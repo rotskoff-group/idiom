@@ -1,0 +1,18 @@
+smiles_file: "./merged_smiles.h5" #Populate with a npy file of SMILES strings encoded in byte string form, e.g. np.array([b'CCO', b'CCN', ...])
+target_file: "./targets_all_smiles.h5" #Populate with an h5 file that has a key 'targets' which contains a numpy array of shape (n,) for n scalar targets
+input_generator: "SMILESInputBasic"
+#Make sure stop and start tokens are present in both input and target generators
+input_generator_addn_args:
+  apply_start: true 
+  apply_stop: true
+target_generator: "SMILESTarget"
+target_generator_addn_args:
+  apply_start: true
+  apply_stop: true
+output_file: "./generative_smiles_dset.h5"
+alphabet: null
+num_processes: 16
+precompute_data_format: "SMILES_only"
+tokenizer: "BasicSmilesTokenizer"
+canonicalize_smiles: false
+

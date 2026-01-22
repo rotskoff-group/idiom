@@ -1,0 +1,18 @@
+defaults:
+  - model: transformer
+  - training: transformer
+  - inference: transformer
+  - data: transformer
+  - _self_
+
+hydra:  
+  output_subdir: null  
+  run:  
+    dir: .  
+
+
+global_args:
+  ngpus: 1
+  dtype: float32
+  savedir: checkpoints
+  seed: 42

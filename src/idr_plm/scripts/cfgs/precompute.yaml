@@ -1,0 +1,10 @@
+defaults: 
+  - precompute: smiles
+  - _self_
+
+
+global_args:
+  ngpus: 1
+  dtype: float32
+  savedir: checkpoints
+  seed: 42

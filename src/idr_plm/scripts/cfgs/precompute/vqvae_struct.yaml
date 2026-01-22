@@ -1,0 +1,16 @@
+smiles_file: "./merged_smiles.h5" #Populate with a npy file of SMILES strings encoded in byte string form, e.g. np.array([b'CCO', b'CCN', ...])
+target_file: null #Not needed for VQVAE structure precompute
+struct_token_file: null
+input_generator: "SMILESAndTokenizedStructureInput"
+#Make sure stop and start tokens are present in both input and target generators
+input_generator_addn_args: {}
+target_generator: "SMILESTarget"
+target_generator_addn_args:
+  apply_start: true
+  apply_stop: true
+output_file: "./generative_smiles_dset.h5"
+alphabet: null
+num_processes: 16
+precompute_data_format: "SMILES_and_VQVAE_struct"
+tokenizer: "BasicSmilesTokenizer"
+canonicalize_smiles: false

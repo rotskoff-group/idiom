@@ -1,0 +1,102 @@
+import torch
+import math
+import torch.nn as nn
+from .blocks import UnifiedTransformerBlock
+
+
+class TransformerStack(nn.Module):
+    """
+    A stack of transformer blocks used in the ESM-3 model. Each block is a UnifiedTransformerBlock,
+    which can either be geometric attention or standard multi-head attention.
+
+    Args:
+        d_model (int): The dimensionality of the input and output feature vectors.
+        n_heads (int): The number of attention heads.
+        v_heads (int): The number of voting heads.
+        n_layers (int): The number of transformer blocks in the stack.
+        n_layers_geom (int, optional): The number of transformer blocks that use geometric attention.
+        scale_residue (bool, optional): Whether to scale the residue connections in each transformer block.
+        mask_and_zero_frameless (bool, optional): Whether to mask and zero frameless positions in the input.
+            Only applies in the geometric attention blocks, which is conditioned on the structure
+    """
+
+    def __init__(
+        self,
+        d_model,
+        n_layers,
+        geom_layer_indices,
+        mha_layer_indices,
+        ida_layer_indices,
+        bias=False,
+        mha_args=None,
+        gha_args=None,
+        ida_args=None,
+        scaling_factor=1.0,
+        ffn_type="swiglu",
+        norm_type="layer_norm",
+        expansion_ratio=8 / 3,
+    ):
+        super().__init__()
+        if scaling_factor is None:
+            scaling_factor = math.sqrt(n_layers / 36)
+        self.blocks = nn.ModuleList(
+            [
+                UnifiedTransformerBlock(
+                    d_model=d_model,
+                    bias=bias,
+                    use_mha=(layer_num in mha_layer_indices),
+                    use_ga=(layer_num in geom_layer_indices),
+                    use_ida=(layer_num in ida_layer_indices),
+                    ffn_type=ffn_type,
+                    scaling_factor=scaling_factor,
+                    expansion_ratio=expansion_ratio,
+                    mha_args=mha_args,
+                    gha_args=gha_args,
+                    ida_args=ida_args,
+                )
+                for layer_num in range(n_layers)
+            ]
+        )
+        if norm_type == "layer_norm":
+            self.norm = nn.LayerNorm(d_model, bias=False)
+        elif norm_type == "identity":
+            self.norm = nn.Identity()
+        else:
+            raise ValueError("Unknown norm_type passed")
+
+    def forward(
+        self, x, sequence_id, affine, affine_mask, coords=None, coords_mask=None
+    ):
+        """
+        Forward pass of the TransformerStack.
+
+        Args:
+            x (torch.Tensor): The input tensor of shape (batch_size, sequence_length, d_model).
+            affine (Affine3D): contains:
+                trans (torch.Tensor | None): The translational portion of the affine transform
+                rot (torch.Tensor | None): The rotational portion of the affine transform
+            affine_mask (torch.Tensor | None): The affine mask tensor or None.
+            sequence_id (torch.Tensor): The sequence ID tensor of shape (batch_size, sequence_length).
+            coords (torch.Tensor | None): 3D coordinates for IDA layer of shape (batch_size, sequence_length, 3).
+            coords_mask (torch.Tensor | None): Mask for coordinates.
+
+        Returns:
+            post_norm: The output tensor of shape (batch_size, sequence_length, d_model).
+            pre_norm: The embedding of shape (batch_size, sequence_length, d_model).
+        """
+        *batch_dims, _ = x.shape
+        if sequence_id is None:
+            sequence_id = torch.ones(
+                size=batch_dims, dtype=torch.int64, device=x.device
+            )
+
+        for block in self.blocks:
+            x = block(
+                x=x,
+                sequence_id=sequence_id,
+                affine=affine,
+                affine_mask=affine_mask,
+                coords=coords,
+                coords_mask=coords_mask,
+            )
+        return self.norm(x), x
