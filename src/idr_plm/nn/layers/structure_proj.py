@@ -7,7 +7,7 @@ import torch.nn as nn
 #     RotationMatrix,
 # )
 
-from clm.utils.affine import Affine3D, graham_schmidt
+from idr_plm.nn.layers.utils.affine import Affine3D, graham_schmidt
 
 BB_COORDINATES = [
     [0.5256, 1.3612, 0.0000],

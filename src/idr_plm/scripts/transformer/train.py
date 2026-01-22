@@ -7,20 +7,21 @@ from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
 from omegaconf import OmegaConf
 from lightning.pytorch.strategies import FSDPStrategy
-from clm.utils.data_utils import get_hdf5_fn, split_data_subsets
-from clm.utils.misc import seed_worker
-from mole.nn.transformer.module import LightningModel
-from mole.nn.transformer import dataset as DSET
-from mole.utils.token import aggregate_tokens_hdf5
 import os
 import h5py
+
+from idr_plm.utils.data_utils import get_hdf5_fn, split_data_subsets
+from idr_plm.nn.layers.utils.misc import seed_worker
+from idr_plm.nn.transformer.module import LightningModel
+from idr_plm.nn.transformer import dataset as DSET
+from idr_plm.utils.token import aggregate_tokens_hdf5
 
 
 @hydra.main(version_base="1.3", config_path="../cfgs", config_name="training")
 def main(cfg) -> None:
+    data_args = cfg["data"]
     model_args = cfg["model"]
     training_args = cfg["training"]
-    data_args = cfg["data"]
 
     L.seed_everything(**training_args["seed_args"])
 

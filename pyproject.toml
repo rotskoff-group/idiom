@@ -9,15 +9,22 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "biopython>=1.86",
+    "einops>=0.8.1",
+    "h5py>=3.15.1",
     "hydra-core>=1.3.2",
+    "ipdb>=0.13.13",
     "ipython>=8.38.0",
     "lightning>=2.6.0",
     "lightning-bolts>=0.7.0",
     "pip>=25.0",
     "pre-commit>=4.5.1",
+    "pytorch-lightning==1.9.5",
+    "sparrow",
     "torch==2.4.0",
     "torch-geometric>=2.7.0",
     "torchvision==0.19.0",
+    "tqdm>=4.67.1",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -25,13 +32,15 @@ include = [
     "/src"
 ]
 
+[tool.uv.sources]
+sparrow = { git = "https://github.com/idptools/sparrow.git" }
+
 [dependency-groups]
 dev = [
     "ruff>=0.14.13",
 ]
 
 [project.scripts]
-precompute_transformer_dataset = "mole.scripts.data.precompute_transformer_dataset:main"
-mgpt_transformer_train = "mole.scripts.transformer.train:main"
-mgpt_transformer_precompute = "mole.scripts.transformer.precompute_dataset:main"
-mgpt_transformer_infer = "mole.scripts.transformer.inference:main"
+transformer_precompute = "idr_plm.scripts.data.precompute:main" 
+transformer_train = "idr_plm.scripts.transformer.train:main"
+transformer_infer = "idr_plm.scripts.transformer.inference:main"

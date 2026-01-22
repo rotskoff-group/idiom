@@ -4,24 +4,27 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
-from mole.nn.transformer.nn import (
-    GeometricMolTransformer,
-    TransfusionMolTransformer,
-    SeqStructMixedTransformer,
-)
-from mole.nn.transformer.utils import get_node_features
-from clm.layers import diffusion
-from clm.layers.diffusion import sample_torsions
-from rdkit import Chem
-from rdkit import RDLogger
-from mole.utils.structure import compute_dihedrals
 import pl_bolts
 from torch.nn.utils.rnn import pad_sequence
 import math
-from mole.utils.sampler import TokenSampler
-from mole.nn.transformer.scores import (
+from lightning.pytorch.utilities import grad_norm
+
+from idr_plm.nn.transformer.nn import (
+    GeometricMolTransformer,
+    # TransfusionMolTransformer,
+    # SeqStructMixedTransformer,
+)
+
+# from idr_plm.nn.transformer.utils import get_node_features
+# from idr_plm.nn.layers import diffusion
+# from idr_plm.nn.layers.diffusion import sample_torsions
+# from rdkit import Chem
+# from rdkit import RDLogger
+# from idr_plm.utils.structure import compute_dihedrals
+from idr_plm.utils.sampler import TokenSampler
+from idr_plm.nn.transformer.scores import (
     apply_gaussian_reward_shaping,
-    compute_qed_score,
+    # compute_qed_score,
     compute_fraction_alanine,
     compute_charge_kappa,
     compute_protgps_score,
@@ -35,9 +38,8 @@ from mole.nn.transformer.scores import (
     compute_entropy_reward,
     valid_sequence_characters,
 )
-from lightning.pytorch.utilities import grad_norm
 
-RDLogger.DisableLog("rdApp.*")
+# RDLogger.DisableLog("rdApp.*")
 
 
 class LightningModel(L.LightningModule):
@@ -1081,7 +1083,7 @@ class LightningModel(L.LightningModule):
         reward_function_map = {
             "compute_charge_kappa": compute_charge_kappa,
             "compute_fraction_alanine": compute_fraction_alanine,
-            "compute_qed_score": compute_qed_score,
+            # "compute_qed_score": compute_qed_score,
             "compute_protgps_score": compute_protgps_score,
         }
         self.reward_function = reward_function_map[self.reward_function_name]
@@ -2018,7 +2020,7 @@ class LightningModel(L.LightningModule):
                     )
                     for i in range(batch_size)
                 ]
-                # breakpoint()
+
                 unmasked_indices = torch.tensor(
                     np.concatenate(unmasked_indices), device=device
                 ).long()
@@ -2409,7 +2411,7 @@ class LightningModel(L.LightningModule):
         [V0,  P,  V1,  P, V2,  P, V3,  P]
         [H0,  P,  H1,  P, H2,  P, H3,  P]
 
-        See "mole.nn.transformer.input_generators.SMILESStructureAVHGenerator" for more information.
+        See "idr_plm.nn.transformer.input_generators.SMILESStructureAVHGenerator" for more information.
         Here, mol_node_features is (n_atom, 3)
         """
         mol_node_features = torch.tensor(
