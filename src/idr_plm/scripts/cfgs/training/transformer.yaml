@@ -1,0 +1,45 @@
+resume_training_path: null
+training_mode: 'autoregressive'
+manual_opt_args: {} #Arguments that control manual optimization
+lightning_model_args:
+  optimizer: "AdamW"
+  optimizer_args:
+    lr: 1.0e-05
+  lr_scheduler: "ReduceLROnPlateau"
+  lr_scheduler_args: null #Make sure to populate this correctly!
+  lr_scheduler_monitor: "validation/loss"
+  interval: "step" #Interval here is for the lr_scheduler
+  sync_dist: True
+  on_step: False
+  lr_monitor_args:
+    logging_interval: step
+  every_epoch_checkpoint_args:
+    filename: "epoch_{epoch:02d}"
+    every_n_epochs: 10
+    every_n_train_steps: null
+    save_top_k: -1
+  best_checkpoint_args:
+    filename: "best_model"
+    monitor: "validation/loss"
+    mode: "min"
+    save_top_k: 1
+trainer_args: 
+  accelerator: "cuda"
+  devices: 4
+  strategy: "auto"
+  max_steps: 1000000
+  max_epochs: 10000
+  precision: 16-mixed
+  inference_mode: False
+  enable_progress_bar: False
+  gradient_clip_val: 1.0 #Maximum gradient magnitude
+  gradient_clip_algorithm: norm #Default in PyTorch Lightning 
+logger:
+  loggertype: "TensorBoard" # "TensorBoard" or "Wandb"
+  project: null # null if Tensorboard. Name for Wandb project folder
+  name: null # null if Tensorboard. Name for specific run
+seed_args:
+  seed: 42
+  workers: True
+loss_fn: "CrossEntropyLoss"
+loss_fn_args: null

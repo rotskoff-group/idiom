@@ -1,0 +1,24 @@
+model: TransfusionMolTransformer
+load_model: null
+load_opitimizer: null
+model_args:
+  d_model: 1536
+  unified_transformer_args:
+    n_layers: 16
+    geom_layer_indices: []
+    mha_layer_indices: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    bias: False
+    mha_args: 
+      num_heads: 24
+      bias: False
+      qk_layernorm: True
+      mask_mode: packed_seq
+    gha_args: 
+      num_heads: 256 #v_heads in ESM repo
+      num_vector_messages: 1
+      mask_and_zero_frameless: True # hard code
+      bias: False # hard code 
+    scaling_factor: 1 #sqrt(48/36)
+    ffn_type: "swiglu" #hard code
+    norm_type: "layer_norm" #hard code
+    expansion_ratio: 2.66666666667 #hard code (8/3)
