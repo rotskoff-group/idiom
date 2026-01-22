@@ -11,8 +11,8 @@ target_generator_addn_args:
   apply_stop: true
 output_file: "./generative_smiles_dset.h5"
 alphabet: null
-num_processes: 16
+num_processes: 2
 precompute_data_format: "SMILES_only"
-tokenizer: "BasicSmilesTokenizer"
+tokenizer: "CharTokenizer"
 canonicalize_smiles: false
 

@@ -54,33 +54,6 @@ class TargetGeneratorBase:
         return self.max_len
 
 
-class ScalarTarget(TargetGeneratorBase):
-    """Process scalar labels into a tensor"""
-
-    def __init__(
-        self,
-        smiles: np.ndarray,
-        tokenizer: BasicSmilesTokenizer,
-        alphabet: np.ndarray,
-        targets: np.ndarray,
-    ) -> None:
-        """
-        Args:
-            smiles: np.ndarray
-                Array of SMILES strings
-            tokenizer: BasicSmilesTokenizer
-                Instance of BasicSmilesTokenizer for splitting SMILES strings into tokens
-            alphabet: np.ndarray
-                Array of SORTED unique tokens
-            targets: np.ndarray
-                Array of scalar targets
-        """
-        super().__init__(smiles, tokenizer, alphabet, targets)
-
-    def transform(self, smiles: str, targets: float) -> tuple[np.ndarray]:
-        return (targets,)
-
-
 class SMILESTarget(TargetGeneratorBase):
     """Process SMILES strings into a tokenized array with padding to maximum sequence length"""
 

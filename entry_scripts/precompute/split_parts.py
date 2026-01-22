@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Randomly split the dataset  ['smiles']  of an input HDF5 file into N part_X_idr.h5 files.
+Randomly split the dataset  ['idrs']  of an input HDF5 file into N part_X_idr.h5 files.
 
 Example
 -------
-$ python split_smiles_h5.py data/full_smiles.h5 \
+$ python split_parts.py data/full_idrs.h5 \
       --num-parts 500 \
       --out-dir ./splits \
       --chunk-size 1_000_000 \
@@ -20,10 +20,10 @@ from tqdm import tqdm
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Randomly partition the 'smiles' dataset of an HDF5 file."
+        description="Randomly partition the 'idrs' dataset of an HDF5 file."
     )
     p.add_argument(
-        "input", help="Path to the source .h5 file containing dataset ['smiles']."
+        "input", help="Path to the source .h5 file containing dataset ['idrs']."
     )
     p.add_argument(
         "-n",
@@ -62,9 +62,9 @@ def main() -> None:
 
     # Probe the source file just once to get length and dtype ------------------
     with h5py.File(args.input, "r") as fin:
-        src = fin["smiles"]
+        src = fin["idrs"]
         total = int(src.shape[0])
-        smiles_dtype = src.dtype  # fixed-length or vlen byte strings
+        idrs_dtype = src.dtype  # fixed-length or vlen byte strings
 
     # -------------------------------------------------------------------------
     # Prepare output files with extendable datasets (shape=(0,) but maxshape=None)
@@ -73,10 +73,10 @@ def main() -> None:
     for i in range(1, args.num_parts + 1):
         fout = h5py.File(os.path.join(args.out_dir, f"part_{i}_idrs.h5"), "w")
         dset = fout.create_dataset(
-            "smiles",
+            "idrs",
             shape=(0,),
             maxshape=(None,),
-            dtype=smiles_dtype,
+            dtype=idrs_dtype,
             chunks=True,
             compression="gzip",
             compression_opts=4,
@@ -87,7 +87,7 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # Stream the source dataset and distribute records -------------------------
     with h5py.File(args.input, "r") as fin:
-        src = fin["smiles"]
+        src = fin["idrs"]
         for start in tqdm(
             range(0, total, args.chunk_size),
             total=(total + args.chunk_size - 1) // args.chunk_size,

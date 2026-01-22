@@ -1,7 +1,8 @@
 import torch
 import numpy as np
-from rdkit import Chem
-from rdkit.Chem import QED
+
+# from rdkit import Chem
+# from rdkit.Chem import QED
 from sparrow import Protein
 from Bio import pairwise2
 import sys
@@ -10,60 +11,60 @@ import pickle
 from argparse import Namespace
 
 
-def compute_qed_score(tokens, token_info, device):
-    """
-    Compute negative log QED score for a sequence of tokens (lower values = better drug-likeness).
+# def compute_qed_score(tokens, token_info, device):
+#     """
+#     Compute negative log QED score for a sequence of tokens (lower values = better drug-likeness).
 
-    Uses token_info["alphabet"] to convert tokens to SMILES strings for QED computation.
-    Returns 4.5 as failure value for invalid molecules or missing alphabet.
-    """
-    try:
-        # Convert tokens to SMILES string
-        # pad_token = token_info.get("TOK_PAD", 0)
-        # start_token = token_info.get("TOK_START", 1)
-        # stop_token = token_info.get("TOK_STOP", 2)
-        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-        _start_token = token_info["input"]["TOK"]["TOK_START"]
+#     Uses token_info["alphabet"] to convert tokens to SMILES strings for QED computation.
+#     Returns 4.5 as failure value for invalid molecules or missing alphabet.
+#     """
+#     try:
+#         # Convert tokens to SMILES string
+#         # pad_token = token_info.get("TOK_PAD", 0)
+#         # start_token = token_info.get("TOK_START", 1)
+#         # stop_token = token_info.get("TOK_STOP", 2)
+#         _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
+#         _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
+#         _start_token = token_info["input"]["TOK"]["TOK_START"]
 
-        # Extract valid tokens (skip special tokens)
-        # valid_tokens = tokens[(tokens != pad_token) & (tokens != start_token) & (tokens != stop_token)]
-        valid_tokens = tokens[
-            (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-        ]
+#         # Extract valid tokens (skip special tokens)
+#         # valid_tokens = tokens[(tokens != pad_token) & (tokens != start_token) & (tokens != stop_token)]
+#         valid_tokens = tokens[
+#             (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
+#         ]
 
-        if len(valid_tokens) == 0:
-            return torch.tensor(4.5, device=device)  # Failure value
+#         if len(valid_tokens) == 0:
+#             return torch.tensor(4.5, device=device)  # Failure value
 
-        # Convert to SMILES using alphabet from token_info
-        if "alphabet" in token_info and token_info["alphabet"] is not None:
-            alphabet = token_info["alphabet"]
-            # Decode bytes alphabet
-            alphabet = [item.decode("utf-8") for item in alphabet]
-            smiles = "".join([alphabet[token.item()] for token in valid_tokens])
-        else:
-            # Fallback: return failure value if no alphabet available
-            print(
-                "Warning: No alphabet found in token_info, cannot convert tokens to SMILES"
-            )
-            return torch.tensor(4.5, device=device)
+#         # Convert to SMILES using alphabet from token_info
+#         if "alphabet" in token_info and token_info["alphabet"] is not None:
+#             alphabet = token_info["alphabet"]
+#             # Decode bytes alphabet
+#             alphabet = [item.decode("utf-8") for item in alphabet]
+#             smiles = "".join([alphabet[token.item()] for token in valid_tokens])
+#         else:
+#             # Fallback: return failure value if no alphabet available
+#             print(
+#                 "Warning: No alphabet found in token_info, cannot convert tokens to SMILES"
+#             )
+#             return torch.tensor(4.5, device=device)
 
-        # Compute QED score
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is not None:
-            qed_score = QED.qed(mol)
-            if qed_score <= 0.0:
-                return torch.tensor(4.5, device=device)  # Failure value for invalid QED
-            else:
-                return torch.tensor(-np.log(qed_score), device=device)
-        else:
-            return torch.tensor(
-                4.5, device=device
-            )  # Failure value for invalid molecule
+#         # Compute QED score
+#         mol = Chem.MolFromSmiles(smiles)
+#         if mol is not None:
+#             qed_score = QED.qed(mol)
+#             if qed_score <= 0.0:
+#                 return torch.tensor(4.5, device=device)  # Failure value for invalid QED
+#             else:
+#                 return torch.tensor(-np.log(qed_score), device=device)
+#         else:
+#             return torch.tensor(
+#                 4.5, device=device
+#             )  # Failure value for invalid molecule
 
-    except Exception as e:
-        print(f"Error computing QED: {e}")
-        return torch.tensor(4.5, device=device)  # Failure value for exceptions
+#     except Exception as e:
+#         print(f"Error computing QED: {e}")
+#         return torch.tensor(4.5, device=device)  # Failure value for exceptions
 
 
 def compute_charge_kappa(tokens, token_info, device):
