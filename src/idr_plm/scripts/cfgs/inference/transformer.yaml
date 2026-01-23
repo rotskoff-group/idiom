@@ -1,8 +1,8 @@
 checkpoint_path: null
 savedir: "./"
 unmasking_mode: 'sample'
-inference_mode: 'bidirectional'
-batch_size: 128
+inference_mode: 'autoregressive'
+batch_size: 100
 num_batches: 100
 seed_args:
   seed: 42
@@ -10,6 +10,6 @@ seed_args:
 dataset_filename: null #For picking out the control tokens in the dataset
 addn_args: {} #Additional arguments needed for specific inference modes
 sampler_args:
-  method: 'top_k'
-  sample_val: 5
+  method: 'full'
+  sample_val: 1
   temperature: 1.0 
