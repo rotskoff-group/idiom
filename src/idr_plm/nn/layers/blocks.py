@@ -73,27 +73,30 @@ class UnifiedTransformerBlock(nn.Module):
         d_model,
         bias=False,
         use_mha=False,
-        use_ga=False,
-        use_ida=False,
+        # use_ga=False,
+        # use_ida=False,
         ffn_type="swiglu",
         scaling_factor=1,
         expansion_ratio=8 / 3,
         mha_args=None,
-        gha_args=None,
-        ida_args=None,
+        # gha_args=None,
+        # ida_args=None,
     ):
         super().__init__()
         self.use_mha = use_mha
         if self.use_mha:
             self.attn = MultiHeadAttention(d_model=d_model, **mha_args)
-        self.use_ga = use_ga
-        if self.use_ga:
-            self.geom_attn = GeometricAttention(d_model=d_model, **gha_args)
-        self.use_ida = use_ida
-        if self.use_ida:
-            self.interatomic_distance_attention = InteratomicDistanceAttention(
-                d_model=d_model, **ida_args
-            )
+        
+        # self.use_ga = use_ga
+        # if self.use_ga:
+        #     self.geom_attn = GeometricAttention(d_model=d_model, **gha_args)
+        
+        # self.use_ida = use_ida
+        # if self.use_ida:
+        #     self.interatomic_distance_attention = InteratomicDistanceAttention(
+        #         d_model=d_model, **ida_args
+        #     )
+
         if ffn_type == "swiglu":
             self.ffn = swiglu_ln_ffn(d_model, expansion_ratio, bias)
         elif ffn_type == "gelu":
@@ -134,17 +137,17 @@ class UnifiedTransformerBlock(nn.Module):
             r1 = self.attn(x=x, sequence_id=sequence_id)
             x = x + r1 / self.scaling_factor
 
-        if self.use_ga:
-            r2 = self.geom_attn(
-                x, affine=affine, affine_mask=affine_mask, sequence_id=sequence_id
-            )
-            x = x + r2 / self.scaling_factor
+        # if self.use_ga:
+        #     r2 = self.geom_attn(
+        #         x, affine=affine, affine_mask=affine_mask, sequence_id=sequence_id
+        #     )
+        #     x = x + r2 / self.scaling_factor
 
-        if self.use_ida:
-            r3 = self.interatomic_distance_attention(
-                x, coords=coords, coords_mask=coords_mask
-            )
-            x = x + r3 / self.scaling_factor
+        # if self.use_ida:
+        #     r3 = self.interatomic_distance_attention(
+        #         x, coords=coords, coords_mask=coords_mask
+        #     )
+        #     x = x + r3 / self.scaling_factor
 
         r4 = self.ffn(x) / self.scaling_factor
         x = x + r4
