@@ -1,8 +1,8 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from .mha import MultiHeadAttention
-from .ida import InteratomicDistanceAttention
-from .geometric_attention import GeometricAttention
+# from .ida import InteratomicDistanceAttention
+# from .geometric_attention import GeometricAttention
 
 
 def swiglu_correction_fn(expansion_ratio, d_model):
