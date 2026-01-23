@@ -50,14 +50,14 @@ class LightningModel(L.LightningModule):
         try:
             assert self.training_args["training_mode"] in [
                 "autoregressive",
-                "bidirectional",
-                "transfusion",
-                "transfusion_offset",
-                "era",
+                # "bidirectional",
+                # "transfusion",
+                # "transfusion_offset",
+                # "era",
                 "era_online",
                 "grpo",
-                "mixed_sequence",
-                "dpo",
+                # "mixed_sequence",
+                # "dpo",
             ]
         except AssertionError:
             raise ValueError("Invalid training mode specified")
@@ -118,30 +118,6 @@ class LightningModel(L.LightningModule):
                         "unified_transformer_args"
                     ],
                 )
-            elif self.model_args["model"] == "TransfusionMolTransformer":
-                current_model = TransfusionMolTransformer(
-                    dim_model=self.model_args["model_args"]["d_model"],
-                    token_info=self.token_info,
-                    unified_transformer_args=self.model_args["model_args"][
-                        "unified_transformer_args"
-                    ],
-                    structure_embedding_args=self.model_args["model_args"][
-                        "structure_embedding_args"
-                    ],
-                    structure_out_dim=self.model_args["model_args"][
-                        "structure_out_dim"
-                    ],
-                )
-            elif self.model_args["model"] == "SeqStructMixedTransformer":
-                current_model = SeqStructMixedTransformer(
-                    dim_model=self.model_args["model_args"]["d_model"],
-                    token_info=self.token_info,
-                    unified_transformer_args=self.model_args["model_args"][
-                        "unified_transformer_args"
-                    ],
-                    embedding_args=self.model_args["model_args"]["embedding_args"],
-                    forward_mode=self.model_args["model_args"]["forward_mode"],
-                )
             else:
                 raise ValueError("Invalid model type specified")
 
@@ -154,30 +130,7 @@ class LightningModel(L.LightningModule):
                         "unified_transformer_args"
                     ],
                 )
-            elif self.model_args["model"] == "TransfusionMolTransformer":
-                reference_model = TransfusionMolTransformer(
-                    dim_model=self.model_args["model_args"]["d_model"],
-                    token_info=self.token_info,
-                    unified_transformer_args=self.model_args["model_args"][
-                        "unified_transformer_args"
-                    ],
-                    structure_embedding_args=self.model_args["model_args"][
-                        "structure_embedding_args"
-                    ],
-                    structure_out_dim=self.model_args["model_args"][
-                        "structure_out_dim"
-                    ],
-                )
-            elif self.model_args["model"] == "SeqStructMixedTransformer":
-                reference_model = SeqStructMixedTransformer(
-                    dim_model=self.model_args["model_args"]["d_model"],
-                    token_info=self.token_info,
-                    unified_transformer_args=self.model_args["model_args"][
-                        "unified_transformer_args"
-                    ],
-                    embedding_args=self.model_args["model_args"]["embedding_args"],
-                    forward_mode=self.model_args["model_args"]["forward_mode"],
-                )
+
             else:
                 raise ValueError("Invalid model type specified")
 
@@ -187,7 +140,8 @@ class LightningModel(L.LightningModule):
             #     param.requires_grad = False
             # reference_model.eval()
             return [reference_model, current_model]
-        else:
+ 
+        else: # Standard autoregressive training mode 
             if self.model_args["model"] == "GeometricMolTransformer":
                 return GeometricMolTransformer(
                     dim_model=self.model_args["model_args"]["d_model"],
@@ -196,35 +150,13 @@ class LightningModel(L.LightningModule):
                         "unified_transformer_args"
                     ],
                 )
-            elif self.model_args["model"] == "TransfusionMolTransformer":
-                return TransfusionMolTransformer(
-                    dim_model=self.model_args["model_args"]["d_model"],
-                    token_info=self.token_info,
-                    unified_transformer_args=self.model_args["model_args"][
-                        "unified_transformer_args"
-                    ],
-                    structure_embedding_args=self.model_args["model_args"][
-                        "structure_embedding_args"
-                    ],
-                    structure_out_dim=self.model_args["model_args"][
-                        "structure_out_dim"
-                    ],
-                )
-            elif self.model_args["model"] == "SeqStructMixedTransformer":
-                return SeqStructMixedTransformer(
-                    dim_model=self.model_args["model_args"]["d_model"],
-                    token_info=self.token_info,
-                    unified_transformer_args=self.model_args["model_args"][
-                        "unified_transformer_args"
-                    ],
-                    embedding_args=self.model_args["model_args"]["embedding_args"],
-                    forward_mode=self.model_args["model_args"]["forward_mode"],
-                )
+  
             else:
                 raise ValueError("Invalid model type specified")
 
     def build_loss_fn(self):
-        if self.training_args["training_mode"] in ["autoregressive", "bidirectional"]:
+        if self.training_args["training_mode"] in ["autoregressive"]:
+        # if self.training_args["training_mode"] in ["autoregressive", "bidirectional"]:
             loss_fn_base = nn.CrossEntropyLoss
             if self.training_args["loss_fn_args"] is not None:
                 loss_fn = loss_fn_base(**self.training_args["loss_fn_args"])
@@ -233,20 +165,12 @@ class LightningModel(L.LightningModule):
                     reduction="none", ignore_index=self.smi_info["pad"]
                 )
             return loss_fn
+
         elif self.training_args["training_mode"] in [
-            "transfusion",
-            "transfusion_offset",
-        ]:
-            assert self.training_args["loss_fn_args"] is not None
-            loss_type = self.training_args["loss_fn"]
-            assert loss_type in ["DDPMLoss", "TorDiffLoss"]
-            # Get the loss function from the diffusion module in clm
-            return getattr(diffusion, loss_type)(**self.training_args["loss_fn_args"])
-        elif self.training_args["training_mode"] in [
-            "era",
+            # "era",
             "era_online",
-            "mixed_sequence",
-            "dpo",
+            # "mixed_sequence",
+            # "dpo",
             "grpo",
         ]:
             return None
@@ -326,78 +250,15 @@ class LightningModel(L.LightningModule):
             to_return = {"optimizer": u_optimizer, "lr_scheduler": lr_scheduler_config}
         return to_return
 
-    def clear_kv_cache(self):
-        """Clear KV cache in the underlying model"""
-        print("Cache cleared in module")
-        if hasattr(self.model, "clear_kv_cache"):
-            self.model.clear_kv_cache()
-        elif hasattr(self.model, "transformer") and hasattr(
-            self.model.transformer, "clear_kv_cache"
-        ):
-            self.model.transformer.clear_kv_cache()
-
-    def _shared_eval_transfusion(self, batch, batch_idx, prefix):
-        token_input, token_target, structure_segment, struct_mask, sequence_id = batch
-        # Sample time steps for the noising
-        losses = self.loss_fn(
-            self.model,
-            token_input,
-            token_target,
-            structure_segment,
-            struct_mask,
-            sequence_id,
-        )
-        # Returns each tensor separately to allow for separate optimization in a different
-        #   shared eval function
-        ce_loss, diff_loss, lambda_diff = losses
-        loss_tensor = ce_loss + (lambda_diff * diff_loss)
-        metrics = {
-            f"{prefix}/loss": loss_tensor,
-            f"{prefix}/ce": ce_loss,
-            f"{prefix}/diff": diff_loss,
-        }
-        self.log_dict(metrics, on_step=True, on_epoch=True, sync_dist=True)
-        return loss_tensor
-
-    def _shared_eval_transfusion_offset(self, batch, batch_idx, prefix):
-        # TODO: How to handle learning rate scheduling in this case?
-        token_input, token_target, structure_segment, struct_mask, sequence_id = batch
-        # Sample time steps for the noising
-        losses = self.loss_fn(
-            self.model,
-            token_input,
-            token_target,
-            structure_segment,
-            struct_mask,
-            sequence_id,
-        )
-        ce_loss, diff_loss, lambda_diff = losses
-        if (batch_idx + 1) % self.hparams.training_args.manual_opt_args.ce_n_steps == 0:
-            # Add in CE loss at specified intervals
-            loss_to_opt = ce_loss + lambda_diff * diff_loss
-        else:
-            loss_to_opt = lambda_diff * diff_loss
-
-        metrics = {
-            f"{prefix}/loss": ce_loss + lambda_diff * diff_loss,
-            f"{prefix}/ce": ce_loss,
-            f"{prefix}/diff": diff_loss,
-        }
-
-        self.log_dict(metrics, on_step=True, on_epoch=True, sync_dist=True)
-        return loss_to_opt
-
-    def _shared_eval_bidirec(self, batch, batch_idx, prefix):
-        """Bidirectional shared_eval has loss masking"""
-        struct, smi, masked_smi, seq_id, loss_mask = batch
-        out = self.model(masked_smi, struct, seq_id)
-        out = out.permute(0, 2, 1)
-        loss = self.loss_fn(out, smi)
-        loss = (loss * loss_mask).sum(-1) / (loss_mask.sum(-1))
-        loss = loss.mean()
-        metrics = {f"{prefix}/loss": loss}
-        self.log_dict(metrics, on_step=True, on_epoch=True, sync_dist=True)
-        return loss
+    # def clear_kv_cache(self):
+    #     """Clear KV cache in the underlying model"""
+    #     print("Cache cleared in module")
+    #     if hasattr(self.model, "clear_kv_cache"):
+    #         self.model.clear_kv_cache()
+    #     elif hasattr(self.model, "transformer") and hasattr(
+    #         self.model.transformer, "clear_kv_cache"
+    #     ):
+    #         self.model.transformer.clear_kv_cache()
 
     def _shared_eval_autoreg(self, batch, batch_idx, prefix):
         """Autoregressive shared_eval has no loss masking"""
@@ -409,175 +270,6 @@ class LightningModel(L.LightningModule):
         metrics = {f"{prefix}/loss": loss}
         self.log_dict(metrics, on_step=True, on_epoch=True, sync_dist=True)
         return loss
-
-    def _shared_eval_mixed_seq(self, batch, batch_idx, prefix):
-        """Mixed sequence shared_eval with loss masking and the ability to support both
-        structure and smiles tokens"""
-        mode = batch[0]
-        if mode == "smiles_only":
-            _, smi_tokens, masked_smi_tokens, sequence_id, loss_mask = batch
-            mod_out = self.model((mode, masked_smi_tokens, sequence_id))
-            out, pad_token = mod_out
-            out = out.permute(0, 2, 1)
-            loss = nn.functional.cross_entropy(
-                out, smi_tokens, reduction="none", ignore_index=pad_token
-            )
-            loss = (loss * loss_mask).sum(-1) / (loss_mask.sum(-1))
-            loss = loss.mean()
-            metrics = {f"{prefix}/loss": loss}
-            self.log_dict(metrics, on_step=True, on_epoch=True, sync_dist=True)
-            return loss
-        elif mode in ["smiles_and_struct", "smiles_struct_avh"]:
-            (
-                _,
-                smi_tokens,
-                masked_smi_tokens,
-                struct_tokens,
-                masked_struct_tokens,
-                sequence_id,
-                loss_mask_smi,
-                loss_mask_struct,
-            ) = batch
-            out = self.model(
-                (mode, masked_smi_tokens, masked_struct_tokens, sequence_id)
-            )
-            # smiles out and struct out both 2D here
-            # smiles_out: (N, T, E)
-            # struct_out: (?, E)
-            smiles_out, struct_out, smiles_pad_token, struct_pad_token = out
-
-            # SMILES loss calc
-            smiles_loss = F.cross_entropy(
-                smiles_out.reshape(-1, smiles_out.shape[-1]),
-                smi_tokens.reshape(-1),
-                ignore_index=smiles_pad_token,
-                reduction="none",
-            )
-            loss_mask_smi_flat = loss_mask_smi.reshape(-1)
-            smiles_loss = smiles_loss[loss_mask_smi_flat]
-            smiles_loss = smiles_loss.mean()
-
-            if struct_tokens.ndim == 3:
-                # FH: Additional dimensions here if atom, valency, hybridization information is included, but only go off
-                #   the first row in this scenario (which contains the true structure tokens)
-                assert struct_tokens.shape[1] == 4
-                struct_tokens = struct_tokens[:, 0, :]
-
-            # Structure loss calc
-            # GR: The structure token cross entropy loss is
-            # computed over the non-padding tokens of the
-            # structure track
-            # FH: Have to be more nuanced here because the struct_out from the transformer
-            # is only over non-padding structure tokens whereas the target struct_tokens and
-            # loss_mask_struct take into account padding, so need to prune that out from both
-            # the struct_tokns and loss_mask_struct to ensure the masks and target tokens are
-            # applied properly
-
-            struct_tokens_flat = struct_tokens.reshape(-1)
-            loss_mask_struct_flat = loss_mask_struct.reshape(-1)
-            non_padding_selection = struct_tokens_flat != struct_pad_token
-            struct_tokens_flat = struct_tokens_flat[non_padding_selection]
-            loss_mask_struct_flat = loss_mask_struct_flat[non_padding_selection]
-
-            struct_loss = F.cross_entropy(
-                struct_out,
-                struct_tokens_flat,
-                ignore_index=struct_pad_token,
-                reduction="none",
-            )
-            struct_loss = struct_loss[loss_mask_struct_flat]
-            struct_loss = struct_loss.mean()
-
-            # Combine losses
-            if torch.isnan(smiles_loss):
-                smiles_loss = torch.tensor(0.0, device=smiles_loss.device)
-            if torch.isnan(struct_loss):
-                struct_loss = torch.tensor(0.0, device=struct_loss.device)
-
-            loss = smiles_loss + struct_loss
-            metrics = {
-                f"{prefix}/loss": loss,
-                f"{prefix}/smiles_loss": smiles_loss,
-                f"{prefix}/struct_loss": struct_loss,
-            }
-            self.log_dict(metrics, on_step=True, on_epoch=True, sync_dist=True)
-            return loss
-        elif mode == "ida":
-            (
-                _,
-                smi_tokens,
-                masked_smi_tokens,
-                struct_tokens,
-                masked_struct_tokens,
-                coords,
-                sequence_id,
-                loss_mask_smi,
-                loss_mask_struct,
-            ) = batch
-            out = self.model(
-                (mode, masked_smi_tokens, masked_struct_tokens, coords, sequence_id)
-            )
-            # smiles out and struct out both 2D here
-            # smiles_out: (N, T, E)
-            # struct_out: (?, E)
-            smiles_out, struct_out, smiles_pad_token, struct_pad_token = out
-
-            # SMILES loss calc
-            smiles_loss = F.cross_entropy(
-                smiles_out.reshape(-1, smiles_out.shape[-1]),
-                smi_tokens.reshape(-1),
-                ignore_index=smiles_pad_token,
-                reduction="none",
-            )
-            loss_mask_smi_flat = loss_mask_smi.reshape(-1)
-            smiles_loss = smiles_loss[loss_mask_smi_flat]
-            smiles_loss = smiles_loss.mean()
-
-            # Structure loss calc
-            if struct_tokens.ndim == 3:
-                # FH: Additional dimensions here if atom, valency, hybridization information is included, but only go off
-                #   the first row in this scenario (which contains the true structure tokens)
-                assert struct_tokens.shape[1] == 4
-                struct_tokens = struct_tokens[:, 0, :]
-
-            # GR: The structure token cross entropy loss is
-            # computed over the non-padding tokens of the
-            # structure track
-            # FH: Have to be more nuanced here because the struct_out from the transformer
-            # is only over non-padding structure tokens whereas the target struct_tokens and
-            # loss_mask_struct take into account padding, so need to prune that out from both
-            # the struct_tokns and loss_mask_struct to ensure the masks and target tokens are
-            # applied properly
-
-            struct_tokens_flat = struct_tokens.reshape(-1)
-            loss_mask_struct_flat = loss_mask_struct.reshape(-1)
-            non_padding_selection = struct_tokens_flat != struct_pad_token
-            struct_tokens_flat = struct_tokens_flat[non_padding_selection]
-            loss_mask_struct_flat = loss_mask_struct_flat[non_padding_selection]
-
-            struct_loss = F.cross_entropy(
-                struct_out,
-                struct_tokens_flat,
-                ignore_index=struct_pad_token,
-                reduction="none",
-            )
-            struct_loss = struct_loss[loss_mask_struct_flat]
-            struct_loss = struct_loss.mean()
-
-            # Combine losses
-            if torch.isnan(smiles_loss):
-                smiles_loss = torch.tensor(0.0, device=smiles_loss.device)
-            if torch.isnan(struct_loss):
-                struct_loss = torch.tensor(0.0, device=struct_loss.device)
-
-            loss = smiles_loss + struct_loss
-            metrics = {
-                f"{prefix}/loss": loss,
-                f"{prefix}/smiles_loss": smiles_loss,
-                f"{prefix}/struct_loss": struct_loss,
-            }
-            self.log_dict(metrics, on_step=True, on_epoch=True, sync_dist=True)
-            return loss
 
     def _compute_policy_logps(self, model, tokens, structure, masks):
         """Calculate per-token logps under a provided model"""
@@ -593,68 +285,68 @@ class LightningModel(L.LightningModule):
         # policy_logps is going to be 1 shorter than len(tokens) because start token doesn't have a logp
         return policy_logps
 
-    def _shared_eval_era(self, batch, batch_idx, prefix):
-        if not hasattr(self, "alignment_betas"):
-            self.alignment_betas = torch.tensor(
-                self.hparams.training_args.lightning_model_args.beta
-            ).to(self.device)
+    # def _shared_eval_era(self, batch, batch_idx, prefix):
+    #     if not hasattr(self, "alignment_betas"):
+    #         self.alignment_betas = torch.tensor(
+    #             self.hparams.training_args.lightning_model_args.beta
+    #         ).to(self.device)
 
-        tokens, masks, energies, ref_logps = batch
+    #     tokens, masks, energies, ref_logps = batch
 
-        policy_logps = self._compute_policy_logps(self.model, tokens, None, masks)
-        # Ignore the BOS when computing logps
-        policy_logps = policy_logps * masks[:, 1:]
-        policy_logps = policy_logps.sum(-1)
+    #     policy_logps = self._compute_policy_logps(self.model, tokens, None, masks)
+    #     # Ignore the BOS when computing logps
+    #     policy_logps = policy_logps * masks[:, 1:]
+    #     policy_logps = policy_logps.sum(-1)
 
-        beta_prime = self.alignment_betas / (
-            1 + self.hparams.training_args.lightning_model_args.gamma
-        )
-        gamma_prime = self.hparams.training_args.lightning_model_args.gamma / (
-            1 + self.hparams.training_args.lightning_model_args.gamma
-        )
+    #     beta_prime = self.alignment_betas / (
+    #         1 + self.hparams.training_args.lightning_model_args.gamma
+    #     )
+    #     gamma_prime = self.hparams.training_args.lightning_model_args.gamma / (
+    #         1 + self.hparams.training_args.lightning_model_args.gamma
+    #     )
 
-        # FH: Here, energies can be (n_samples, n_energies) with associated beta_prime of shape (n_energies)
-        # or energies can be (n_samples) with a scalar beta_prime. After the multiplication and summation
-        # guarded behind the dimension check, energies should just be (n_samples).
-        energies = energies * beta_prime
-        if energies.dim() == 2:
-            energies = energies.sum(-1)
+    #     # FH: Here, energies can be (n_samples, n_energies) with associated beta_prime of shape (n_energies)
+    #     # or energies can be (n_samples) with a scalar beta_prime. After the multiplication and summation
+    #     # guarded behind the dimension check, energies should just be (n_samples).
+    #     energies = energies * beta_prime
+    #     if energies.dim() == 2:
+    #         energies = energies.sum(-1)
 
-        policy_logps_y1 = policy_logps.reshape(-1, 2)[:, 0]
-        policy_logps_y2 = policy_logps.reshape(-1, 2)[:, 1]
+    #     policy_logps_y1 = policy_logps.reshape(-1, 2)[:, 0]
+    #     policy_logps_y2 = policy_logps.reshape(-1, 2)[:, 1]
 
-        ref_logps_y1 = ref_logps.reshape(-1, 2)[:, 0]
-        ref_logps_y2 = ref_logps.reshape(-1, 2)[:, 1]
+    #     ref_logps_y1 = ref_logps.reshape(-1, 2)[:, 0]
+    #     ref_logps_y2 = ref_logps.reshape(-1, 2)[:, 1]
 
-        energies_y1 = energies.reshape(-1, 2)[:, 0]
-        energies_y2 = energies.reshape(-1, 2)[:, 1]
+    #     energies_y1 = energies.reshape(-1, 2)[:, 0]
+    #     energies_y2 = energies.reshape(-1, 2)[:, 1]
 
-        logp = nn.functional.logsigmoid(policy_logps_y2 - policy_logps_y1)
-        logp_prime = nn.functional.logsigmoid(policy_logps_y1 - policy_logps_y2)
+    #     logp = nn.functional.logsigmoid(policy_logps_y2 - policy_logps_y1)
+    #     logp_prime = nn.functional.logsigmoid(policy_logps_y1 - policy_logps_y2)
 
-        logp_star = nn.functional.logsigmoid(
-            -(energies_y2 - energies_y1) + (gamma_prime * (ref_logps_y2 - ref_logps_y1))
-        )
-        logp_star_prime = nn.functional.logsigmoid(
-            -(energies_y1 - energies_y2) + (gamma_prime * (ref_logps_y1 - ref_logps_y2))
-        )
-        kl_loss = torch.exp(logp_star) * (logp_star - logp) + torch.exp(
-            logp_star_prime
-        ) * (logp_star_prime - logp_prime)
+    #     logp_star = nn.functional.logsigmoid(
+    #         -(energies_y2 - energies_y1) + (gamma_prime * (ref_logps_y2 - ref_logps_y1))
+    #     )
+    #     logp_star_prime = nn.functional.logsigmoid(
+    #         -(energies_y1 - energies_y2) + (gamma_prime * (ref_logps_y1 - ref_logps_y2))
+    #     )
+    #     kl_loss = torch.exp(logp_star) * (logp_star - logp) + torch.exp(
+    #         logp_star_prime
+    #     ) * (logp_star_prime - logp_prime)
 
-        kl_loss = kl_loss.mean()
+    #     kl_loss = kl_loss.mean()
 
-        metrics = {f"{prefix}/ERALoss": kl_loss}
+    #     metrics = {f"{prefix}/ERALoss": kl_loss}
 
-        self.log_dict(
-            metrics,
-            on_epoch=True,
-            on_step=self.hparams.training_args.lightning_model_args.on_step,
-            sync_dist=self.hparams.training_args.lightning_model_args.sync_dist,
-            batch_size=tokens.shape[0],
-        )
+    #     self.log_dict(
+    #         metrics,
+    #         on_epoch=True,
+    #         on_step=self.hparams.training_args.lightning_model_args.on_step,
+    #         sync_dist=self.hparams.training_args.lightning_model_args.sync_dist,
+    #         batch_size=tokens.shape[0],
+    #     )
 
-        return kl_loss
+    #     return kl_loss
 
     def _shared_eval_era_online(self, batch, batch_idx, prefix):
         """
@@ -1780,85 +1472,60 @@ class LightningModel(L.LightningModule):
                 param.requires_grad = False
             self.reference_model.eval()
 
-    def _shared_eval_dpo(self, batch, batch_idx, prefix):
-        if not hasattr(self, "alignment_betas"):
-            self.alignment_betas = torch.tensor(
-                self.hparams.training_args.lightning_model_args.beta
-            ).to(self.device)
+    # def _shared_eval_dpo(self, batch, batch_idx, prefix):
+    #     if not hasattr(self, "alignment_betas"):
+    #         self.alignment_betas = torch.tensor(
+    #             self.hparams.training_args.lightning_model_args.beta
+    #         ).to(self.device)
 
-        tokens, masks, energies, ref_logps = batch
+    #     tokens, masks, energies, ref_logps = batch
 
-        policy_logps = self._compute_policy_logps(self.model, tokens, None, masks)
-        # Ignore the BOS when computing logps
-        policy_logps = policy_logps * masks[:, 1:]
-        policy_logps = policy_logps.sum(-1)
+    #     policy_logps = self._compute_policy_logps(self.model, tokens, None, masks)
+    #     # Ignore the BOS when computing logps
+    #     policy_logps = policy_logps * masks[:, 1:]
+    #     policy_logps = policy_logps.sum(-1)
 
-        beta = self.alignment_betas
+    #     beta = self.alignment_betas
 
-        if energies.dim() == 2:
-            energies = energies.sum(-1)
+    #     if energies.dim() == 2:
+    #         energies = energies.sum(-1)
 
-        policy_logps_y1 = policy_logps.reshape(-1, 2)[:, 0]
-        policy_logps_y2 = policy_logps.reshape(-1, 2)[:, 1]
+    #     policy_logps_y1 = policy_logps.reshape(-1, 2)[:, 0]
+    #     policy_logps_y2 = policy_logps.reshape(-1, 2)[:, 1]
 
-        ref_logps_y1 = ref_logps.reshape(-1, 2)[:, 0]
-        ref_logps_y2 = ref_logps.reshape(-1, 2)[:, 1]
+    #     ref_logps_y1 = ref_logps.reshape(-1, 2)[:, 0]
+    #     ref_logps_y2 = ref_logps.reshape(-1, 2)[:, 1]
 
-        energies_y1 = energies.reshape(-1, 2)[:, 0]
-        energies_y2 = energies.reshape(-1, 2)[:, 1]
+    #     energies_y1 = energies.reshape(-1, 2)[:, 0]
+    #     energies_y2 = energies.reshape(-1, 2)[:, 1]
 
-        # SI: want to be able to specify whether higher or lower energy is better
-        if self.hparams.training_args.lightning_model_args.better_energy == "higher":
-            y2_sign = (energies_y2 >= energies_y1).long()
-        elif self.hparams.training_args.lightning_model_args.better_energy == "lower":
-            y2_sign = (energies_y2 <= energies_y1).long()
-        else:
-            raise ValueError("better_energy must be 'higher' or 'lower'")
-        y2_sign[y2_sign == 0] = -1
-        y1_sign = -y2_sign
+    #     # SI: want to be able to specify whether higher or lower energy is better
+    #     if self.hparams.training_args.lightning_model_args.better_energy == "higher":
+    #         y2_sign = (energies_y2 >= energies_y1).long()
+    #     elif self.hparams.training_args.lightning_model_args.better_energy == "lower":
+    #         y2_sign = (energies_y2 <= energies_y1).long()
+    #     else:
+    #         raise ValueError("better_energy must be 'higher' or 'lower'")
+    #     y2_sign[y2_sign == 0] = -1
+    #     y1_sign = -y2_sign
 
-        pi_logratios = y2_sign * policy_logps_y2 + y1_sign * policy_logps_y1
-        ref_logratios = y2_sign * ref_logps_y2 + y1_sign * ref_logps_y1
+    #     pi_logratios = y2_sign * policy_logps_y2 + y1_sign * policy_logps_y1
+    #     ref_logratios = y2_sign * ref_logps_y2 + y1_sign * ref_logps_y1
 
-        loss = -nn.functional.logsigmoid(beta * (pi_logratios - ref_logratios))
-        tot_loss = loss.mean()
+    #     loss = -nn.functional.logsigmoid(beta * (pi_logratios - ref_logratios))
+    #     tot_loss = loss.mean()
 
-        metrics = {f"{prefix}/DPOLoss": tot_loss}
+    #     metrics = {f"{prefix}/DPOLoss": tot_loss}
 
-        self.log_dict(
-            metrics,
-            on_epoch=True,
-            on_step=self.hparams.training_args.lightning_model_args.on_step,
-            sync_dist=self.hparams.training_args.lightning_model_args.sync_dist,
-            batch_size=tokens.shape[0],
-        )
+    #     self.log_dict(
+    #         metrics,
+    #         on_epoch=True,
+    #         on_step=self.hparams.training_args.lightning_model_args.on_step,
+    #         sync_dist=self.hparams.training_args.lightning_model_args.sync_dist,
+    #         batch_size=tokens.shape[0],
+    #     )
 
-        return tot_loss
-
-    def _get_unmask_indices(self, masked_indices, sequence_length):
-        num_masked = masked_indices.shape[0]
-        if num_masked == 0:
-            return np.array([])
-
-        if np.random.rand() < 0.8:
-            # Draw from Beta(3, 9) distribution
-            mask_rate = np.random.beta(3, 9)
-        else:
-            # Draw from a linear distribution
-            mask_rate = np.random.uniform(0, 1)
-
-        num_to_mask = int(mask_rate * sequence_length)
-        num_to_mask = max(1, num_to_mask)
-        num_to_mask = min(num_to_mask, num_masked)
-        mask_indices = np.random.choice(masked_indices, num_to_mask, replace=False)
-        return mask_indices
-
-    def _unmask_all_indices(self, masked_indices, sequence_length):
-        num_masked = masked_indices.shape[0]
-        if num_masked == 0:
-            return np.array([])
-        # Return all the indices at once for unmasking everything
-        return masked_indices
+    #     return tot_loss
 
     def on_before_optimizer_step(self, optimizer):
         # Calculate the L2 norm of the gradients
@@ -1869,1197 +1536,41 @@ class LightningModel(L.LightningModule):
     def training_step(self, batch, batch_idx):
         if self.training_args["training_mode"] == "autoregressive":
             return self._shared_eval_autoreg(batch, batch_idx, "train")
-        elif self.training_args["training_mode"] == "mixed_sequence":
-            return self._shared_eval_mixed_seq(batch, batch_idx, "train")
-        elif self.training_args["training_mode"] == "bidirectional":
-            return self._shared_eval_bidirec(batch, batch_idx, "train")
-        elif self.training_args["training_mode"] == "transfusion":
-            return self._shared_eval_transfusion(batch, batch_idx, "train")
-        elif self.training_args["training_mode"] == "transfusion_offset":
-            return self._shared_eval_transfusion_offset(batch, batch_idx, "train")
-        elif self.training_args["training_mode"] == "era":
-            return self._shared_eval_era(batch, batch_idx, "train")
+        # elif self.training_args["training_mode"] == "era":
+        #     return self._shared_eval_era(batch, batch_idx, "train")
         elif self.training_args["training_mode"] == "era_online":
             return self._shared_eval_era_online(batch, batch_idx, "train")
         elif self.training_args["training_mode"] == "grpo":
             return self._shared_eval_grpo(batch, batch_idx, "train")
-        elif self.training_args["training_mode"] == "dpo":
-            return self._shared_eval_dpo(batch, batch_idx, "train")
+        # elif self.training_args["training_mode"] == "dpo":
+            # return self._shared_eval_dpo(batch, batch_idx, "train")
 
     def validation_step(self, batch, batch_idx):
         with torch.enable_grad():
             if self.training_args["training_mode"] == "autoregressive":
                 return self._shared_eval_autoreg(batch, batch_idx, "validation")
-            elif self.training_args["training_mode"] == "mixed_sequence":
-                return self._shared_eval_mixed_seq(batch, batch_idx, "validation")
-            elif self.training_args["training_mode"] == "bidirectional":
-                return self._shared_eval_bidirec(batch, batch_idx, "validation")
-            elif self.training_args["training_mode"] == "transfusion":
-                return self._shared_eval_transfusion(batch, batch_idx, "validation")
-            elif self.training_args["training_mode"] == "transfusion_offset":
-                return self._shared_eval_transfusion_offset(
-                    batch, batch_idx, "validation"
-                )
-            elif self.training_args["training_mode"] == "era":
-                return self._shared_eval_era(batch, batch_idx, "validation")
+            # elif self.training_args["training_mode"] == "era":
+            #     return self._shared_eval_era(batch, batch_idx, "validation")
             elif self.training_args["training_mode"] == "era_online":
                 return self._shared_eval_era_online(batch, batch_idx, "validation")
             elif self.training_args["training_mode"] == "grpo":
                 return self._shared_eval_grpo(batch, batch_idx, "validation")
-            elif self.training_args["training_mode"] == "dpo":
-                return self._shared_eval_dpo(batch, batch_idx, "validation")
+            # elif self.training_args["training_mode"] == "dpo":
+            #     return self._shared_eval_dpo(batch, batch_idx, "validation")
 
     def test_step(self, batch, batch_idx):
         with torch.enable_grad():
             if self.training_args["training_mode"] == "autoregressive":
                 return self._shared_eval_autoreg(batch, batch_idx, "test")
-            elif self.training_args["training_mode"] == "mixed_sequence":
-                return self._shared_eval_mixed_seq(batch, batch_idx, "test")
-            elif self.training_args["training_mode"] == "bidirectional":
-                return self._shared_eval_bidirec(batch, batch_idx, "test")
-            elif self.training_args["training_mode"] == "transfusion":
-                return self._shared_eval_transfusion(batch, batch_idx, "test")
-            elif self.training_args["training_mode"] == "transfusion_offset":
-                return self._shared_eval_transfusion_offset(batch, batch_idx, "test")
-            elif self.training_args["training_mode"] == "era":
-                return self._shared_eval_era(batch, batch_idx, "test")
+            # elif self.training_args["training_mode"] == "era":
+            #     return self._shared_eval_era(batch, batch_idx, "test")
             elif self.training_args["training_mode"] == "era_online":
                 return self._shared_eval_era_online(batch, batch_idx, "test")
             elif self.training_args["training_mode"] == "grpo":
                 return self._shared_eval_grpo(batch, batch_idx, "test")
-            elif self.training_args["training_mode"] == "dpo":
-                return self._shared_eval_dpo(batch, batch_idx, "test")
+            # elif self.training_args["training_mode"] == "dpo":
+            #     return self._shared_eval_dpo(batch, batch_idx, "test")
 
-    def forward_bidirec(self, batch, token_sampler, unmasking_mode="sample"):
-        """Does not currently add padding"""
-        if unmasking_mode == "sample" or unmasking_mode == "all":
-            struct_batch, _, masked_smi_batch, seq_id, _ = batch
-            device = struct_batch.device
-
-            batch_size = masked_smi_batch.shape[0]
-            padded_sequence_length = masked_smi_batch.shape[1]
-
-            # Fix this hardcoding
-            mask_token = self.token_info["input"]["TOK"]["TOK_MASK"]
-            pad_token = self.token_info["input"]["TOK"]["TOK_PAD"]
-
-            smiles_masked_indices = (
-                masked_smi_batch == mask_token
-            )  # GET THIS, remove hardcoding after testing
-            # True sequence length without padding and masking
-            # rotamer_non_special_indices = ((masked_rotamer_tokens_batch <= self.max_non_special_token_rotamer)
-            #                                | (masked_rotamer_tokens_batch == self.mask_token_rotamer))
-            # sequence_length = rotamer_non_special_indices.sum(-1)
-            sequence_length = (
-                (masked_smi_batch < pad_token) | (masked_smi_batch == mask_token)
-            ).sum(-1)
-
-            masked_indices = [
-                torch.where(smiles_masked_indices[i])[0].detach().cpu().numpy()
-                for i in range(batch_size)
-            ]
-
-            if unmasking_mode == "sample":
-                unmasked_indices = [
-                    (
-                        self._get_unmask_indices(masked_indices[i], sequence_length[i])
-                        + padded_sequence_length * i
-                    )
-                    for i in range(batch_size)
-                ]
-            elif unmasking_mode == "all" or unmasking_mode == "masked_left_to_right":
-                unmasked_indices = [
-                    (
-                        self._unmask_all_indices(masked_indices[i], sequence_length[i])
-                        + padded_sequence_length * i
-                    )
-                    for i in range(batch_size)
-                ]
-
-            unmasked_indices = torch.tensor(
-                np.concatenate(unmasked_indices), device=device
-            ).long()
-
-            # import pdb; pdb.set_trace()
-            while unmasked_indices.shape[0] > 0:
-                # logits = self.model(structural_tokens=structural_tokens_batch,
-                #                  residue_tokens=residue_tokens_batch,
-                #                  rotamer_tokens=masked_rotamer_tokens_batch,
-                #                  bb_coords=bb_coords_batch,
-                #                  sequence_id=sequence_id_batch)
-                # import pdb; pdb.set_trace()
-                logits = self.model(masked_smi_batch, struct_batch, seq_id)
-
-                masked_smi_batch_flattened = masked_smi_batch.flatten()
-                logits_flattened = logits.view(-1, logits.shape[-1])
-
-                # mask_token_probs = nn.functional.softmax(
-                #     logits_flattened[unmasked_indices], dim=-1
-                # )
-                # tokens = torch.multinomial(mask_token_probs, 1).squeeze(-1)
-                tokens, _ = token_sampler(logits_flattened[unmasked_indices]).squeeze(
-                    -1
-                )
-
-                masked_smi_batch_flattened[unmasked_indices] = tokens
-
-                masked_smi_batch = masked_smi_batch_flattened.view(
-                    -1, masked_smi_batch.shape[-1]
-                )
-
-                smi_masked_indices = masked_smi_batch == mask_token
-
-                masked_indices = [
-                    torch.where(smi_masked_indices[i])[0].detach().cpu().numpy()
-                    for i in range(batch_size)
-                ]
-                unmasked_indices = [
-                    (
-                        self._get_unmask_indices(masked_indices[i], sequence_length[i])
-                        + padded_sequence_length * i
-                    )
-                    for i in range(batch_size)
-                ]
-
-                unmasked_indices = torch.tensor(
-                    np.concatenate(unmasked_indices), device=device
-                ).long()
-
-            return masked_smi_batch
-
-        elif unmasking_mode == "masked_left_to_right":
-            structural_batch, smi_batch, seq_id_batch = batch
-            assert (
-                structural_batch.shape[0] == smi_batch.shape[0] == seq_id_batch.shape[0]
-            )
-            device = structural_batch.device
-            batch_size = structural_batch.shape[0]
-            # For keeping track and only working on incomplete structures
-            index_mapping = torch.arange(batch_size, device=device)
-            completed_structures = [None] * batch_size
-            # Save the sum of log probabilities as a score for each sequence
-            completed_token_probs = [None] * batch_size
-            all_structures_completed = False
-
-            # Three quantities to keep track of and grow as we go
-            working_smi_batch = smi_batch.clone()  # (N, 1)
-            working_seq_id_batch = seq_id_batch.clone()  # (N, 1)
-            working_structural_batch = structural_batch.clone()  # (N, 1)
-            working_token_probs = torch.tensor([]).to(device)
-
-            # Fix this hardcoding
-            mask_token = self.token_info["input"]["TOK"]["TOK_MASK"]
-            pad_token = self.token_info["input"]["TOK"]["TOK_PAD"]
-            stop_token = self.token_info["input"]["TOK"]["TOK_STOP"]
-            # start_token = self.token_info['input']['TOK']['TOK_START']
-
-            while not all_structures_completed:
-                print(
-                    "beginning of loop",
-                    working_smi_batch.shape,
-                    working_structural_batch.shape,
-                    working_seq_id_batch.shape,
-                )
-
-                # SI: check where there's a mask token at the end of each sequence still being worked on and remove it
-                if working_smi_batch[:, -1].eq(mask_token).all():
-                    working_smi_batch = working_smi_batch[:, :-1]
-                    working_token_probs = working_token_probs[:, :-1]
-                    working_seq_id_batch = working_seq_id_batch[:, :-1]
-                    working_structural_batch = working_structural_batch[:, :-1]
-
-                logits = self.model(
-                    working_smi_batch, working_structural_batch, working_seq_id_batch
-                )  # (N, T, E)
-                next_pos = logits[:, -1, :]  # (N, E)
-                # char_probs = torch.nn.functional.softmax(next_pos, dim=-1)  # (N, E)
-                # tokens = torch.multinomial(char_probs, 1)  # (N, 1)
-                # selected_probs = torch.gather(char_probs, 1, tokens)  # (N, 1)
-                tokens, selected_probs = token_sampler(next_pos)
-
-                # import pdb; pdb.set_trace()
-                concatenated_results = torch.cat((working_smi_batch, tokens), dim=-1)
-                concatenated_probs = torch.cat(
-                    (working_token_probs, selected_probs), dim=1
-                )
-
-                # SI: Append mask token to end of sequence
-                mask_tokens = torch.full(
-                    (working_smi_batch.shape[0], 1), mask_token, device=device
-                )
-                concatenated_results = torch.cat(
-                    (concatenated_results, mask_tokens), dim=-1
-                )
-
-                # SI: Append mask token probability (zero as a filler) to end of sequence
-                mask_probs = torch.zeros((working_smi_batch.shape[0], 1), device=device)
-                concatenated_probs = torch.cat((concatenated_probs, mask_probs), dim=-1)
-
-                # Sequence id here is binary so appending on more 1's is good enough
-                # SI: needed to append two at a time to account for presence of mask token
-                concatenated_seq_id = torch.cat(
-                    (
-                        working_seq_id_batch,
-                        torch.ones(
-                            (working_seq_id_batch.shape[0], 2), device=device
-                        ).long(),
-                    ),
-                    dim=1,
-                )
-                concatenated_structural = torch.cat(
-                    (
-                        working_structural_batch,
-                        torch.ones(
-                            (working_structural_batch.shape[0], 2), device=device
-                        ).long()
-                        * pad_token,
-                    ),
-                    dim=1,
-                )
-
-                stop_token_mask = (
-                    concatenated_results[:, -2] == stop_token
-                )  # modified from original autorereg code
-                comp_structs = concatenated_results[stop_token_mask]
-                comp_probs = concatenated_probs[stop_token_mask]
-                comp_inds = index_mapping[stop_token_mask]
-
-                # SI: remove the last token (mask token) from the completed structures and probabilities
-                comp_structs = comp_structs[:, :-1]
-                comp_probs = comp_probs[:, :-1]
-
-                for i, icomp in enumerate(comp_inds):
-                    completed_structures[icomp] = comp_structs[i].detach().cpu().numpy()
-                    completed_token_probs[icomp] = comp_probs[i].detach().cpu().numpy()
-
-                # import pdb; pdb.set_trace()
-                working_smi_batch = concatenated_results[~stop_token_mask]
-                working_token_probs = concatenated_probs[~stop_token_mask]
-                index_mapping = index_mapping[~stop_token_mask]
-                # Also update the sequence ID and structural tokens
-                working_seq_id_batch = concatenated_seq_id[~stop_token_mask]
-                working_structural_batch = concatenated_structural[~stop_token_mask]
-
-                if (
-                    working_smi_batch.shape[-1] > 1000
-                ):  # Fix this hardcoding for the token limit
-                    working_smi_batch = torch.cat(
-                        (
-                            working_smi_batch,
-                            torch.tensor([stop_token] * working_smi_batch.shape[0])
-                            .reshape(-1, 1)
-                            .to(device),
-                        ),
-                        dim=-1,
-                    )
-                    working_token_probs = torch.cat(
-                        (
-                            working_token_probs,
-                            torch.tensor([0.0] * working_smi_batch.shape[0])
-                            .reshape(-1, 1)
-                            .to(device),
-                        ),
-                        dim=-1,
-                    )
-                    for j, idx in enumerate(index_mapping):
-                        completed_structures[idx] = (
-                            working_smi_batch[j].detach().cpu().numpy()
-                        )
-                        completed_token_probs[idx] = (
-                            working_token_probs[j].detach().cpu().numpy()
-                        )
-
-                    all_structures_completed = True
-
-                if len(working_smi_batch) == 0:
-                    all_structures_completed = True
-                # import pdb; pdb.set_trace()
-
-            return completed_structures, completed_token_probs
-
-    def _sample_structue_tokens_unmasking(
-        self,
-        completed_smiles_structures,
-        token_sampler,
-        smiles_pad_token,
-        struct_token,
-        struct_mask_token,
-        struct_stop_token,
-        device,
-    ):
-        """
-        With completed SMILES structures, sample the structure tokens
-        """
-        # import pdb; pdb.set_trace()
-        batch_size = len(completed_smiles_structures)
-        # Stage 2: Structural inference
-        final_completed_smiles = []
-        final_completed_structure = []
-        # Create a batch from the ragged tensors but augment by a buffer value of doubling the size
-        working_smiles_batch = pad_sequence(
-            completed_smiles_structures,
-            batch_first=True,
-            padding_value=smiles_pad_token,
-        )  # (N, T)
-        working_smiles_batch = torch.cat(
-            (
-                working_smiles_batch,
-                torch.ones_like(working_smiles_batch) * smiles_pad_token,
-            ),
-            dim=1,
-        )  # (N, 2*T)
-        working_seq_id_batch = (
-            working_smiles_batch != smiles_pad_token
-        ).long()  # (N, 2*T)
-        # Add a structure token to the end of the batch using the sum
-        working_smiles_batch[
-            torch.arange(working_smiles_batch.shape[0]), working_seq_id_batch.sum(-1)
-        ] = struct_token
-        working_seq_id_batch = (
-            working_smiles_batch != smiles_pad_token
-        ).long()  # (N, 2*T)
-        working_structural_batch = (
-            torch.tensor([struct_mask_token] * batch_size).reshape(-1, 1).to(device)
-        )  # (N, 1)
-
-        while len(final_completed_smiles) < batch_size:
-            curr_batch = (
-                "smiles_and_struct",
-                working_smiles_batch,
-                working_structural_batch,
-                working_seq_id_batch,
-            )
-            out = self.model(curr_batch)
-            _, struct_out, _, _ = (
-                out  # struct_out shape is (N*S, E), need to get back to (N, S, E)
-            )
-
-            # Convert the probabilities to tokens
-            input_batch_size = working_structural_batch.shape[0]
-            struct_out = struct_out.reshape(
-                input_batch_size, -1, struct_out.shape[-1]
-            )  # (N, S, E)
-            struct_next_pos = struct_out[:, -1, :]  # (N, E)
-            # struct_char_probs = torch.nn.functional.softmax(
-            #     struct_next_pos, dim=-1
-            # )  # (N, E)
-            # struct_tokens = torch.multinomial(struct_char_probs, 1)
-            struct_tokens, _ = token_sampler(struct_next_pos)
-            struct_tokens = struct_tokens.squeeze(
-                -1
-            )  # (N,) to allow for direct assignment
-
-            # Filter out completed stuff
-            working_structural_batch[:, -1] = struct_tokens
-            stop_token_mask = working_structural_batch[:, -1] == struct_stop_token
-
-            final_completed_smiles.extend([*working_smiles_batch[stop_token_mask]])
-            final_completed_structure.extend(
-                [*working_structural_batch[stop_token_mask]]
-            )
-
-            working_structural_batch = working_structural_batch[~stop_token_mask]
-            working_smiles_batch = working_smiles_batch[~stop_token_mask]
-            working_seq_id_batch = working_seq_id_batch[~stop_token_mask]
-
-            # Update the modified quantities
-
-            # Check if smiles batch needs resizing
-            last_tokens = working_smiles_batch[:, -1]
-            if (last_tokens != smiles_pad_token).any():
-                # Add a buffering
-                working_smiles_batch = torch.cat(
-                    (
-                        working_smiles_batch,
-                        torch.ones_like(working_smiles_batch) * smiles_pad_token,
-                    ),
-                    dim=1,
-                )
-                working_seq_id_batch = (working_smiles_batch != smiles_pad_token).long()
-            # Add a structure token to the end of the batch using the sum
-            working_smiles_batch[
-                torch.arange(working_smiles_batch.shape[0]),
-                working_seq_id_batch.sum(-1),
-            ] = struct_token
-            working_seq_id_batch = (working_smiles_batch != smiles_pad_token).long()
-
-            # Append a structure masking token to the end of the structural batch
-            working_structural_batch = torch.cat(
-                (
-                    working_structural_batch,
-                    torch.tensor(
-                        [struct_mask_token] * working_structural_batch.shape[0]
-                    )
-                    .reshape(-1, 1)
-                    .to(device),
-                ),
-                dim=-1,
-            )
-
-            assert (
-                (working_smiles_batch == struct_token)
-                .sum(-1)
-                .eq(working_structural_batch.shape[-1])
-                .all()
-            )
-
-            if working_structural_batch.shape[-1] > 1000:
-                # FH: Introduce a hard cutoff to prevent infinite looping
-                final_completed_smiles.extend([*working_smiles_batch])
-                final_completed_structure.extend([*working_structural_batch])
-
-        # Detach and cast to cpu
-        final_completed_smiles = [
-            x.detach().cpu().numpy() for x in final_completed_smiles
-        ]
-        final_completed_structure = [
-            x.detach().cpu().numpy() for x in final_completed_structure
-        ]
-
-        return final_completed_smiles, final_completed_structure
-
-    def _determine_maximum_num_struct_tokens(
-        self, completed_smiles_structures, alphabet
-    ):
-        # The tightest possible upper bound for a batch is the greatest number of atoms
-        #   for a sequence in the batch
-        needed_lengths = []
-        for seq in completed_smiles_structures:
-            non_special_tokens = (
-                seq[1:-1].detach().cpu().numpy()
-            )  # Remove start, stop tokens
-            temp_smi = "".join(alphabet[non_special_tokens])
-            try:
-                mol = Chem.MolFromSmiles(temp_smi)
-                mol = Chem.AddHs(mol)
-                num_atoms = mol.GetNumAtoms()
-                needed_lengths.append(num_atoms)
-            except Exception:
-                # Just a single structure token
-                needed_lengths.append(1)
-        needed_lengths = torch.tensor(
-            needed_lengths,
-            device=completed_smiles_structures[0].device,
-            dtype=torch.long,
-        )
-        return needed_lengths
-
-    def _get_node_features(self, completed_smiles_structures, alphabet):
-        """
-        Extracts node features after removing all the hydrogen atoms from the
-        molecule
-        """
-        # import pdb; pdb.set_trace()
-        mol_node_features = []
-        failed_indices = []
-        for i, seq in enumerate(completed_smiles_structures):
-            non_special_tokens = seq[1:-1].detach().cpu().numpy()
-            temp_smi = "".join(alphabet[non_special_tokens])
-            try:
-                mol = Chem.MolFromSmiles(temp_smi)
-                # The transformer only sees heavy atoms, no protons!
-                mol = Chem.RemoveAllHs(mol)
-                node_features = np.array(get_node_features(mol))
-                mol_node_features.append(node_features)
-            except Exception:
-                # import pdb; pdb.set_trace()
-                # Just a single structure token
-                failed_indices.append(i)
-                mol_node_features.append([])
-        return mol_node_features, failed_indices
-
-    def _generate_token_group_masking(
-        self, mol_node_features, token_grouping, total_vocabulary_size
-    ):
-        """
-        The mol_node_features contain the atom-valency-hybridization information
-        for each atom in the molecule. We know that only certain tokens are allowed so we need to mask
-        out the rest of the vocabulary. The token_grouping dictionary maps keys of the form
-        'atom-valency-hybridization' to the set of valid indices in the vocabulary.
-
-        Note that because the probabilities are computed using softmax, to properly zero out the logits for
-        undesirable tokens, we need to set them to -inf. We do this by using the addition identity, and only
-        adding 0 to logits which we want to keep (any values + -inf = -inf).
-
-        mol_node_features: (n_atoms, 3)
-        token_grouping: {atom-valency-hybridization: [indices]}
-        total_vocabulary_size: int
-        """
-        masking = torch.full(
-            (len(mol_node_features), total_vocabulary_size),
-            float("-inf"),
-            dtype=torch.float32,
-        )
-        for i, node_features in enumerate(mol_node_features):
-            atom_val_hyb = "_".join([str(int(x)) for x in node_features])
-            if atom_val_hyb in token_grouping:
-                valid_indices = token_grouping[atom_val_hyb]
-                masking[i, valid_indices] = 0.0
-            else:
-                # All tokens are viable here
-                masking[i, :] = 0.0
-        return masking
-
-    def _construct_packed_sequence_repr(
-        self, mol_node_features, avh_special_tokens, structure_masking_token
-    ):
-        """
-        Construct the packed sequences with the correct offsets, simlar to the output of the
-        input generator where a final sequence looks like:
-        [ P, S0,   P, S1,  P, S2,  P, S3]
-        [A0,  P,  A1,  P, A2,  P, A3,  P]
-        [V0,  P,  V1,  P, V2,  P, V3,  P]
-        [H0,  P,  H1,  P, H2,  P, H3,  P]
-
-        See "idr_plm.nn.transformer.input_generators.SMILESStructureAVHGenerator" for more information.
-        Here, mol_node_features is (n_atom, 3)
-        """
-        mol_node_features = torch.tensor(
-            mol_node_features, dtype=torch.long
-        )  # (n_atoms, 3)
-        n_structure_tokens = len(mol_node_features)
-        completed_repr = torch.zeros((4, n_structure_tokens * 2), dtype=torch.long)
-        node_feat_T = mol_node_features.T  # (3, n_atoms)
-        completed_repr[0, :] = structure_masking_token
-        completed_repr[1, 0::2] = node_feat_T[0, :]  # Atom
-        completed_repr[1, 1::2] = avh_special_tokens["atom_pad_idx"]
-        completed_repr[2, 0::2] = node_feat_T[1, :]
-        completed_repr[2, 1::2] = avh_special_tokens["valency_pad_idx"]
-        completed_repr[3, 0::2] = node_feat_T[2, :]
-        completed_repr[3, 1::2] = avh_special_tokens["hybrid_pad_idx"]
-        return completed_repr
-
-    def _sample_structure_tokens_autorgressive_avh(
-        self,
-        all_smiles_reprs,
-        all_node_reprs,
-        all_seq_id,
-        all_vocab_masks,
-        all_num_iterations,
-        smiles_pad_token,
-        struct_pad_token,
-    ):
-        """
-        Sample the structure tokens autoregressively using the AVH information,
-        but updating the structure track along the way with the tokens that are sampled
-        """
-        # import pdb; pdb.set_trace()
-        completed_smiles_tracks = []
-        completed_structure_tracks = []
-        max_iter = max(all_num_iterations)
-
-        # Construct a batching vector for reconstruction of struct_out, tricky because of how
-        #   all structure tokens are passed at once
-        node_repr_T = all_node_reprs.permute(0, 2, 1)  # (N, S, 4)
-        batch_vector = node_repr_T[:, :, 0] != struct_pad_token  # (N, S)
-        cat_1 = (
-            torch.ones(batch_vector.shape[0], dtype=torch.long)
-            .reshape(-1, 1)
-            .to(batch_vector.device)
-        )  # (N, 1)
-        batch_vector = torch.cat((cat_1, batch_vector), dim=-1)  # (N, S + 1)
-        batch_vector = batch_vector.reshape(-1)
-
-        for i in range(max_iter):
-            input_batch_size = all_smiles_reprs.shape[0]
-            curr_batch = (
-                "smiles_struct_avh",
-                all_smiles_reprs,
-                all_node_reprs,
-                all_seq_id,
-            )
-            out = self.model(curr_batch)
-            # import pdb; pdb.set_trace()
-            _, struct_out, _, _ = out
-            # This reshaping does not work because you don't have the exact same number of structure tokens for each
-            #     sequence in the batch
-            # struct_out = struct_out.reshape(input_batch_size, -1, struct_out.shape[-1]) #(N, S, E)
-
-            # Try a more costly strategy of reshaping the entire batch
-            struct_out_tmp = torch.zeros(
-                batch_vector.shape[0], struct_out.shape[-1]
-            ).to(struct_out.device)
-            struct_out_tmp[batch_vector.bool()] = struct_out
-            struct_out = struct_out_tmp.reshape(
-                input_batch_size, -1, struct_out.shape[-1]
-            )  # (N, S, E)
-
-            # Careful here: the index for the position we want to sample is actually the 2i + 1th position
-            sample_idx = (2 * i) + 1
-            struct_token_pos = struct_out[:, sample_idx, :]  # (N, E)
-            # Print the max logits before and after masking
-            # max_logits_pre_mask = torch.max(struct_token_pos, dim = -1)
-            # print("Max logits before masking", max_logits_pre_mask)
-            # Correct the struct_token_pos logits with the vocabulary masks
-            struct_token_pos = struct_token_pos + all_vocab_masks[:, i, :]  # (N, E)
-            # max_logits_post_mask = torch.max(struct_token_pos, dim = -1)
-            # print("Max logits after masking", max_logits_post_mask)
-
-            # Check the logit diff
-            # logit_diff = max_logits_post_mask.values - max_logits_pre_mask.values
-            # print("Logit diff", logit_diff)
-            # import pdb; pdb.set_trace()
-            struct_char_probs = torch.nn.functional.softmax(
-                struct_token_pos, dim=-1
-            )  # (N, E)
-            struct_tokens = torch.multinomial(struct_char_probs, 1)  # (N, 1)
-            struct_tokens = struct_tokens.squeeze(-1)  # (N,)
-            # Update the working batch
-            all_node_reprs[:, 0, sample_idx] = struct_tokens
-
-            # Filter out those that are completed based on num_iterations
-            # print("Before", all_node_reprs.shape)
-            previous_shape = all_node_reprs.shape[0]
-
-            num_sampled_tokens = i + 1
-
-            num_sampled_mask = all_num_iterations == num_sampled_tokens
-            completed_smiles_tracks.extend([*all_smiles_reprs[num_sampled_mask]])
-            completed_structure_tracks.extend([*all_node_reprs[num_sampled_mask]])
-
-            all_smiles_reprs = all_smiles_reprs[~num_sampled_mask]
-            all_node_reprs = all_node_reprs[~num_sampled_mask]
-            all_seq_id = all_seq_id[~num_sampled_mask]
-            all_vocab_masks = all_vocab_masks[~num_sampled_mask]
-            all_num_iterations = all_num_iterations[~num_sampled_mask]
-
-            # print("After", all_node_reprs.shape)
-            final_shape = all_node_reprs.shape[0]
-            if previous_shape != final_shape:
-                # Reconstruct the batch vector
-                node_repr_T = all_node_reprs.permute(0, 2, 1)  # (N, S, 4)
-                batch_vector = node_repr_T[:, :, 0] != struct_pad_token  # (N, S)
-                cat_1 = (
-                    torch.ones(batch_vector.shape[0], dtype=torch.long)
-                    .reshape(-1, 1)
-                    .to(batch_vector.device)
-                )  # (N, 1)
-                batch_vector = torch.cat((cat_1, batch_vector), dim=-1)  # (N, S + 1)
-                batch_vector = batch_vector.reshape(-1)
-
-        # Detach and cast to cpu
-        completed_smiles_tracks = [
-            x.detach().cpu().numpy() for x in completed_smiles_tracks
-        ]
-        completed_structure_tracks = [
-            x.detach().cpu().numpy() for x in completed_structure_tracks
-        ]
-        return completed_smiles_tracks, completed_structure_tracks
-
-    def _sample_structure_tokens_autoregressive(
-        self,
-        completed_smiles_structures,
-        token_sampler,
-        smiles_pad_token,
-        struct_token,
-        struct_mask_token,
-        struct_stop_token,
-        struct_pad_token,
-        maximum_num_structure_tokens,
-        device,
-    ):
-        """
-        Sample structure tokens autoregressively.
-
-        Because of the way that the autoregressive forward pass is set up for the model, we need to
-        do a dummy forward pass to extract the first structure token
-
-        There are two stopping conditions: either the model samples a stop token or it reaches the maximum
-        number of structure tokens allowed for the sequence
-        """
-        batch_size = len(completed_smiles_structures)
-        working_struct_token_max_number_mask = torch.clone(maximum_num_structure_tokens)
-        final_completed_smiles = []
-        final_completed_structure = []
-        working_smiles_batch = pad_sequence(
-            completed_smiles_structures,
-            batch_first=True,
-            padding_value=smiles_pad_token,
-        )  # (N, T)
-        working_smiles_batch = torch.cat(
-            (
-                working_smiles_batch,
-                torch.ones_like(working_smiles_batch) * smiles_pad_token,
-            ),
-            dim=1,
-        )  # (N, 2*T)
-        working_seq_id_batch = (
-            working_smiles_batch != smiles_pad_token
-        ).long()  # (N, 2*T)
-        # Add a single structure token to the end of the batch using the sum
-        working_smiles_batch[
-            torch.arange(working_smiles_batch.shape[0]), working_seq_id_batch.sum(-1)
-        ] = struct_token
-        working_seq_id_batch = (
-            working_smiles_batch != smiles_pad_token
-        ).long()  # (N, 2*T)
-        # This is a dummy structure batch, will overwrite this after a dummy pass
-        working_structural_batch = (
-            torch.tensor([struct_mask_token] * batch_size).reshape(-1, 1).to(device)
-        )  # (N, 1)
-
-        # #FH: Determine the limit here for structure tokens based on the number of non-padding smiles tokens
-        # #   and dcale by 2.5x as a buffer. Would be good to derive a tighter upper bound on this value
-        # max_num_non_pad_smiles_tokens = (working_smiles_batch != smiles_pad_token).sum(-1).max().item()
-        # max_num_struct_tokens = math.ceil(max_num_non_pad_smiles_tokens * 2.5)
-
-        # Dummy pass to sample the first structure token
-        curr_batch = (
-            "smiles_and_struct",
-            working_smiles_batch,
-            working_structural_batch,
-            working_seq_id_batch,
-        )
-        out = self.model(curr_batch)
-        _, struct_out, _, _ = (
-            out  # Struct out shape is (N*S, E), need to get back to (N, S, E)
-        )
-        struct_out = struct_out.reshape(
-            batch_size, -1, struct_out.shape[-1]
-        )  # (N, S, E)
-        # The very first token is going to be the 0th token, should only be 2 tokens at this
-        #    stage
-        assert struct_out.shape[1] == 2
-        struct_first_pos = struct_out[:, 0, :]  # (N, E)
-        # struct_char_probs = torch.nn.functional.softmax(
-        #     struct_first_pos, dim=-1
-        # )  # (N, E)
-        # working_structural_batch = torch.multinomial(struct_char_probs, 1)  # (N, 1)
-        working_structural_batch, _ = token_sampler(struct_first_pos)  # (N, 1)
-
-        # Now we can perform the rest of the loop
-        while len(final_completed_smiles) < batch_size:
-            curr_batch = (
-                "smiles_and_struct",
-                working_smiles_batch,
-                working_structural_batch,
-                working_seq_id_batch,
-            )
-            out = self.model(curr_batch)
-            input_batch_size = working_structural_batch.shape[0]
-            _, struct_out, _, _ = out
-            struct_out = struct_out.reshape(
-                input_batch_size, -1, struct_out.shape[-1]
-            )  # (N, S, E)
-            struct_next_pos = struct_out[:, -1, :]  # (N, E)
-            # struct_char_probs = torch.nn.functional.softmax(
-            #     struct_next_pos, dim=-1
-            # )  # (N, E)
-            # struct_tokens = torch.multinomial(struct_char_probs, 1)
-            struct_tokens, _ = token_sampler(struct_next_pos)
-
-            # Stop token completion check
-            working_structural_batch = torch.cat(
-                (working_structural_batch, struct_tokens), dim=-1
-            )
-            stop_token_mask = working_structural_batch[:, -1] == struct_stop_token
-
-            final_completed_smiles.extend([*working_smiles_batch[stop_token_mask]])
-            final_completed_structure.extend(
-                [*working_structural_batch[stop_token_mask]]
-            )
-
-            working_structural_batch = working_structural_batch[~stop_token_mask]
-            working_smiles_batch = working_smiles_batch[~stop_token_mask]
-            working_seq_id_batch = working_seq_id_batch[~stop_token_mask]
-            working_struct_token_max_number_mask = working_struct_token_max_number_mask[
-                ~stop_token_mask
-            ]
-
-            # Control token mask
-            # Remove any cases here immediately where the model samples a token greater than the maximum permitted
-            control_token_mask = working_structural_batch[:, -1] >= struct_pad_token
-            working_structural_batch = working_structural_batch[~control_token_mask]
-            working_smiles_batch = working_smiles_batch[~control_token_mask]
-            working_seq_id_batch = working_seq_id_batch[~control_token_mask]
-            working_struct_token_max_number_mask = working_struct_token_max_number_mask[
-                ~control_token_mask
-            ]
-            batch_size = batch_size - control_token_mask.sum().item()
-
-            # Structural token number completion check
-            # The working_struct_token_max_number_mask is the maximum number of structure tokens that should be
-            #   sampled for each sequence, so anywhere that has more structure tokens than the maximum should be removed
-            struct_token_number_mask = (
-                working_struct_token_max_number_mask
-                < working_structural_batch.shape[-1]
-            )
-
-            final_completed_smiles.extend(
-                [*working_smiles_batch[struct_token_number_mask]]
-            )
-            final_completed_structure.extend(
-                [*working_structural_batch[struct_token_number_mask]]
-            )
-
-            working_structural_batch = working_structural_batch[
-                ~struct_token_number_mask
-            ]
-            working_smiles_batch = working_smiles_batch[~struct_token_number_mask]
-            working_seq_id_batch = working_seq_id_batch[~struct_token_number_mask]
-            working_struct_token_max_number_mask = working_struct_token_max_number_mask[
-                ~struct_token_number_mask
-            ]
-
-            last_tokens = working_smiles_batch[:, -1]
-            if (last_tokens != smiles_pad_token).any():
-                # Add a buffering
-                working_smiles_batch = torch.cat(
-                    (
-                        working_smiles_batch,
-                        torch.ones_like(working_smiles_batch) * smiles_pad_token,
-                    ),
-                    dim=1,
-                )
-                working_seq_id_batch = (working_smiles_batch != smiles_pad_token).long()
-            # Add a structure token to the end of the batch using the sum
-            working_smiles_batch[
-                torch.arange(working_smiles_batch.shape[0]),
-                working_seq_id_batch.sum(-1),
-            ] = struct_token
-            working_seq_id_batch = (working_smiles_batch != smiles_pad_token).long()
-
-            # The number of structural tokens in the smiles sequence should equal the number of structural tokens
-            #   that have been sampled
-            assert (
-                (working_smiles_batch == struct_token)
-                .sum(-1)
-                .eq(working_structural_batch.shape[-1])
-                .all()
-            )
-            assert (
-                working_struct_token_max_number_mask
-                >= working_structural_batch.shape[-1]
-            ).all()
-
-            # FH: Introduce a hard cutoff based on buffered number of non-padding smiles tokens to prevent infinite looping
-            if working_structural_batch.shape[-1] > 1000:
-                final_completed_smiles.extend([*working_smiles_batch])
-                final_completed_structure.extend([*working_structural_batch])
-
-        # Detach and cast to cpu
-        final_completed_smiles = [
-            x.detach().cpu().numpy() for x in final_completed_smiles
-        ]
-        final_completed_structure = [
-            x.detach().cpu().numpy() for x in final_completed_structure
-        ]
-
-        return final_completed_smiles, final_completed_structure
-
-    def forward_seq_struct_mixed(
-        self,
-        batch,
-        token_sampler,
-        alphabet,
-        mode="masked",
-        struct_limit_method="n_atoms",
-        struct_limit_multiplier=2.5,
-        use_finished_smiles=False,
-        avh_args=None,
-    ):
-        """
-        This function supports autoregressive inference across the smiles and structure tokens
-        as well as left-to-right unmasking of the tokens.
-
-        Notation is:
-            N: batch size
-            T/S: sequence length
-            E: embedding dimension
-
-        The struct_limit_method is how to determine the correct number of structure tokens to sample, either
-        based on the number of atoms in the molecule (n_atoms) or a multiple of the number of non-padding tokens
-        (token_mult). In the case of struct_limit_method=='token_mult', the struct_limit_multiplier determines
-        the upper bound as the number of non-padding SMILES tokens multiplied by the multiplier.
-
-        Some updated functionalities:
-            use_finished_smiles: If this is set to True, the function assumes that the
-            avh_args: A dictionary that contains arguments required for the AVH-enhanced sampling.
-        """
-        # import pdb; pdb.set_trace()
-        assert mode in ["masked", "autoregressive", "autoregressive_avh"]
-        assert struct_limit_method in ["n_atoms", "token_mult"]
-        assert struct_limit_multiplier >= 1
-
-        # smiles_start_token = self.token_info['input']['TOK']['TOK_START']
-        smiles_mask_token = self.token_info["input"]["TOK"]["TOK_MASK"]
-        smiles_stop_token = self.token_info["input"]["TOK"]["TOK_STOP"]
-        smiles_pad_token = self.token_info["input"]["TOK"]["TOK_PAD"]
-        struct_token = self.token_info["input"]["STRUCT"]["STRUCT"]
-        struct_stop_token = self.token_info["input"]["STRUCT"]["STRUCT_STOP"]
-        struct_mask_token = self.token_info["input"]["STRUCT"]["STRUCT_MASK"]
-        struct_pad_token = self.token_info["input"]["STRUCT"]["STRUCT_PAD"]
-
-        if use_finished_smiles:
-            completed_smiles_structures = batch[0]
-            device = completed_smiles_structures[0].device
-        else:
-            start_tokens, seq_id = batch
-            assert start_tokens.shape[0] == seq_id.shape[0]
-            device = start_tokens.device
-            batch_size = start_tokens.shape[0]
-            completed_smiles_structures = []
-            # import pdb; pdb.set_trace()
-
-            # import pdb; pdb.set_trace()
-
-            # Stage 1: Smiles inference
-            working_smi_batch = start_tokens.clone()  # (N, 1)
-            working_seq_id_batch = seq_id.clone()  # (N, 1), all 1's
-
-            if mode == "masked":
-                # Attach a mask token and update sequence id at the end for unmasking
-                working_smi_batch = torch.cat(
-                    (
-                        working_smi_batch,
-                        torch.tensor([smiles_mask_token] * working_smi_batch.shape[0])
-                        .reshape(-1, 1)
-                        .to(device),
-                    ),
-                    dim=-1,
-                )
-                working_seq_id_batch = torch.cat(
-                    (
-                        working_seq_id_batch,
-                        torch.ones(
-                            (working_seq_id_batch.shape[0], 1), device=device
-                        ).long(),
-                    ),
-                    dim=1,
-                )
-
-            while len(completed_smiles_structures) < batch_size:
-                # print(working_smi_batch)
-                # Get next token
-                curr_batch = ("smiles_only", working_smi_batch, working_seq_id_batch)
-                out = self.model(curr_batch)
-                logits, _ = out
-                next_pos = logits[:, -1, :]  # (N, E)
-                # char_probs = torch.nn.functional.softmax(next_pos, dim=-1)  # (N, E)
-                # tokens = torch.multinomial(char_probs, 1)  # (N, 1)
-                tokens, _ = token_sampler(next_pos)  # (N, 1), sampler directly callable
-
-                if mode == "masked":
-                    tokens = tokens.squeeze(-1)  # (N,) to allow for direct assignment
-                    working_smi_batch[:, -1] = tokens
-                elif mode in ["autoregressive", "autoregressive_avh"]:
-                    working_smi_batch = torch.cat((working_smi_batch, tokens), dim=-1)
-                    working_seq_id_batch = torch.cat(
-                        (
-                            working_seq_id_batch,
-                            torch.ones(
-                                (working_seq_id_batch.shape[0], 1), device=device
-                            ).long(),
-                        ),
-                        dim=1,
-                    )
-
-                stop_token_mask = working_smi_batch[:, -1] == smiles_stop_token
-
-                completed_results = working_smi_batch[stop_token_mask]
-                completed_smiles_structures.extend([*completed_results])
-
-                working_smi_batch = working_smi_batch[~stop_token_mask]
-                working_seq_id_batch = working_seq_id_batch[~stop_token_mask]
-
-                # Additional check here as a control token should never be sampled. Any
-                #   SMILES that have this feature should be removed immediately. When we do this removal, we
-                #   need to adjust the target batch size that guards the while loop
-                control_token_mask = working_smi_batch[:, -1] >= smiles_pad_token
-                working_smi_batch = working_smi_batch[~control_token_mask]
-                working_seq_id_batch = working_seq_id_batch[~control_token_mask]
-                batch_size = batch_size - control_token_mask.sum().item()
-
-                if mode == "masked":
-                    working_smi_batch = torch.cat(
-                        (
-                            working_smi_batch,
-                            torch.tensor(
-                                [smiles_mask_token] * working_smi_batch.shape[0]
-                            )
-                            .reshape(-1, 1)
-                            .to(device),
-                        ),
-                        dim=-1,
-                    )
-                    working_seq_id_batch = torch.cat(
-                        (
-                            working_seq_id_batch,
-                            torch.ones(
-                                (working_seq_id_batch.shape[0], 1), device=device
-                            ).long(),
-                        ),
-                        dim=1,
-                    )
-
-                if working_smi_batch.shape[-1] > 1000:
-                    # FH: Introduce a hard cutoff to prevent infinite looping
-                    completed_smiles_structures.extend([*working_smi_batch])
-
-        if mode == "masked":
-            final_completed_smiles, final_completed_structure = (
-                self._sample_structue_tokens_unmasking(
-                    completed_smiles_structures,
-                    token_sampler,
-                    smiles_pad_token,
-                    struct_token,
-                    struct_mask_token,
-                    struct_stop_token,
-                    device,
-                )
-            )
-        elif mode == "autoregressive":
-            if struct_limit_method == "n_atoms":
-                maximum_num_structure_tokens = (
-                    self._determine_maximum_num_struct_tokens(
-                        completed_smiles_structures, alphabet
-                    )
-                )
-            elif struct_limit_method == "token_mult":
-                max_num_tokens = max(len(x) for x in completed_smiles_structures)
-                max_num_tokens = math.ceil(max_num_tokens * struct_limit_multiplier)
-                maximum_num_structure_tokens = torch.tensor(
-                    [max_num_tokens] * len(completed_smiles_structures),
-                    device=device,
-                    dtype=torch.long,
-                )
-            final_completed_smiles, final_completed_structure = (
-                self._sample_structure_tokens_autoregressive(
-                    completed_smiles_structures,
-                    token_sampler,
-                    smiles_pad_token,
-                    struct_token,
-                    struct_mask_token,
-                    struct_stop_token,
-                    struct_pad_token,
-                    maximum_num_structure_tokens,
-                    device,
-                )
-            )
-
-        elif mode == "autoregressive_avh":
-            # import pdb; pdb.set_trace()
-            assert avh_args is not None
-            # Maps atomic numbers to a 0-indexed value for embedding
-            assert "atom_mapping" in avh_args
-            # Specifies for each atom-valency-hybridization combination the indices of the vocabulary
-            assert "token_grouping" in avh_args
-            # Specifies special tokens for the atom-valency-hybridization information such as the padding index
-            #   for each separate track
-            assert "avh_special_tokens" in avh_args
-            # Specifies the total size of the vocabulary embedding for structure tokens
-            assert "total_structure_vocab_size" in avh_args
-
-            # FH: Autoregressive inference augmented with atom-valency-hybridization information on top, requires a different
-            #   approach to ensure that the offset in the token sequences is correctly preserved
-
-            # Step 1: Get the node features of the smiles structures. mol_node_features here is of shape (n_molecules, n_atoms, 3)
-            mol_node_features, failed_indices = self._get_node_features(
-                completed_smiles_structures, alphabet
-            )
-            failed_indices = set(failed_indices)  # Faster lookup
-            assert len(mol_node_features) == len(completed_smiles_structures)
-            completed_smiles_structures = [
-                x
-                for i, x in enumerate(completed_smiles_structures)
-                if i not in failed_indices
-            ]
-            mol_node_features = [
-                x for i, x in enumerate(mol_node_features) if i not in failed_indices
-            ]
-
-            # Step 2 + 3: For each set of node features, generate a corresponding set of masks over the entire vocabulary and
-            #  remap the atom types in the node features to their 0-indexed values using the atom_mapping dictionary
-            all_vocab_masks = []
-            atom_mapping = avh_args["atom_mapping"]
-            for i, node_features in enumerate(mol_node_features):
-                vocabulary_masks = self._generate_token_group_masking(
-                    node_features,
-                    token_grouping=avh_args["token_grouping"],
-                    total_vocabulary_size=avh_args["total_structure_vocab_size"],
-                )
-                all_vocab_masks.append(vocabulary_masks)
-                elements = node_features[:, 0]
-                node_features[:, 0] = [
-                    atom_mapping[int(element)] for element in elements
-                ]
-
-            # import pdb; pdb.set_trace()
-
-            # Step 4: Shape the SMILES and structure sequences into the correct complementary formats
-            all_mol_node_reprs = []
-            all_smiles_reprs = []
-            all_num_iterations = []
-            for i, node_features in enumerate(mol_node_features):
-                num_structure_tokens = node_features.shape[0]
-                curr_smiles_struct = completed_smiles_structures[i]
-                # Need the full sequence here of 2 * num_structure tokens, BUT need to account for shifting of the sequence
-                #   later on...
-                curr_smiles_struct = torch.cat(
-                    (
-                        curr_smiles_struct,
-                        torch.tensor([struct_token] * (num_structure_tokens * 2)).to(
-                            device
-                        ),
-                    ),
-                    dim=0,
-                )  # (T + S)
-                all_smiles_reprs.append(curr_smiles_struct)
-                all_num_iterations.append(num_structure_tokens)
-
-                node_repr = self._construct_packed_sequence_repr(
-                    node_features,
-                    avh_special_tokens=avh_args["avh_special_tokens"],
-                    structure_masking_token=struct_mask_token,
-                )
-                # Transpose here for easier sequence padding later
-                all_mol_node_reprs.append(node_repr.T)
-
-            # import pdb; pdb.set_trace()
-            all_smiles_reprs = pad_sequence(
-                all_smiles_reprs, batch_first=True, padding_value=smiles_pad_token
-            )  # (N, T)
-            all_mol_node_reprs = pad_sequence(
-                all_mol_node_reprs, batch_first=True, padding_value=struct_pad_token
-            )  # (S, N)
-            all_mol_node_reprs = all_mol_node_reprs.permute(0, 2, 1)
-            all_mol_node_reprs = all_mol_node_reprs.to(device)  # (N, 4, S)
-            all_mol_node_reprs[:, 1, :][
-                all_mol_node_reprs[:, 1, :] == struct_pad_token
-            ] = avh_args["avh_special_tokens"]["atom_pad_idx"]
-            all_mol_node_reprs[:, 2, :][
-                all_mol_node_reprs[:, 2, :] == struct_pad_token
-            ] = avh_args["avh_special_tokens"]["valency_pad_idx"]
-            all_mol_node_reprs[:, 3, :][
-                all_mol_node_reprs[:, 3, :] == struct_pad_token
-            ] = avh_args["avh_special_tokens"]["hybrid_pad_idx"]
-            all_vocab_masks = pad_sequence(
-                all_vocab_masks, batch_first=True, padding_value=0.0
-            )
-            all_vocab_masks = all_vocab_masks.to(device)
-            all_num_iterations = torch.tensor(
-                all_num_iterations, device=device, dtype=torch.long
-            )  # (N,)
-            # Also, get the sequence IDs here, just need to do this once
-            all_seq_id_reprs = (all_smiles_reprs != smiles_pad_token).long()  # (N, T)
-
-            # Finally, pass into the sampling function
-            # Not going to apply the token sampler here because the vocabulary masks
-            #   already restrict the tokens to a very small valid subset so no need to
-            #   do probability filtering/sampling.
-            final_completed_smiles, final_completed_structure = (
-                self._sample_structure_tokens_autorgressive_avh(
-                    all_smiles_reprs=all_smiles_reprs,
-                    all_node_reprs=all_mol_node_reprs,
-                    all_seq_id=all_seq_id_reprs,
-                    all_vocab_masks=all_vocab_masks,
-                    all_num_iterations=all_num_iterations,
-                    smiles_pad_token=smiles_pad_token,
-                    struct_pad_token=struct_pad_token,
-                )
-            )
-
-        return final_completed_smiles, final_completed_structure
 
     def forward_autoregressive_prompted(
         self, batch, token_sampler, use_cache_here=False
@@ -3397,354 +1908,9 @@ class LightningModel(L.LightningModule):
 
         return completed_structures, completed_token_probs
 
-    def _transfusion_autoregressive_step(
-        self, smi_batch, seq_id_batch, token_sampler, device
-    ):
-        """Autoregressive sampling of SMILES strings using the transfusion model"""
-        assert smi_batch.shape == seq_id_batch.shape
-
-        # Stage 1: Autoregressively sample SMILES in batched mode until a struct_start_token is sampled
-        working_smi_batch = smi_batch.clone()  # (N, 1)
-        working_seq_id_batch = seq_id_batch.clone()  # (N, 1)
-        batch_size = working_smi_batch.shape[0]
-        # For keeping track and only working on incomplete structures
-        index_mapping = torch.arange(batch_size, device=device)
-        completed_structures = [None] * batch_size
-        all_structures_completed = False
-
-        struct_start_token = self.token_info["input"]["STRUCT"]["STRUCT_START"]
-
-        while not all_structures_completed:
-            # A TranfusionMolTransformer here
-            out = self.model(
-                working_smi_batch,
-                None,  # No structural input
-                None,  # No structural mask
-                working_seq_id_batch,
-                None,
-            )  # No time step
-            logits, _ = out  # (N, T, E)
-            next_pos = logits[:, -1, :]  # (N, E)
-            # char_probs = torch.nn.functional.softmax(next_pos, dim=-1)  # (N, E)
-            # tokens = torch.multinomial(char_probs, 1)  # (N, 1)
-            tokens, _ = token_sampler(next_pos)  # (N, 1), sampler directly callable
-
-            concatenated_results = torch.cat((working_smi_batch, tokens), dim=-1)
-            concatenated_seq_id = torch.cat(
-                (
-                    working_seq_id_batch,
-                    torch.ones(
-                        (working_seq_id_batch.shape[0], 1), device=device
-                    ).long(),
-                ),
-                dim=1,
-            )
-
-            stop_mask = concatenated_results[:, -1] == struct_start_token
-            comp_structs = concatenated_results[stop_mask]
-            comp_inds = index_mapping[stop_mask]
-
-            for i, icomp in enumerate(comp_inds):
-                completed_structures[icomp] = comp_structs[i].detach().cpu().numpy()
-
-            working_smi_batch = concatenated_results[~stop_mask]
-            index_mapping = index_mapping[~stop_mask]
-            working_seq_id_batch = concatenated_seq_id[~stop_mask]
-
-            if (
-                working_smi_batch.shape[-1] > 1000
-            ):  # Fix this hardcoding for the token limit
-                working_smi_batch = torch.cat(
-                    (
-                        working_smi_batch,
-                        torch.tensor([struct_start_token] * working_smi_batch.shape[0])
-                        .reshape(-1, 1)
-                        .to(device),
-                    ),
-                    dim=-1,
-                )
-                for j, idx in enumerate(index_mapping):
-                    completed_structures[idx] = (
-                        working_smi_batch[j].detach().cpu().numpy()
-                    )
-
-                all_structures_completed = True
-
-            if len(working_smi_batch) == 0:
-                all_structures_completed = True
-
-        return completed_structures
-
-    def _transfusion_filtering_step(self, completed_structures, alphabet):
-        """Removing invalid SMILES strings and computing dihedrals for valid ones"""
-        valid_structures = []
-        initial_num = len(completed_structures)
-        for struct in completed_structures:
-            try:
-                # Remove the start token and structure start token here
-                decoded_string = "".join(
-                    [alphabet[int(token)] for token in struct[1:-1]]
-                )
-                mol = Chem.MolFromSmiles(decoded_string)
-                assert mol is not None
-                angles, indices = compute_dihedrals(decoded_string)
-                assert len(angles) > 0
-                valid_structures.append((struct, decoded_string, angles, indices))
-            except Exception:
-                continue  # Skip the structure if it is invalid
-        return valid_structures, initial_num
-
-    def _transfusion_diffusion_step(self, valid_structures, diff_config, device):
-        """Carry out the torsional diffusion step for valid structures"""
-        struct_token = self.token_info["input"]["STRUCT"]["STRUCT"]
-        struct_end_token = self.token_info["input"]["STRUCT"]["STRUCT_END"]
-
-        n_diff_samples = diff_config["n_samples"]
-        n_time_steps = diff_config["n_time_steps"]
-        feat_dim = diff_config["feat_dim"]
-        sigma_min = diff_config["sigma_min"] * np.pi
-        sigma_max = diff_config["sigma_max"] * np.pi
-
-        final_predictions = []
-
-        for i, (tokens, smiles, angles, indices) in enumerate(valid_structures):
-            print(f"Starting on valid structure {i}")
-            # Compose the input to the model
-            tokens = torch.tensor(tokens).long()
-            # Remove the struct_start_token from the sequence so that it matches the format of data
-            #   used as input during training (?)
-            # The structure start token is included now so should be okay to leave it in during
-            #   inference
-            # tokens = tokens[:-1]
-            # import pdb; pdb.set_trace()
-            num_angles = len(angles)
-            sequence_id = torch.ones_like(tokens)
-            sequence_id = torch.cat(
-                (sequence_id, torch.ones(num_angles) * 2, torch.ones(1)), dim=0
-            ).long()
-
-            tokens = torch.cat(
-                (
-                    tokens,
-                    torch.tensor([struct_token] * num_angles).long(),
-                    torch.tensor([struct_end_token]).long(),
-                ),
-                dim=0,
-            )
-            assert tokens.shape == sequence_id.shape
-            # Unsqueeze and reshape into num_samples
-            tokens = tokens.unsqueeze(0).expand(
-                n_diff_samples, -1
-            )  # (n_diff_samples, T)
-            sequence_id = sequence_id.unsqueeze(0).expand(
-                n_diff_samples, -1
-            )  # (n_diff_samples, T)
-
-            # Construct a structure mask
-            struct_mask = torch.ones(
-                (n_diff_samples, feat_dim)
-            )  # (n_diff_samples, feat_dim)
-            struct_mask[:, :num_angles] = 0
-            struct_mask = struct_mask.bool()  # (n_diff_samples, feat_dim)
-
-            # Construct the input dictionary
-            input_dict = {
-                "token_input": tokens.to(device),
-                "sequence_id": sequence_id.to(device),
-                "struct_mask": struct_mask.to(device),
-            }
-            torsions = sample_torsions(
-                self.model,
-                input_dict,
-                n_diff_samples,
-                n_time_steps,
-                feat_dim,
-                sigma_min,
-                sigma_max,
-                device=device,
-            )
-            # import pdb; pdb.set_trace()
-            torsions = torsions[
-                :, :, :num_angles
-            ]  # Only keep the angles that are non-padding
-            final_predictions.append((smiles, angles, indices, torsions))
-
-        return final_predictions
-
-    def forward_transfusion(
-        self,
-        batch: tuple[torch.Tensor, torch.Tensor, np.ndarray, int],
-        token_sampler: TokenSampler,
-        run_diffusion: bool = True,
-    ) -> tuple[list, list]:
-        """Forward pass for the transfusion model where tokens are sampled first autoregressively
-        and then the structural components are sampled by reversing a diffusion process
-
-        Args:
-            batch: tuple[torch.Tensor, torch.Tensor, numpy.ndarray, int]
-                A tuple which contains the following:
-                    token_input: torch.Tensor
-                        The token input tensor. Here, the token input is just the SMILES start token
-                    sequence_id: torch.Tensor
-                        The sequence id tensor which starts off as just a tensor of ones
-                    alphabet: numpy.ndarray
-                        The alphabet for decoding the token indices into SMILES strings
-                    diffusion_config: dict
-                        Dictionary with contains the following information:
-                            n_samples: int
-                                The number of samples to generate for each valid SMILES string sampled
-                            feat_dim: int
-                                The feature dimension for diffusion of the structural features
-                            n_time_steps: int
-                                The number of time steps for the diffusion process
-                            sigma_min: float
-                                The minimum value for the diffusion sigma relative to pi
-                            sigma_max
-            run_diffusion: bool
-                A flag which indicates if the diffusion process should be included. If False, the returned
-                predictions are just the completed SMILES strings from autoregressive sampling.
-
-        Returns:
-            Dihedral angles sampled from the model (if diffusion enabled) and the autoregressive SMILES strings
-
-        Notes:
-            The input to this method starts with only the tokens corresponding to the SMILES strings
-            because we sample the smiles strings first and then append noised uniform vectors for the
-            diffusion process. The diffusion process is then reversed to obtain the dihedral angles
-        """
-        smi_batch, seq_id_batch, alphabet, diff_config = batch
-        device = smi_batch.device
-        completed_structures = self._transfusion_autoregressive_step(
-            smi_batch, seq_id_batch, token_sampler, device
-        )
-        if not run_diffusion:
-            print("Skipping diffusion, returning only SMILES strings")
-            return [], completed_structures
-        valid_structures, initial_num = self._transfusion_filtering_step(
-            completed_structures, alphabet
-        )
-        print("Number of initial structures", initial_num)
-        print("Number of valid structures", len(valid_structures))
-
-        if len(valid_structures) == 0:
-            print("No valid SMILES were generated, cannot compute dihedrals/diffuse")
-            return [], completed_structures
-
-        final_predictions = self._transfusion_diffusion_step(
-            valid_structures, diff_config, device
-        )
-        return final_predictions, completed_structures
-
-    def forward_transfusion_structure_only(self, batch):
-        """Forward where the model is only asked to sample dihedrals, not the SMILES strings themselves"""
-        smiles_tokens, alphabet, diff_config = batch
-        device = smiles_tokens[0].device
-        smiles_tokens = [x.detach().cpu().numpy() for x in smiles_tokens]
-        valid_structures, initial_num = self._transfusion_filtering_step(
-            smiles_tokens, alphabet
-        )
-        print("Number of initial structures", initial_num)
-        print("Number of valid structures", len(valid_structures))
-
-        if len(valid_structures) == 0:
-            print("No valid SMILES were generated, cannot compute dihedrals/diffuse")
-            return []
-        final_predictions = self._transfusion_diffusion_step(
-            valid_structures, diff_config, device
-        )
-        return final_predictions, valid_structures
-
-    def forward_masked_mixed_seq_infilling(self, batch, unmask_size=50):
-        """
-        Rather than doing left-to-right or sampling tokens to unmask, this method performs in-filling where
-        the stop token is specified and the model is asked to fill in the mask tokens between the start and stop tokens.
-        This applies for both the smiles and structural tokens.
-
-        The models that should be used with this are the mixed sequence transformers trained WITHOUT always enforcing
-        stop token masking. The downside is you would need to know the size of regions to unmask in advance
-        """
-        raise NotImplementedError("This method is not implemented yet")
-
-
-####################################################################################################################
-# EXPOSED SAMPLING METHODS
-####################################################################################################################
-
-
-def sample_components_from_bidirectional_transformer(
-    transformer_model,
-    structural_tokens,
-    masked_smiles_tokens,
-    sequence_id,
-    token_sampler,
-    inference_batch_size=128,
-    unmasking_mode="sample",
-):
-    """Samples components from the transformer model (lightning module)"""
-    transformer_model.model.eval()
-    assert not transformer_model.model.training
-
-    num_batches = (
-        structural_tokens.shape[0] + inference_batch_size - 1
-    ) // inference_batch_size
-    if unmasking_mode == "sample":
-        unmasked_rotamer_tokens = []
-        for batch in range(num_batches):
-            print(batch, num_batches)
-            structural_tokens_batch = structural_tokens[
-                batch * inference_batch_size : (batch + 1) * inference_batch_size
-            ]
-            masked_smiles_tokens_batch = masked_smiles_tokens[
-                batch * inference_batch_size : (batch + 1) * inference_batch_size
-            ]
-            sequence_id_batch = sequence_id[
-                batch * inference_batch_size : (batch + 1) * inference_batch_size
-            ]
-
-            unmasked_rotamer_tokens_batch = transformer_model.forward_bidirec(
-                (
-                    structural_tokens_batch,
-                    None,
-                    masked_smiles_tokens_batch,
-                    sequence_id_batch,
-                    None,  # No loss mask when infering components
-                ),
-                token_sampler=token_sampler,
-                unmasking_mode=unmasking_mode,
-            )
-            unmasked_rotamer_tokens.append(unmasked_rotamer_tokens_batch)
-        unmasked_rotamer_tokens = torch.cat(unmasked_rotamer_tokens, dim=0)
-        return unmasked_rotamer_tokens
-
-    elif unmasking_mode == "all":
-        raise NotImplementedError("Unmasking mode all not implemented")
-
-    elif unmasking_mode == "masked_left_to_right":
-        all_sampled_tokens = []
-        # all_token_probs = []
-
-        for batch in range(num_batches):
-            print(batch, num_batches)
-            structural_tokens_batch = structural_tokens[
-                batch * inference_batch_size : (batch + 1) * inference_batch_size
-            ]
-            smiles_tokens_batch = masked_smiles_tokens[
-                batch * inference_batch_size : (batch + 1) * inference_batch_size
-            ]
-            sequence_id_batch = sequence_id[
-                batch * inference_batch_size : (batch + 1) * inference_batch_size
-            ]
-            tokens, _ = transformer_model.forward_bidirec(
-                (structural_tokens_batch, smiles_tokens_batch, sequence_id_batch),
-                token_sampler=token_sampler,
-                unmasking_mode=unmasking_mode,
-            )
-            all_sampled_tokens.append(tokens)
-            # all_token_probs.append(probs)
-
-        all_sampled_tokens = torch.cat(all_sampled_tokens, dim=0)
-        return all_sampled_tokens  # , all_token_probs
-
+#####
+# EXPOSED SAMPLING METHOD
+#####
 
 def sample_components_from_autoregressive_transformer(
     transformer_model,
@@ -3818,173 +1984,3 @@ def sample_components_from_autoregressive_transformer(
     # all_token_probs = torch.cat(all_token_probs, dim=0)
     return all_sampled_tokens, all_token_probs
 
-
-def sample_components_from_transfusion_transformer(
-    transformer_model: L.LightningModule,
-    smiles_tokens: torch.Tensor,
-    sequence_id: torch.Tensor,
-    token_sampler: TokenSampler,
-    diff_config: dict,
-    alphabet: np.ndarray,
-    inference_batch_size: int = 128,
-    run_diffusion: bool = True,
-) -> list[tuple[str, list[float], list[int], np.ndarray]]:
-    """
-    Samples from a trained transfusion model by first performing next-token prediction and
-    then reverse diffusion sampling for the molecular dihedrals
-
-    Args:
-        transformer_model: L.LightnigModule
-            The trained transfusion model loaded back into PyTorch Lightning
-        smiles_tokens: torch.Tensor
-            The starting tensor of SMILES tokens, containing the sequence start token
-        sequence_id: torch.Tensor
-            The sequence ID tensor which is binary (and all 1's to start with)
-        diff_config: dict
-            Dictionary containing additional options required for diffusion sampling
-                with a trained transformer model
-        alphabet: np.ndarray
-            Array of unique tokens for decoding indices into SMILES strings
-        inference_batch_size: int
-            The batch size for inference. Default is 128
-        run_diffusion: bool
-            If torsional diffusion should be carried out to sample dihedral angles. Default is True
-
-    Returns:
-        predictions: list[tuple[str, list[float], list[int], np.ndarray]]
-            A list of tuples containing the smiles strings, the dihedral angles computed from RDKit, the indices
-                that the dihedrals map to in the molecule, and the torsions sampled by the transformer model
-    """
-    transformer_model.model.eval()
-    assert not transformer_model.model.training
-    all_final_predictions = []
-    all_completed_structures = []
-    num_batches = (
-        smiles_tokens.shape[0] + inference_batch_size - 1
-    ) // inference_batch_size
-    for batch in range(num_batches):
-        print(batch, num_batches)
-        smiles_tokens_batch = smiles_tokens[
-            batch * inference_batch_size : (batch + 1) * inference_batch_size
-        ]
-        sequence_id_batch = sequence_id[
-            batch * inference_batch_size : (batch + 1) * inference_batch_size
-        ]
-        final_predictions, completed_structures = transformer_model.forward_transfusion(
-            (smiles_tokens_batch, sequence_id_batch, alphabet, diff_config),
-            token_sampler=token_sampler,
-            run_diffusion=run_diffusion,
-        )
-        all_final_predictions.extend(final_predictions)
-        all_completed_structures.extend(completed_structures)
-    return all_final_predictions, all_completed_structures
-
-
-def sample_structure_from_transfusion_transformer(
-    transformer_model: L.LightningModule,
-    smiles_tokens: list[torch.Tensor],
-    diff_config: dict,
-    alphabet: np.ndarray,
-    inference_batch_size: int = 128,
-) -> list[tuple[str, list[float], list[int], np.ndarray]]:
-    """Samples dihedral angles for provided SMILES strings using a trained transfusion model
-
-    Args:
-        transformer_model: L.LightnigModule
-            The trained transfusion model loaded back into PyTorch Lightning
-        smiles_tokens: torch.Tensor
-            The molecules to sample dihedral angles for, expressed as a list of SMILES tokens
-        diff_config: dict
-            Dictionary containing additional options required for diffusion sampling
-                with a trained transformer model
-        alphabet: np.ndarray
-            Array of unique tokens for decoding indices into SMILES strings
-        inference_batch_size: int
-            The batch size for inference. Default is 128
-        run_diffusion: bool
-            If torsional diffusion should be carried out to sample dihedral angles. Default is True
-
-    Returns:
-        predictions: list[tuple[str, list[float], list[int], np.ndarray]]
-            A list of tuples containing the smiles strings, the dihedral angles computed from RDKit, the indices
-                that the dihedrals map to in the molecule, and the torsions sampled by the transformer model
-
-    Notes:
-        No sequence_id is required because the sequence id is constructed on the fly for diffusion
-        smiles_tokens is a list because molecules can have different numbers of tokens (way to get around ragged tensor)
-    """
-    transformer_model.model.eval()
-    assert not transformer_model.model.training
-    all_final_predictions = []
-    num_batches = (
-        len(smiles_tokens) + inference_batch_size - 1
-    ) // inference_batch_size
-    for batch in range(num_batches):
-        print(batch, num_batches)
-        smiles_tokens_batch = smiles_tokens[
-            batch * inference_batch_size : (batch + 1) * inference_batch_size
-        ]
-        final_predictions, _ = transformer_model.forward_transfusion_structure_only(
-            (smiles_tokens_batch, alphabet, diff_config)
-        )
-        all_final_predictions.extend(final_predictions)
-    return all_final_predictions, smiles_tokens
-
-
-def sample_smiles_structure_from_mixed_seq_transformer(
-    transformer_model: L.LightningModule,
-    smiles_tokens: list[torch.Tensor],
-    sequence_id: torch.Tensor,
-    token_sampler: TokenSampler,
-    inference_batch_size: int = 128,
-    alphabet: np.ndarray = None,
-    mode: str = "masked",
-    struct_limit_method: str = "n_atoms",
-    struct_limit_multiplier: float = 2.5,
-    use_finished_smiles: bool = False,
-    avh_args: dict = None,
-):
-    # import pdb; pdb.set_trace()
-    transformer_model.model.eval()
-    device = transformer_model.device
-    assert not transformer_model.model.training
-    if isinstance(smiles_tokens, torch.Tensor):
-        num_batches = (
-            smiles_tokens.shape[0] + inference_batch_size - 1
-        ) // inference_batch_size
-    elif isinstance(smiles_tokens, list):
-        num_batches = (
-            len(smiles_tokens) + inference_batch_size - 1
-        ) // inference_batch_size
-    else:
-        raise ValueError("Unrecognized data format for smiles tokens")
-    all_smiles, all_structures = [], []
-    for batch in range(num_batches):
-        if batch % 100 == 0:
-            print(batch, num_batches)
-        smiles_tokens_batch = smiles_tokens[
-            batch * inference_batch_size : (batch + 1) * inference_batch_size
-        ]
-        sequence_id_batch = sequence_id[
-            batch * inference_batch_size : (batch + 1) * inference_batch_size
-        ]
-        sampled_smiles_tokens, sampled_structure_tokens = (
-            transformer_model.forward_seq_struct_mixed(
-                (
-                    smiles_tokens_batch.to(device)
-                    if isinstance(smiles_tokens_batch, torch.Tensor)
-                    else [x.to(device) for x in smiles_tokens_batch],
-                    sequence_id_batch.to(device),
-                ),
-                token_sampler=token_sampler,
-                alphabet=alphabet,
-                mode=mode,
-                struct_limit_method=struct_limit_method,
-                struct_limit_multiplier=struct_limit_multiplier,
-                use_finished_smiles=use_finished_smiles,
-                avh_args=avh_args,
-            )
-        )
-        all_smiles.append(sampled_smiles_tokens)
-        all_structures.append(sampled_structure_tokens)
-    return all_smiles, all_structures
