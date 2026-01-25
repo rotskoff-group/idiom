@@ -15,8 +15,8 @@ source /home/scratch/group_scratch/idr_plm/idr-plm/.venv/bin/activate
 
 TASK_ID=$(printf "%04d" ${SLURM_ARRAY_TASK_ID})
 
-mkdir -p outfiles 
-mkdir -p outputs 
+# mkdir -p outfiles # Need to run these before running the script 
+# mkdir -p outputs 
 
 # Need to first create the precompute_shards subdirectory (currently done in make_targs.py) 
 transformer_precompute "precompute=smiles"\

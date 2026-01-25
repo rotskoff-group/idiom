@@ -2,11 +2,8 @@ import time
 import lightning as L
 import torch
 import torch.nn as nn
-import numpy as np
-import torch.nn.functional as F
 import pl_bolts
 from torch.nn.utils.rnn import pad_sequence
-import math
 from lightning.pytorch.utilities import grad_norm
 
 from idr_plm.nn.transformer.nn import (
@@ -140,8 +137,8 @@ class LightningModel(L.LightningModule):
             #     param.requires_grad = False
             # reference_model.eval()
             return [reference_model, current_model]
- 
-        else: # Standard autoregressive training mode 
+
+        else:  # Standard autoregressive training mode
             if self.model_args["model"] == "GeometricMolTransformer":
                 return GeometricMolTransformer(
                     dim_model=self.model_args["model_args"]["d_model"],
@@ -150,13 +147,13 @@ class LightningModel(L.LightningModule):
                         "unified_transformer_args"
                     ],
                 )
-  
+
             else:
                 raise ValueError("Invalid model type specified")
 
     def build_loss_fn(self):
         if self.training_args["training_mode"] in ["autoregressive"]:
-        # if self.training_args["training_mode"] in ["autoregressive", "bidirectional"]:
+            # if self.training_args["training_mode"] in ["autoregressive", "bidirectional"]:
             loss_fn_base = nn.CrossEntropyLoss
             if self.training_args["loss_fn_args"] is not None:
                 loss_fn = loss_fn_base(**self.training_args["loss_fn_args"])
@@ -275,8 +272,8 @@ class LightningModel(L.LightningModule):
         """Calculate per-token logps under a provided model"""
         if isinstance(model, GeometricMolTransformer):
             policy_logits = model(tokens, structure, masks)
-        elif isinstance(model, SeqStructMixedTransformer):
-            policy_logits, _ = model(("smiles_only", tokens, masks))
+        # elif isinstance(model, SeqStructMixedTransformer):
+        # policy_logits, _ = model(("smiles_only", tokens, masks))
 
         policy_logps = policy_logits.log_softmax(dim=-1)
         policy_logps = torch.gather(
@@ -1543,7 +1540,7 @@ class LightningModel(L.LightningModule):
         elif self.training_args["training_mode"] == "grpo":
             return self._shared_eval_grpo(batch, batch_idx, "train")
         # elif self.training_args["training_mode"] == "dpo":
-            # return self._shared_eval_dpo(batch, batch_idx, "train")
+        # return self._shared_eval_dpo(batch, batch_idx, "train")
 
     def validation_step(self, batch, batch_idx):
         with torch.enable_grad():
@@ -1570,7 +1567,6 @@ class LightningModel(L.LightningModule):
                 return self._shared_eval_grpo(batch, batch_idx, "test")
             # elif self.training_args["training_mode"] == "dpo":
             #     return self._shared_eval_dpo(batch, batch_idx, "test")
-
 
     def forward_autoregressive_prompted(
         self, batch, token_sampler, use_cache_here=False
@@ -1908,9 +1904,11 @@ class LightningModel(L.LightningModule):
 
         return completed_structures, completed_token_probs
 
+
 #####
 # EXPOSED SAMPLING METHOD
 #####
+
 
 def sample_components_from_autoregressive_transformer(
     transformer_model,
@@ -1944,6 +1942,7 @@ def sample_components_from_autoregressive_transformer(
     all_sampled_tokens = []
     all_token_probs = []
     for batch in range(num_batches):
+        batch_start_time = time.time()
         print(batch, num_batches)
         structural_tokens_batch = structural_tokens[
             batch * inference_batch_size : (batch + 1) * inference_batch_size
@@ -1965,22 +1964,23 @@ def sample_components_from_autoregressive_transformer(
                 for x in smiles_tokens_batch
             ]
         if not use_input_smiles:
-            print("Generating SMILES unprompted")
+            print("Generating sequences unprompted")
             tokens, probs = transformer_model.forward_autoregressive(
                 (structural_tokens_batch, smiles_tokens_batch, sequence_id_batch),
                 token_sampler=token_sampler,
             )
         else:
-            print("Generating SMILES prompted")
+            print("Generating sequences prompted")
             tokens, probs = transformer_model.forward_autoregressive_prompted(
                 (structural_tokens_batch, smiles_tokens_batch, sequence_id_batch),
                 token_sampler=token_sampler,
             )
         all_sampled_tokens.append(tokens)
         all_token_probs.append(probs)
+        batch_time = time.time() - batch_start_time
+        print(f"Batch {batch}/{num_batches} completed in {batch_time:.2f} seconds")
         # jxliu2: at the end of the batch, clear KV cache
-        transformer_model.clear_kv_cache()
+        # transformer_model.clear_kv_cache()
     # all_sampled_tokens = torch.cat(all_sampled_tokens, dim=0)
     # all_token_probs = torch.cat(all_token_probs, dim=0)
     return all_sampled_tokens, all_token_probs
-
