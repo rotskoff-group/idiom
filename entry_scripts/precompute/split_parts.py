@@ -62,7 +62,7 @@ def main() -> None:
 
     # Probe the source file just once to get length and dtype ------------------
     with h5py.File(args.input, "r") as fin:
-        src = fin["idrs"]
+        src = fin["smiles"]  # Check this is the right one smiles/idrs
         total = int(src.shape[0])
         idrs_dtype = src.dtype  # fixed-length or vlen byte strings
 
@@ -87,7 +87,7 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # Stream the source dataset and distribute records -------------------------
     with h5py.File(args.input, "r") as fin:
-        src = fin["idrs"]
+        src = fin["smiles"]  # Make sure this is the right one smiles/idrs
         for start in tqdm(
             range(0, total, args.chunk_size),
             total=(total + args.chunk_size - 1) // args.chunk_size,
