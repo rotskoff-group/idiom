@@ -31,20 +31,20 @@ def run_inference_on_gpu(
     token_info,
     start_idx,
     end_idx,
-    smi_tokens_is_list,
-    smi_tokens_data,
-    structural_tokens_data,
-    sequence_id_data,
     savedir,
     num_gpus,
     total_size,
+    use_input_smiles,
+    smiles_path,
 ):
     """Run inference on a specific GPU and save results to file."""
     try:
         device = f"cuda:{gpu_id}"
 
-        # Set seed for reproducibility (use same seed for all GPUs)
-        L.seed_everything(**training_args["seed_args"])
+        # Set seed for reproducibility, with gpu_id offset for diversity across GPUs
+        seed_args = training_args["seed_args"].copy()
+        seed_args["seed"] = seed_args.get("seed", 0) + gpu_id
+        L.seed_everything(**seed_args)
 
         # Load model on this GPU
         lightning_model = LightningModel(
@@ -56,15 +56,40 @@ def run_inference_on_gpu(
         # Instantiate the sampler
         token_sampler = TokenSampler(**inference_args["sampler_args"])
 
-        # Slice the data for this GPU
-        if smi_tokens_is_list:
-            smi_tokens_gpu = smi_tokens_data[start_idx:end_idx]
-            structural_tokens_gpu = structural_tokens_data[start_idx:end_idx]
-            sequence_id_gpu = sequence_id_data[start_idx:end_idx]
+        # Load and slice the data for this GPU
+        _start_token = token_info["input"]["TOK"]["TOK_START"]
+        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
+
+        if not use_input_smiles:
+            # Unprompted generation
+            num_seqs = end_idx - start_idx
+            start_tokens = torch.ones((num_seqs, 1)) * _start_token
+            smi_tokens_gpu = start_tokens.long()
+            structural_tokens_gpu = (
+                torch.ones((num_seqs, 1), dtype=torch.long) * _pad_token
+            )
+            sequence_id_gpu = torch.ones((num_seqs, 1), dtype=torch.long)
         else:
-            smi_tokens_gpu = smi_tokens_data[start_idx:end_idx]
-            structural_tokens_gpu = structural_tokens_data[start_idx:end_idx]
-            sequence_id_gpu = sequence_id_data[start_idx:end_idx]
+            # Prompted generation - load from file and slice
+            smi_tokens_full = np.load(smiles_path, allow_pickle=True)
+            smi_tokens_full = [torch.tensor(s).long() for s in smi_tokens_full]
+
+            # Prepend start token if needed
+            start_token_long = torch.tensor(_start_token, dtype=torch.long).unsqueeze(0)
+            smi_tokens_full = [
+                torch.cat([start_token_long, seq], dim=0)
+                if seq[0] != _start_token
+                else seq
+                for seq in smi_tokens_full
+            ]
+
+            # Slice for this GPU
+            smi_tokens_gpu = smi_tokens_full[start_idx:end_idx]
+            num_seqs = len(smi_tokens_gpu)
+            structural_tokens_gpu = (
+                torch.ones(num_seqs, 1, dtype=torch.long) * _pad_token
+            )
+            sequence_id_gpu = torch.ones(num_seqs, dtype=torch.long)
 
         num_seqs = end_idx - start_idx
         print(
@@ -134,6 +159,7 @@ def main(cfg) -> None:
         _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
         batch_size = inference_args["batch_size"]
 
+        # Prepare input sequences
         # FH: Logic here accounts for the case where the user wants to continue
         # sampling from initialized SMILES tokens, not just unprompted sampling
         # from a start token. The input is expected to be tokens, not strings.
@@ -188,126 +214,102 @@ def main(cfg) -> None:
             structural_tokens = structural_tokens.long()
             sequence_id = sequence_id.long()
 
-        if use_multi_gpu:
-            # Multi-GPU inference using multiprocessing
-            # Use 'fork' to avoid pickling torch tensors (spawn causes "too many open files" error)
-            try:
-                mp.set_start_method("fork", force=True)
-            except RuntimeError:
-                # If fork is already set, continue
-                pass
-            processes = []
+        # Set multiprocessing start method to 'spawn' for better stability
+        try:
+            mp.set_start_method("spawn", force=True)
+        except RuntimeError:
+            # If spawn is already set, continue
+            pass
 
-            # Distribute sequences among GPUs
-            sequences_per_gpu = total_size // num_gpus  # floor div
-            remainder = total_size % num_gpus  # modulo
-            smi_tokens_is_list = isinstance(smi_tokens, list)
+        # Use multiprocessing for both single and multi-GPU inference
+        processes = []
 
+        # Distribute sequences among GPUs
+        sequences_per_gpu = total_size // num_gpus  # floor div
+        remainder = total_size % num_gpus  # modulo
+
+        if num_gpus > 1:
             print(f"Distributing {total_size} sequences across {num_gpus} GPUs:")
-            for gpu_id in range(num_gpus):
-                # First 'remainder' GPUs get one extra sequence
-                if gpu_id < remainder:
-                    start_idx = gpu_id * (sequences_per_gpu + 1)
-                    end_idx = start_idx + sequences_per_gpu + 1
-                else:
-                    start_idx = (
-                        remainder * (sequences_per_gpu + 1)
-                        + (gpu_id - remainder) * sequences_per_gpu
-                    )
-                    end_idx = start_idx + sequences_per_gpu
-
-                num_seqs_for_gpu = end_idx - start_idx
-                # Calculate batches needed for this GPU
-                batches_for_gpu = (num_seqs_for_gpu + batch_size - 1) // batch_size
-                print(
-                    f"  GPU {gpu_id}: {num_seqs_for_gpu} sequences ({batches_for_gpu} batches)"
-                )
-
-                p = mp.Process(
-                    target=run_inference_on_gpu,
-                    args=(
-                        gpu_id,
-                        batches_for_gpu,
-                        batch_size,
-                        model_args,
-                        training_args,
-                        inference_args,
-                        token_info,
-                        start_idx,
-                        end_idx,
-                        smi_tokens_is_list,
-                        smi_tokens,
-                        structural_tokens,
-                        sequence_id,
-                        inference_args["savedir"],
-                        num_gpus,
-                        total_size,
-                    ),
-                )
-                p.start()
-                processes.append(p)
-
-            # Wait for all processes to complete
-            for p in processes:
-                p.join()
-
-            print("All GPU processes completed, collecting results...")
-
-            # Collect results from temporary files
-            results = []
-            for gpu_id in range(num_gpus):
-                temp_file = f"{inference_args['savedir']}/gpu_{gpu_id}_temp.pkl"
-                try:
-                    with open(temp_file, "rb") as f:
-                        results.append(pickle.load(f))
-                    # Clean up temporary file
-                    os.remove(temp_file)
-                except Exception as e:
-                    print(f"Warning: Could not load results from GPU {gpu_id}: {e}")
-                    results.append((gpu_id, None))
-
-            # Sort by GPU ID and combine results
-            results.sort(key=lambda x: x[0])
-
-            # Combine outputs
-            all_tokens = []
-            all_probs = []
-            for gpu_id, output_tuple in results:
-                if output_tuple is not None:
-                    tokens, probs = output_tuple
-                    all_tokens.extend(tokens)
-                    all_probs.extend(probs)
-                else:
-                    print(f"Warning: GPU {gpu_id} returned no results")
-
-            output = (all_tokens, all_probs)
-
         else:
-            # Single GPU inference (original behavior)
-            device = "cuda:0"
-            lightning_model = LightningModel(
-                model_args=model_args,
-                token_info=token_info,
-                training_args=training_args,
-            )
-            lightning_model.load_model_from_checkpoint(
-                inference_args["checkpoint_path"]
-            )
-            lightning_model.to(device)
+            print(f"Processing {total_size} sequences on 1 GPU:")
 
-            # Instantiate the sampler
-            token_sampler = TokenSampler(**inference_args["sampler_args"])
-
-            with torch.no_grad():
-                output = sample_components_from_autoregressive_transformer(
-                    transformer_model=lightning_model,
-                    structural_tokens=structural_tokens,
-                    smiles_tokens=smi_tokens,
-                    sequence_id=sequence_id,
-                    token_sampler=token_sampler,
-                    inference_batch_size=batch_size,
-                    use_input_smiles=inference_args["addn_args"]["use_input_smiles"],
+        for gpu_id in range(num_gpus):
+            # First 'remainder' GPUs get one extra sequence
+            if gpu_id < remainder:
+                start_idx = gpu_id * (sequences_per_gpu + 1)
+                end_idx = start_idx + sequences_per_gpu + 1
+            else:
+                start_idx = (
+                    remainder * (sequences_per_gpu + 1)
+                    + (gpu_id - remainder) * sequences_per_gpu
                 )
+                end_idx = start_idx + sequences_per_gpu
+
+            print(f"GPU {gpu_id}, start idx {start_idx}, end idx {end_idx}")
+
+            num_seqs_for_gpu = end_idx - start_idx
+            # Calculate batches needed for this GPU
+            batches_for_gpu = (num_seqs_for_gpu + batch_size - 1) // batch_size
+            print(
+                f"  GPU {gpu_id}: {num_seqs_for_gpu} sequences ({batches_for_gpu} batches)"
+            )
+
+            p = mp.Process(
+                target=run_inference_on_gpu,
+                args=(
+                    gpu_id,
+                    batches_for_gpu,
+                    batch_size,
+                    model_args,
+                    training_args,
+                    inference_args,
+                    token_info,
+                    start_idx,
+                    end_idx,
+                    inference_args["savedir"],
+                    num_gpus,
+                    total_size,
+                    inference_args["addn_args"]["use_input_smiles"],
+                    inference_args["addn_args"]["smiles_path"],
+                ),
+            )
+            p.start()
+            processes.append(p)
+
+        # Wait for all processes to complete
+        for p in processes:
+            p.join()
+
+        print("All GPU processes completed, collecting results...")
+
+        # Collect results from temporary files
+        results = []
+        for gpu_id in range(num_gpus):
+            temp_file = f"{inference_args['savedir']}/gpu_{gpu_id}_temp.pkl"
+            try:
+                with open(temp_file, "rb") as f:
+                    results.append(pickle.load(f))
+                # Clean up temporary file
+                os.remove(temp_file)
+            except Exception as e:
+                print(f"Warning: Could not load results from GPU {gpu_id}: {e}")
+                results.append((gpu_id, None))
+
+        # Sort by GPU ID and combine results
+        results.sort(key=lambda x: x[0])
+
+        # Combine outputs
+        all_tokens = []
+        all_probs = []
+        for gpu_id, output_tuple in results:
+            if output_tuple is not None:
+                tokens, probs = output_tuple
+                all_tokens.extend(tokens)
+                all_probs.extend(probs)
+            else:
+                print(f"Warning: GPU {gpu_id} returned no results")
+
+        output = (all_tokens, all_probs)
 
         # output here is a tuple of lists, the first one is the sampled token ids by batch and the second is the
         #   token probabilities by batch
