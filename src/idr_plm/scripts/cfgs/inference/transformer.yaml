@@ -3,8 +3,8 @@ savedir: "./"
 unmasking_mode: 'sample'
 inference_mode: 'autoregressive'
 batch_size: 100
-num_batches: 100
-use_multi_gpu: true  # Enable multi-GPU inference if multiple GPUs available
+num_batches: 1000
+use_multi_gpu: false  # Enable multi-GPU inference if multiple GPUs available
 seed_args:
   seed: 42
   workers: True
