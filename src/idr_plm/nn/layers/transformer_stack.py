@@ -24,13 +24,9 @@ class TransformerStack(nn.Module):
         self,
         d_model,
         n_layers,
-        # geom_layer_indices,
         mha_layer_indices,
-        # ida_layer_indices,
         bias=False,
         mha_args=None,
-        # gha_args=None,
-        # ida_args=None,
         scaling_factor=1.0,
         ffn_type="swiglu",
         norm_type="layer_norm",
@@ -45,14 +41,10 @@ class TransformerStack(nn.Module):
                     d_model=d_model,
                     bias=bias,
                     use_mha=(layer_num in mha_layer_indices),
-                    # use_ga=(layer_num in geom_layer_indices),
-                    # use_ida=(layer_num in ida_layer_indices),
                     ffn_type=ffn_type,
                     scaling_factor=scaling_factor,
                     expansion_ratio=expansion_ratio,
                     mha_args=mha_args,
-                    # gha_args=gha_args,
-                    # ida_args=ida_args,
                 )
                 for layer_num in range(n_layers)
             ]

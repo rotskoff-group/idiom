@@ -1,12 +1,7 @@
-import torch
 import torch.nn as nn
 from idr_plm.nn.layers import TransformerStack, RegressionHead
-# from idr_plm.nn.layers import TransfusionEmbedding
-# from torch_scatter import segment_csr
 
 
-# FH: This transformer model is essentially only useful for SMILES training and SMILES-based tasks.
-#   It is not sufficient for mixed token training
 class GeometricMolTransformer(nn.Module):
     def __init__(
         self, dim_model: int, token_info: dict[str, int], unified_transformer_args
@@ -107,74 +102,3 @@ class GeometricMolTransformer(nn.Module):
         )  # out() is RegressionHead from embeddings_dim to vocabulary size
         # Here, x.shape = [B, L, E] where E is vocab size
         return x  # These are the logits returned to the self.model() call in module.py
-
-
-class SequenceConcatenator(nn.Module):
-    def __init__(self, token_info: dict):
-        super().__init__()
-        self.token_info = token_info
-        self.struct_pad_token = self.token_info["input"]["STRUCT"]["STRUCT_PAD"]
-        self.struct_token = self.token_info["input"]["STRUCT"]["STRUCT"]
-
-    def forward(
-        self,
-        smiles_tokens: torch.Tensor,
-        structure_tokens: torch.Tensor,
-        smiles_embedding: torch.Tensor,
-        structural_embedding: torch.Tensor,
-    ) -> torch.Tensor:
-        """Combines the embeddings from the smiles and structure tracks together into a concatenated sequence
-        Args:
-            smiles_tokens: The unembedded SMILES tokens, (N, T)
-            structure_tokens: The unembedded structure tokens, (N, S) for regular structure sequence only
-                or (N, 4, S) for structure sequence with atom, valency, and hybridization information
-            smiles_embedding: The embedded SMILES tokens, (N, T, E)
-            structural_embedding: The embedded structure tokens, (N, S, E), S < T
-        Returns:
-            The combined embeddings, (N, T, E) where the structure token positions in the SMILES embeddings
-                have been replaced with the corresponding structure embeddings
-        """
-        # FH: Sequence composition should alwyas be done based on the structure token sequence in the
-        #   case where atom, valency, and hybridization information is present.
-        if structure_tokens.ndim == 3:
-            structure_tokens = structure_tokens[:, 0, :]
-        n_smi, t_smi, e_smi = smiles_embedding.shape
-        n_struct, t_struct, e_struct = structural_embedding.shape
-        assert smiles_tokens.shape == (n_smi, t_smi)
-        smiles_tokens = smiles_tokens.reshape(-1)
-        structure_tokens = structure_tokens.reshape(-1)
-        smiles_embeddings = smiles_embedding.reshape(n_smi * t_smi, e_smi)
-        structural_embeddings = structural_embedding.reshape(
-            n_struct * t_struct, e_struct
-        )
-        non_padding_struct_embed = structural_embeddings[
-            structure_tokens != self.struct_pad_token
-        ]
-        structure_embedding_indices = smiles_tokens == self.struct_token
-
-        smiles_embeddings[structure_embedding_indices] = non_padding_struct_embed
-        return smiles_embeddings.reshape(n_smi, t_smi, e_smi)
-
-
-class SequenceSummator(nn.Module):
-    def __init__(self, token_info: dict):
-        super().__init__()
-        self.token_info = token_info
-
-    def forward(
-        self,
-        smiles_tokens: torch.Tensor,
-        structure_tokens: torch.Tensor,
-        smiles_embedding: torch.Tensor,
-        structural_embedding: torch.Tensor,
-    ) -> torch.Tensor:
-        """Combines the embeddings from the smiles and structure tracks together into a summed sequence
-        Args:
-            smiles_tokens: The unembedded SMILES tokens, (N, T)
-            smiles_embedding: The embedded SMILES tokens, (N, T, E)
-            structural_embedding: The embedded structure tokens, (N, S, E), S < T
-        Returns:
-            The combined embeddings, (N, T, E) where the structure token positions in the SMILES embeddings
-                have been replaced with the corresponding structure embeddings
-        """
-        return smiles_embedding + structural_embedding
