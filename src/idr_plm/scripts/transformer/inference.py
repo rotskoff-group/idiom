@@ -2,21 +2,14 @@ import torch
 import hydra
 import lightning as L
 from omegaconf import OmegaConf
-from idr_plm.nn.transformer.module import LightningModel
-
-# from rdkit import Chem
 import h5py
 import pickle
 import numpy as np
 import os
 import torch.multiprocessing as mp
-from idr_plm.nn.transformer.module import (
-    # sample_components_from_bidirectional_transformer,
-    sample_components_from_autoregressive_transformer,
-    # sample_components_from_transfusion_transformer,
-    # sample_structure_from_transfusion_transformer,
-    # sample_smiles_structure_from_mixed_seq_transformer,
-)
+
+from idr_plm.nn.transformer.module import LightningModel
+from idr_plm.nn.transformer.module import sample_components_from_autoregressive_transformer
 from idr_plm.utils.token import aggregate_tokens_hdf5
 from idr_plm.utils.sampler import TokenSampler
 
@@ -37,12 +30,13 @@ def run_inference_on_gpu(
     use_input_smiles,
     smiles_path,
 ):
-    """Run inference on a specific GPU and save results to file."""
+    """Run inference on a specific GPU and save results to temporary file."""
     try:
         device = f"cuda:{gpu_id}"
 
-        # Set seed for reproducibility, with gpu_id offset for diversity across GPUs
+        # Set seed for reproducibility
         seed_args = training_args["seed_args"].copy()
+        # Use gpu_id offset so each GPU doesn't generate the same sequences
         seed_args["seed"] = seed_args.get("seed", 0) + gpu_id
         L.seed_everything(**seed_args)
 
@@ -83,7 +77,7 @@ def run_inference_on_gpu(
                 for seq in smi_tokens_full
             ]
 
-            # Slice for this GPU
+            # Slice prompts for this GPU
             smi_tokens_gpu = smi_tokens_full[start_idx:end_idx]
             num_seqs = len(smi_tokens_gpu)
             structural_tokens_gpu = (
@@ -107,7 +101,7 @@ def run_inference_on_gpu(
                 use_input_smiles=inference_args["addn_args"]["use_input_smiles"],
             )
 
-        # Save results to temporary file to avoid queue deadlock
+        # Save results to temporary file 
         temp_file = f"{savedir}/gpu_{gpu_id}_temp.pkl"
         with open(temp_file, "wb") as f:
             pickle.dump((gpu_id, output), f)
@@ -136,9 +130,6 @@ def main(cfg) -> None:
     # Detect number of GPUs
     num_gpus = torch.cuda.device_count()
     use_multi_gpu = inference_args.get("use_multi_gpu", False) and num_gpus > 1
-
-    # print(use_multi_gpu)
-    # print(inference_args.get('use_multi_gpu', False))
 
     if use_multi_gpu:
         print(f"Multi-GPU inference enabled: Using {num_gpus} GPUs")
@@ -214,7 +205,7 @@ def main(cfg) -> None:
             structural_tokens = structural_tokens.long()
             sequence_id = sequence_id.long()
 
-        # Set multiprocessing start method to 'spawn' for better stability
+        # Set multiprocessing start method to 'spawn' (NOT 'fork')
         try:
             mp.set_start_method("spawn", force=True)
         except RuntimeError:
