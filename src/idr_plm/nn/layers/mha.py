@@ -13,7 +13,7 @@ class MultiHeadAttention(nn.Module):
         num_heads,
         bias=False,
         qk_layernorm=True,
-        mask_mode="packed_seq",
+        mask_mode="causal",
         cross_attention=False,
     ):
         """Implementation of MultiHeadAttention
@@ -220,70 +220,6 @@ class MultiHeadAttention(nn.Module):
                 )
                 mask_BHLL = mask_BHLL.masked_fill_(mask_BHLL.bool(), float("-inf"))
 
-            context_BHLD = F.scaled_dot_product_attention(
-                query_BHLD, key_BHLD, value_BHLD, attn_mask=mask_BHLL
-            )
-
-        elif self.mask_mode == "transfusion":
-            if self.cross_attention:
-                # Similar to causal case but for transfusion
-                mask_outer = torch.einsum("bi,bj->bij", sequence_id, key_sequence_id)
-                mask_BLL = torch.zeros_like(mask_outer).float()
-                padding_mask = (sequence_id.unsqueeze(-1) == 0) | (
-                    key_sequence_id.unsqueeze(-2) == 0
-                )
-                mask_BLL.masked_fill_(padding_mask, float("-inf"))
-            else:
-                # Construct a mask to use for training TRANSFUSION models
-                # Adapting logic from the causal mask case, we construct a transfusion attention mask similar to what
-                #   is shown in Fig. 4 of this paper: https://www.arxiv.org/pdf/2408.11039
-                # The premise is that SMILES/sequence tokens attend to each other autoregressively whereas
-                #   structure tokens attend to all tokens in the sequence. This is achieved by constructing
-                #   a lower triangular mask for the SMILES tokens and an all-to-all mask for the structure tokens
-                #   and combining the two through masked filling.
-
-                # Construct lower triangular first
-                bin_seq_id = sequence_id.clone()
-                bin_seq_id[bin_seq_id > 0] = 1
-
-                # Construct lower triangular using binary dummy seq id
-                mask_outer = torch.einsum("bi,bj->bij", bin_seq_id, bin_seq_id)
-                boolean_selection = torch.tril(
-                    torch.ones(mask_outer.shape, device=mask_outer.device), diagonal=0
-                )
-                boolean_selection = (mask_outer * boolean_selection).bool()
-                mask_BLL = torch.zeros_like(boolean_selection).float()
-                mask_BLL.masked_fill_(boolean_selection.logical_not(), float("-inf"))
-                mask_BLL.masked_fill_(boolean_selection, 0)
-
-                # Assuming that the sequence_id is binary, invert by subtracting from 1
-                inverted_bin_sequence_id = 1 - bin_seq_id
-                all_ones = torch.ones_like(inverted_bin_sequence_id)
-                padding_only_blocks = torch.einsum(
-                    "bi,bj->bij", inverted_bin_sequence_id, all_ones
-                )
-                # Prevents nans in softmax from rows of only padding (-inf)
-                mask_BLL.masked_fill_(padding_only_blocks.bool(), 0)
-
-                # Transfusion addition
-                selected_out_struct = (sequence_id == 2).long()  # Binary
-                range_indices = torch.arange(
-                    sequence_id.shape[-1], device=sequence_id.device
-                )
-                range_indices = range_indices.unsqueeze(0).expand(
-                    sequence_id.shape[0], -1
-                )
-                index_mul = range_indices * selected_out_struct
-                max_index = torch.max(index_mul, dim=-1).values.reshape(-1, 1)
-                all_ones_transfuse = (range_indices <= max_index).long()
-
-                # all_ones_transfuse = (sequence_id > 0).long() #Binary #Need more selective, should be 1's before 2's, not after
-                mask_transfuse = torch.einsum(
-                    "bi,bj->bij", selected_out_struct, all_ones_transfuse
-                )  # Binary matrix
-                mask_BLL.masked_fill_(mask_transfuse.bool(), 0)
-
-            mask_BHLL = mask_BLL.unsqueeze(1)
             context_BHLD = F.scaled_dot_product_attention(
                 query_BHLD, key_BHLD, value_BHLD, attn_mask=mask_BHLL
             )
