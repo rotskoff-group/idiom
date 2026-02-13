@@ -1,15 +1,15 @@
 import numpy as np
-from .tokenizer import BasicSmilesTokenizer
+from .tokenizer import CharTokenizer
 
 
-def look_ahead_smiles(smiles: list[str], tokenizer: BasicSmilesTokenizer) -> int:
+def look_ahead_smiles(smiles: list[str], tokenizer: CharTokenizer) -> int:
     """Determines the maximum length of the smiles strings in numbers of tokens
 
     Args:
         smiles: list[str]
             List of SMILES strings
-        tokenizer: BasicSmilesTokenizer
-            Instance of the BasicSmilesTokenizer class for tokenizing the SMILES strings
+        tokenizer: CharTokenizer
+            Instance of the CharTokenizer class for tokenizing the SMILES strings
 
     Returns:
         int: The maximum length of the tokenized SMILES strings
@@ -22,28 +22,11 @@ def look_ahead_smiles(smiles: list[str], tokenizer: BasicSmilesTokenizer) -> int
     return max_len + 1
 
 
-def look_ahead_dihedral(smiles: list[str]) -> int:
-    """Determines the maximum number of dihedral angles computable over the SMILES strings
-
-    Args:
-        smiles: list[str]
-            The list of SMILES strings to compute the dihedral angles over
-
-    Returns:
-        int: The maximum number of dihedral angles that can be computed over the SMILES strings
-    """
-    max_len = 0
-    for i in range(len(smiles)):
-        angles, _ = compute_dihedrals(smiles[i])
-        max_len = max(max_len, len(angles))
-    return max_len + 1
-
-
 # Base class for input generators, to be inherited by others
 class InputGeneratorBase:
     # Getters have concrete implementations, but constructor and transform are not implemented
     def __init__(
-        self, smiles: np.ndarray, tokenizer: BasicSmilesTokenizer, alphabet: np.ndarray
+        self, smiles: np.ndarray, tokenizer: CharTokenizer, alphabet: np.ndarray
     ) -> None:
         self.alphabet_size = -100
         self.max_len = -100
@@ -73,7 +56,7 @@ class SMILESInputBasic(InputGeneratorBase):
     def __init__(
         self,
         smiles: np.ndarray,
-        tokenizer: BasicSmilesTokenizer,
+        tokenizer: CharTokenizer,
         alphabet: np.ndarray,
         apply_start: bool = True,
         apply_stop: bool = True,
@@ -82,7 +65,7 @@ class SMILESInputBasic(InputGeneratorBase):
         Args:
             smiles: np.ndarray
                 Array of SMILES strings
-            tokenizer: BasicSmilesTokenizer
+            tokenizer: CharTokenizer
                 Tokenizer for separating SMILES strings into tokens
             alphabet: np.ndarray
                 Array of SORTED unique tokens

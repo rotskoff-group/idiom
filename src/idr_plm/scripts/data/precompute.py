@@ -1,25 +1,24 @@
 import hydra
 from functools import reduce
-from idr_plm.nn.transformer import tokenizer as tokenmodule
-from idr_plm.nn.transformer.tokenizer import BasicSmilesTokenizer, CharTokenizer
-from idr_plm.nn.transformer import input_generators as input_generators
-from idr_plm.nn.transformer import target_generators as target_generators
 import h5py
 import numpy as np
 from typing import Callable
 from multiprocessing import Pool
 from tqdm import tqdm
 
+from idr_plm.nn.transformer import tokenizer as tokenmodule
+from idr_plm.nn.transformer.tokenizer import CharTokenizer
+from idr_plm.nn.transformer import input_generators as input_generators
+from idr_plm.nn.transformer import target_generators as target_generators
 
-def determine_alphabet(
-    smiles: list[str], tokenizer: BasicSmilesTokenizer | CharTokenizer
-) -> list[str]:
+
+def determine_alphabet(smiles: list[str], tokenizer: CharTokenizer) -> list[str]:
     """Determines all unique tokens represented in a set of strings
 
     Args:
         smiles: list[str]
             List of SMILES strings to determine the alphabet over
-        tokenizer: BasicSmilesTokenizer
+        tokenizer: CharTokenizer
             Tokenizer object used to find unique tokens from the strings
 
     Returns:
