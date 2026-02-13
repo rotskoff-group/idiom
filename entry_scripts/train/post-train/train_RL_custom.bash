@@ -143,8 +143,6 @@ transformer_train \
     "++training.lightning_model_args.protgps_target_compartment=${COMPARTMENT}"\
     "++training.lightning_model_args.protgps_aggregation=${COMPARTMENT}"\
     "++training.lightning_model_args.protgps_parent_dir=${PROTGPS_PARENT_DIR}"\
-    "++training.lightning_model_args.pid_sample_fraction=0.25"\
-    "++training.lightning_model_args.pid_penalty=0.0"\
     "++training.lightning_model_args.normalize_advantage=True"\
     "++training.lightning_model_args.use_target_length=True"\
     "++training.lightning_model_args.target_length=${TARGET_LENGTH}"\

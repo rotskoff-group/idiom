@@ -8,19 +8,7 @@ from lightning.pytorch.utilities import grad_norm
 
 from idr_plm.nn.transformer.nn import GeometricMolTransformer
 from idr_plm.utils.sampler import TokenSampler
-from idr_plm.nn.transformer.scores import (
-    compute_fraction_alanine,
-    compute_charge_kappa,
-    compute_protgps_score,
-    apply_quadratic_reward_shaping,
-    print_example_sequences,
-    calculate_percent_identities,
-    calculate_idr_length,
-    compute_length_reward,
-    compute_sequence_entropy,
-    compute_entropy_reward,
-    valid_sequence_characters,
-)
+from idr_plm.nn.transformer import scores
 
 
 class LightningModel(L.LightningModule):
@@ -237,18 +225,12 @@ class LightningModel(L.LightningModule):
 
     def _shared_eval_grpo(self, batch, batch_idx, prefix):
         """
-        Group relative policy optimization (GRPO) evaluation with DAPO token-level loss. See reference here https://huggingface.co/papers/2503.14476
+        Implementation of GRPO with DAPO modification. See reference here https://huggingface.co/papers/2503.14476
 
         Args:
             batch: Provides tuples of prompt (tokens, masks) from TransformerOnlineDataset
             batch_idx: Batch index
             prefix: Logging prefix ("train", "validation", or "test")
-
-        External args: (Passed in through hydra config)
-            group_size: Number of sequences to generate per prompt
-            epsilon_clip: PPO-style clipping ratio
-            mu_grpo: Number of optimization steps to take for a batch of sampled prompts + completions
-            beta_kl: Relative magnitude of D_KL in loss
 
         Returns:
             GRPO objective loss
@@ -274,19 +256,21 @@ class LightningModel(L.LightningModule):
                 device=self.device,
             )
 
+        # Number off-policy steps. Should keep this at 1
         if not hasattr(self, "mu_grpo"):
             self.mu_grpo = torch.tensor(
                 self.hparams.training_args.lightning_model_args.get("mu_grpo", 1),
                 device=self.device,
             )
 
+        # Magnitude of D_KL penalty
         if not hasattr(self, "beta_kl"):
             self.beta_kl = torch.tensor(
                 self.hparams.training_args.lightning_model_args.get("beta_kl", 0.1),
                 device=self.device,
             )
 
-        # Reward shaping hyperparameters
+        # Quadratic reward shaping
         if not hasattr(self, "use_reward_shaping"):
             self.use_reward_shaping = (
                 self.hparams.training_args.lightning_model_args.get(
@@ -310,19 +294,12 @@ class LightningModel(L.LightningModule):
                 device=self.device,
             )
 
-        # Percent identity calculation sampling fraction
+        # Percent identity calculation sampling fraction. Just for diagnostics
         if not hasattr(self, "pid_sample_fraction"):
             self.pid_sample_fraction = (
                 self.hparams.training_args.lightning_model_args.get(
-                    "pid_sample_fraction", 1.0
+                    "pid_sample_fraction", 0.25
                 )
-            )
-
-        # Percent identity penalty for diversity
-        if not hasattr(self, "pid_penalty"):
-            self.pid_penalty = torch.tensor(
-                self.hparams.training_args.lightning_model_args.get("pid_penalty", 0.0),
-                device=self.device,
             )
 
         # Advantage normalization flag
@@ -344,7 +321,7 @@ class LightningModel(L.LightningModule):
         if not hasattr(self, "target_entropy"):
             self.target_entropy = torch.tensor(
                 self.hparams.training_args.lightning_model_args.get(
-                    "target_entropy", 2.5
+                    "target_entropy", 2.75
                 ),
                 device=self.device,
             )
@@ -352,7 +329,7 @@ class LightningModel(L.LightningModule):
         if not hasattr(self, "entropy_reward_weight"):
             self.entropy_reward_weight = torch.tensor(
                 self.hparams.training_args.lightning_model_args.get(
-                    "entropy_reward_weight", 0.1
+                    "entropy_reward_weight", 1.0
                 ),
                 device=self.device,
             )
@@ -360,7 +337,7 @@ class LightningModel(L.LightningModule):
         if not hasattr(self, "entropy_reward_width"):
             self.entropy_reward_width = (
                 self.hparams.training_args.lightning_model_args.get(
-                    "entropy_reward_width", 1.0
+                    "entropy_reward_width", 0.2
                 )
             )
 
@@ -368,7 +345,7 @@ class LightningModel(L.LightningModule):
         if not hasattr(self, "reward_function_name"):
             self.reward_function_name = (
                 self.hparams.training_args.lightning_model_args.get(
-                    "reward_function_name", "compute_charge_kappa"
+                    "reward_function_name", "compute_fraction_alanine"
                 )
             )
 
@@ -411,7 +388,7 @@ class LightningModel(L.LightningModule):
         if not hasattr(self, "length_reward_weight"):
             self.length_reward_weight = torch.tensor(
                 self.hparams.training_args.lightning_model_args.get(
-                    "length_reward_weight", 0.1
+                    "length_reward_weight", 1.0
                 ),
                 device=self.device,
             )
@@ -421,18 +398,21 @@ class LightningModel(L.LightningModule):
             # Default 1.0 is tight; increase to 2.0, 3.0 etc for wider tolerance around target length
             self.length_reward_width = (
                 self.hparams.training_args.lightning_model_args.get(
-                    "length_reward_width", 1.0
+                    "length_reward_width", 0.1
                 )
             )
 
-        # Map reward function name to actual function
-        reward_function_map = {
-            "compute_charge_kappa": compute_charge_kappa,
-            "compute_fraction_alanine": compute_fraction_alanine,
-            # "compute_qed_score": compute_qed_score,
-            "compute_protgps_score": compute_protgps_score,
-        }
-        self.reward_function = reward_function_map[self.reward_function_name]
+        # Map reward function name to actual function (loads from scores.py as well as custom_rewards.py in entry_scripts)
+        reward_function_registry = scores.get_reward_function_registry()
+
+        if self.reward_function_name not in reward_function_registry:
+            available_functions = ", ".join(reward_function_registry.keys())
+            raise ValueError(
+                f"Reward function '{self.reward_function_name}' not found. "
+                f"Available functions: {available_functions}"
+            )
+
+        self.reward_function = reward_function_registry[self.reward_function_name]
 
         # Assign special tokens
         _pad_token = self.token_info["input"]["TOK"]["TOK_PAD"]
@@ -452,7 +432,8 @@ class LightningModel(L.LightningModule):
         # Calculate all-to-all percent identities using biopython
         percent_identity_start = time.time()
 
-        percent_identities = calculate_percent_identities(
+        # Just for logging:
+        percent_identities = scores.calculate_percent_identities(
             generated_sequences,
             token_info=self.token_info,
             global_align=False,  # When False, normalize by min(len(seq1), len(seq2))
@@ -468,9 +449,6 @@ class LightningModel(L.LightningModule):
         percent_identities_tensor = torch.tensor(percent_identities, device=self.device)
         mean_pid = percent_identities_tensor.mean().item()
         std_pid = percent_identities_tensor.std().item()
-
-        # Convert mean_pid to tensor for use in loss calculation
-        mean_pid_tensor = torch.tensor(mean_pid, device=self.device)
 
         print(
             f"Step {self.global_step}: Mean percent identity: {mean_pid:.2f}%, Std: {std_pid:.2f}%"
@@ -491,13 +469,13 @@ class LightningModel(L.LightningModule):
         )
 
         # Compute rewards for generated sequences
-        # As a placeholder reward, run compute_fraction_alanine() on sequences
         reward_start = time.time()
         rewards = []
         raw_rewards = []  # Store raw rewards before shaping
         length_rewards = []  # Store length rewards separately for logging
         entropy_rewards = []  # Store entropy rewards separately for logging
-        entropies = []  # Store entropy values for logging
+        entropies = []  # Store Shannon entropy values for logging
+
         for seq_data in generated_sequences:  # Reward calculation is serial here
             # Extract the sequence tensor
             sequence = seq_data["sequence"]  # tokens
@@ -524,7 +502,7 @@ class LightningModel(L.LightningModule):
 
             # Apply reward shaping if enabled
             if self.use_reward_shaping:
-                shaped_reward = apply_quadratic_reward_shaping(
+                shaped_reward = scores.apply_quadratic_reward_shaping(
                     raw_reward, self.reward_target_value, self.reward_scale
                 )
             else:
@@ -532,7 +510,7 @@ class LightningModel(L.LightningModule):
 
             # Compute length reward if enabled and add to total reward
             if self.use_target_length:
-                length_reward = compute_length_reward(
+                length_reward = scores.compute_length_reward(
                     sequence,
                     self.token_info,
                     self.device,
@@ -547,10 +525,12 @@ class LightningModel(L.LightningModule):
 
             # Compute entropy reward if enabled and add to total reward
             # Also compute entropy for logging regardless
-            entropy = compute_sequence_entropy(sequence, self.token_info, self.device)
+            entropy = scores.compute_sequence_entropy(
+                sequence, self.token_info, self.device
+            )
             entropies.append(entropy)
             if self.use_target_entropy:
-                entropy_reward = compute_entropy_reward(
+                entropy_reward = scores.compute_entropy_reward(
                     sequence,
                     self.token_info,
                     self.device,
@@ -576,7 +556,7 @@ class LightningModel(L.LightningModule):
         print(f"Step {self.global_step}: Reward computation took {reward_time:.3f}s")
 
         # Calculate IDR lengths (excluding pad tokens)
-        seq_lengths_tensor = calculate_idr_length(
+        seq_lengths_tensor = scores.calculate_idr_length(
             generated_sequences, self.token_info, self.device
         )
 
@@ -649,14 +629,14 @@ class LightningModel(L.LightningModule):
                 f"Step {self.global_step}: Mean entropy reward: {entropy_rewards_tensor.mean().item():.4f}, Std entropy reward: {entropy_rewards_tensor.std().item():.4f}"
             )
 
-        # Print 3 randomly chosen generated sequences
-        print_example_sequences(
+        # Print some randomly chosen generated sequences as diagnostic
+        scores.print_example_sequences(
             generated_sequences,
             rewards_tensor,
             raw_rewards_tensor,
             self.token_info,
             self.global_step,
-            num_examples=3,
+            num_examples=5,
         )
 
         # Calculate normalized relative advantage within groups
@@ -670,7 +650,7 @@ class LightningModel(L.LightningModule):
         group_means = rewards_grouped.mean(dim=1, keepdim=True)  # (B, 1)
         group_stds = rewards_grouped.std(dim=1, keepdim=True, unbiased=False)  # (B, 1)
 
-        # Add small epsilon to prevent division by zero and handle identical rewards
+        # Add small epsilon to prevent div by zero and handle identical rewards
         epsilon = 1e-8
         group_stds = torch.clamp(group_stds, min=epsilon)
 
@@ -751,7 +731,7 @@ class LightningModel(L.LightningModule):
             ref_per_token_logps = ref_per_token_logps_list[i]
 
             # Compute per-token advantages with PPO-style clipping
-            # Calculate policy ratio: π_θ(a|s) / π_θ_old(a|s)
+            # Calculate policy ratio (the term multiplying advantage)
             ratio = torch.exp(per_token_logps - per_token_logps.detach())
 
             # Clip the ratio to [1 - epsilon_clip, 1 + epsilon_clip]
@@ -763,7 +743,7 @@ class LightningModel(L.LightningModule):
             unclipped_advantages = ratio * advantage
             clipped_advantages = ratio_clipped * advantage
 
-            # Take minimum (pessimistic bound) as in PPO
+            # Take min
             per_token_advantages = torch.min(unclipped_advantages, clipped_advantages)
 
             # Calculate per-token D_KL (Schulman approximation)
@@ -779,17 +759,11 @@ class LightningModel(L.LightningModule):
             total_kl_sum += masked_per_token_kl.sum().item()
             total_response_tokens += response_mask[1:].sum().item()
 
-            # Calculate per-token losses
-            # Optimization minimizes loss, so will maximize within parenthesis, so will minimize PID and KL penalty
-            # per_token_loss = -(per_token_advantages - self.beta_kl * per_token_kl)
-
             # Calculate individual loss components
             kl_penalty_term = self.beta_kl * per_token_kl
-            pid_penalty_term = self.pid_penalty * mean_pid_tensor / 100
 
-            per_token_loss = -(
-                per_token_advantages - kl_penalty_term - pid_penalty_term
-            )  # Include PID penalty (entropy now in reward)
+            per_token_loss = -(per_token_advantages - kl_penalty_term)
+            # Entropy now in reward, in advantages. Also, ratio is already folded into advantages here (see above)
 
             # Pass through response_mask
             per_token_loss = per_token_loss * response_mask[1:]
@@ -808,7 +782,6 @@ class LightningModel(L.LightningModule):
             # e.g., if batch_size=2 and G=4, then group_losses has keys 0, 1
             # and for each of those keys, outputs lists of len(4)
 
-        # DAPO implementation, reference: https://huggingface.co/papers/2503.14476
         # Collect all per-token losses and completion masks
         all_per_token_losses = []
         all_response_masks = []
@@ -842,8 +815,6 @@ class LightningModel(L.LightningModule):
             all_per_token_losses * all_response_masks
         ).sum() / total_completion_tokens
 
-        ##########
-
         # Calculate batch-level KL divergence for logging
         # Compute mean by dividing accumulated sum by total number of response tokens
         batch_kl_divergence = total_kl_sum / total_response_tokens
@@ -853,7 +824,6 @@ class LightningModel(L.LightningModule):
         # Calculate batch-level component magnitudes for logging
         total_advantage_sum = 0.0
         total_kl_penalty_sum = 0.0
-        total_pid_penalty_sum = 0.0
         total_tokens_for_components = 0
 
         for i, seq_data in enumerate(generated_sequences):
@@ -862,7 +832,7 @@ class LightningModel(L.LightningModule):
             ref_per_token_logps = ref_per_token_logps_list[i]
             advantage = advantages[i]
 
-            # Recalculate components for logging (with PPO-style clipping)
+            # Recalculate components (as above) for logging
             ratio = torch.exp(per_token_logps - per_token_logps.detach())
             ratio_clipped = torch.clamp(
                 ratio, 1.0 - self.epsilon_clip, 1.0 + self.epsilon_clip
@@ -878,16 +848,13 @@ class LightningModel(L.LightningModule):
             )
 
             kl_penalty_term = self.beta_kl * per_token_kl
-            pid_penalty_term = self.pid_penalty * mean_pid_tensor / 100
 
             # Apply response mask and accumulate
             masked_advantages = (per_token_advantages * response_mask[1:]).abs()
             masked_kl_penalty = (kl_penalty_term * response_mask[1:]).abs()
-            masked_pid_penalty = (pid_penalty_term * response_mask[1:]).abs()
 
             total_advantage_sum += masked_advantages.sum().item()
             total_kl_penalty_sum += masked_kl_penalty.sum().item()
-            total_pid_penalty_sum += masked_pid_penalty.sum().item()
             total_tokens_for_components += response_mask[1:].sum().item()
 
         # Convert to tensors for logging
@@ -897,9 +864,6 @@ class LightningModel(L.LightningModule):
         mean_kl_penalty_magnitude = torch.tensor(
             total_kl_penalty_sum / total_tokens_for_components, device=self.device
         )
-        mean_pid_penalty_magnitude = torch.tensor(
-            total_pid_penalty_sum / total_tokens_for_components, device=self.device
-        )
 
         # Log GRPO loss and KL divergence
         grpo_metrics = {
@@ -907,7 +871,6 @@ class LightningModel(L.LightningModule):
             f"{prefix}/kl_divergence": batch_kl_divergence,
             f"{prefix}/loss_advantage_magnitude": mean_advantage_magnitude,
             f"{prefix}/loss_kl_penalty_magnitude": mean_kl_penalty_magnitude,
-            f"{prefix}/loss_pid_penalty_magnitude": mean_pid_penalty_magnitude,
         }
 
         self.log_dict(
@@ -1032,9 +995,9 @@ class LightningModel(L.LightningModule):
                 )
             # This contains (batch_size * group_size) generated sequences and probs
 
-        # Initialize validity checking and recursion depth tracking
+        # Initialize validity checking for generated sequences (when too far off-policy, there may be invalid sequences)
         if not hasattr(self, "check_sequence_validity"):
-            self.check_sequence_validity = valid_sequence_characters
+            self.check_sequence_validity = scores.valid_sequence_characters
 
         if not hasattr(self, "log_invalid_sequences"):
             self.log_invalid_sequences = True
