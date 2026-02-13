@@ -168,7 +168,7 @@ class LightningModel(L.LightningModule):
                 param.requires_grad = False
 
             for p in self.reference_model.parameters():
-                assert not p.requires_grad 
+                assert not p.requires_grad
             for p in self.model.parameters():
                 assert p.requires_grad
 
