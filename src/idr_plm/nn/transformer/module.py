@@ -6,28 +6,14 @@ import pl_bolts
 from torch.nn.utils.rnn import pad_sequence
 from lightning.pytorch.utilities import grad_norm
 
-from idr_plm.nn.transformer.nn import (
-    GeometricMolTransformer,
-    # TransfusionMolTransformer,
-    # SeqStructMixedTransformer,
-)
-
-# from idr_plm.nn.transformer.utils import get_node_features
-# from idr_plm.nn.layers import diffusion
-# from idr_plm.nn.layers.diffusion import sample_torsions
-# from rdkit import Chem
-# from rdkit import RDLogger
-# from idr_plm.utils.structure import compute_dihedrals
+from idr_plm.nn.transformer.nn import GeometricMolTransformer
 from idr_plm.utils.sampler import TokenSampler
 from idr_plm.nn.transformer.scores import (
-    apply_gaussian_reward_shaping,
-    # compute_qed_score,
     compute_fraction_alanine,
     compute_charge_kappa,
     compute_protgps_score,
     apply_quadratic_reward_shaping,
     print_example_sequences,
-    apply_absolute_difference_reward_shaping,
     calculate_percent_identities,
     calculate_idr_length,
     compute_length_reward,
@@ -35,8 +21,6 @@ from idr_plm.nn.transformer.scores import (
     compute_entropy_reward,
     valid_sequence_characters,
 )
-
-# RDLogger.DisableLog("rdApp.*")
 
 
 class LightningModel(L.LightningModule):
@@ -47,20 +31,13 @@ class LightningModel(L.LightningModule):
         try:
             assert self.training_args["training_mode"] in [
                 "autoregressive",
-                # "bidirectional",
-                # "transfusion",
-                # "transfusion_offset",
-                # "era",
-                "era_online",
                 "grpo",
-                # "mixed_sequence",
-                # "dpo",
             ]
         except AssertionError:
             raise ValueError("Invalid training mode specified")
         self.token_info = token_info
         models = self.build_model_base()
-        if self.training_args["training_mode"] in ("era_online", "grpo"):
+        if self.training_args["training_mode"] in ("grpo"):
             self.reference_model, self.model = models
         else:
             self.model = models
@@ -77,10 +54,7 @@ class LightningModel(L.LightningModule):
         lightning_model_args = self.training_args.get("lightning_model_args", {})
         sampler_args = lightning_model_args.get("sampler_args", {})
         self.token_limit = sampler_args.get("token_limit", 1000)
-        if sampler_args and self.training_args["training_mode"] in (
-            "era_online",
-            "grpo",
-        ):
+        if sampler_args and self.training_args["training_mode"] in ("grpo",):
             # Use sampler_args configs to make TokenSampler
             self.sampling_method = sampler_args.get("method", "full")
             self.sample_val = sampler_args.get("sample_val", 1)
@@ -105,7 +79,7 @@ class LightningModel(L.LightningModule):
         self.save_hyperparameters()
 
     def build_model_base(self):
-        if self.training_args["training_mode"] in ("era_online", "grpo"):
+        if self.training_args["training_mode"] in ("grpo"):
             # Create current model
             if self.model_args["model"] == "GeometricMolTransformer":
                 current_model = GeometricMolTransformer(
@@ -164,10 +138,6 @@ class LightningModel(L.LightningModule):
             return loss_fn
 
         elif self.training_args["training_mode"] in [
-            # "era",
-            "era_online",
-            # "mixed_sequence",
-            # "dpo",
             "grpo",
         ]:
             return None
@@ -188,7 +158,7 @@ class LightningModel(L.LightningModule):
             if (k in curr_state_dict) and curr_state_dict[k].shape == v.shape
         }
 
-        if self.training_args["training_mode"] in ("era_online", "grpo"):
+        if self.training_args["training_mode"] in ("grpo"):
             # Load pre-trained model for post-training
             self.model.load_state_dict(pretrained_dict, strict=False)
             # Load reference model
@@ -198,9 +168,9 @@ class LightningModel(L.LightningModule):
                 param.requires_grad = False
 
             for p in self.reference_model.parameters():
-                assert p.requires_grad == False
+                assert not p.requires_grad 
             for p in self.model.parameters():
-                assert p.requires_grad == True
+                assert p.requires_grad
 
             self.reference_model.eval()
             # NOTE: For now, this needs to be added to the training config to account for the frozen reference model during training:
@@ -247,16 +217,6 @@ class LightningModel(L.LightningModule):
             to_return = {"optimizer": u_optimizer, "lr_scheduler": lr_scheduler_config}
         return to_return
 
-    # def clear_kv_cache(self):
-    #     """Clear KV cache in the underlying model"""
-    #     print("Cache cleared in module")
-    #     if hasattr(self.model, "clear_kv_cache"):
-    #         self.model.clear_kv_cache()
-    #     elif hasattr(self.model, "transformer") and hasattr(
-    #         self.model.transformer, "clear_kv_cache"
-    #     ):
-    #         self.model.transformer.clear_kv_cache()
-
     def _shared_eval_autoreg(self, batch, batch_idx, prefix):
         """Autoregressive shared_eval has no loss masking"""
         struct, src, src_key_pad_mask, tgt, tgt_key_pad_mask, seq_id = batch
@@ -281,293 +241,6 @@ class LightningModel(L.LightningModule):
         ).squeeze(-1)
         # policy_logps is going to be 1 shorter than len(tokens) because start token doesn't have a logp
         return policy_logps
-
-    # def _shared_eval_era(self, batch, batch_idx, prefix):
-    #     if not hasattr(self, "alignment_betas"):
-    #         self.alignment_betas = torch.tensor(
-    #             self.hparams.training_args.lightning_model_args.beta
-    #         ).to(self.device)
-
-    #     tokens, masks, energies, ref_logps = batch
-
-    #     policy_logps = self._compute_policy_logps(self.model, tokens, None, masks)
-    #     # Ignore the BOS when computing logps
-    #     policy_logps = policy_logps * masks[:, 1:]
-    #     policy_logps = policy_logps.sum(-1)
-
-    #     beta_prime = self.alignment_betas / (
-    #         1 + self.hparams.training_args.lightning_model_args.gamma
-    #     )
-    #     gamma_prime = self.hparams.training_args.lightning_model_args.gamma / (
-    #         1 + self.hparams.training_args.lightning_model_args.gamma
-    #     )
-
-    #     # FH: Here, energies can be (n_samples, n_energies) with associated beta_prime of shape (n_energies)
-    #     # or energies can be (n_samples) with a scalar beta_prime. After the multiplication and summation
-    #     # guarded behind the dimension check, energies should just be (n_samples).
-    #     energies = energies * beta_prime
-    #     if energies.dim() == 2:
-    #         energies = energies.sum(-1)
-
-    #     policy_logps_y1 = policy_logps.reshape(-1, 2)[:, 0]
-    #     policy_logps_y2 = policy_logps.reshape(-1, 2)[:, 1]
-
-    #     ref_logps_y1 = ref_logps.reshape(-1, 2)[:, 0]
-    #     ref_logps_y2 = ref_logps.reshape(-1, 2)[:, 1]
-
-    #     energies_y1 = energies.reshape(-1, 2)[:, 0]
-    #     energies_y2 = energies.reshape(-1, 2)[:, 1]
-
-    #     logp = nn.functional.logsigmoid(policy_logps_y2 - policy_logps_y1)
-    #     logp_prime = nn.functional.logsigmoid(policy_logps_y1 - policy_logps_y2)
-
-    #     logp_star = nn.functional.logsigmoid(
-    #         -(energies_y2 - energies_y1) + (gamma_prime * (ref_logps_y2 - ref_logps_y1))
-    #     )
-    #     logp_star_prime = nn.functional.logsigmoid(
-    #         -(energies_y1 - energies_y2) + (gamma_prime * (ref_logps_y1 - ref_logps_y2))
-    #     )
-    #     kl_loss = torch.exp(logp_star) * (logp_star - logp) + torch.exp(
-    #         logp_star_prime
-    #     ) * (logp_star_prime - logp_prime)
-
-    #     kl_loss = kl_loss.mean()
-
-    #     metrics = {f"{prefix}/ERALoss": kl_loss}
-
-    #     self.log_dict(
-    #         metrics,
-    #         on_epoch=True,
-    #         on_step=self.hparams.training_args.lightning_model_args.on_step,
-    #         sync_dist=self.hparams.training_args.lightning_model_args.sync_dist,
-    #         batch_size=tokens.shape[0],
-    #     )
-
-    #     return kl_loss
-
-    def _shared_eval_era_online(self, batch, batch_idx, prefix):
-        """
-        Online ERA evaluation that samples from the current model instead of pre-computed pairs.
-
-        Key differences from standard ERA:
-        - Generates molecule pairs on-the-fly from the current model at each training step
-        - Uses alanine fraction as a dummy reward function for demonstration purposes
-        - Computes reference log probabilities using a reference model from previous training step
-        - Reference model is automatically updated every N steps (default: 100, configurable via 'reference_update_frequency')
-        - Multiplies KL loss by probability ratio: (π_θ(y)·π_θ(y')) / (π_ref(y)·π_ref(y'))
-
-        Args:
-            batch: Dummy batch data (actual generation happens in this method)
-            batch_idx: Batch index
-            prefix: Logging prefix ("train", "validation", or "test")
-
-        Returns:
-            KL divergence loss computed using same formula as standard ERA
-        """
-        tokens, masks = batch
-
-        _pad_token = self.token_info["input"]["TOK"]["TOK_PAD"]
-
-        if not hasattr(self, "alignment_betas"):
-            self.alignment_betas = torch.tensor(
-                self.hparams.training_args.lightning_model_args.beta
-            ).to(self.device)
-
-        # Arguments for what energy function to use
-        if not hasattr(self, "energy_function"):
-            self.energy_function = self.hparams.training_args.lightning_model_args.get(
-                "energy_function", "fraction_alanine"
-            )
-
-        # Map energy function names to actual functions
-        if not hasattr(self, "energy_function_map"):
-            self.energy_function_map = {
-                "fraction_alanine": compute_fraction_alanine,
-                "charge_kappa": compute_charge_kappa,
-            }
-
-        # Reward shaping hyperparameters
-        if not hasattr(self, "use_reward_shaping"):
-            self.use_reward_shaping = (
-                self.hparams.training_args.lightning_model_args.get(
-                    "use_reward_shaping", False
-                )
-            )
-
-        # Choose reward shaping function to use
-        if self.use_reward_shaping:
-            self.reward_shaping_function = (
-                self.hparams.training_args.lightning_model_args.get(
-                    "reward_shaping_function", "gaussian"
-                )
-            )
-
-        # Map reward shaping function names to actual functions
-        if not hasattr(self, "reward_shaping_function_map"):
-            self.reward_shaping_function_map = {
-                "gaussian": apply_gaussian_reward_shaping,
-                "quadratic": apply_quadratic_reward_shaping,
-                "absolute_difference": apply_absolute_difference_reward_shaping,
-            }
-
-        # Generate sample pairs from the current model
-        generated_sequences = self._generate_sequences_online(
-            tokens, masks, group_size=2
-        )
-
-        energies = []
-        generated_tokens = []
-        generated_masks = []
-        raw_rewards = []
-        for seq_data in generated_sequences:
-            # Extract the sequence tensor
-            sequence = seq_data["sequence"]
-            reward = self.energy_function_map[self.energy_function](
-                sequence, self.token_info, self.device
-            )
-            raw_rewards.append(reward)
-            if self.use_reward_shaping:
-                reward = self.reward_shaping_function_map[self.reward_shaping_function](
-                    reward,
-                    **self.hparams.training_args.lightning_model_args.get(
-                        "reward_shaping_args", {}
-                    ),
-                )
-            energies.append(reward)
-            generated_tokens.append(sequence)
-            generated_masks.append(seq_data["response_mask"])
-
-        energies = torch.stack(energies).view(-1, 2)  # pairs: [batch_size, 2]
-        raw_rewards_tensor = torch.stack(raw_rewards).view(
-            -1, 2
-        )  # pairs: [batch_size, 2]
-        try:
-            generated_tokens = torch.stack(
-                generated_tokens
-            )  # pairs: [batch_size * 2, seq_len]
-            generated_masks = torch.stack(
-                generated_masks
-            )  # pairs: [batch_size * 2, seq_len]
-        except RuntimeError:
-            print("PADDING NOW")
-            generated_tokens = pad_sequence(
-                generated_tokens, batch_first=True, padding_value=_pad_token
-            )
-            generated_masks = pad_sequence(
-                generated_masks, batch_first=True, padding_value=0
-            )
-
-        metrics = {
-            f"{prefix}/mean_energy": energies.mean(),
-            f"{prefix}/std_energy": energies.std(),
-            f"{prefix}/max_energy": energies.max(),
-            f"{prefix}/min_energy": energies.min(),
-        }
-
-        # Log raw reward statistics if reward shaping is enabled
-        if self.use_reward_shaping:
-            metrics.update(
-                {
-                    f"{prefix}/mean_raw_reward": raw_rewards_tensor.mean(),
-                    f"{prefix}/std_raw_reward": raw_rewards_tensor.std(),
-                    f"{prefix}/max_raw_reward": raw_rewards_tensor.max(),
-                    f"{prefix}/min_raw_reward": raw_rewards_tensor.min(),
-                }
-            )
-
-        # Compute policy logps using current model
-        policy_logps = self._compute_policy_logps(
-            self.model, generated_tokens, None, generated_masks
-        )
-
-        # Ignore the BOS when computing logps
-        policy_logps = policy_logps * generated_masks[:, 1:]
-        policy_logps = policy_logps.sum(-1)
-
-        # Apply same beta and gamma transformations as original ERA
-        beta_prime = self.alignment_betas / (
-            1 + self.hparams.training_args.lightning_model_args.gamma
-        )
-        gamma_prime = self.hparams.training_args.lightning_model_args.gamma / (
-            1 + self.hparams.training_args.lightning_model_args.gamma
-        )
-        energies = energies * beta_prime
-
-        # Compute reference policy probabilities for the same sequences
-        with torch.no_grad():
-            ref_logps = self._compute_policy_logps(
-                self.reference_model, generated_tokens, None, generated_masks
-            )
-
-        # Ignore the BOS when computing logps
-        ref_logps = ref_logps * generated_masks[:, 1:]
-        ref_logps = ref_logps.sum(-1)
-
-        # Compute KL loss using same formula as original ERA
-        policy_logps_y1 = policy_logps.reshape(-1, 2)[:, 0]
-        policy_logps_y2 = policy_logps.reshape(-1, 2)[:, 1]
-
-        ref_logps_y1 = ref_logps.reshape(-1, 2)[:, 0]
-        ref_logps_y2 = ref_logps.reshape(-1, 2)[:, 1]
-
-        energies_y1 = energies.reshape(-1, 2)[:, 0]
-        energies_y2 = energies.reshape(-1, 2)[:, 1]
-
-        logp = nn.functional.logsigmoid(policy_logps_y2 - policy_logps_y1)
-        logp_prime = nn.functional.logsigmoid(policy_logps_y1 - policy_logps_y2)
-
-        logp_star = nn.functional.logsigmoid(
-            -(energies_y2 - energies_y1) + (gamma_prime * (ref_logps_y2 - ref_logps_y1))
-        )
-        logp_star_prime = nn.functional.logsigmoid(
-            -(energies_y1 - energies_y2) + (gamma_prime * (ref_logps_y1 - ref_logps_y2))
-        )
-        kl_loss = torch.exp(logp_star) * (logp_star - logp) + torch.exp(
-            logp_star_prime
-        ) * (logp_star_prime - logp_prime)
-
-        # Compute probability ratio: (pi_theta(y) * pi_theta(y')) / (pi_ref(y) * pi_ref(y'))
-        log_prob_ratio = (policy_logps_y1 + policy_logps_y2) - (
-            ref_logps_y1 + ref_logps_y2
-        )
-        eps = self.hparams.training_args.lightning_model_args.get("eps", 1e-10)
-
-        log_total_loss = torch.logsumexp(
-            log_prob_ratio + (kl_loss + eps).log(), dim=0
-        ) - torch.log(torch.tensor(kl_loss.shape[0], device=self.device))
-
-        total_loss = torch.exp(log_total_loss)
-
-        log_ratio_shifted = log_prob_ratio - log_prob_ratio.max()
-        log_sum_weights = torch.logsumexp(log_ratio_shifted, dim=0)
-        log_sum_weights_squared = torch.logsumexp(2 * log_ratio_shifted, dim=0)
-        log_ess = 2 * log_sum_weights - log_sum_weights_squared
-        effective_sample_size = torch.exp(log_ess) / kl_loss.shape[0]
-
-        metrics[f"{prefix}/ERAOnlineLoss"] = total_loss
-        metrics[f"{prefix}/EffectiveSampleSize"] = effective_sample_size
-
-        # Update reference model periodically (default every 100 steps)
-        update_ess_threshold = self.hparams.training_args.lightning_model_args.get(
-            "reference_update_ess_threshold", None
-        )
-
-        if update_ess_threshold is not None:
-            if effective_sample_size <= update_ess_threshold:
-                self.reference_model.load_state_dict(self.model.state_dict())
-                print(
-                    f"Step {self.global_step}: Updated reference model (ESS: {effective_sample_size:.4f} <= {update_ess_threshold})"
-                )
-
-        self.log_dict(
-            metrics,
-            on_epoch=True,
-            on_step=self.hparams.training_args.lightning_model_args.on_step,
-            sync_dist=self.hparams.training_args.lightning_model_args.sync_dist,
-            batch_size=tokens.shape[0],
-        )
-
-        return total_loss
 
     def _shared_eval_grpo(self, batch, batch_idx, prefix):
         """
@@ -1151,36 +824,7 @@ class LightningModel(L.LightningModule):
             # e.g., if batch_size=2 and G=4, then group_losses has keys 0, 1
             # and for each of those keys, outputs lists of len(4)
 
-        ########## ORIGINAL GRPO
-
-        # # Sum loss across group elements to yield per_prompt_loss
-
-        # per_prompt_loss_dict = {}
-        # for prompt_idx, loss in group_losses.items():
-        #     per_prompt_loss = torch.stack(loss).sum(dim=0)
-        #     per_prompt_loss_dict[prompt_idx] = per_prompt_loss
-
-        # # Sum total number of response tokens for each prompt_idx
-        # per_prompt_token_count_dict = {}
-        # for i, seq_data in enumerate(generated_sequences):
-        #     prompt_idx = seq_data['prompt_idx']
-        #     response_mask = seq_data['response_mask']
-        #     token_count = response_mask.sum()
-        #     if prompt_idx not in per_prompt_token_count_dict:
-        #         per_prompt_token_count_dict[prompt_idx] = torch.tensor(0.0, device=self.device)
-        #     per_prompt_token_count_dict[prompt_idx] += token_count
-
-        # # Normalize per_prompt_loss_dict by total number of response tokens
-        # for prompt_idx, loss in per_prompt_loss_dict.items():
-        #     per_prompt_loss_dict[prompt_idx] = per_prompt_loss_dict[prompt_idx] / per_prompt_token_count_dict[prompt_idx]
-
-        # grpo_batch_loss = 0
-        # for prompt_idx, loss in per_prompt_loss_dict.items():
-        #     grpo_batch_loss += loss
-        # grpo_batch_loss = grpo_batch_loss / batch_size
-
-        ########## DAPO
-        # Reference: https://huggingface.co/papers/2503.14476
+        # DAPO implementation, reference: https://huggingface.co/papers/2503.14476
         # Collect all per-token losses and completion masks
         all_per_token_losses = []
         all_response_masks = []
@@ -1226,7 +870,6 @@ class LightningModel(L.LightningModule):
         total_advantage_sum = 0.0
         total_kl_penalty_sum = 0.0
         total_pid_penalty_sum = 0.0
-        total_entropy_penalty_sum = 0.0
         total_tokens_for_components = 0
 
         for i, seq_data in enumerate(generated_sequences):
@@ -1457,73 +1100,6 @@ class LightningModel(L.LightningModule):
 
         return all_generated_sequences, final_num_invalid
 
-    def _update_reference_model(self):
-        """Update the reference model with current model parameters"""
-        if (
-            self.training_args["training_mode"] == "era_online"
-            and self.reference_model is not None
-        ):
-            self.reference_model.load_state_dict(self.model.state_dict())
-            # Ensure reference model stays frozen and in eval mode
-            for param in self.reference_model.parameters():
-                param.requires_grad = False
-            self.reference_model.eval()
-
-    # def _shared_eval_dpo(self, batch, batch_idx, prefix):
-    #     if not hasattr(self, "alignment_betas"):
-    #         self.alignment_betas = torch.tensor(
-    #             self.hparams.training_args.lightning_model_args.beta
-    #         ).to(self.device)
-
-    #     tokens, masks, energies, ref_logps = batch
-
-    #     policy_logps = self._compute_policy_logps(self.model, tokens, None, masks)
-    #     # Ignore the BOS when computing logps
-    #     policy_logps = policy_logps * masks[:, 1:]
-    #     policy_logps = policy_logps.sum(-1)
-
-    #     beta = self.alignment_betas
-
-    #     if energies.dim() == 2:
-    #         energies = energies.sum(-1)
-
-    #     policy_logps_y1 = policy_logps.reshape(-1, 2)[:, 0]
-    #     policy_logps_y2 = policy_logps.reshape(-1, 2)[:, 1]
-
-    #     ref_logps_y1 = ref_logps.reshape(-1, 2)[:, 0]
-    #     ref_logps_y2 = ref_logps.reshape(-1, 2)[:, 1]
-
-    #     energies_y1 = energies.reshape(-1, 2)[:, 0]
-    #     energies_y2 = energies.reshape(-1, 2)[:, 1]
-
-    #     # SI: want to be able to specify whether higher or lower energy is better
-    #     if self.hparams.training_args.lightning_model_args.better_energy == "higher":
-    #         y2_sign = (energies_y2 >= energies_y1).long()
-    #     elif self.hparams.training_args.lightning_model_args.better_energy == "lower":
-    #         y2_sign = (energies_y2 <= energies_y1).long()
-    #     else:
-    #         raise ValueError("better_energy must be 'higher' or 'lower'")
-    #     y2_sign[y2_sign == 0] = -1
-    #     y1_sign = -y2_sign
-
-    #     pi_logratios = y2_sign * policy_logps_y2 + y1_sign * policy_logps_y1
-    #     ref_logratios = y2_sign * ref_logps_y2 + y1_sign * ref_logps_y1
-
-    #     loss = -nn.functional.logsigmoid(beta * (pi_logratios - ref_logratios))
-    #     tot_loss = loss.mean()
-
-    #     metrics = {f"{prefix}/DPOLoss": tot_loss}
-
-    #     self.log_dict(
-    #         metrics,
-    #         on_epoch=True,
-    #         on_step=self.hparams.training_args.lightning_model_args.on_step,
-    #         sync_dist=self.hparams.training_args.lightning_model_args.sync_dist,
-    #         batch_size=tokens.shape[0],
-    #     )
-
-    #     return tot_loss
-
     def on_before_optimizer_step(self, optimizer):
         # Calculate the L2 norm of the gradients
         norms = grad_norm(self, norm_type=2)
@@ -1533,44 +1109,24 @@ class LightningModel(L.LightningModule):
     def training_step(self, batch, batch_idx):
         if self.training_args["training_mode"] == "autoregressive":
             return self._shared_eval_autoreg(batch, batch_idx, "train")
-        # elif self.training_args["training_mode"] == "era":
-        #     return self._shared_eval_era(batch, batch_idx, "train")
-        elif self.training_args["training_mode"] == "era_online":
-            return self._shared_eval_era_online(batch, batch_idx, "train")
         elif self.training_args["training_mode"] == "grpo":
             return self._shared_eval_grpo(batch, batch_idx, "train")
-        # elif self.training_args["training_mode"] == "dpo":
-        # return self._shared_eval_dpo(batch, batch_idx, "train")
 
     def validation_step(self, batch, batch_idx):
         with torch.enable_grad():
             if self.training_args["training_mode"] == "autoregressive":
                 return self._shared_eval_autoreg(batch, batch_idx, "validation")
-            # elif self.training_args["training_mode"] == "era":
-            #     return self._shared_eval_era(batch, batch_idx, "validation")
-            elif self.training_args["training_mode"] == "era_online":
-                return self._shared_eval_era_online(batch, batch_idx, "validation")
             elif self.training_args["training_mode"] == "grpo":
                 return self._shared_eval_grpo(batch, batch_idx, "validation")
-            # elif self.training_args["training_mode"] == "dpo":
-            #     return self._shared_eval_dpo(batch, batch_idx, "validation")
 
     def test_step(self, batch, batch_idx):
         with torch.enable_grad():
             if self.training_args["training_mode"] == "autoregressive":
                 return self._shared_eval_autoreg(batch, batch_idx, "test")
-            # elif self.training_args["training_mode"] == "era":
-            #     return self._shared_eval_era(batch, batch_idx, "test")
-            elif self.training_args["training_mode"] == "era_online":
-                return self._shared_eval_era_online(batch, batch_idx, "test")
             elif self.training_args["training_mode"] == "grpo":
                 return self._shared_eval_grpo(batch, batch_idx, "test")
-            # elif self.training_args["training_mode"] == "dpo":
-            #     return self._shared_eval_dpo(batch, batch_idx, "test")
 
-    def forward_autoregressive_prompted(
-        self, batch, token_sampler, use_cache_here=False
-    ):
+    def forward_autoregressive_prompted(self, batch, token_sampler):
         """This method performs autoregressive sampling of SMILES strings or
         other tokenizer representations, but with a provided prompt.
 
@@ -1583,12 +1139,6 @@ class LightningModel(L.LightningModule):
         going into and coming out of the transformer. Consequently, this requires indexing based on
         the sum of sequence ids.
         """
-
-        # import time
-        # start_time = time.time()
-
-        # Clear KV cache at the start of generation for this batch
-        # self.clear_kv_cache()
 
         # Here, smi_batch is a list of tensors of differing lengths
         structural_batch, smi_batch, seq_id_batch = batch
@@ -1665,30 +1215,6 @@ class LightningModel(L.LightningModule):
                     working_seq_id_batch,
                     batch_access_indices=all_indices,
                 )  # (N, T, E)
-
-                # if iteration == 2:
-                #     logits_no_cache = self.model(
-                #         working_smi_batch,
-                #         working_structural_batch,
-                #         working_seq_id_batch,
-                #         batch_access_indices=all_indices,
-                #         inference_iteration=self._inference_iteration,
-                #         use_cache_here=False,
-                #     )  # (B, T, E)
-
-                #     # Check:
-                #     # (logits_no_cache[:, 0:working_seq_id_batch.sum(-1)[0], :] - logits[:, 0:working_seq_id_batch.sum(-1)[0], :]).sum()
-                #     # (logits_no_cache[:, 0:10, :] - logits[:, 0:10, :]).sum()
-
-                # if iteration == 1:
-                #     # Save logits to variable for later reference
-                #     logits_iteration_1 = logits.clone()
-
-                # if iteration == 2:
-                #     # Save logits to variable and compare to iteration == 1 logits
-                #     logits_iteration_2 = logits.clone()
-
-                # assert torch.allclose(logits, logits_no_cache, atol=1e-5), f"Cached and non-cached logits differ by more than 1e-5: max diff = {(logits - logits_no_cache).abs().max().item()}"
 
             indexed_positions = working_seq_id_batch.sum(-1)  # (N,)
             # FH: Subtract 1 from the indexed position here because we want to last non-padding token.
@@ -1979,8 +1505,5 @@ def sample_components_from_autoregressive_transformer(
         all_token_probs.append(probs)
         batch_time = time.time() - batch_start_time
         print(f"Batch {batch}/{num_batches} completed in {batch_time:.2f} seconds")
-        # jxliu2: at the end of the batch, clear KV cache
-        # transformer_model.clear_kv_cache()
-    # all_sampled_tokens = torch.cat(all_sampled_tokens, dim=0)
-    # all_token_probs = torch.cat(all_token_probs, dim=0)
+
     return all_sampled_tokens, all_token_probs
