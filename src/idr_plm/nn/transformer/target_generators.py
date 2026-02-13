@@ -1,15 +1,15 @@
 import numpy as np
-from .tokenizer import BasicSmilesTokenizer
+from .tokenizer import CharTokenizer
 
 
-def look_ahead_smiles(smiles: list[str], tokenizer: BasicSmilesTokenizer) -> int:
+def look_ahead_smiles(smiles: list[str], tokenizer: CharTokenizer) -> int:
     """Determines the maximum length of the smiles strings in numbers of tokens
 
     Args:
         smiles: list[str]
             List of SMILES strings
-        tokenizer: BasicSmilesTokenizer
-            Instance of BasicSmilesTokenizer for splitting SMILES strings into tokens
+        tokenizer: CharTokenizer
+            Instance of CharTokenizer for splitting SMILES strings into tokens
 
     Returns:
         max_len: int
@@ -28,7 +28,7 @@ class TargetGeneratorBase:
     def __init__(
         self,
         smiles: np.ndarray,
-        tokenizer: BasicSmilesTokenizer,
+        tokenizer: CharTokenizer,
         alphabet: np.ndarray,
         targets: np.ndarray,
     ) -> None:
@@ -60,7 +60,7 @@ class SMILESTarget(TargetGeneratorBase):
     def __init__(
         self,
         smiles: np.ndarray,
-        tokenizer: BasicSmilesTokenizer,
+        tokenizer: CharTokenizer,
         alphabet: np.ndarray,
         targets: np.ndarray,
         apply_start: bool = True,
@@ -71,7 +71,7 @@ class SMILESTarget(TargetGeneratorBase):
             smiles: np.ndarray
                 Array of SMILES strings
             tokenizer: BasicSmilestokenizer
-                Instance of BasicSmilesTokenizer for splitting SMILES strings into tokens
+                Instance of CharTokenizer for splitting SMILES strings into tokens
             alphabet: np.ndarray
                 Array of SORTED unique tokens
             targets: np.ndarray
