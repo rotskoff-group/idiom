@@ -29,23 +29,6 @@ def get_hdf5_fn(dataset_filename):
     return get_hdf5_data
 
 
-# def create_dataset_from_path(dataset_filename, model_config):
-#     """Creates a dataset from a path to a hdf5 file
-#     Args:
-#         dataset_filename (str): The name of the file where the dataset is saved
-#         nn_config (dict): A dictionary with the configuration for the neural network
-#     Returns:
-#         dataset: A (subclassed) PyTorch Dataset
-#     """
-#     dataset = getattr(clm.models, model_config["dataset"])
-#     get_hdf5_data = get_hdf5_fn(dataset_filename)
-
-#     dataset = dataset(get_hdf5_data=get_hdf5_data,
-#                       data_in_memory=model_config["data_in_memory"],
-#                       config=model_config)
-#     return dataset
-
-
 def split_data_subsets(
     dataset: Dataset,
     splits: Optional[str],

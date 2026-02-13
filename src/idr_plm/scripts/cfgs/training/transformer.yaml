@@ -28,7 +28,7 @@ lightning_model_args:
     save_top_k: 1
 trainer_args: 
   accelerator: "cuda"
-  devices: 2
+  devices: 8
   strategy: "auto"
   max_steps: 250000
   max_epochs: 10000
@@ -37,8 +37,8 @@ trainer_args:
   enable_progress_bar: False
   gradient_clip_val: null
   gradient_clip_algorithm: null
-  val_check_interval: 5000
-  accumulate_grad_batches: 2
+  val_check_interval: 25000
+  accumulate_grad_batches: 1
 logger:
   loggertype: "TensorBoard" # "TensorBoard" or "Wandb"
   project: null # null if Tensorboard. Name for Wandb project folder

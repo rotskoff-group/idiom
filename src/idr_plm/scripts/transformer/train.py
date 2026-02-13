@@ -70,6 +70,7 @@ def main(cfg) -> None:
         shuffle=True,
         collate_fn=collate_fn,
     )
+
     val_loader = DataLoader(
         val_set,
         worker_init_fn=seed_worker,
@@ -78,6 +79,7 @@ def main(cfg) -> None:
         shuffle=False,
         collate_fn=collate_fn,
     )
+
     # test_loader = DataLoader(test_set, worker_init_fn=seed_worker,
     #                          generator=g, **data_args['dloader_args'], shuffle=False, collate_fn=collate_fn)
 
@@ -92,7 +94,9 @@ def main(cfg) -> None:
     )
 
     custom_version = os.environ.get("LIGHTNING_LOG_VERSION", None)
+
     logger = TensorBoardLogger(save_dir="./", version=custom_version)
+
     lightning_model = LightningModel(
         model_args=model_args, token_info=token_dict, training_args=training_args
     )
@@ -103,6 +107,7 @@ def main(cfg) -> None:
                 activation_checkpointing_policy={nn.TransformerEncoderLayer},
                 sharding_strategy="FULL_SHARD",
             )
+
         trainer = L.Trainer(
             logger=logger,
             callbacks=[
@@ -112,6 +117,7 @@ def main(cfg) -> None:
             ],
             **training_args["trainer_args"],
         )
+
     else:
         trainer = L.Trainer(
             logger=logger,
@@ -130,10 +136,8 @@ def main(cfg) -> None:
 
         # Extract and print version number
         version_match = os.path.basename(train_folder_name)
-        print("\n" + "=" * 50)
         print(f"Lightning Logs Version: {version_match}")
         print(f"Log Directory: {train_folder_name}")
-        print("=" * 50 + "\n")
 
     print(f"Reloading from {training_args['resume_training_path']}")
     trainer.fit(
