@@ -1,174 +1,10 @@
 import torch
-import numpy as np
-
-# from rdkit import Chem
-# from rdkit.Chem import QED
-from sparrow import Protein
-from Bio import pairwise2
 import sys
 import os
 import pickle
 from argparse import Namespace
-
-
-# def compute_qed_score(tokens, token_info, device):
-#     """
-#     Compute negative log QED score for a sequence of tokens (lower values = better drug-likeness).
-
-#     Uses token_info["alphabet"] to convert tokens to SMILES strings for QED computation.
-#     Returns 4.5 as failure value for invalid molecules or missing alphabet.
-#     """
-#     try:
-#         # Convert tokens to SMILES string
-#         # pad_token = token_info.get("TOK_PAD", 0)
-#         # start_token = token_info.get("TOK_START", 1)
-#         # stop_token = token_info.get("TOK_STOP", 2)
-#         _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-#         _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-#         _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-#         # Extract valid tokens (skip special tokens)
-#         # valid_tokens = tokens[(tokens != pad_token) & (tokens != start_token) & (tokens != stop_token)]
-#         valid_tokens = tokens[
-#             (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-#         ]
-
-#         if len(valid_tokens) == 0:
-#             return torch.tensor(4.5, device=device)  # Failure value
-
-#         # Convert to SMILES using alphabet from token_info
-#         if "alphabet" in token_info and token_info["alphabet"] is not None:
-#             alphabet = token_info["alphabet"]
-#             # Decode bytes alphabet
-#             alphabet = [item.decode("utf-8") for item in alphabet]
-#             smiles = "".join([alphabet[token.item()] for token in valid_tokens])
-#         else:
-#             # Fallback: return failure value if no alphabet available
-#             print(
-#                 "Warning: No alphabet found in token_info, cannot convert tokens to SMILES"
-#             )
-#             return torch.tensor(4.5, device=device)
-
-#         # Compute QED score
-#         mol = Chem.MolFromSmiles(smiles)
-#         if mol is not None:
-#             qed_score = QED.qed(mol)
-#             if qed_score <= 0.0:
-#                 return torch.tensor(4.5, device=device)  # Failure value for invalid QED
-#             else:
-#                 return torch.tensor(-np.log(qed_score), device=device)
-#         else:
-#             return torch.tensor(
-#                 4.5, device=device
-#             )  # Failure value for invalid molecule
-
-#     except Exception as e:
-#         print(f"Error computing QED: {e}")
-#         return torch.tensor(4.5, device=device)  # Failure value for exceptions
-
-
-def compute_charge_kappa(tokens, token_info, device):
-    """
-    Compute the charge segregation, kappa, of a protein sequence.
-
-    Uses token_info["alphabet"] to convert tokens to amino acid sequence.
-    Returns kappa of the sequence.
-    """
-
-    try:
-        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-        _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-        # Extract valid tokens (skip special tokens)
-        valid_tokens = tokens[
-            (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-        ]
-
-        if len(valid_tokens) == 0:
-            return torch.tensor(0.0, device=device)  # No valid tokens
-
-        # Convert to amino acid sequence using alphabet from token_info
-        if "alphabet" in token_info and token_info["alphabet"] is not None:
-            alphabet = token_info["alphabet"]
-            # Decode bytes alphabet
-            alphabet = [item.decode("utf-8") for item in alphabet]
-            sequence = "".join([alphabet[token.item()] for token in valid_tokens])
-        else:
-            # Fallback: return 0 if no alphabet available
-            print(
-                "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
-            )
-            return torch.tensor(0.0, device=device)
-
-        # Rearrange FIM IDR
-        # sequence_FIM = sequence # Save FIM sequence (has 1,2,3) in case
-        # sequence = rearrange_sequence(sequence) # Rearrange FIM sequence into regular
-        idr_sequence, _, _ = extract_disordered_regions(sequence)
-
-        # Calculate kappa using Sparrow
-        prot = Protein(idr_sequence)
-        charge_kappa = prot.kappa
-
-        return torch.tensor(charge_kappa, device=device)
-
-    except Exception as e:
-        print(f"Error computing kappa: {e}")
-        return torch.tensor(0.0, device=device)  # Return 0 for exceptions
-
-
-def compute_fraction_alanine(tokens, token_info, device):
-    """
-    Compute the fraction of alanine residues in a protein sequence.
-
-    Uses token_info["alphabet"] to convert tokens to amino acid sequence.
-    Returns the fraction of alanine (A) residues in the sequence.
-    """
-    # import ipdb; ipdb.set_trace()
-    try:
-        # Convert tokens to amino acid sequence
-        # pad_token = token_info.get("TOK_PAD", 0)
-        # start_token = token_info.get("TOK_START", 1)
-        # stop_token = token_info.get("TOK_STOP", 2)
-        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-        _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-        # Extract valid tokens (skip special tokens)
-        valid_tokens = tokens[
-            (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-        ]
-
-        if len(valid_tokens) == 0:
-            return torch.tensor(0.0, device=device)  # No valid tokens
-
-        # Convert to amino acid sequence using alphabet from token_info
-        if "alphabet" in token_info and token_info["alphabet"] is not None:
-            alphabet = token_info["alphabet"]
-            # Decode bytes alphabet
-            alphabet = [item.decode("utf-8") for item in alphabet]
-            sequence = "".join([alphabet[token.item()] for token in valid_tokens])
-        else:
-            # Fallback: return 0 if no alphabet available
-            print(
-                "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
-            )
-            return torch.tensor(0.0, device=device)
-
-        # Count alanine residues
-        alanine_count = sequence.upper().count("A")
-        total_residues = len(sequence) - 3  # -3 for 1,2,3 FIM sentinels
-
-        if total_residues == 0:
-            return torch.tensor(0.0, device=device)
-
-        fraction_alanine = alanine_count / total_residues
-        return torch.tensor(fraction_alanine, device=device)
-
-    except Exception as e:
-        print(f"Error computing fraction alanine: {e}")
-        return torch.tensor(0.0, device=device)  # Return 0 for exceptions
-
+import random
+from Bio import pairwise2
 
 # Global variables for ProtGPS model caching
 _PROTGPS_MODEL = None
@@ -190,9 +26,53 @@ COMPARTMENT_CLASSES = [
 ]
 
 
-def load_protgps_model(protgps_parent_dir="/home/jxliu2/protgps", device=None):
+def compute_fraction_alanine(tokens, token_info, device):
     """
-    Load the ProtGPS model for predicting biomolecular condensate localization.
+    Compute the fraction of alanine residues in a protein sequence.
+
+    Uses token_info["alphabet"] to convert tokens to amino acid sequence.
+    Returns the fraction of alanine (A) residues in the sequence.
+    """
+
+    _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
+    _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
+    _start_token = token_info["input"]["TOK"]["TOK_START"]
+
+    # Extract valid tokens (skip special tokens)
+    valid_tokens = tokens[
+        (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
+    ]
+
+    if len(valid_tokens) == 0:
+        return torch.tensor(0.0, device=device)  # No valid tokens
+
+    # Convert to amino acid sequence using alphabet from token_info
+    if "alphabet" in token_info and token_info["alphabet"] is not None:
+        alphabet = token_info["alphabet"]
+        # Decode bytes alphabet
+        alphabet = [item.decode("utf-8") for item in alphabet]
+        sequence = "".join([alphabet[token.item()] for token in valid_tokens])
+    else:
+        # Fallback: return 0 if no alphabet available
+        print(
+            "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
+        )
+        return torch.tensor(0.0, device=device)
+
+    # Count alanine residues
+    alanine_count = sequence.upper().count("A")
+    total_residues = len(sequence) - 3  # -3 for 1,2,3 FIM sentinels
+
+    if total_residues == 0:
+        return torch.tensor(0.0, device=device)
+
+    fraction_alanine = alanine_count / total_residues
+    return torch.tensor(fraction_alanine, device=device)
+
+
+def load_protgps_model(protgps_parent_dir="/home/protgps", device=None):
+    """
+    Load the ProtGPS model for predicting protein localization.
 
     Args:
         protgps_parent_dir: Path to the ProtGPS parent directory
@@ -250,7 +130,7 @@ def compute_protgps_score(
     token_info,
     device,
     target_compartment="p-body",
-    protgps_parent_dir="/home/jxliu2/protgps",
+    protgps_parent_dir="/home/protgps",
     aggregation="max",
 ):
     """
@@ -339,41 +219,6 @@ def compute_protgps_score(
     return score.to(device)
 
 
-# def rearrange_sequence(sequence):
-#     """
-#     Rearranges a sequence to be in order 1...2...3... without including the markers
-#     Args:
-#         sequence (str): Input sequence containing markers 1, 2, and 3
-#     Returns:
-#         str: Rearranged sequence without markers
-#     """
-#     # Split the sequence into parts
-#     parts = {}
-#     current_part = ""
-#     current_marker = None
-
-#     for char in sequence:
-#         if char in ['1', '2', '3']:
-#             if current_marker is not None:
-#                 parts[current_marker] = current_part
-#             current_marker = char
-#             current_part = ""
-#         else:
-#             current_part += char
-
-#     # Add the last part
-#     if current_marker is not None:
-#         parts[current_marker] = current_part
-
-#     # Combine parts in order 1, 2, 3 (without including the markers)
-#     rearranged = ""
-#     for marker in ['1', '2', '3']:
-#         if marker in parts:
-#             rearranged += parts[marker]
-
-#     return rearranged
-
-
 def extract_disordered_regions(sequence):
     """
     Extract the amino acids corresponding to regions marked by '1', '2', and '3' from a sequence.
@@ -417,51 +262,13 @@ def apply_quadratic_reward_shaping(raw_reward, target_value, reward_scale=1.0):
     Returns:
         Shaped reward value (same type as raw_reward)
     """
-    # import ipdb; ipdb.set_trace()
+
     if isinstance(raw_reward, torch.Tensor):
         shaped_reward = -reward_scale * torch.pow(raw_reward - target_value, 2)
     else:
         shaped_reward = -reward_scale * (raw_reward - target_value) ** 2
 
     return shaped_reward
-
-
-def apply_gaussian_reward_shaping(raw_reward, target_value, sigma=1.0):
-    """
-    Apply Gaussian reward shaping around a target value.
-
-    The shaped reward is: - 0.5 * ((raw_reward - target_value)^2 / sigma^2)
-
-    Args:
-        raw_reward: The original reward value (tensor or float)
-        target_value: The target value we want the reward to be close to (tensor or float)
-        sigma: Standard deviation for the Gaussian shaping (default=1.0)
-
-    Returns:
-        Shaped reward value (same type as raw_reward)
-    """
-    if isinstance(raw_reward, torch.Tensor):
-        shaped_reward = 0.5 * torch.pow(raw_reward - target_value, 2) / sigma**2
-    else:
-        shaped_reward = 0.5 * ((raw_reward - target_value) ** 2 / sigma**2)
-
-    return shaped_reward
-
-
-def apply_absolute_difference_reward_shaping(raw_reward, target_value):
-    """
-    Apply absolute difference reward shaping around a target value.
-
-    The shaped reward is: |raw_reward - target_value|
-
-    Args:
-        raw_reward: The original reward value (tensor or float)
-        target_value: The target value we want the reward to be close to (tensor or float)
-    """
-    if isinstance(raw_reward, torch.Tensor):
-        return torch.abs(raw_reward - target_value)
-    else:
-        return np.abs(raw_reward - target_value)
 
 
 def compute_length_reward(
@@ -473,13 +280,7 @@ def compute_length_reward(
     The reward uses a quadratic penalty function that can be widened via the length_reward_width parameter:
     reward = -((length - target_length) / (target_length * length_reward_width))^2
 
-    Higher length_reward_width values create a wider, softer penalty curve, allowing more variability
-    around the target length. Lower values create a tighter penalty.
-
-    Examples with target_length=100:
-    - length_reward_width=1.0 (default, tight): 50% deviation → -0.25, 100% deviation → -1.0
-    - length_reward_width=2.0 (medium): 50% deviation → -0.0625, 100% deviation → -0.25
-    - length_reward_width=3.0 (wide): 50% deviation → -0.028, 100% deviation → -0.111
+    Higher length_reward_width values create a wider penalty curve
 
     Args:
         tokens: Tensor of token indices
@@ -653,22 +454,20 @@ def percent_identity(
 
 
 def calculate_percent_identities(
-    generated_sequences, token_info, global_align=True, sample_fraction=1.0
+    generated_sequences, token_info, global_align=True, sample_fraction=0.25
 ):
     """
-    Calculate all-to-all percent identities for a list of generated sequences.
+    Calculate all-to-all percent identities for a list of generated sequences. Mainly used as a diagnostic and not in the reward or loss
 
     Args:
         generated_sequences: List of generated sequence dictionaries containing 'sequence'
         token_info: Dictionary containing token information including alphabet
         global_align: Whether to use global alignment (True) or local (False)
-        sample_fraction: Fraction of sequences to sample for PID calculation (0.0 to 1.0, default=1.0)
-                        If < 1.0, randomly samples a subset of sequences before calculating PIDs
+        sample_fraction: Fraction of sequences to sample for PID calculation (0.0 to 1.0, default=0.25) If < 1.0, randomly samples a subset of sequences before calculating PIDs
 
     Returns:
         list: List of percent identity values for all unique pairs
     """
-    import random
 
     percent_identities = []
     sequences_list = [seq_data["sequence"] for seq_data in generated_sequences]
@@ -695,71 +494,16 @@ def calculate_percent_identities(
     return percent_identities
 
 
-def calculate_idr_length(generated_sequences, token_info, device):
-    """
-    Calculate IDR lengths for generated sequences using extract_disordered_regions().
-
-    Extracts the disordered region (marked by '2') from each sequence and calculates
-    its length, excluding special tokens (pad, start, stop).
-
-    Args:
-        generated_sequences: List of generated sequence dictionaries containing 'sequence'
-        token_info: Dictionary containing token information including special tokens and alphabet
-        device: Torch device for tensor creation
-
-    Returns:
-        seq_lengths_tensor: Tensor of IDR sequence lengths with dtype float32
-    """
-    _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-    _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-    _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-    seq_lengths = []
-
-    # Get alphabet for decoding
-    alphabet = token_info["alphabet"]
-    alphabet = [
-        item.decode("utf-8") if isinstance(item, bytes) else item for item in alphabet
-    ]
-
-    for seq_data in generated_sequences:
-        sequence = seq_data["sequence"]
-
-        # Extract valid tokens (skip special tokens)
-        valid_tokens = sequence[
-            (sequence != _pad_token)
-            & (sequence != _start_token)
-            & (sequence != _stop_token)
-        ]
-
-        if len(valid_tokens) == 0:
-            seq_lengths.append(0)
-            continue
-
-        # Convert tokens to string sequence
-        sequence_str = "".join([alphabet[token.item()] for token in valid_tokens])
-
-        # Extract disordered region (region marked by '2')
-        idr_sequence, _, _ = extract_disordered_regions(sequence_str)
-
-        # Calculate length of IDR
-        length = len(idr_sequence)
-        seq_lengths.append(length)
-
-    seq_lengths_tensor = torch.tensor(seq_lengths, device=device, dtype=torch.float32)
-    return seq_lengths_tensor
-
-
 def print_example_sequences(
     generated_sequences,
     rewards_tensor,
     raw_rewards_tensor,
     token_info,
     global_step,
-    num_examples=3,
+    num_examples=5,
 ):
     """
-    Print randomly selected example sequences with their rewards.
+    Print randomly selected example sequences with their rewards throughout GRPO training.
 
     Args:
         generated_sequences: List of generated sequence dictionaries containing 'sequence', 'prompt_idx'
@@ -767,13 +511,12 @@ def print_example_sequences(
         raw_rewards_tensor: Tensor of raw (unshaped) rewards
         token_info: Dictionary containing token information including alphabet
         global_step: Current training step for logging
-        num_examples: Number of example sequences to print (default=3)
+        num_examples: Number of example sequences to print (default=5)
     """
     import random
 
-    print("=" * 80)
+    print("=" * 60)
     print(f"Step {global_step}: Example Generated Sequences (randomly selected)")
-    print("=" * 80)
 
     num_sequences = len(generated_sequences)
     if num_sequences > 0:
@@ -817,18 +560,18 @@ def print_example_sequences(
 
             print(f"\nExample {idx}:")
             print(f"  Prompt Index: {seq_data['prompt_idx']}")
-            print(f"  Raw Reward: {raw_reward:.4f}")
-            print(f"  Shaped Reward: {reward:.4f}")
+            print(f"  Raw Reward: {raw_reward:.2f}")
+            print(f"  Shaped Reward: {reward:.2f}")
             print(f"  Sequence: {sequence_str}")
 
-    print("=" * 80)
+    print("=" * 60)
 
 
 def compute_sequence_entropy(sequence, token_info, device):
-    """Calculate Shannon entropy of amino acid distribution in a sequence, excluding markers.
+    """Calculate Shannon entropy of amino acid distribution in the disordered region.
 
-    Computes entropy only over amino acids (ACDEFGHIKLMNPQRSTVWY), excluding the
-    structural markers '1', '2', '3' and special tokens (pad, start, stop).
+    Extracts the disordered region (marked by '2') and computes entropy only over
+    amino acids (ACDEFGHIKLMNPQRSTVWY) in that region, excluding structural markers.
 
     Args:
         sequence: torch.Tensor of token indices
@@ -852,7 +595,7 @@ def compute_sequence_entropy(sequence, token_info, device):
         if len(filtered_tokens) == 0:
             return torch.tensor(0.0, device=device)
 
-        # Convert tokens to amino acid string to identify and exclude markers
+        # Convert tokens to amino acid string
         if "alphabet" in token_info and token_info["alphabet"] is not None:
             alphabet = token_info["alphabet"]
             alphabet = [
@@ -863,15 +606,14 @@ def compute_sequence_entropy(sequence, token_info, device):
         else:
             return torch.tensor(0.0, device=device)
 
-        # Filter out markers '1', '2', '3' and keep only amino acids
-        markers = {"1", "2", "3"}
-        aa_only_str = "".join([char for char in sequence_str if char not in markers])
+        # Extract the disordered region (marked by '2')
+        disordered_region, _, _ = extract_disordered_regions(sequence_str)
 
-        if len(aa_only_str) == 0:
+        if len(disordered_region) == 0:
             return torch.tensor(0.0, device=device)
 
-        # Convert amino acid string back to token indices for counting
-        aa_indices = [alphabet.index(char) for char in aa_only_str]
+        # Convert disordered region to token indices for counting
+        aa_indices = [alphabet.index(char) for char in disordered_region]
         aa_tokens = torch.tensor(aa_indices, device=device)
 
         # Count token frequencies
@@ -898,13 +640,7 @@ def compute_entropy_reward(
     The reward uses a quadratic penalty function that can be widened via the entropy_reward_width parameter:
     reward = -((entropy - target_entropy) / (target_entropy * entropy_reward_width))^2
 
-    Higher entropy_reward_width values create a wider, softer penalty curve, allowing more variability
-    around the target entropy. Lower values create a tighter penalty.
-
-    Examples with target_entropy=2.5:
-    - entropy_reward_width=1.0 (default, tight): 50% deviation → -0.25, 100% deviation → -1.0
-    - entropy_reward_width=2.0 (medium): 50% deviation → -0.0625, 100% deviation → -0.25
-    - entropy_reward_width=3.0 (wide): 50% deviation → -0.028, 100% deviation → -0.111
+    Higher entropy_reward_width values create a wider/softer penalty.
 
     Args:
         tokens: Tensor of token indices

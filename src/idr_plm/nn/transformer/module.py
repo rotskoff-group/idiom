@@ -68,10 +68,6 @@ class LightningModel(L.LightningModule):
             self.token_sampler = None
 
         self.loss_fn = self.build_loss_fn()
-        if self.training_args["training_mode"] in ["transfusion_offset"]:
-            assert self.training_args["manual_opt_args"] is not None
-            # Number of steps that should happen before a ce_step happens
-            assert "ce_n_steps" in self.training_args["manual_opt_args"]
 
         # Initialize inference iteration counter for debugging
         self._inference_iteration = 0
@@ -127,7 +123,6 @@ class LightningModel(L.LightningModule):
 
     def build_loss_fn(self):
         if self.training_args["training_mode"] in ["autoregressive"]:
-            # if self.training_args["training_mode"] in ["autoregressive", "bidirectional"]:
             loss_fn_base = nn.CrossEntropyLoss
             if self.training_args["loss_fn_args"] is not None:
                 loss_fn = loss_fn_base(**self.training_args["loss_fn_args"])
@@ -145,7 +140,7 @@ class LightningModel(L.LightningModule):
     def load_model_from_checkpoint(self, filename):
         print(f"Loading model from ckpt file {filename}")
         # Load checkpoint to CPU first
-        # In GRPO (and probably in era_online) this seems necessary to avoid GPU conflicts when training in DDP mode. This resolves the "gpu is busy" error when trying to load models from checkpoints
+        # In GRPO this seems necessary to avoid GPU conflicts when training in DDP mode. This resolves the "gpu is busy" error when trying to load models from checkpoints
         ckpt = torch.load(filename, map_location="cpu")["state_dict"]
         # ckpt = torch.load(filename)["state_dict"]
 
@@ -232,8 +227,6 @@ class LightningModel(L.LightningModule):
         """Calculate per-token logps under a provided model"""
         if isinstance(model, GeometricMolTransformer):
             policy_logits = model(tokens, structure, masks)
-        # elif isinstance(model, SeqStructMixedTransformer):
-        # policy_logits, _ = model(("smiles_only", tokens, masks))
 
         policy_logps = policy_logits.log_softmax(dim=-1)
         policy_logps = torch.gather(
@@ -244,14 +237,7 @@ class LightningModel(L.LightningModule):
 
     def _shared_eval_grpo(self, batch, batch_idx, prefix):
         """
-        Group relative policy optimization (GRPO) evaluation with DAPO token-level loss.
-        (https://huggingface.co/papers/2503.14476)
-
-        Differences from original GRPO:
-        - Uses token-level normalization: L = -1/N * sum(per_token_loss * completion_mask)
-        - N is the total number of completion tokens across the entire batch
-        - Eliminates response-length bias where longer responses are under-penalized
-        - Provides fair weighting regardless of individual response lengths
+        Group relative policy optimization (GRPO) evaluation with DAPO token-level loss. See reference here https://huggingface.co/papers/2503.14476
 
         Args:
             batch: Provides tuples of prompt (tokens, masks) from TransformerOnlineDataset
@@ -372,8 +358,6 @@ class LightningModel(L.LightningModule):
             )
 
         if not hasattr(self, "entropy_reward_width"):
-            # Controls the width of the entropy reward curve. Higher values allow more variability.
-            # Default 1.0 is tight; increase to 2.0, 3.0 etc for wider tolerance around target entropy
             self.entropy_reward_width = (
                 self.hparams.training_args.lightning_model_args.get(
                     "entropy_reward_width", 1.0
@@ -398,7 +382,7 @@ class LightningModel(L.LightningModule):
         if not hasattr(self, "protgps_parent_dir"):
             self.protgps_parent_dir = (
                 self.hparams.training_args.lightning_model_args.get(
-                    "protgps_parent_dir", "/home/jxliu2/protgps"
+                    "protgps_parent_dir", "/home/protgps"
                 )
             )
         if not hasattr(self, "protgps_aggregation"):
