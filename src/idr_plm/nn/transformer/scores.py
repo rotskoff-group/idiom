@@ -756,3 +756,50 @@ def valid_sequence_characters(tokens, token_info, device):
     except Exception as e:
         print(f"Error validating sequence characters: {e}")
         return False
+
+
+def get_reward_function_registry():
+    """
+    Dynamically collect all reward functions from this module and custom_rewards.
+
+    A reward function is identified by:
+    1. Starting with "compute_"
+    2. Being callable
+    3. Having the signature: compute_*(tokens, token_info, device, **kwargs)
+
+    Collects from:
+    - idr_plm.nn.transformer.rewards (built-in functions)
+    - custom_rewards (user-defined functions, if available)
+
+    Returns:
+        dict: Mapping of function names to function objects
+    """
+    registry = {}
+
+    # Add built-in reward functions from this module
+    current_module = sys.modules[__name__]
+
+    for name in dir(current_module):
+        if name.startswith("compute_") and callable(getattr(current_module, name)):
+            func = getattr(current_module, name)
+            registry[name] = func
+
+    # Try to import and add custom reward functions
+    try:
+        import custom_rewards as custom_module
+
+        for name in dir(custom_module):
+            if name.startswith("compute_") and callable(getattr(custom_module, name)):
+                func = getattr(custom_module, name)
+                # Avoid overwriting built-in functions with custom ones
+                if name not in registry:
+                    registry[name] = func
+                else:
+                    print(
+                        f"Warning: Custom reward function '{name}' shadows built-in function. Using built-in version."
+                    )
+    except ImportError:
+        # custom_rewards module not found, which is fine - just use built-in functions
+        pass
+
+    return registry
