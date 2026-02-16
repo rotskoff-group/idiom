@@ -1,5 +1,5 @@
 import numpy as np
-from .utils.tokenizer import CharTokenizer
+from ..utils.tokenizer import CharTokenizer
 
 
 def look_ahead_smiles(smiles: list[str], tokenizer: CharTokenizer) -> int:
