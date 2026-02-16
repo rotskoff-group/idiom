@@ -9,7 +9,9 @@ import os
 import torch.multiprocessing as mp
 
 from idr_plm.nn.transformer.module import LightningModel
-from idr_plm.nn.transformer.module import sample_components_from_autoregressive_transformer
+from idr_plm.nn.transformer.utils.sampling import (
+    sample_components_from_autoregressive_transformer,
+)
 from idr_plm.utils.token import aggregate_tokens_hdf5
 from idr_plm.utils.sampler import TokenSampler
 
@@ -101,7 +103,7 @@ def run_inference_on_gpu(
                 use_input_smiles=inference_args["addn_args"]["use_input_smiles"],
             )
 
-        # Save results to temporary file 
+        # Save results to temporary file
         temp_file = f"{savedir}/gpu_{gpu_id}_temp.pkl"
         with open(temp_file, "wb") as f:
             pickle.dump((gpu_id, output), f)

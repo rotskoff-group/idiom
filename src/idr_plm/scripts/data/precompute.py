@@ -6,8 +6,8 @@ from typing import Callable
 from multiprocessing import Pool
 from tqdm import tqdm
 
-from idr_plm.nn.transformer import tokenizer as tokenmodule
-from idr_plm.nn.transformer.tokenizer import CharTokenizer
+from idr_plm.nn.transformer.utils import tokenizer as tokenmodule
+from idr_plm.nn.transformer.utils.tokenizer import CharTokenizer
 from idr_plm.nn.transformer import input_generators as input_generators
 from idr_plm.nn.transformer import target_generators as target_generators
 
