@@ -11,7 +11,7 @@ import os
 import h5py
 
 from idr_plm.utils.data_utils import get_hdf5_fn, split_data_subsets
-from idr_plm.nn.layers.utils.misc import seed_worker
+from idr_plm.utils.misc import seed_worker
 from idr_plm.nn.transformer.module import LightningModel
 from idr_plm.nn.transformer import dataset as DSET
 from idr_plm.utils.token import aggregate_tokens_hdf5
