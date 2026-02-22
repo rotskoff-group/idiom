@@ -200,11 +200,11 @@ class LightningModel(L.LightningModule):
         return to_return
 
     def _shared_eval_autoreg(self, batch, batch_idx, prefix):
-        """Autoregressive shared_eval - delegates to autoreg_loss module"""
+        """Autoregressive loss evaluation, from autoreg_loss module"""
         return shared_eval_autoreg(self, batch, batch_idx, prefix)
 
     def _shared_eval_grpo(self, batch, batch_idx, prefix):
-        """GRPO shared_eval - delegates to grpo_loss module"""
+        """GRPO loss evaluation, from grpo_loss module"""
         return shared_eval_grpo(self, batch, batch_idx, prefix)
 
     def on_before_optimizer_step(self, optimizer):
