@@ -3,10 +3,8 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 from idr_plm.nn.transformer import scores
-from idr_plm.nn.transformer.utils.utils import (
-    compute_policy_logps,
-    generate_sequences_online,
-)
+from idr_plm.nn.transformer.utils.utils import compute_policy_logps
+from idr_plm.nn.transformer.utils.sampling import generate_sequences_online
 
 
 def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
