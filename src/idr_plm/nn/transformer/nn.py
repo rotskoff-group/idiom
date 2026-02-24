@@ -90,8 +90,6 @@ class GeometricMolTransformer(nn.Module):
         x, _ = self.transformer(
             embedding,
             sequence_id,
-            affine=None,
-            affine_mask=None,
             # batch_access_indices=batch_access_indices,
             # use_cache_here=use_cache_here,
             # inference_iteration=inference_iteration,

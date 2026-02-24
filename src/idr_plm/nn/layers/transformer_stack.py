@@ -56,21 +56,13 @@ class TransformerStack(nn.Module):
         else:
             raise ValueError("Unknown norm_type passed")
 
-    def forward(
-        self, x, sequence_id, affine, affine_mask, coords=None, coords_mask=None
-    ):
+    def forward(self, x, sequence_id):
         """
         Forward pass of the TransformerStack.
 
         Args:
             x (torch.Tensor): The input tensor of shape (batch_size, sequence_length, d_model).
-            affine (Affine3D): contains:
-                trans (torch.Tensor | None): The translational portion of the affine transform
-                rot (torch.Tensor | None): The rotational portion of the affine transform
-            affine_mask (torch.Tensor | None): The affine mask tensor or None.
             sequence_id (torch.Tensor): The sequence ID tensor of shape (batch_size, sequence_length).
-            coords (torch.Tensor | None): 3D coordinates for IDA layer of shape (batch_size, sequence_length, 3).
-            coords_mask (torch.Tensor | None): Mask for coordinates.
 
         Returns:
             post_norm: The output tensor of shape (batch_size, sequence_length, d_model).
@@ -86,9 +78,5 @@ class TransformerStack(nn.Module):
             x = block(
                 x=x,
                 sequence_id=sequence_id,
-                affine=affine,
-                affine_mask=affine_mask,
-                coords=coords,
-                coords_mask=coords_mask,
             )
         return self.norm(x), x
