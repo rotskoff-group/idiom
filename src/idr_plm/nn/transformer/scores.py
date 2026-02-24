@@ -494,6 +494,52 @@ def calculate_percent_identities(
     return percent_identities
 
 
+def calculate_idr_length(generated_sequences, token_info, device):
+    """
+    Calculate IDR lengths for generated sequences using extract_disordered_regions().
+
+    Extracts the disordered region (marked by '2') from each sequence and calculates
+    its length, excluding special tokens (pad, start, stop).
+
+    Args:
+        generated_sequences: List of generated sequence dictionaries containing 'sequence'
+        token_info: Dictionary containing token information including special tokens and alphabet
+        device: Torch device for tensor creation
+
+    Returns:
+        torch.Tensor: Tensor of IDR sequence lengths with dtype float32
+    """
+    _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
+    _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
+    _start_token = token_info["input"]["TOK"]["TOK_START"]
+
+    seq_lengths = []
+
+    alphabet = token_info["alphabet"]
+    alphabet = [
+        item.decode("utf-8") if isinstance(item, bytes) else item for item in alphabet
+    ]
+
+    for seq_data in generated_sequences:
+        sequence = seq_data["sequence"]
+
+        valid_tokens = sequence[
+            (sequence != _pad_token)
+            & (sequence != _start_token)
+            & (sequence != _stop_token)
+        ]
+
+        if len(valid_tokens) == 0:
+            seq_lengths.append(0)
+            continue
+
+        sequence_str = "".join([alphabet[token.item()] for token in valid_tokens])
+        idr_sequence, _, _ = extract_disordered_regions(sequence_str)
+        seq_lengths.append(len(idr_sequence))
+
+    return torch.tensor(seq_lengths, device=device, dtype=torch.float32)
+
+
 def print_example_sequences(
     generated_sequences,
     rewards_tensor,
