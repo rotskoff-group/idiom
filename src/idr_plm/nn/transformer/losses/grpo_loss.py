@@ -7,191 +7,78 @@ from idr_plm.nn.transformer.utils.utils import compute_policy_logps
 from idr_plm.nn.transformer.utils.sampling import generate_sequences_online
 
 
-def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
-    """
-    Implementation of GRPO with DAPO modification. See reference here https://huggingface.co/papers/2503.14476
+def _initialize_grpo_config(lightning_module):
+    """Initialize GRPO config once on the LightningModule."""
+    if getattr(lightning_module, "_grpo_config_initialized", False):
+        return
 
-    Args:
-        lightning_module: LightningModule instance with model and hyperparameters
-        batch: Provides tuples of prompt (tokens, masks) from TransformerOnlineDataset
-        batch_idx: Batch index
-        prefix: Logging prefix ("train", "validation", or "test")
+    grpo_args = lightning_module.hparams.training_args.lightning_model_args
 
-    Returns:
-        GRPO objective loss
-    """
-
-    start_time = time.time()
-
-    # Unpack batch from Dataset
-    tokens, masks = batch  # sequence_id attention masks
-
-    # Assign GRPO variables from lightning_model_args (hydra ++ params)
-    if not hasattr(lightning_module, "group_size"):
-        lightning_module.group_size = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "group_size", 4
-            ),
-            device=lightning_module.device,
-        )
-
-    if not hasattr(lightning_module, "epsilon_clip"):
-        lightning_module.epsilon_clip = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "epsilon_clip", 0.2
-            ),
-            device=lightning_module.device,
-        )
-
+    lightning_module.group_size = torch.tensor(
+        grpo_args.get("group_size", 4), device=lightning_module.device
+    )
+    lightning_module.epsilon_clip = torch.tensor(
+        grpo_args.get("epsilon_clip", 0.2), device=lightning_module.device
+    )
     # Number off-policy steps. Should keep this at 1
-    if not hasattr(lightning_module, "mu_grpo"):
-        lightning_module.mu_grpo = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "mu_grpo", 1
-            ),
-            device=lightning_module.device,
-        )
-
+    lightning_module.mu_grpo = torch.tensor(
+        grpo_args.get("mu_grpo", 1), device=lightning_module.device
+    )
     # Magnitude of D_KL penalty
-    if not hasattr(lightning_module, "beta_kl"):
-        lightning_module.beta_kl = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "beta_kl", 0.1
-            ),
-            device=lightning_module.device,
-        )
+    lightning_module.beta_kl = torch.tensor(
+        grpo_args.get("beta_kl", 0.1), device=lightning_module.device
+    )
 
     # Quadratic reward shaping
-    if not hasattr(lightning_module, "use_reward_shaping"):
-        lightning_module.use_reward_shaping = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "use_reward_shaping", False
-            )
-        )
-
-    if not hasattr(lightning_module, "reward_target_value"):
-        lightning_module.reward_target_value = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "reward_target_value", 0.5
-            ),
-            device=lightning_module.device,
-        )
-
-    if not hasattr(lightning_module, "reward_scale"):
-        lightning_module.reward_scale = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "reward_scale", 1.0
-            ),
-            device=lightning_module.device,
-        )
+    lightning_module.use_reward_shaping = grpo_args.get("use_reward_shaping", False)
+    lightning_module.reward_target_value = torch.tensor(
+        grpo_args.get("reward_target_value", 0.5), device=lightning_module.device
+    )
+    lightning_module.reward_scale = torch.tensor(
+        grpo_args.get("reward_scale", 1.0), device=lightning_module.device
+    )
 
     # Percent identity calculation sampling fraction. Just for diagnostics
-    if not hasattr(lightning_module, "pid_sample_fraction"):
-        lightning_module.pid_sample_fraction = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "pid_sample_fraction", 0.25
-            )
-        )
+    lightning_module.pid_sample_fraction = grpo_args.get("pid_sample_fraction", 0.25)
 
     # Advantage normalization flag
-    if not hasattr(lightning_module, "normalize_advantage"):
-        lightning_module.normalize_advantage = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "normalize_advantage", True
-            )
-        )
+    lightning_module.normalize_advantage = grpo_args.get("normalize_advantage", True)
 
     # Entropy reward parameters
-    if not hasattr(lightning_module, "use_target_entropy"):
-        lightning_module.use_target_entropy = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "use_target_entropy", False
-            )
-        )
-
-    if not hasattr(lightning_module, "target_entropy"):
-        lightning_module.target_entropy = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "target_entropy", 2.75
-            ),
-            device=lightning_module.device,
-        )
-
-    if not hasattr(lightning_module, "entropy_reward_weight"):
-        lightning_module.entropy_reward_weight = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "entropy_reward_weight", 1.0
-            ),
-            device=lightning_module.device,
-        )
-
-    if not hasattr(lightning_module, "entropy_reward_width"):
-        lightning_module.entropy_reward_width = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "entropy_reward_width", 0.2
-            )
-        )
+    lightning_module.use_target_entropy = grpo_args.get("use_target_entropy", False)
+    lightning_module.target_entropy = torch.tensor(
+        grpo_args.get("target_entropy", 2.75), device=lightning_module.device
+    )
+    lightning_module.entropy_reward_weight = torch.tensor(
+        grpo_args.get("entropy_reward_weight", 1.0), device=lightning_module.device
+    )
+    lightning_module.entropy_reward_width = grpo_args.get("entropy_reward_width", 0.2)
 
     # Reward function selection
-    if not hasattr(lightning_module, "reward_function_name"):
-        lightning_module.reward_function_name = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "reward_function_name", "compute_fraction_alanine"
-            )
-        )
+    lightning_module.reward_function_name = grpo_args.get(
+        "reward_function_name", "compute_fraction_alanine"
+    )
 
     # ProtGPS-specific parameters
-    if not hasattr(lightning_module, "protgps_target_compartment"):
-        lightning_module.protgps_target_compartment = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "protgps_target_compartment", "p-body"
-            )
-        )
-    if not hasattr(lightning_module, "protgps_parent_dir"):
-        lightning_module.protgps_parent_dir = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "protgps_parent_dir", "/home/protgps"
-            )
-        )
-    if not hasattr(lightning_module, "protgps_aggregation"):
-        lightning_module.protgps_aggregation = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "protgps_aggregation", "max"
-            )
-        )
+    lightning_module.protgps_target_compartment = grpo_args.get(
+        "protgps_target_compartment", "p-body"
+    )
+    lightning_module.protgps_parent_dir = grpo_args.get(
+        "protgps_parent_dir", "/home/protgps"
+    )
+    lightning_module.protgps_aggregation = grpo_args.get("protgps_aggregation", "max")
 
     # Target length reward parameters
-    if not hasattr(lightning_module, "use_target_length"):
-        lightning_module.use_target_length = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "use_target_length", False
-            )
-        )
-
-    if not hasattr(lightning_module, "target_length"):
-        lightning_module.target_length = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "target_length", 100
-            ),
-            device=lightning_module.device,
-        )
-
-    if not hasattr(lightning_module, "length_reward_weight"):
-        lightning_module.length_reward_weight = torch.tensor(
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "length_reward_weight", 1.0
-            ),
-            device=lightning_module.device,
-        )
-
-    if not hasattr(lightning_module, "length_reward_width"):
-        # Controls the width of the length reward curve. Higher values allow more variability.
-        # Default 1.0 is tight; increase to 2.0, 3.0 etc for wider tolerance around target length
-        lightning_module.length_reward_width = (
-            lightning_module.hparams.training_args.lightning_model_args.get(
-                "length_reward_width", 0.1
-            )
-        )
+    lightning_module.use_target_length = grpo_args.get("use_target_length", False)
+    lightning_module.target_length = torch.tensor(
+        grpo_args.get("target_length", 100), device=lightning_module.device
+    )
+    lightning_module.length_reward_weight = torch.tensor(
+        grpo_args.get("length_reward_weight", 1.0), device=lightning_module.device
+    )
+    # Controls the width of the length reward curve. Higher values allow more variability.
+    # Default 1.0 is tight; increase to 2.0, 3.0 etc for wider tolerance around target length
+    lightning_module.length_reward_width = grpo_args.get("length_reward_width", 0.1)
 
     # Map reward function name to actual function (loads from scores.py as well as custom_rewards.py in entry_scripts)
     reward_function_registry = scores.get_reward_function_registry()
@@ -206,22 +93,10 @@ def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
     lightning_module.reward_function = reward_function_registry[
         lightning_module.reward_function_name
     ]
+    lightning_module._grpo_config_initialized = True
 
-    # Assign special tokens
-    _pad_token = lightning_module.token_info["input"]["TOK"]["TOK_PAD"]
-    _stop_token = lightning_module.token_info["input"]["TOK"]["TOK_STOP"]
-    _start_token = lightning_module.token_info["input"]["TOK"]["TOK_START"]
 
-    # Generate sequences (in total, batch_size * group_size). Sequences here are in tokens
-    generation_start = time.time()
-    generated_sequences, num_invalid_sequences = generate_sequences_online(
-        lightning_module, tokens, masks, lightning_module.group_size
-    )
-    generation_time = time.time() - generation_start
-    print(
-        f"Step {lightning_module.global_step}: Sequence generation took {generation_time:.3f}s"
-    )
-
+def _compute_and_log_percent_identity(lightning_module, generated_sequences, prefix):
     # Calculate all-to-all percent identities using biopython
     percent_identity_start = time.time()
 
@@ -263,6 +138,10 @@ def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
         logger=True,
     )
 
+
+def _compute_and_log_rewards(
+    lightning_module, generated_sequences, num_invalid_sequences, prefix
+):
     # Compute rewards for generated sequences
     reward_start = time.time()
     rewards = []
@@ -439,7 +318,10 @@ def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
         lightning_module.global_step,
         num_examples=5,
     )
+    return rewards_tensor
 
+
+def _compute_and_log_advantages(lightning_module, tokens, rewards_tensor, prefix):
     # Calculate normalized relative advantage within groups
     batch_size = tokens.shape[0]
     group_size = lightning_module.group_size.item()
@@ -486,7 +368,10 @@ def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
     print(
         f"Step {lightning_module.global_step}: Mean advantage: {advantages.mean().item():.4f}, Std: {advantages.std().item():.4f}, Min: {advantages.min().item():.4f}, Max: {advantages.max().item():.4f}"
     )
+    return advantages
 
+
+def _compute_policy_logps_lists(lightning_module, generated_sequences):
     # Calculate per-token logps
     logp_start = time.time()
     per_token_logps_list = []
@@ -516,7 +401,17 @@ def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
     print(
         f"Step {lightning_module.global_step}: Logp calculation took {logp_time:.3f}s"
     )
+    return per_token_logps_list, ref_per_token_logps_list
 
+
+def _compute_and_log_grpo_loss(
+    lightning_module,
+    generated_sequences,
+    advantages,
+    per_token_logps_list,
+    ref_per_token_logps_list,
+    prefix,
+):
     # Calculate GRPO loss
     group_losses = {}
     total_kl_sum = 0.0  # Accumulate sum of KL values for batch-level logging
@@ -524,7 +419,7 @@ def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
 
     # This loop runs calculations per-response
     for i, seq_data in enumerate(generated_sequences):
-        sequence = seq_data["sequence"]
+        # sequence = seq_data["sequence"]
         response_mask = seq_data["response_mask"]
         prompt_idx = seq_data["prompt_idx"]
         advantage = advantages[i]
@@ -696,6 +591,63 @@ def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
     # Print loss and KL on step
     print(
         f"Step {lightning_module.global_step}: GRPO Loss: {grpo_batch_loss.item():.4f}, KL Div: {batch_kl_divergence.item():.4f}"
+    )
+    return grpo_batch_loss
+
+
+def shared_eval_grpo(lightning_module, batch, batch_idx, prefix):
+    """
+    Implementation of GRPO with DAPO modification. See reference here https://huggingface.co/papers/2503.14476
+
+    Args:
+        lightning_module: LightningModule instance with model and hyperparameters
+        batch: Provides tuples of prompt (tokens, masks) from TransformerOnlineDataset
+        batch_idx: Batch index
+        prefix: Logging prefix ("train", "validation", or "test")
+
+    Returns:
+        GRPO objective loss
+    """
+
+    start_time = time.time()
+
+    # Unpack batch from Dataset
+    tokens, masks = batch  # sequence_id attention masks
+
+    _initialize_grpo_config(lightning_module)
+
+    # Assign special tokens
+    _pad_token = lightning_module.token_info["input"]["TOK"]["TOK_PAD"]
+    _stop_token = lightning_module.token_info["input"]["TOK"]["TOK_STOP"]
+    _start_token = lightning_module.token_info["input"]["TOK"]["TOK_START"]
+
+    # Generate sequences (in total, batch_size * group_size). Sequences here are in tokens
+    generation_start = time.time()
+    generated_sequences, num_invalid_sequences = generate_sequences_online(
+        lightning_module, tokens, masks, lightning_module.group_size
+    )
+    generation_time = time.time() - generation_start
+    print(
+        f"Step {lightning_module.global_step}: Sequence generation took {generation_time:.3f}s"
+    )
+
+    _compute_and_log_percent_identity(lightning_module, generated_sequences, prefix)
+    rewards_tensor = _compute_and_log_rewards(
+        lightning_module, generated_sequences, num_invalid_sequences, prefix
+    )
+    advantages = _compute_and_log_advantages(
+        lightning_module, tokens, rewards_tensor, prefix
+    )
+    per_token_logps_list, ref_per_token_logps_list = _compute_policy_logps_lists(
+        lightning_module, generated_sequences
+    )
+    grpo_batch_loss = _compute_and_log_grpo_loss(
+        lightning_module,
+        generated_sequences,
+        advantages,
+        per_token_logps_list,
+        ref_per_token_logps_list,
+        prefix,
     )
 
     total_time = time.time() - start_time
