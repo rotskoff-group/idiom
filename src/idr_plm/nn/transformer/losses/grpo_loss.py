@@ -416,6 +416,9 @@ def _compute_and_log_grpo_loss(
     group_losses = {}
     total_kl_sum = 0.0  # Accumulate sum of KL values for batch-level logging
     total_response_tokens = 0  # Count total number of response tokens
+    total_advantage_sum = 0.0
+    total_kl_penalty_sum = 0.0
+    total_tokens_for_components = 0
 
     # This loop runs calculations per-response
     for i, seq_data in enumerate(generated_sequences):
@@ -454,19 +457,26 @@ def _compute_and_log_grpo_loss(
             - 1
         )
 
-        # Accumulate KL values for batch-level logging later
-        masked_per_token_kl = per_token_kl * response_mask[1:]
-        total_kl_sum += masked_per_token_kl.sum().item()
-        total_response_tokens += response_mask[1:].sum().item()
-
-        # Calculate individual loss components
         kl_penalty_term = lightning_module.beta_kl * per_token_kl
+
+        # Accumulate KL and component magnitude values for batch-level logging
+        masked_response = response_mask[1:]
+        masked_per_token_kl = per_token_kl * masked_response
+        total_kl_sum += masked_per_token_kl.sum().item()
+        num_response_tokens = masked_response.sum().item()
+        total_response_tokens += num_response_tokens
+
+        total_advantage_sum += (
+            (per_token_advantages * masked_response).abs().sum().item()
+        )
+        total_kl_penalty_sum += (kl_penalty_term * masked_response).abs().sum().item()
+        total_tokens_for_components += num_response_tokens
 
         per_token_loss = -(per_token_advantages - kl_penalty_term)
         # Entropy now in reward, in advantages. Also, ratio is already folded into advantages here (see above)
 
         # Pass through response_mask
-        per_token_loss = per_token_loss * response_mask[1:]
+        per_token_loss = per_token_loss * masked_response
 
         # Sum loss over response
         # This is sum_{t=1}^{|o_i|} A - beta * D_KL (per token values)
@@ -523,45 +533,7 @@ def _compute_and_log_grpo_loss(
         batch_kl_divergence, device=lightning_module.device
     )
 
-    # Calculate batch-level component magnitudes for logging
-    total_advantage_sum = 0.0
-    total_kl_penalty_sum = 0.0
-    total_tokens_for_components = 0
-
-    for i, seq_data in enumerate(generated_sequences):
-        response_mask = seq_data["response_mask"]
-        per_token_logps = per_token_logps_list[i]
-        ref_per_token_logps = ref_per_token_logps_list[i]
-        advantage = advantages[i]
-
-        # Recalculate components (as above) for logging
-        ratio = torch.exp(per_token_logps - per_token_logps.detach())
-        ratio_clipped = torch.clamp(
-            ratio,
-            1.0 - lightning_module.epsilon_clip,
-            1.0 + lightning_module.epsilon_clip,
-        )
-        unclipped_advantages = ratio * advantage
-        clipped_advantages = ratio_clipped * advantage
-        per_token_advantages = torch.min(unclipped_advantages, clipped_advantages)
-
-        per_token_kl = (
-            torch.exp(ref_per_token_logps - per_token_logps)
-            - (ref_per_token_logps - per_token_logps)
-            - 1
-        )
-
-        kl_penalty_term = lightning_module.beta_kl * per_token_kl
-
-        # Apply response mask and accumulate
-        masked_advantages = (per_token_advantages * response_mask[1:]).abs()
-        masked_kl_penalty = (kl_penalty_term * response_mask[1:]).abs()
-
-        total_advantage_sum += masked_advantages.sum().item()
-        total_kl_penalty_sum += masked_kl_penalty.sum().item()
-        total_tokens_for_components += response_mask[1:].sum().item()
-
-    # Convert to tensors for logging
+    # Convert component magnitude accumulators to tensors for logging
     mean_advantage_magnitude = torch.tensor(
         total_advantage_sum / total_tokens_for_components,
         device=lightning_module.device,
