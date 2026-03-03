@@ -18,7 +18,7 @@ uv pip install -e .
 
 ## Entrypoints/commands
 
-Entrypoints in `entrypoints`
+Entrypoints in `entrypoints/`
 
 Commands are under:
 ```
