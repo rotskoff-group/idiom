@@ -208,3 +208,7 @@ __marimo__/
 
 # Slurm output directories
 slurm_out/
+
+# Project directories
+models/
+data/
