@@ -3,6 +3,7 @@ Define your custom reward functions here. Your reward function name must start w
 """
 
 import torch
+from idr_plm.nn.transformer.scores import extract_disordered_regions
 
 
 def compute_fraction_proline(tokens, token_info, device):
@@ -38,12 +39,61 @@ def compute_fraction_proline(tokens, token_info, device):
         )
         return torch.tensor(0.0, device=device)
 
-    # Count proline residues
-    proline_count = sequence.upper().count("P")
-    total_residues = len(sequence) - 3  # -3 for 1,2,3 FIM sentinels
+    # Extract disordered region (marked by '2')
+    disordered_region, _, _ = extract_disordered_regions(sequence)
+
+    if len(disordered_region) == 0:
+        return torch.tensor(0.0, device=device)
+
+    # Count proline residues in disordered region
+    proline_count = disordered_region.upper().count("P")
+    total_residues = len(disordered_region)
 
     if total_residues == 0:
         return torch.tensor(0.0, device=device)
 
     fraction_proline = proline_count / total_residues
     return torch.tensor(fraction_proline, device=device)
+
+
+# def compute_your_reward(tokens, token_info, device):
+#     """
+#     Put your custom reward function here
+#     This function name must start with "compute_"
+#     """
+
+#     _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
+#     _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
+#     _start_token = token_info["input"]["TOK"]["TOK_START"]
+
+#     # Extract valid tokens (skip special tokens)
+#     valid_tokens = tokens[
+#         (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
+#     ]
+
+#     if len(valid_tokens) == 0:
+#         return torch.tensor(0.0, device=device)  # No valid tokens
+
+#     # Convert to amino acid sequence using alphabet from token_info
+#     if "alphabet" in token_info and token_info["alphabet"] is not None:
+#         alphabet = token_info["alphabet"]
+#         # Decode bytes alphabet
+#         alphabet = [item.decode("utf-8") for item in alphabet]
+#         sequence = "".join([alphabet[token.item()] for token in valid_tokens])
+#     else:
+#         # Fallback: return 0 if no alphabet available
+#         print(
+#             "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
+#         )
+#         return torch.tensor(0.0, device=device)
+
+#     # Extract disordered region (marked by '2')
+#     disordered_region, region1, region3 = extract_disordered_regions(sequence)
+
+#     if len(disordered_region) == 0:
+#         return torch.tensor(0.0, device=device)
+
+#     # disordered_region now contains the IDR sequence ready for processing into your reward
+#     # region1 and region3 contain the flanking regions marked by '1' and '3'
+#     print(disordered_region)
+#     pass
