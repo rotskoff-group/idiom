@@ -80,7 +80,7 @@ def _initialize_grpo_config(lightning_module):
     # Default 1.0 is tight; increase to 2.0, 3.0 etc for wider tolerance around target length
     lightning_module.length_reward_width = grpo_args.get("length_reward_width", 0.1)
 
-    # Map reward function name to actual function (loads from scores.py as well as custom_rewards.py in entry_scripts)
+    # Map reward function name to actual function (loads from scores.py as well as custom_rewards.py in entrypoints)
     reward_function_registry = scores.get_reward_function_registry()
 
     if lightning_module.reward_function_name not in reward_function_registry:
