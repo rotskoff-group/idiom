@@ -209,6 +209,9 @@ __marimo__/
 # Slurm output directories
 slurm_out/
 
-# Project directories
-models/
-data/
+# Keep directory scaffolds, ignore real files inside. They will be gotten from HuggingFace later by the user 
+data/*
+!data/.gitkeep
+
+models/*
+!models/.gitkeep
