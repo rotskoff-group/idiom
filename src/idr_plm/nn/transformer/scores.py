@@ -2,6 +2,8 @@ import torch
 import sys
 import os
 import pickle
+import importlib.util
+from pathlib import Path
 from argparse import Namespace
 import random
 from Bio import pairwise2
@@ -814,38 +816,53 @@ def get_reward_function_registry():
     3. Having the signature: compute_*(tokens, token_info, device, **kwargs)
 
     Collects from:
-    - idr_plm.nn.transformer.rewards (built-in functions)
+    - idr_plm.nn.transformer.scores (built-in functions)
     - custom_rewards (user-defined functions, if available)
 
     Returns:
         dict: Mapping of function names to function objects
     """
-    registry = {}
 
-    # Add built-in reward functions from this module
-    current_module = sys.modules[__name__]
-
-    for name in dir(current_module):
-        if name.startswith("compute_") and callable(getattr(current_module, name)):
-            func = getattr(current_module, name)
-            registry[name] = func
-
-    # Try to import and add custom reward functions
-    try:
-        import custom_rewards as custom_module
-
-        for name in dir(custom_module):
-            if name.startswith("compute_") and callable(getattr(custom_module, name)):
-                func = getattr(custom_module, name)
-                # Avoid overwriting built-in functions with custom ones
+    def _add_compute_functions(module, registry):
+        for name in dir(module):
+            if name.startswith("compute_") and callable(getattr(module, name)):
+                func = getattr(module, name)
                 if name not in registry:
                     registry[name] = func
                 else:
                     print(
                         f"Warning: Custom reward function '{name}' shadows built-in function. Using built-in version."
                     )
+
+    registry = {}
+
+    # Add built-in reward functions from this module
+    current_module = sys.modules[__name__]
+    _add_compute_functions(current_module, registry)
+
+    custom_module = None
+
+    # First try regular import (works when custom rewards dir is on PYTHONPATH)
+    try:
+        import custom_rewards as custom_module
     except ImportError:
-        # custom_rewards module not found, which is fine - just use built-in functions
-        pass
+        # Fallback: load rewards/custom_rewards/custom_rewards.py by absolute path
+        custom_rewards_path = (
+            Path(__file__).resolve().parents[4]
+            / "rewards"
+            / "custom_rewards"
+            / "custom_rewards.py"
+        )
+        if custom_rewards_path.exists():
+            spec = importlib.util.spec_from_file_location(
+                "custom_rewards", str(custom_rewards_path)
+            )
+            if spec is not None and spec.loader is not None:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                custom_module = module
+
+    if custom_module is not None:
+        _add_compute_functions(custom_module, registry)
 
     return registry
