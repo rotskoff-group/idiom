@@ -1,48 +1,57 @@
 #!/bin/bash
 #SBATCH --job-name=rl
-#SBATCH --time=7-00:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --gpus=1
 #SBATCH --output=./slurm_out/slurm-%A_%a.out
 #SBATCH --cpus-per-task=1
+#SBATCH --array=0-11%4
+
+# Save script into slurm out 
+echo "===== BEGIN SLURM SCRIPT: $0 =====" 
+sed -e 's/^/    /' "${BASH_SOURCE[0]}"
+echo "===== END   SLURM SCRIPT: $0 ====="
+echo; echo; echo; echo 
 
 ###
 # Run RL post-training with the ProtGPS reward model 
 ###
 
-cd .. # This file is located in ./scripts 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENTRYPOINT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+cd "${ENTRYPOINT_DIR}"
 
-# source /home/groups/ardunn/jxliu2/MoLE/.venv/bin/activate # sherlock 
-# source /home/jxliu2/MoLE/.venv/bin/activate # H100/4080 cluster 
-source /home/scratch/group_scratch/idr_plm/idr-plm/.venv/bin/activate # 4080 
+source "${REPO_ROOT}/.venv/bin/activate"
 
-CKPT_PATH="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/idr_plm/2026-01-26_train_FIM/lightning_logs/version_2/checkpoints/best_model_step_243022.ckpt"
+CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt"
 
-SHARD_PATH="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90/AFDB_IDR_90_FIM_512/AFDB_IDR_90_FIM_512_parts/precompute_shards/0001_file.h5"
+SHARD_PATH="${REPO_ROOT}/data/shard/0001_file.h5"
 
-DATASET_FILENAME="dataset/idp_prompt_1e3x_grpo_dataset.h5"
+DATASET_FILENAME="${REPO_ROOT}/data/rl_datasets/idp_dataset/idp_prompt_1e3x_grpo_dataset.h5"
 
-PROTGPS_PARENT_DIR="/home/jxliu2/protgps"
+PROTGPS_PARENT_DIR="${REPO_ROOT}/rewards/protgps"
 
 # Training parameters 
 LR=5e-6
-BETA_KL_VALUES=(2e-2)
-REWARD_TARGET_VALUES=(0.9)
-
-TARGET_LENGTHS=(100)
-LENGTH_REWARD_WEIGHTS=(1.0)
-LENGTH_REWARD_WIDTHS=(1)
-
-TARGET_ENTROPIES=(2.7)
-ENTROPY_REWARD_WEIGHTS=(1.0)
-ENTROPY_REWARD_WIDTHS=(0.2)
+BETA_KL=2e-2
+REWARD_TARGET_VALUE=0.9
+TARGET_LENGTH=100
+LENGTH_REWARD_WEIGHT=1.0
+LENGTH_REWARD_WIDTH=1
+TARGET_ENTROPY=2.7
+ENTROPY_REWARD_WEIGHT=1.0
+ENTROPY_REWARD_WIDTH=0.2
+BATCH_SIZE=4
+ACCUMULATE_GRAD_BATCHES=2
+GROUP_SIZE=8
 
 COMPARTMENTS=(
-    # "nuclear_speckle"
-    # "p-body"
-    # "pml-bdoy"
-    # "post_synaptic_density"
-    # "stress_granule"
-    # "chromosome"
+    "nuclear_speckle"
+    "p-body"
+    "pml-bdoy"
+    "post_synaptic_density"
+    "stress_granule"
+    "chromosome"
     "nucleolus"
     "nuclear_pore_complex"
     "cajal_body"
@@ -53,21 +62,11 @@ COMPARTMENTS=(
 
 # Calculate job indexing based on SLURM_ARRAY_TASK_ID
 NUM_COMPARTMENTS=${#COMPARTMENTS[@]}
-NUM_TARGET_LENGTHS=${#TARGET_LENGTHS[@]}
 
-# Indexing: compartment varies first, then target_length
+# Indexing: compartment varies first
 COMPARTMENT_INDEX=$((SLURM_ARRAY_TASK_ID % NUM_COMPARTMENTS))
-TARGET_LENGTH_INDEX=$((SLURM_ARRAY_TASK_ID / NUM_COMPARTMENTS))
 
-BETA_KL=${BETA_KL_VALUES[0]}
-LENGTH_REWARD_WEIGHT=${LENGTH_REWARD_WEIGHTS[0]}
-TARGET_LENGTH=${TARGET_LENGTHS[$TARGET_LENGTH_INDEX]}
-LENGTH_REWARD_WIDTH=${LENGTH_REWARD_WIDTHS[0]}
-REWARD_TARGET_VALUE=${REWARD_TARGET_VALUES[0]}
-ENTROPY_REWARD_WEIGHT=${ENTROPY_REWARD_WEIGHTS[0]}
-TARGET_ENTROPY=${TARGET_ENTROPIES[0]}
 COMPARTMENT=${COMPARTMENTS[$COMPARTMENT_INDEX]}
-ENTROPY_REWARD_WIDTH=${ENTROPY_REWARD_WIDTHS[0]}
 
 echo "======================================================================"
 echo "Task ID: ${SLURM_ARRAY_TASK_ID}"
@@ -88,7 +87,7 @@ transformer_train \
     "data.dataset=TransformerOnlineDataset"\
     "data.collate_fn=transformer_online_collate_fn"\
     "data.dataset_filename=${DATASET_FILENAME}"\
-    "data.dloader_args.batch_size=4"\
+    "data.dloader_args.batch_size=${BATCH_SIZE}"\
     "data.data_in_memory=False"\
     "model=transformer"\
     "model.model=GeometricMolTransformer"\
@@ -108,7 +107,7 @@ transformer_train \
     "training.trainer_args.gradient_clip_val=null"\
     "training.trainer_args.gradient_clip_algorithm=null"\
     "training.trainer_args.max_steps=1500"\
-    "training.trainer_args.accumulate_grad_batches=2"\
+    "training.trainer_args.accumulate_grad_batches=${ACCUMULATE_GRAD_BATCHES}"\
     "++training.trainer_args.log_every_n_steps=1"\
     "++training.loss_fn_args.ignore_index=23"\
     "++training.lightning_model_args.every_epoch_checkpoint_args.filename='step_{step:06d}'"\
@@ -124,7 +123,7 @@ transformer_train \
     "++training.lightning_model_args.sampler_args.sample_val=1"\
     "++training.lightning_model_args.sampler_args.temperature=1"\
     "++training.lightning_model_args.sampler_args.token_limit=1000"\
-    "++training.lightning_model_args.group_size=8"\
+    "++training.lightning_model_args.group_size=${GROUP_SIZE}"\
     "++training.lightning_model_args.epsilon_clip=0.2"\
     "++training.lightning_model_args.mu_grpo=1"\
     "++training.lightning_model_args.beta_kl=${BETA_KL}"\
@@ -144,4 +143,3 @@ transformer_train \
     "++training.lightning_model_args.target_entropy=${TARGET_ENTROPY}"\
     "++training.lightning_model_args.entropy_reward_weight=${ENTROPY_REWARD_WEIGHT}"\
     "++training.lightning_model_args.entropy_reward_width=${ENTROPY_REWARD_WIDTH}"
-
