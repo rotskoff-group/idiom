@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=npm1
-#SBATCH --time=7-00:00:00
-#SBATCH --gpus=3
-#SBATCH --cpus-per-task=4
+#SBATCH --job-name=gen_IDR
+#SBATCH --time=1-00:00:00
+#SBATCH --gpus=1
+#SBATCH --cpus-per-task=1
 #SBATCH --output=./slurm_out/slurm-%j.out 
 
 echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out 
@@ -11,26 +11,25 @@ echo "===== END   SLURM SCRIPT: $0 ====="
 echo; echo; echo; echo 
 
 ###
-# Run inference for IDR FIM 
+# Generated prompted IDRs
 ###
 
-cd ..
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENTRYPOINT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+cd "${ENTRYPOINT_DIR}"
 
-# source /data2/scratch/group_scratch/idr_plm/idr-plm/.venv/bin/activate # H100
-source /home/scratch/group_scratch/idr_plm/idr-plm/.venv/bin/activate # 4080 
+source "${REPO_ROOT}/.venv/bin/activate"
 
 # new FIM10 is version_3
-# CKPT_PATH="/home/scratch_mount/group_scratch/idr_plm/h100_rsync/idr_plm/2026-01-23_train_FIM/lightning_logs/version_3/checkpoints/best_model_step_246104.ckpt"
-# FIM12 is 90 trained on Sherlock
-CKPT_PATH="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/idr_plm/2026-01-26_train_FIM/lightning_logs/version_2/checkpoints/best_model_step_243022.ckpt"
+CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt"
 
-# SHARD_PATH="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90/AFDB_IDR_90_splits/AFDB_IDR_90_FIM_512_splits/AFDB_IDR_90_FIM_512_splits_parts/precompute_shards/0001_file.h5"
-SHARD_PATH="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90/AFDB_IDR_90_FIM_512/AFDB_IDR_90_FIM_512_parts/precompute_shards/0001_file.h5"
+SHARD_PATH="${REPO_ROOT}/data/shard/0001_file.h5"
 
-PROMPT_PATH="prompts/p06748_prompt_1e5x_array.pkl"
+PROMPT_PATH="${REPO_ROOT}/data/prompts/p06748_prompt_1e5x_array.pkl"
 
-OUT_DIR="output/infer12_p06748_1e5x"
-mkdir -p $OUT_DIR
+OUT_DIR="${REPO_ROOT}/entrypoints/infer/output"
+mkdir -p "${OUT_DIR}"
 
 export PYTHONUNBUFFERED=1  
 transformer_infer \
