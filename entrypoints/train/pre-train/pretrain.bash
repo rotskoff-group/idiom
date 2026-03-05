@@ -4,8 +4,6 @@
 #SBATCH --gpus=8
 #SBATCH --cpus-per-task=16
 #SBATCH --mem-per-cpu=16GB
-#SBATCH --partition=rotskoff
-#SBATCH --nodelist=sh04-12n01 # H100 node 
 #SBATCH --output=./slurm_out/slurm-%j.out 
 
 echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out 
@@ -14,25 +12,18 @@ echo "===== END   SLURM SCRIPT: $0 ====="
 echo; echo; echo; echo 
 
 ###
-# Run training for IDR FIM 
+# Run pre-training 
 ###
 
-cd .. # Put this script under ./scripts in a working dir 
+cd .. # Put this script under ./scripts in a day's working dir 
 
-# source /home/scratch/group_scratch/idr_plm/idr-plm/.venv/bin/activate # 4080
-# source /data2/scratch/group_scratch/idr_plm/idr-plm/.venv/bin/activate # H100
 source /home/groups/ardunn/jxliu2/idr-plm/.venv/bin/activate # sherlock 
 
 export PYTHONBREAKPOINT=ipdb.set_trace # for using breakpoint() 
 export PYTHONUNBUFFERED=1
 
-# Dataset paths
-# DATASET_FILENAME="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90/AFDB_IDR_90_splits/AFDB_IDR_90_FIM_512_splits/AFDB_IDR_90_FIM_512_splits_parts/precompute_shards" # 4080
-# DATASET_FILENAME="/data2/scratch/group_scratch/idr_plm/rsync_4080/AFDB_IDR_90_FIM_512_splits_parts/precompute_shards" # H100s
+# Dataset path
 DATASET_FILENAME="/scratch/groups/ardunn/jxliu2/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90_FIM_512/AFDB_IDR_90_FIM_512_parts/precompute_shards" # sherlock
-
-# SPLITS_FILE="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90/AFDB_IDR_90_splits/AFDB_IDR_90_FIM_512_splits/fim_split_indices.npy" # 4080 
-# SPLITS_FILE="/data2/scratch/group_scratch/idr_plm/rsync_4080/fim_split_indices.npy" # H100
 
 echo 'Start training..' 
 
