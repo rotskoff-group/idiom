@@ -1,12 +1,6 @@
 # IDR-PLM
 Official repository for IDR-PLM. 
 
-All necessary data and model checkpoints can be found on our HuggingFace Model and Dataset repositories here: 
-
-Model checkpoints: https://huggingface.co/jxliu2/idr-plm
-
-Dataset: https://huggingface.co/datasets/jxliu2/idr-plm-dataset
-
 ## Environment setup (uv) 
 
 ```bash
@@ -17,10 +11,17 @@ uv pip install -e .
 ```
 
 ## Data and checkpoints 
-After downloading, place dataset and checkpoint files under the repository `data/` subdirectory. The configs read from:
+
+All necessary data and model checkpoints can be found on our HuggingFace Model and Dataset repositories here: 
+
+Model checkpoints: https://huggingface.co/jxliu2/idr-plm (this will contain IDR-PLM models as well as ProtGPS models) 
+
+Dataset: https://huggingface.co/datasets/jxliu2/idr-plm-dataset (this will have stuff necessary for inference and post-training, and also contain the pre-training IDR data)
+
+After downloading, place dataset (only the prompts, shard, etc.) and checkpoint files under the repository `data/` subdirectory. 
 ```
-data/<dataset>/scale2max/<dataset>.csv
-data/<dataset>/<dataset>.fasta
+data/prompts/stuff
+data/shard/stuff
 ```
 
 ## Entrypoints/commands
@@ -50,4 +51,4 @@ To generate prompted IDRs,
 
 To post-train, 
 
-After that, generating unprompted IDPs or prompted IDRs can be performed following the above sections. 
+After that, generating unprompted IDPs or prompted IDRs can be performed following the above sections, replacing X and Y. 
