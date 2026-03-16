@@ -4,7 +4,7 @@
 #SBATCH --gpus=1
 #SBATCH --output=./slurm_out/slurm-%A_%a.out
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-11%4
+# #SBATCH --array=0-11%4
 
 # Save script into slurm out 
 echo "===== BEGIN SLURM SCRIPT: $0 =====" 
@@ -46,18 +46,18 @@ ACCUMULATE_GRAD_BATCHES=2
 GROUP_SIZE=8
 
 COMPARTMENTS=(
-    "nuclear_speckle"
-    "p-body"
-    "pml-bdoy"
-    "post_synaptic_density"
+    # "nuclear_speckle"
+    # "p-body"
+    # "pml-bdoy"
+    # "post_synaptic_density"
     "stress_granule"
-    "chromosome"
-    "nucleolus"
-    "nuclear_pore_complex"
-    "cajal_body"
-    "rna_granule"
-    "cell_junction"
-    "transcriptional"
+    # "chromosome"
+    # "nucleolus"
+    # "nuclear_pore_complex"
+    # "cajal_body"
+    # "rna_granule"
+    # "cell_junction"
+    # "transcriptional"
 )
 
 # Calculate job indexing based on SLURM_ARRAY_TASK_ID
