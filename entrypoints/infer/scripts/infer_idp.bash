@@ -24,9 +24,9 @@ source "${REPO_ROOT}/.venv/bin/activate"
 # new FIM10 is version_3
 CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt"
 
-SHARD_PATH="${REPO_ROOT}/data/shard/0001_file.h5"
+SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
 
-PROMPT_PATH="${REPO_ROOT}/data/prompts/idp_prompt_1e5x_array.pkl"
+PROMPT_PATH="${REPO_ROOT}/models/data/prompts/idp_prompt_1e5x_array.pkl"
 
 OUT_DIR="${REPO_ROOT}/entrypoints/infer/output"
 mkdir -p "${OUT_DIR}"

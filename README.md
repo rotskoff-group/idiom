@@ -18,10 +18,10 @@ Model checkpoints: https://huggingface.co/jxliu2/idr-plm (this will contain IDR-
 
 Dataset: https://huggingface.co/datasets/jxliu2/idr-plm-dataset (this will have stuff necessary for inference and post-training, and also contain the pre-training IDR data)
 
-After downloading, place dataset (only the prompts, shard, etc.) and checkpoint files under the repository `data/` subdirectory. 
+After downloading, place dataset (only the prompts, shard, etc.) and checkpoint files under the repository `models/data/` subdirectory.
 ```
-data/prompts/stuff
-data/shard/stuff
+models/data/prompts/stuff
+models/data/shard/stuff
 ```
 
 ## Entrypoints/commands

@@ -4,7 +4,7 @@ Randomly split the dataset  ['idrs']  of an input HDF5 file into N part_X_idr.h5
 
 Example
 -------
-$ python split_parts.py data/full_idrs.h5 \
+$ python split_parts.py models/data/full_idrs.h5 \
       --num-parts 500 \
       --out-dir ./splits \
       --chunk-size 1_000_000 \
