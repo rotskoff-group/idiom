@@ -7,6 +7,7 @@ import pickle
 import numpy as np
 import os
 import torch.multiprocessing as mp
+from functools import reduce
 
 from idr_plm.nn.transformer.module import LightningModel
 from idr_plm.nn.transformer.utils.sampling import (
@@ -14,6 +15,10 @@ from idr_plm.nn.transformer.utils.sampling import (
 )
 from idr_plm.utils.token import aggregate_tokens_hdf5
 from idr_plm.utils.sampler import TokenSampler
+from idr_plm.utils.misc import (
+    rearrange_sequence,
+    extract_idr_with_indices,
+)
 
 
 def run_inference_on_gpu(
@@ -312,6 +317,77 @@ def main(cfg) -> None:
         print(
             f"Inference complete. Results saved to {inference_args['savedir']}/tst_autoregressive.pkl"
         )
+
+        # Export sequences to FASTA files
+        print("\nExporting sequences to FASTA files...")
+
+        # Load alphabet from shard file
+        precomputed_shard = h5py.File(inference_args["dataset_filename"], "r")
+        alphabet = precomputed_shard["alphabet"][()]
+        alphabet = [x.decode("utf-8") for x in alphabet]
+
+        # Load the pickle file the same way as idp_to_fasta.py
+        pkl_path = f"{inference_args['savedir']}/tst_autoregressive.pkl"
+        with open(pkl_path, "rb") as f:
+            inference_out = pickle.load(f)
+
+        # Flatten the token lists (same approach as idp_to_fasta.py)
+        seqs_tokens = list(reduce(lambda x, y: x + y, inference_out[0]))
+
+        # Convert tokens to characters using alphabet
+        sequences = []
+        for seq in seqs_tokens:
+            if seq is None:
+                sequences.append(None)
+            else:
+                # Convert tokens to characters, filtering out padding tokens (>22)
+                seq_chars = "".join(alphabet[token] for token in seq if token <= 22)
+                sequences.append(seq_chars)
+
+        # Filter out None sequences
+        sequences = [s for s in sequences if s is not None]
+        # print(f"Total sequences to export: {len(sequences)}")
+
+        # Extract IDRs and full sequences
+        idr_sequences = []
+        full_sequences_with_indices = []
+
+        for i, seq in enumerate(sequences):
+            # Extract IDR
+            idr_seq, idr_start, idr_end = extract_idr_with_indices(seq)
+
+            if idr_seq:  # Only keep sequences with IDR
+                idr_sequences.append((i, idr_seq))
+                # Rearrange full sequence
+                full_seq = rearrange_sequence(seq)
+                full_sequences_with_indices.append((i, full_seq, idr_start, idr_end))
+
+        print(
+            # f"Found {len(idr_sequences)} sequences with disordered regions out of {len(sequences)}"
+        )
+
+        # Save FASTA files
+        # File 1: IDR regions only
+        idr_fasta = os.path.join(inference_args["savedir"], "generated_idrs.fasta")
+        # print(f"\nWriting IDR sequences to {idr_fasta}...")
+        with open(idr_fasta, "w") as f:
+            for seq_idx, idr_seq in idr_sequences:
+                f.write(f">seq_{seq_idx:06d}\n")
+                f.write(f"{idr_seq}\n")
+        # print(f"Successfully wrote {len(idr_sequences)} IDR sequences to {idr_fasta}")
+
+        # File 2: Full sequences with IDR indices in header
+        full_fasta = os.path.join(inference_args["savedir"], "generated_full.fasta")
+        # print(f"\nWriting full sequences to {full_fasta}...")
+        with open(full_fasta, "w") as f:
+            for seq_idx, full_seq, idr_start, idr_end in full_sequences_with_indices:
+                f.write(f">seq_{seq_idx:06d}_IDR_{idr_start + 1}-{idr_end}\n")
+                f.write(f"{full_seq}\n")
+        print(
+            # f"Successfully wrote {len(full_sequences_with_indices)} full sequences to {full_fasta}"
+        )
+
+        precomputed_shard.close()
 
 
 if __name__ == "__main__":
