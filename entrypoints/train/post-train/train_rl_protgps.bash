@@ -25,9 +25,9 @@ source "${REPO_ROOT}/.venv/bin/activate"
 
 CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt"
 
-SHARD_PATH="${REPO_ROOT}/data/shard/0001_file.h5"
+SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
 
-DATASET_FILENAME="${REPO_ROOT}/data/rl_datasets/idp_dataset/idp_prompt_1e3x_grpo_dataset.h5"
+DATASET_FILENAME="${REPO_ROOT}/models/data/rl_datasets/idp_dataset/idp_prompt_1e3x_grpo_dataset.h5"
 
 PROTGPS_PARENT_DIR="${REPO_ROOT}/rewards/protgps"
 
