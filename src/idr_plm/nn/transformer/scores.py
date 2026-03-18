@@ -28,6 +28,46 @@ COMPARTMENT_CLASSES = [
 ]
 
 
+def tokens_to_sequence(tokens, token_info):
+    """
+    Convert a token tensor to an amino acid sequence string, filtering out special tokens.
+
+    Args:
+        tokens: Tensor of token indices
+        token_info: Dictionary containing token information including alphabet and special tokens
+
+    Returns:
+        str or None: Decoded amino acid sequence string, or None if conversion fails
+    """
+    try:
+        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
+        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
+        _start_token = token_info["input"]["TOK"]["TOK_START"]
+    except (KeyError, TypeError):
+        return None
+
+    valid_tokens = tokens[
+        (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
+    ]
+
+    if len(valid_tokens) == 0:
+        return None
+
+    try:
+        alphabet = token_info["alphabet"]
+        alphabet = [
+            item.decode("utf-8") if isinstance(item, bytes) else item
+            for item in alphabet
+        ]
+    except (KeyError, TypeError):
+        print(
+            "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
+        )
+        return None
+
+    return "".join([alphabet[token.item()] for token in valid_tokens])
+
+
 def compute_fraction_alanine(tokens, token_info, device):
     """
     Compute the fraction of alanine residues in a protein sequence.
@@ -36,29 +76,8 @@ def compute_fraction_alanine(tokens, token_info, device):
     Returns the fraction of alanine (A) residues in the sequence.
     """
 
-    _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-    _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-    _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-    # Extract valid tokens (skip special tokens)
-    valid_tokens = tokens[
-        (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-    ]
-
-    if len(valid_tokens) == 0:
-        return torch.tensor(0.0, device=device)  # No valid tokens
-
-    # Convert to amino acid sequence using alphabet from token_info
-    if "alphabet" in token_info and token_info["alphabet"] is not None:
-        alphabet = token_info["alphabet"]
-        # Decode bytes alphabet
-        alphabet = [item.decode("utf-8") for item in alphabet]
-        sequence = "".join([alphabet[token.item()] for token in valid_tokens])
-    else:
-        # Fallback: return 0 if no alphabet available
-        print(
-            "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
-        )
+    sequence = tokens_to_sequence(tokens, token_info)
+    if sequence is None:
         return torch.tensor(0.0, device=device)
 
     # Count alanine residues
@@ -159,25 +178,8 @@ def compute_protgps_score(
     Returns:
         Tensor with the ProtGPS score (0.0 to 1.0)
     """
-    _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-    _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-    _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-    # Extract valid tokens (skip special tokens)
-    valid_tokens = tokens[
-        (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-    ]
-
-    # Convert to amino acid sequence using alphabet from token_info
-    if "alphabet" in token_info and token_info["alphabet"] is not None:
-        alphabet = token_info["alphabet"]
-        # Decode bytes alphabet
-        alphabet = [item.decode("utf-8") for item in alphabet]
-        sequence = "".join([alphabet[token.item()] for token in valid_tokens])
-    else:
-        print(
-            "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
-        )
+    sequence = tokens_to_sequence(tokens, token_info)
+    if sequence is None:
         return torch.tensor(0.0, device=device)
 
     # Extract IDR sequence (region marked by '2')
@@ -300,34 +302,11 @@ def compute_length_reward(
         Tensor with the normalized length reward (range approximately -1 to 0)
     """
     try:
-        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-        _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-        # Extract valid tokens (skip special tokens)
-        valid_tokens = tokens[
-            (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-        ]
-
-        if len(valid_tokens) == 0:
+        sequence = tokens_to_sequence(tokens, token_info)
+        if sequence is None:
             return torch.tensor(
                 -1.0, device=device
             )  # Maximum penalty for empty sequence
-
-        # Convert to amino acid sequence using alphabet from token_info
-        if "alphabet" in token_info and token_info["alphabet"] is not None:
-            alphabet = token_info["alphabet"]
-            # Decode bytes alphabet
-            alphabet = [
-                item.decode("utf-8") if isinstance(item, bytes) else item
-                for item in alphabet
-            ]
-            sequence = "".join([alphabet[token.item()] for token in valid_tokens])
-        else:
-            print(
-                "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
-            )
-            return torch.tensor(-1.0, device=device)
 
         # Extract IDR sequence (region marked by '2')
         idr_sequence, _, _ = extract_disordered_regions(sequence)
@@ -377,40 +356,12 @@ def percent_identity(
     """
     # Convert tokens to strings if token_info is provided
     if token_info is not None:
-        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-        _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-        try:
-            alphabet = token_info["alphabet"]
-            alphabet = [
-                item.decode("utf-8") if isinstance(item, bytes) else item
-                for item in alphabet
-            ]
-        except (KeyError, TypeError):
+        seq1 = tokens_to_sequence(seq1_or_tokens1, token_info)
+        if seq1 is None:
             return 0.0
-
-        # Convert first sequence from tokens to string
-        tokens1 = seq1_or_tokens1
-        valid_tokens1 = tokens1[
-            (tokens1 != _pad_token)
-            & (tokens1 != _start_token)
-            & (tokens1 != _stop_token)
-        ]
-        if len(valid_tokens1) == 0:
+        seq2 = tokens_to_sequence(seq2_or_tokens2, token_info)
+        if seq2 is None:
             return 0.0
-        seq1 = "".join([alphabet[token.item()] for token in valid_tokens1])
-
-        # Convert second sequence from tokens to string
-        tokens2 = seq2_or_tokens2
-        valid_tokens2 = tokens2[
-            (tokens2 != _pad_token)
-            & (tokens2 != _start_token)
-            & (tokens2 != _stop_token)
-        ]
-        if len(valid_tokens2) == 0:
-            return 0.0
-        seq2 = "".join([alphabet[token.item()] for token in valid_tokens2])
     else:
         # Assume inputs are already strings
         seq1 = seq1_or_tokens1
@@ -515,31 +466,13 @@ def calculate_idr_length(generated_sequences, token_info, device):
     Returns:
         torch.Tensor: Tensor of IDR sequence lengths with dtype float32
     """
-    _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-    _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-    _start_token = token_info["input"]["TOK"]["TOK_START"]
-
     seq_lengths = []
 
-    alphabet = token_info["alphabet"]
-    alphabet = [
-        item.decode("utf-8") if isinstance(item, bytes) else item for item in alphabet
-    ]
-
     for seq_data in generated_sequences:
-        sequence = seq_data["sequence"]
-
-        valid_tokens = sequence[
-            (sequence != _pad_token)
-            & (sequence != _start_token)
-            & (sequence != _stop_token)
-        ]
-
-        if len(valid_tokens) == 0:
+        sequence_str = tokens_to_sequence(seq_data["sequence"], token_info)
+        if sequence_str is None:
             seq_lengths.append(0)
             continue
-
-        sequence_str = "".join([alphabet[token.item()] for token in valid_tokens])
         idr_sequence, _, _ = extract_disordered_regions(sequence_str)
         seq_lengths.append(len(idr_sequence))
 
@@ -572,43 +505,18 @@ def print_example_sequences(
 
     num_sequences = len(generated_sequences)
     if num_sequences > 0:
-        # Get special tokens
-        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-        _start_token = token_info["input"]["TOK"]["TOK_START"]
-
         # Select up to num_examples random indices
         num_to_print = min(num_examples, num_sequences)
         random_indices = random.sample(range(num_sequences), num_to_print)
 
-        # Get alphabet from token_info for decoding
-        try:
-            alphabet = token_info["alphabet"]
-            # Decode bytes alphabet
-            alphabet = [item.decode("utf-8") for item in alphabet]
-        except (KeyError, TypeError):
-            alphabet = None
-
         for idx, seq_idx in enumerate(random_indices, 1):
             seq_data = generated_sequences[seq_idx]
-            sequence_tensor = seq_data["sequence"]
             reward = rewards_tensor[seq_idx].item()
             raw_reward = raw_rewards_tensor[seq_idx].item()
 
-            # Extract valid tokens (skip special tokens)
-            valid_tokens = sequence_tensor[
-                (sequence_tensor != _pad_token)
-                & (sequence_tensor != _start_token)
-                & (sequence_tensor != _stop_token)
-            ]
-
-            if len(valid_tokens) == 0 or alphabet is None:
+            sequence_str = tokens_to_sequence(seq_data["sequence"], token_info)
+            if sequence_str is None:
                 sequence_str = "[Empty or no alphabet]"
-            else:
-                # Decode tokens to sequence string
-                sequence_str = "".join(
-                    [alphabet[token.item()] for token in valid_tokens]
-                )
 
             print(f"\nExample {idx}:")
             print(f"  Prompt Index: {seq_data['prompt_idx']}")
@@ -634,28 +542,8 @@ def compute_sequence_entropy(sequence, token_info, device):
         torch.Tensor: Shannon entropy value (scalar)
     """
     try:
-        pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        start_token = token_info["input"]["TOK"]["TOK_START"]
-        stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-
-        # Filter out special tokens (pad, start, stop)
-        special_tokens = {pad_token, start_token, stop_token}
-        filtered_tokens = sequence[
-            ~torch.isin(sequence, torch.tensor(list(special_tokens), device=device))
-        ]
-
-        if len(filtered_tokens) == 0:
-            return torch.tensor(0.0, device=device)
-
-        # Convert tokens to amino acid string
-        if "alphabet" in token_info and token_info["alphabet"] is not None:
-            alphabet = token_info["alphabet"]
-            alphabet = [
-                item.decode("utf-8") if isinstance(item, bytes) else item
-                for item in alphabet
-            ]
-            sequence_str = "".join([alphabet[int(token)] for token in filtered_tokens])
-        else:
+        sequence_str = tokens_to_sequence(sequence, token_info)
+        if sequence_str is None:
             return torch.tensor(0.0, device=device)
 
         # Extract the disordered region (marked by '2')
@@ -664,15 +552,14 @@ def compute_sequence_entropy(sequence, token_info, device):
         if len(disordered_region) == 0:
             return torch.tensor(0.0, device=device)
 
-        # Convert disordered region to token indices for counting
-        aa_indices = [alphabet.index(char) for char in disordered_region]
-        aa_tokens = torch.tensor(aa_indices, device=device)
-
-        # Count token frequencies
-        unique_tokens, counts = torch.unique(aa_tokens, return_counts=True)
+        # Count character frequencies
+        chars, counts_list = zip(
+            *((c, disordered_region.count(c)) for c in set(disordered_region))
+        )
+        counts = torch.tensor(counts_list, device=device, dtype=torch.float)
 
         # Calculate probabilities
-        probabilities = counts.float() / aa_tokens.shape[0]
+        probabilities = counts / len(disordered_region)
 
         # Calculate Shannon entropy: H = -sum(p * log(p))
         entropy = -(probabilities * torch.log(probabilities + 1e-10)).sum()
@@ -748,27 +635,8 @@ def valid_sequence_characters(tokens, token_info, device):
         True if sequence is valid, False otherwise.
     """
     try:
-        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-        _start_token = token_info["input"]["TOK"]["TOK_START"]
-
-        # Extract valid tokens (skip special tokens)
-        valid_tokens = tokens[
-            (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-        ]
-
-        if len(valid_tokens) == 0:
-            return False
-
-        # Convert to amino acid sequence using alphabet from token_info
-        if "alphabet" in token_info and token_info["alphabet"] is not None:
-            alphabet = token_info["alphabet"]
-            alphabet = [
-                item.decode("utf-8") if isinstance(item, bytes) else item
-                for item in alphabet
-            ]
-            sequence = "".join([alphabet[int(token)] for token in valid_tokens])
-        else:
+        sequence = tokens_to_sequence(tokens, token_info)
+        if sequence is None:
             return False
 
         # Standard amino acids that should appear (excluding markers 1, 2, 3)
