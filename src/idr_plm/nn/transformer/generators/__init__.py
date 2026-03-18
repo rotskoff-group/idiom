@@ -1,9 +1,9 @@
-from .input_generators import InputGeneratorBase, SMILESInputBasic
-from .target_generators import TargetGeneratorBase, SMILESTarget
+from .input_generators import InputGeneratorBase, ResiduesInputBasic
+from .target_generators import TargetGeneratorBase, ResiduesTarget
 
 __all__ = [
     "InputGeneratorBase",
-    "SMILESInputBasic",
+    "ResiduesInputBasic",
     "TargetGeneratorBase",
-    "SMILESTarget",
+    "ResiduesTarget",
 ]
