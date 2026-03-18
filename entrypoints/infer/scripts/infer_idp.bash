@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=gen_IDP
+#SBATCH --job-name=gen_idp
 #SBATCH --time=1-00:00:00
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=1
