@@ -12,20 +12,20 @@ from idr_plm.nn.transformer.generators import input_generators as input_generato
 from idr_plm.nn.transformer.generators import target_generators as target_generators
 
 
-def determine_alphabet(smiles: list[str], tokenizer: CharTokenizer) -> list[str]:
+def determine_alphabet(residues: list[str], tokenizer: CharTokenizer) -> list[str]:
     """Determines all unique tokens represented in a set of strings
 
     Args:
-        smiles: list[str]
-            List of SMILES strings to determine the alphabet over
+        residues: list[str]
+            List of residue sequences to determine the alphabet over
         tokenizer: CharTokenizer
             Tokenizer object used to find unique tokens from the strings
 
     Returns:
         alphabet: list[str]
-            List of all unique tokens as determined from the given SMILES strings
+            List of all unique tokens as determined from the given residue sequences
     """
-    token_sets = [set(tokenizer.tokenize(smi)) for smi in tqdm(smiles)]
+    token_sets = [set(tokenizer.tokenize(res)) for res in tqdm(residues)]
     final_set = list(reduce(lambda x, y: x.union(y), token_sets))
     alphabet = sorted(final_set)
     return alphabet
@@ -84,8 +84,8 @@ def main(cfg) -> None:
     else:
         targets = None
 
-    smiles = h5py.File(precompute_args["smiles_file"], "r")["idrs"]
-    smiles = [smi.decode("utf-8") for smi in smiles]
+    residues = h5py.File(precompute_args["residues_file"], "r")["residues"]
+    residues = [res.decode("utf-8") for res in residues]
 
     # Get the tokenizer
     try:
@@ -97,19 +97,19 @@ def main(cfg) -> None:
 
     alp = precompute_args["alphabet"]
     if alp is None:
-        print("Determining alphabet based on SMILES")
-        alphabet = determine_alphabet(smiles, tokenizer)
+        print("Determining alphabet based on residues")
+        alphabet = determine_alphabet(residues, tokenizer)
     else:
         print(f"Loading the following: {alp}")
         alphabet = np.load(alp, allow_pickle=True)
         alphabet = [str(x) for x in alphabet]
 
     input_generator = getattr(input_generators, precompute_args["input_generator"])(
-        smiles, tokenizer, alphabet, **precompute_args["input_generator_addn_args"]
+        residues, tokenizer, alphabet, **precompute_args["input_generator_addn_args"]
     )
 
     target_generator = getattr(target_generators, precompute_args["target_generator"])(
-        smiles,
+        residues,
         tokenizer,
         alphabet,
         targets,
@@ -120,16 +120,16 @@ def main(cfg) -> None:
     num_processes = precompute_args["num_processes"]
     print("Starting parallel runs...")
 
-    if precompute_args["precompute_data_format"] == "SMILES_only":
+    if precompute_args["precompute_data_format"] == "residues_only":
         processed_inputs = run_process_parallel(
-            input_generator.transform, {}, num_processes, smiles
+            input_generator.transform, {}, num_processes, residues
         )
 
         processed_targets = run_process_parallel(
-            target_generator.transform, {}, num_processes, smiles, targets
+            target_generator.transform, {}, num_processes, residues, targets
         )
-        # FH: Dataset is precomputed and intended only to train the model on SMILES data tasks,
-        #   such as generating SMILES or predicting properties from SMILES
+        # FH: Dataset is precomputed and intended only to train the model on residue data tasks,
+        #   such as generating residue sequences or predicting properties from residues
 
         # Convert all targets and inputs into numpy arrays for encoding
         processed_inputs = np.array(list(map(lambda x: np.array(x), processed_inputs)))
@@ -151,7 +151,7 @@ def main(cfg) -> None:
         print("target_metadata", target_metadata)
         print("input_metadata", input_metadata)
 
-        # Compute the sequence id here over the tokenized SMILES (inputs only)
+        # Compute the sequence id here over the tokenized residues (inputs only)
         sequence_id = np.array(processed_inputs)
         input_pad_token = input_metadata["ctrl_tokens"]["TOK_PAD"]
         # True for nonpadding, false for padding
@@ -163,9 +163,9 @@ def main(cfg) -> None:
         )
 
         with h5py.File(precompute_args["output_file"], "w") as f:
-            f.create_dataset("smi_tokens", data=processed_inputs)
+            f.create_dataset("res_tokens", data=processed_inputs)
             f.create_dataset("targets", data=processed_targets)
-            f.create_dataset("smiles", data=smiles)
+            f.create_dataset("residues", data=residues)
             f.create_dataset("alphabet", data=alphabet)
             f.create_dataset("sequence_id", data=sequence_id)
             f.create_dataset("structural_tokens", data=struct_tokens)

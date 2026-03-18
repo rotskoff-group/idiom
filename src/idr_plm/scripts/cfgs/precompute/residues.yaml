@@ -1,18 +1,17 @@
-smiles_file: "./idrs.h5" 
-target_file: "./idrs_targets.h5" 
-input_generator: "SMILESInputBasic"
+residues_file: "./idrs.h5"
+target_file: "./idrs_targets.h5"
+input_generator: "ResiduesInputBasic"
 # Make sure stop and start tokens are present in both input and target generators
 input_generator_addn_args:
-  apply_start: true 
+  apply_start: true
   apply_stop: false
-target_generator: "SMILESTarget"
+target_generator: "ResiduesTarget"
 target_generator_addn_args:
   apply_start: false
   apply_stop: true
 output_file: "./shard.h5"
 alphabet: null
 num_processes: 2
-precompute_data_format: "SMILES_only"
+precompute_data_format: "residues_only"
 tokenizer: "CharTokenizer"
-canonicalize_smiles: false
 
