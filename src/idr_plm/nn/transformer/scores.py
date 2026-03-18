@@ -7,6 +7,7 @@ from pathlib import Path
 from argparse import Namespace
 import random
 from Bio import pairwise2
+from idr_plm.utils.misc import tokens_to_sequence
 
 # Global variables for ProtGPS model caching
 _PROTGPS_MODEL = None
@@ -26,46 +27,6 @@ COMPARTMENT_CLASSES = [
     "cell_junction",
     "transcriptional",
 ]
-
-
-def tokens_to_sequence(tokens, token_info):
-    """
-    Convert a token tensor to an amino acid sequence string, filtering out special tokens.
-
-    Args:
-        tokens: Tensor of token indices
-        token_info: Dictionary containing token information including alphabet and special tokens
-
-    Returns:
-        str or None: Decoded amino acid sequence string, or None if conversion fails
-    """
-    try:
-        _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
-        _stop_token = token_info["input"]["TOK"]["TOK_STOP"]
-        _start_token = token_info["input"]["TOK"]["TOK_START"]
-    except (KeyError, TypeError):
-        return None
-
-    valid_tokens = tokens[
-        (tokens != _pad_token) & (tokens != _start_token) & (tokens != _stop_token)
-    ]
-
-    if len(valid_tokens) == 0:
-        return None
-
-    try:
-        alphabet = token_info["alphabet"]
-        alphabet = [
-            item.decode("utf-8") if isinstance(item, bytes) else item
-            for item in alphabet
-        ]
-    except (KeyError, TypeError):
-        print(
-            "Warning: No alphabet found in token_info, cannot convert tokens to sequence"
-        )
-        return None
-
-    return "".join([alphabet[token.item()] for token in valid_tokens])
 
 
 def compute_fraction_alanine(tokens, token_info, device):

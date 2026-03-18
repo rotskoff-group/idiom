@@ -3,7 +3,8 @@ Define your custom reward functions here. Your reward function name must start w
 """
 
 import torch
-from idr_plm.nn.transformer.scores import extract_disordered_regions, tokens_to_sequence
+from idr_plm.nn.transformer.scores import extract_disordered_regions
+from idr_plm.utils.misc import tokens_to_sequence
 
 
 def compute_fraction_proline(tokens, token_info, device):
