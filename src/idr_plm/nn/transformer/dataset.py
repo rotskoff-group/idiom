@@ -18,17 +18,17 @@ def transformer_sharded_autoreg_collate_fn(
     ) = zip(*data)
     # Now need to be careful about padding everything to the same size
     pad_tokens = pad_tokens[0]
-    smi_pad_token, struct_pad_token = pad_tokens
+    res_pad_token, struct_pad_token = pad_tokens
 
     # Using rnn padding, presumably works to generate a correct batch
     structural_tokens = pad_sequence(
         structural_tokens, batch_first=True, padding_value=struct_pad_token
     )
-    src_tokens = pad_sequence(src_tokens, batch_first=True, padding_value=smi_pad_token)
+    src_tokens = pad_sequence(src_tokens, batch_first=True, padding_value=res_pad_token)
     src_key_pad_mask = pad_sequence(
         src_key_pad_mask, batch_first=True, padding_value=True
     )
-    tgt_tokens = pad_sequence(tgt_tokens, batch_first=True, padding_value=smi_pad_token)
+    tgt_tokens = pad_sequence(tgt_tokens, batch_first=True, padding_value=res_pad_token)
     tgt_key_pad_mask = pad_sequence(
         tgt_key_pad_mask, batch_first=True, padding_value=True
     )
@@ -101,31 +101,31 @@ class TransformerShardedAutoregDataset(Dataset):
         self._metadata_check(t_hdf5)
 
         ref_ptr = t_hdf5[0]
-        smi_token_pad = (
+        res_token_pad = (
             ref_ptr["input_metadata"]["ctrl_tokens"]["TOK_PAD"][()]
             if "TOK_PAD" in ref_ptr["input_metadata"]["ctrl_tokens"].keys()
             else None
         )
-        assert smi_token_pad is not None, "No padding token found in metadata"
+        assert res_token_pad is not None, "No padding token found in metadata"
         struct_token_pad = (
             ref_ptr["input_metadata"]["ctrl_tokens"]["STRUCT_PAD"][()]
             if "STRUCT_PAD" in ref_ptr["input_metadata"]["ctrl_tokens"].keys()
             else None
         )
         if struct_token_pad is None:
-            # Set to same as smiles padding token in nonetype case
-            struct_token_pad = smi_token_pad
-        # Smiles padding token first, structure padding second
-        self.pad_tokens = [smi_token_pad, struct_token_pad]
+            # Set to same as residues padding token in nonetype case
+            struct_token_pad = res_token_pad
+        # Residues padding token first, structure padding second
+        self.pad_tokens = [res_token_pad, struct_token_pad]
 
-        self.all_lengths = [len(ptr["smi_tokens"]) for ptr in t_hdf5]
+        self.all_lengths = [len(ptr["res_tokens"]) for ptr in t_hdf5]
         self.total_length = sum(self.all_lengths)
         self.len_cum_sum = torch.cumsum(torch.tensor(self.all_lengths), 0)
 
         print("Total number of datasets:", len(t_hdf5))
         print("Total dataset length:", self.total_length)
         print("Cumulative summation of lengths:", self.len_cum_sum)
-        print("SMILES and structural pad tokens:", self.pad_tokens)
+        print("Residues and structural pad tokens:", self.pad_tokens)
 
         del t_hdf5
 
@@ -196,7 +196,7 @@ class TransformerShardedAutoregDataset(Dataset):
         structural_tokens = torch.tensor(
             current_shard["structural_tokens"][idx], dtype=torch.long
         )
-        src_tokens = torch.tensor(current_shard["smi_tokens"][idx], dtype=torch.long)
+        src_tokens = torch.tensor(current_shard["res_tokens"][idx], dtype=torch.long)
         src_key_pad_mask = src_tokens == self.pad_tokens[0]
         tgt_tokens = torch.tensor(current_shard["targets"][idx], dtype=torch.long)
         if tgt_tokens.ndim == 2:

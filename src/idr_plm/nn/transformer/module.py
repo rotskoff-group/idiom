@@ -115,7 +115,7 @@ class LightningModel(L.LightningModule):
                 loss_fn = loss_fn_base(**self.training_args["loss_fn_args"])
             else:
                 loss_fn = loss_fn_base(
-                    reduction="none", ignore_index=self.smi_info["pad"]
+                    reduction="none", ignore_index=self.res_info["pad"]
                 )
             return loss_fn
 
