@@ -3,7 +3,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 from idr_plm.nn.transformer import scores
-from idr_plm.nn.transformer.utils.utils import compute_policy_logps
+from idr_plm.nn.transformer.utils.misc import compute_policy_logps
 from idr_plm.nn.transformer.utils.sampling import generate_sequences_online
 
 
