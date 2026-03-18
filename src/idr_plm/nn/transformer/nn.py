@@ -18,10 +18,10 @@ class GeometricMolTransformer(nn.Module):
             num_decoder_layers: Number of decoder layers
             dropout_p: Dropout probability
 
-            For molecules, we have two types of tokens:
-                "smiles tokens": Here, considered embedding for all tokens in the SMILES sequence
+            For residue sequences, we have two types of tokens:
+                "residue tokens": Embedding for all tokens in the residue sequence
                 "structural tokens": Tokens obtained from the VQVAE
-            For now, only using the smi token embedding, not the structural token embedding which
+            For now, only using the residue token embedding, not the structural token embedding which
                 requires re-training a VQVAE model
         """
         super().__init__()
@@ -29,14 +29,14 @@ class GeometricMolTransformer(nn.Module):
         # LAYERS
         # At least one of the token embeddings should be present
         # Uses fact that empty dictionary evaluates to a False boolean
-        contains_smi = bool(token_info["input"]["TOK"])
+        contains_res = bool(token_info["input"]["TOK"])
         contains_struct = bool(token_info["input"]["STRUCT"])
 
-        assert contains_smi or contains_struct, (
+        assert contains_res or contains_struct, (
             "At least one of the token embeddings should be present!"
         )
 
-        if contains_smi:
+        if contains_res:
             self.smi_token_embedding = nn.Embedding(
                 embedding_dim=dim_model,
                 num_embeddings=token_info["TOTAL"],
@@ -60,7 +60,7 @@ class GeometricMolTransformer(nn.Module):
 
     def forward(
         self,
-        smi_tokens,
+        res_tokens,
         structural_tokens,
         sequence_id,
         batch_access_indices=None,
@@ -76,16 +76,16 @@ class GeometricMolTransformer(nn.Module):
         """
         # (batch_size, sequence_length, 1)
         if self.smi_token_embedding is not None:
-            smi_token_embedding = self.smi_token_embedding(smi_tokens)
+            res_token_embedding = self.smi_token_embedding(res_tokens)
         else:
-            smi_token_embedding = 0
+            res_token_embedding = 0
         if self.structural_token_embedding is not None:
             structural_token_embedding = self.structural_token_embedding(
                 structural_tokens
             )
         else:
             structural_token_embedding = 0
-        embedding = smi_token_embedding + structural_token_embedding
+        embedding = res_token_embedding + structural_token_embedding
         # embedding.shape = [B, L, D]
         x, _ = self.transformer(
             embedding,

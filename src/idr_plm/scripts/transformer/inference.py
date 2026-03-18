@@ -34,8 +34,8 @@ def run_inference_on_gpu(
     savedir,
     num_gpus,
     total_size,
-    use_input_smiles,
-    smiles_path,
+    use_input_residues,
+    residues_path,
 ):
     """Run inference on a specific GPU and save results to temporary file."""
     try:
@@ -61,32 +61,32 @@ def run_inference_on_gpu(
         _start_token = token_info["input"]["TOK"]["TOK_START"]
         _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
 
-        if not use_input_smiles:
+        if not use_input_residues:
             # Unprompted generation
             num_seqs = end_idx - start_idx
             start_tokens = torch.ones((num_seqs, 1)) * _start_token
-            smi_tokens_gpu = start_tokens.long()
+            res_tokens_gpu = start_tokens.long()
             structural_tokens_gpu = (
                 torch.ones((num_seqs, 1), dtype=torch.long) * _pad_token
             )
             sequence_id_gpu = torch.ones((num_seqs, 1), dtype=torch.long)
         else:
             # Prompted generation - load from file and slice
-            smi_tokens_full = np.load(smiles_path, allow_pickle=True)
-            smi_tokens_full = [torch.tensor(s).long() for s in smi_tokens_full]
+            res_tokens_full = np.load(residues_path, allow_pickle=True)
+            res_tokens_full = [torch.tensor(s).long() for s in res_tokens_full]
 
             # Prepend start token if needed
             start_token_long = torch.tensor(_start_token, dtype=torch.long).unsqueeze(0)
-            smi_tokens_full = [
+            res_tokens_full = [
                 torch.cat([start_token_long, seq], dim=0)
                 if seq[0] != _start_token
                 else seq
-                for seq in smi_tokens_full
+                for seq in res_tokens_full
             ]
 
             # Slice prompts for this GPU
-            smi_tokens_gpu = smi_tokens_full[start_idx:end_idx]
-            num_seqs = len(smi_tokens_gpu)
+            res_tokens_gpu = res_tokens_full[start_idx:end_idx]
+            num_seqs = len(res_tokens_gpu)
             structural_tokens_gpu = (
                 torch.ones(num_seqs, 1, dtype=torch.long) * _pad_token
             )
@@ -101,11 +101,11 @@ def run_inference_on_gpu(
             output = sample_components_from_autoregressive_transformer(
                 transformer_model=lightning_model,
                 structural_tokens=structural_tokens_gpu,
-                smiles_tokens=smi_tokens_gpu,
+                res_tokens=res_tokens_gpu,
                 sequence_id=sequence_id_gpu,
                 token_sampler=token_sampler,
                 inference_batch_size=batch_size,
-                use_input_smiles=inference_args["addn_args"]["use_input_smiles"],
+                use_input_residues=inference_args["addn_args"]["use_input_residues"],
             )
 
         # Save results to temporary file
@@ -151,7 +151,6 @@ def main(cfg) -> None:
     OmegaConf.save(cfg, f"{inference_args['savedir']}/inference_config.yaml")
 
     if inference_args["inference_mode"] == "autoregressive":
-        # import pdb; pdb.set_trace()
         # Define tokens at start
         _start_token = token_info["input"]["TOK"]["TOK_START"]
         _pad_token = token_info["input"]["TOK"]["TOK_PAD"]
@@ -159,9 +158,9 @@ def main(cfg) -> None:
 
         # Prepare input sequences
         # FH: Logic here accounts for the case where the user wants to continue
-        # sampling from initialized SMILES tokens, not just unprompted sampling
+        # sampling from initialized residue tokens, not just unprompted sampling
         # from a start token. The input is expected to be tokens, not strings.
-        if not inference_args["addn_args"]["use_input_smiles"]:
+        if not inference_args["addn_args"]["use_input_residues"]:
             # Unprompted generation - use num_batches parameter
             total_batches = inference_args["num_batches"]
             total_size = batch_size * total_batches
@@ -175,38 +174,33 @@ def main(cfg) -> None:
             sequence_id = sequence_id.long()
 
             # FH: Don't send to device until the batch is created within the sampling method
-            smi_tokens = start_tokens
-            # smi_tokens = smi_tokens.to(device)
-            # structural_tokens = structural_tokens.to(device)
-            # sequence_id = sequence_id.to(device)
+            res_tokens = start_tokens
 
         elif (
-            inference_args["addn_args"]["use_input_smiles"]
-            and inference_args["addn_args"]["smiles_path"] is not None
+            inference_args["addn_args"]["use_input_residues"]
+            and inference_args["addn_args"]["residues_path"] is not None
         ):
             # Prompted generation - use actual number of input sequences
-            smiles_file = inference_args["addn_args"]["smiles_path"]
-            smi_tokens = np.load(smiles_file, allow_pickle=True)
-            smi_tokens = [torch.tensor(s).long() for s in smi_tokens]
+            residues_file = inference_args["addn_args"]["residues_path"]
+            res_tokens = np.load(residues_file, allow_pickle=True)
+            res_tokens = [torch.tensor(s).long() for s in res_tokens]
 
-            total_size = len(smi_tokens)
-            print(f"Loaded {total_size} input sequences from {smiles_file}")
+            total_size = len(res_tokens)
+            print(f"Loaded {total_size} input sequences from {residues_file}")
 
-            sequence_id = torch.ones(len(smi_tokens)).long()
-            structural_tokens = torch.ones(len(smi_tokens), 1) * _pad_token
+            sequence_id = torch.ones(len(res_tokens)).long()
+            structural_tokens = torch.ones(len(res_tokens), 1) * _pad_token
 
-            # jxliu2: Prepend start token to each sequence in smi_tokens after loading from smiles_file
+            # jxliu2: Prepend start token to each sequence in res_tokens after loading from residues_file
             start_token_long = torch.tensor(_start_token, dtype=torch.long).unsqueeze(
                 0
             )  # Needs to be 1D for torch.cat()
-            # smi_tokens = [torch.cat([start_token_long, seq], dim=0) for seq in smi_tokens]
-            smi_tokens = [
+            res_tokens = [
                 torch.cat([start_token_long, seq], dim=0)
                 if seq[0] != _start_token
                 else seq
-                for seq in smi_tokens
+                for seq in res_tokens
             ]
-            # import ipdb; ipdb.set_trace()
 
             # type cast
             structural_tokens = structural_tokens.long()
@@ -267,8 +261,8 @@ def main(cfg) -> None:
                     inference_args["savedir"],
                     num_gpus,
                     total_size,
-                    inference_args["addn_args"]["use_input_smiles"],
-                    inference_args["addn_args"]["smiles_path"],
+                    inference_args["addn_args"]["use_input_residues"],
+                    inference_args["addn_args"]["residues_path"],
                 ),
             )
             p.start()
@@ -346,7 +340,6 @@ def main(cfg) -> None:
 
         # Filter out None sequences
         sequences = [s for s in sequences if s is not None]
-        # print(f"Total sequences to export: {len(sequences)}")
 
         # Extract IDRs and full sequences
         idr_sequences = []
@@ -369,16 +362,13 @@ def main(cfg) -> None:
         # Save FASTA files
         # File 1: IDR regions only
         idr_fasta = os.path.join(inference_args["savedir"], "generated_idrs.fasta")
-        # print(f"\nWriting IDR sequences to {idr_fasta}...")
         with open(idr_fasta, "w") as f:
             for seq_idx, idr_seq in idr_sequences:
                 f.write(f">seq_{seq_idx:06d}\n")
                 f.write(f"{idr_seq}\n")
-        # print(f"Successfully wrote {len(idr_sequences)} IDR sequences to {idr_fasta}")
 
         # File 2: Full sequences with IDR indices in header
         full_fasta = os.path.join(inference_args["savedir"], "generated_full.fasta")
-        # print(f"\nWriting full sequences to {full_fasta}...")
         with open(full_fasta, "w") as f:
             for seq_idx, full_seq, idr_start, idr_end in full_sequences_with_indices:
                 f.write(f">seq_{seq_idx:06d}_IDR_{idr_start + 1}-{idr_end}\n")
