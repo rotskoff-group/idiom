@@ -270,6 +270,10 @@ def apply_quadratic_reward_shaping(raw_reward, target_value, reward_scale=1.0):
     else:
         shaped_reward = -reward_scale * (raw_reward - target_value) ** 2
 
+    # Ensure shaped_reward is always a tensor
+    if not isinstance(shaped_reward, torch.Tensor):
+        shaped_reward = torch.tensor(shaped_reward)
+
     return shaped_reward
 
 
