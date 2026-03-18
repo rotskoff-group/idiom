@@ -36,6 +36,7 @@ dev = [
 ]
 
 [project.scripts]
-transformer_precompute = "idr_plm.scripts.data.precompute:main" 
+transformer_precompute = "idr_plm.scripts.data.precompute:main"
 transformer_train = "idr_plm.scripts.transformer.train:main"
 transformer_infer = "idr_plm.scripts.transformer.inference:main"
+transformer_make_prompt = "idr_plm.scripts.data.make_prompt:main"
