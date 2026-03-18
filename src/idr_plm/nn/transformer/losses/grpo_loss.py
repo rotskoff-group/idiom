@@ -432,7 +432,12 @@ def _compute_and_log_grpo_loss(
         ref_per_token_logps = ref_per_token_logps_list[i]
 
         # Compute per-token advantages with PPO-style clipping
+
         # Calculate policy ratio (the term multiplying advantage)
+        # Even though ratio is 1.0, this ratio calculation is used to preserve gradients from per_token_logps, according to the official TRL implementation here:
+        # https://github.com/huggingface/trl/blob/af4ad47035529164799be10f3fe558ee642a9880/trl/trainer/grpo_trainer.py#L567
+        # More discussion on using the .detach()
+        # https://github.com/huggingface/trl/issues/2608
         ratio = torch.exp(per_token_logps - per_token_logps.detach())
 
         # Clip the ratio to [1 - epsilon_clip, 1 + epsilon_clip]
