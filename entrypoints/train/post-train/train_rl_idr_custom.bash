@@ -30,7 +30,10 @@ source "${REPO_ROOT}/.venv/bin/activate"
 
 echo "===== STEP 1: MAKE IDR RL DATASET ====="
 
+DATASET_NAME="idr_prompt_grpo_${SLURM_JOB_ID:-$$}"
+
 make_rl_dataset idr \
+    --name "$DATASET_NAME" \
     --fasta "${REPO_ROOT}/entrypoints/train/post-train/rl_sequence.fasta" \
     --shard "${REPO_ROOT}/models/data/shard/0001_file.h5" \
     --out_dir "${REPO_ROOT}/models/data/rl_datasets"
@@ -39,7 +42,7 @@ echo; echo "===== STEP 2: RUN GRPO TRAINING ====="
 
 CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Starting with base pretrained model
 
-DATASET_FILENAME="${REPO_ROOT}/models/data/rl_datasets/idr_prompt_grpo_dataset.h5"
+DATASET_FILENAME="${REPO_ROOT}/models/data/rl_datasets/${DATASET_NAME}_dataset.h5"
 
 CUSTOM_REWARDS_DIR="${REPO_ROOT}/rewards/custom_rewards"
 

@@ -31,16 +31,19 @@ source "${REPO_ROOT}/.venv/bin/activate"
 echo "===== STEP 1: GENERATE SPECIFIC IDR PROMPTS ====="
 # Make prompts for generating specific IDRs
 # Choose how many IDRs to generate per protein here (num_duplicates)
+PROMPT_NAME="idr_prompt_${SLURM_JOB_ID:-$$}"
+
 make_infer_prompt \
     --shard   "${REPO_ROOT}/models/data/shard/0001_file.h5" \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
     idr \
+    --name "$PROMPT_NAME" \
     --fasta        ./example_sequences.fasta \
     --num_duplicates 1000
 
 echo; echo "===== STEP 2: GENERATE IDRs USING PROMPTS ====="
 
-PROMPT_PATH="${REPO_ROOT}/models/data/prompts/idr_prompt_array.pkl"
+PROMPT_PATH="${REPO_ROOT}/models/data/prompts/${PROMPT_NAME}_array.pkl"
 
 # SET YOUR DESIRED MODEL CHECKPOINT PATH HERE:
 CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Pretrained base model
