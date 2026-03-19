@@ -220,5 +220,5 @@ lightning_logs
 output/
 entrypoints/*/output/
 
-# old dirs
+# old file dirs
 old/ 

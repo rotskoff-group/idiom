@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=rl_idp_pgps
+#SBATCH --job-name=rl_idr_pgps
 #SBATCH --time=1-00:00:00
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=1
