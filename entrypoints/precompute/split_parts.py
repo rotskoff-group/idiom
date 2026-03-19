@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Randomly split the dataset  ['idrs']  of an input HDF5 file into N part_X_idr.h5 files.
+Randomly split the dataset  ['residues']  of an input HDF5 file into N part_X_residues.h5 files.
 
 Example
 -------
-$ python split_parts.py models/data/full_idrs.h5 \
+$ python split_parts.py models/data/full_residues.h5 \
       --num-parts 500 \
       --out-dir ./splits \
       --chunk-size 1_000_000 \
@@ -20,23 +20,23 @@ from tqdm import tqdm
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Randomly partition the 'idrs' dataset of an HDF5 file."
+        description="Randomly partition the 'residues' dataset of an HDF5 file."
     )
     p.add_argument(
-        "input", help="Path to the source .h5 file containing dataset ['idrs']."
+        "input", help="Path to the source .h5 file containing dataset ['residues']."
     )
     p.add_argument(
         "-n",
         "--num-parts",
         type=int,
         required=True,
-        help="Number of partition files to produce (X in part_X_idr.h5).",
+        help="Number of partition files to produce (X in part_X_residues.h5).",
     )
     p.add_argument(
         "-o",
         "--out-dir",
         default=".",
-        help="Directory in which to create the part_X_idr.h5 files. "
+        help="Directory in which to create the part_X_residues.h5 files. "
         "It is created if it does not yet exist.",
     )
     p.add_argument(
@@ -62,7 +62,7 @@ def main() -> None:
 
     # Probe the source file just once to get length and dtype ------------------
     with h5py.File(args.input, "r") as fin:
-        src = fin["smiles"]  # Check this is the right one smiles/idrs
+        src = fin["residues"]
         total = int(src.shape[0])
         idrs_dtype = src.dtype  # fixed-length or vlen byte strings
 
@@ -71,9 +71,9 @@ def main() -> None:
     part_files = []
     part_dsets = []
     for i in range(1, args.num_parts + 1):
-        fout = h5py.File(os.path.join(args.out_dir, f"part_{i}_idrs.h5"), "w")
+        fout = h5py.File(os.path.join(args.out_dir, f"part_{i}_residues.h5"), "w")
         dset = fout.create_dataset(
-            "idrs",
+            "residues",
             shape=(0,),
             maxshape=(None,),
             dtype=idrs_dtype,
@@ -87,7 +87,7 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # Stream the source dataset and distribute records -------------------------
     with h5py.File(args.input, "r") as fin:
-        src = fin["smiles"]  # Make sure this is the right one smiles/idrs
+        src = fin["residues"]
         for start in tqdm(
             range(0, total, args.chunk_size),
             total=(total + args.chunk_size - 1) // args.chunk_size,
