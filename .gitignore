@@ -215,3 +215,6 @@ data/*
 
 models/*
 !models/.gitkeep
+
+# Lightning log directories
+lightning_logs

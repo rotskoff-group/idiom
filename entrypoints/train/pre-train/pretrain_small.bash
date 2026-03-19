@@ -1,10 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=pretrain
 #SBATCH --time=7-00:00:00
-#SBATCH --gpus=8
+#SBATCH --gpus=2
 #SBATCH --cpus-per-task=16
 #SBATCH --mem-per-cpu=16GB
-#SBATCH --output=./slurm_out/slurm-%j.out 
+#SBATCH --output=./slurm_out/slurm-%j.out
+
+# Need to first create the slurm out dir:
+# mkdir -p ./slurm_out
 
 echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out 
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
@@ -18,7 +21,7 @@ echo; echo; echo; echo
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-mkdir -p "${SCRIPT_DIR}/slurm_out"
+echo ${SCRIPT_DIR}
 
 source "${REPO_ROOT}/.venv/bin/activate"
 
@@ -26,7 +29,8 @@ export PYTHONBREAKPOINT=ipdb.set_trace # for using breakpoint()
 export PYTHONUNBUFFERED=1
 
 # Dataset path
-DATASET_FILENAME="${REPO_ROOT}/../idr-plm_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small_parts/precompute_shards"
+# DATASET_FILENAME="${REPO_ROOT}/../idr-plm_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small_parts/precompute_shards"
+DATASET_FILENAME="/home/scratch/group_scratch/idr_plm/idr-plm_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small_parts/precompute_shards"
 
 echo 'Start training..' 
 
@@ -39,8 +43,8 @@ transformer_train \
 	"data.dataset_split_args.train=0.99"\
 	"data.dataset_split_args.val=0.005"\
 	"data.dataset_split_args.test=0.005"\
-	"data.dloader_args.batch_size=128" \
-	"training.trainer_args.devices=8"\
+	"data.dloader_args.batch_size=1" \
+	"training.trainer_args.devices=2"\
 	"training.trainer_args.accumulate_grad_batches=1"\
 	"data.data_in_memory=False"\
 	"data.dloader_args.num_workers=8"\
@@ -65,7 +69,7 @@ transformer_train \
 	"training.training_mode=autoregressive"\
 	"training.trainer_args.max_epochs=10000"\
 	"training.trainer_args.max_steps=250000" \
-	"++training.trainer_args.val_check_interval=25000" \
+	"++training.trainer_args.val_check_interval=1000" \
 	"++training.loss_fn_args.ignore_index=23"\
 	"training.trainer_args.gradient_clip_val=null"\
 	"training.trainer_args.gradient_clip_algorithm=null"\
