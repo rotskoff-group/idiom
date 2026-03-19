@@ -36,7 +36,7 @@ make_rl_dataset idp \
 
 echo; echo "===== STEP 2: RUN GRPO TRAINING ====="
 
-CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Starting with base pretrained model 
+CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Starting with base pretrained model
 
 DATASET_FILENAME="${REPO_ROOT}/models/data/rl_datasets/idp_prompt_grpo_dataset.h5"
 
@@ -45,7 +45,7 @@ CUSTOM_REWARDS_DIR="${REPO_ROOT}/rewards/custom_rewards"
 # Training parameters
 LR=5e-6
 BETA_KL=2e-2
-REWARD_TARGET_VALUE=0.5
+REWARD_TARGET_VALUE=0.2
 TARGET_LENGTH=100
 LENGTH_REWARD_WEIGHT=1.0
 LENGTH_REWARD_WIDTH=1

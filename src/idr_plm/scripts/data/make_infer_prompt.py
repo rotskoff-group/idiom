@@ -19,8 +19,8 @@ SENTINELS = {"prefix": "1", "middle": "2", "suffix": "3"}
 
 
 def load_alphabet(shard):
-    precomputed_shard = h5py.File(shard, "r")
-    alphabet = precomputed_shard["alphabet"][:]
+    with h5py.File(shard, "r") as precomputed_shard:
+        alphabet = precomputed_shard["alphabet"][:]
     return [x.decode("utf-8") for x in alphabet]
 
 

@@ -1,37 +1,48 @@
 #!/bin/bash
-#SBATCH --job-name=rl
+#SBATCH --job-name=rl_idp_pgps
 #SBATCH --time=1-00:00:00
 #SBATCH --gpus=1
-#SBATCH --output=./slurm_out/slurm-%A_%a.out
 #SBATCH --cpus-per-task=1
-# #SBATCH --array=0-11%4
+#SBATCH --output=./slurm_out/slurm-%j.out
 
-# Save script into slurm out 
-echo "===== BEGIN SLURM SCRIPT: $0 =====" 
+# You can run this script using 'sbatch train_rl_idp_protgps.bash' or 'bash train_rl_idp_protgps.bash'
+# If you use sbatch, make sure you first create the SLURM output directory using: 'mkdir -p ./slurm_out'
+
+echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
 echo "===== END   SLURM SCRIPT: $0 ====="
-echo; echo; echo; echo 
+echo; echo; echo; echo
 
 ###
-# Run RL post-training with the ProtGPS reward model 
+# Combined script: Make IDP RL dataset then run GRPO training with the ProtGPS reward model
 ###
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENTRYPOINT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-cd "${ENTRYPOINT_DIR}"
+# Determine repository root when using either SLURM or bash to run
+if [ -n "$SLURM_SUBMIT_DIR" ]; then
+    REPO_ROOT="$(cd "$SLURM_SUBMIT_DIR" && git rev-parse --show-toplevel)"
+else
+    REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+fi
+
+echo "Repo root: ${REPO_ROOT}"
 
 source "${REPO_ROOT}/.venv/bin/activate"
 
-CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt"
+echo "===== STEP 1: MAKE IDP RL DATASET ====="
 
-SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
+make_rl_dataset idp \
+    --shard "${REPO_ROOT}/models/data/shard/0001_file.h5" \
+    --out_dir "${REPO_ROOT}/models/data/rl_datasets"
 
-DATASET_FILENAME="${REPO_ROOT}/models/data/rl_datasets/idp_dataset/idp_prompt_1e3x_grpo_dataset.h5"
+echo; echo "===== STEP 2: RUN GRPO TRAINING ====="
+
+CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Starting with base pretrained model
+
+DATASET_FILENAME="${REPO_ROOT}/models/data/rl_datasets/idp_prompt_grpo_dataset.h5"
 
 PROTGPS_PARENT_DIR="${REPO_ROOT}/rewards/protgps"
 
-# Training parameters 
+# Training parameters
 LR=5e-6
 BETA_KL=2e-2
 REWARD_TARGET_VALUE=0.9
@@ -60,26 +71,15 @@ COMPARTMENTS=(
     # "transcriptional"
 )
 
-# Calculate job indexing based on SLURM_ARRAY_TASK_ID
-NUM_COMPARTMENTS=${#COMPARTMENTS[@]}
-
-# Indexing: compartment varies first
-COMPARTMENT_INDEX=$((SLURM_ARRAY_TASK_ID % NUM_COMPARTMENTS))
-
-COMPARTMENT=${COMPARTMENTS[$COMPARTMENT_INDEX]}
+COMPARTMENT=${COMPARTMENTS[0]}
 
 echo "======================================================================"
-echo "Task ID: ${SLURM_ARRAY_TASK_ID}"
 echo "Running with TARGET_LENGTH=${TARGET_LENGTH}, COMPARTMENT=${COMPARTMENT}"
 echo "ENTROPY_REWARD_WEIGHT=${ENTROPY_REWARD_WEIGHT}, TARGET_ENTROPY=${TARGET_ENTROPY}"
 echo "LR=${LR}"
 echo "======================================================================"
 
-# Set custom lightning log version name
-export LIGHTNING_LOG_VERSION="version_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}_${COMPARTMENT}_target_len_${TARGET_LENGTH}_lr_${LR}"
-echo "Lightning Log Version: ${LIGHTNING_LOG_VERSION}"
-
-export PYTHONBREAKPOINT=ipdb.set_trace # for using breakpoint() 
+export PYTHONBREAKPOINT=ipdb.set_trace # for using breakpoint()
 export PYTHONUNBUFFERED=1
 
 transformer_train \
