@@ -209,8 +209,9 @@ __marimo__/
 # Slurm output directories
 slurm_out/
 
-# This will be gotten from HuggingFace later by the user 
-models/
+# This will be gotten from HuggingFace later by the user
+models/*
+!models/.gitkeep
 
 # Lightning log directories
 lightning_logs
@@ -221,3 +222,8 @@ entrypoints/*/output/
 
 # old file dirs
 old/ 
+
+# Datasets
+datasets/*
+!datasets/.gitkeep
+
