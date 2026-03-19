@@ -2,8 +2,8 @@
 CLI for creating inference prompts.
 
 Subcommands:
-  idp       -- Generate IDP prompts (repeated "132")
-  specific  -- Generate FIM prompts from a FASTA file
+  idp  -- Generate IDP prompts (repeated "132")
+  idr  -- Generate FIM prompts from a FASTA file
 """
 
 import argparse
@@ -87,7 +87,7 @@ def cmd_idp(args):
     save_outputs(name, prompt_array, prompts, metadata_list, args.out_dir)
 
 
-def cmd_specific(args):
+def cmd_idr(args):
     alphabet = load_alphabet(args.shard)
     num_duplicates = args.num_duplicates
     # fasta_stem = os.path.splitext(os.path.basename(args.fasta))[0]
@@ -168,9 +168,9 @@ def main():
         "--num_duplicates", type=int, required=True, help="Number of '132' prompts"
     )
 
-    # specific subcommand
+    # idr subcommand
     specific_parser = subparsers.add_parser(
-        "specific", help="Generate FIM prompts from a FASTA file"
+        "idr", help="Generate FIM prompts from a FASTA file"
     )
     specific_parser.add_argument(
         "--fasta", type=str, required=True, help="Path to input FASTA file"
@@ -186,8 +186,8 @@ def main():
 
     if args.command == "idp":
         cmd_idp(args)
-    elif args.command == "specific":
-        cmd_specific(args)
+    elif args.command == "idr":
+        cmd_idr(args)
 
 
 if __name__ == "__main__":
