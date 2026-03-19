@@ -78,7 +78,7 @@ def parse_fasta(fasta_path):
 def cmd_idp(args):
     alphabet = load_alphabet(args.shard)
     num_duplicates = args.num_duplicates
-    name = "idp_prompt"
+    name = args.name
 
     prompts = ["132"] * num_duplicates
     metadata_list = [("idp", 0, None, None, None, None, p, p) for p in prompts]
@@ -136,8 +136,7 @@ def cmd_idr(args):
         all_metadata.extend([protein_data] * num_duplicates)
 
     prompt_array = tokenize_prompts(all_prompts, alphabet)
-    name = "idr_prompt"
-    save_outputs(name, prompt_array, all_prompts, all_metadata, args.out_dir)
+    save_outputs(args.name, prompt_array, all_prompts, all_metadata, args.out_dir)
 
 
 def main():
@@ -165,12 +164,24 @@ def main():
         "idp", help="Generate IDP prompts (repeated '132')"
     )
     idp_parser.add_argument(
+        "--name",
+        type=str,
+        default="idp_prompt",
+        help="Output file base name (default: idp_prompt)",
+    )
+    idp_parser.add_argument(
         "--num_duplicates", type=int, required=True, help="Number of '132' prompts"
     )
 
     # idr subcommand
     specific_parser = subparsers.add_parser(
         "idr", help="Generate FIM prompts from a FASTA file"
+    )
+    specific_parser.add_argument(
+        "--name",
+        type=str,
+        default="idr_prompt",
+        help="Output file base name (default: idr_prompt)",
     )
     specific_parser.add_argument(
         "--fasta", type=str, required=True, help="Path to input FASTA file"

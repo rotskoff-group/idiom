@@ -56,7 +56,7 @@ def make_grpo_dataset(array_pkl, shard, out_dir, name):
 
 def cmd_idp(args):
     alphabet = load_alphabet(args.shard)
-    name = "idp_prompt_grpo"
+    name = args.name
 
     prompts = ["132"] * NUM_DUPLICATES
     metadata_list = [("idp", 0, None, None, None, None, p, p) for p in prompts]
@@ -82,7 +82,7 @@ def cmd_idp(args):
 
 def cmd_idr(args):
     alphabet = load_alphabet(args.shard)
-    name = "idr_prompt_grpo"
+    name = args.name
 
     sequences = list(parse_fasta(args.fasta))
     if len(sequences) != 1:
@@ -150,6 +150,12 @@ def main():
         "idp", help="Generate generic IDP RL dataset (repeated '132' prompts)"
     )
     idp_parser.add_argument(
+        "--name",
+        type=str,
+        default="idp_prompt_grpo",
+        help="Output file base name (default: idp_prompt_grpo)",
+    )
+    idp_parser.add_argument(
         "--shard",
         type=str,
         default="models/data/shard/0001_file.h5",
@@ -165,6 +171,12 @@ def main():
     # idr subcommand
     idr_parser = subparsers.add_parser(
         "idr", help="Generate IDR RL dataset from a FASTA file (fixed output name)"
+    )
+    idr_parser.add_argument(
+        "--name",
+        type=str,
+        default="idr_prompt_grpo",
+        help="Output file base name (default: idr_prompt_grpo)",
     )
     idr_parser.add_argument(
         "--fasta", type=str, required=True, help="Path to input FASTA file"

@@ -29,16 +29,19 @@ echo "Repo root: " ${REPO_ROOT}
 source "${REPO_ROOT}/.venv/bin/activate"
 
 echo "===== STEP 1: GENERATE IDP PROMPTS ====="
-# Make prompts for generating IDPs 
+# Make prompts for generating IDPs
 # Choose how many IDPs to generate here (num_duplicates)
+PROMPT_NAME="idp_prompt_${SLURM_JOB_ID:-$$}"
+
 make_infer_prompt \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
     idp \
+    --name "$PROMPT_NAME" \
     --num_duplicates 1000
 
 echo; echo "===== STEP 2: GENERATE IDPs USING PROMPTS ====="
 
-PROMPT_PATH="${REPO_ROOT}/models/data/prompts/idp_prompt_array.pkl"
+PROMPT_PATH="${REPO_ROOT}/models/data/prompts/${PROMPT_NAME}_array.pkl"
 
 # SET YOUR DESIRED MODEL CHECKPOINT PATH HERE: 
 CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Pretrained base model 
