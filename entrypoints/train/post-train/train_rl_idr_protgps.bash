@@ -30,10 +30,11 @@ source "${REPO_ROOT}/.venv/bin/activate"
 
 echo "===== STEP 1: MAKE IDP RL DATASET ====="
 
-DATASET_NAME="idp_prompt_grpo_${SLURM_JOB_ID:-$$}"
+DATASET_NAME="idr_prompt_grpo_${SLURM_JOB_ID:-$$}"
 
-make_rl_dataset idp \
+make_rl_dataset idr \
     --name "$DATASET_NAME" \
+    --fasta "${REPO_ROOT}/entrypoints/train/post-train/rl_sequence.fasta" \
     --shard "${REPO_ROOT}/models/data/shard/0001_file.h5" \
     --out_dir "${REPO_ROOT}/models/data/rl_datasets"
 
@@ -55,8 +56,8 @@ LENGTH_REWARD_WIDTH=1
 TARGET_ENTROPY=2.7
 ENTROPY_REWARD_WEIGHT=1.0
 ENTROPY_REWARD_WIDTH=0.2
-BATCH_SIZE=4
-ACCUMULATE_GRAD_BATCHES=2
+BATCH_SIZE=2
+ACCUMULATE_GRAD_BATCHES=4
 GROUP_SIZE=8
 
 COMPARTMENTS=(
@@ -64,9 +65,9 @@ COMPARTMENTS=(
     # "p-body"
     # "pml-bdoy"
     # "post_synaptic_density"
-    "stress_granule"
+    # "stress_granule"
     # "chromosome"
-    # "nucleolus"
+    "nucleolus"
     # "nuclear_pore_complex"
     # "cajal_body"
     # "rna_granule"
