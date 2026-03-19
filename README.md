@@ -49,7 +49,7 @@ models/
 └── protgps/                      # ProtGPS reward model weights
 ```
 
-Additional datasets which not necessary for running the code repository can be found in the following HuggingFace repository. This includes the 37M IDRs used to pre-train `IDR-PLM` as well as the generated sequences which we analyze in the paper. 
+Additional datasets which not necessary for running the code repository can be found in the following HuggingFace repository. This includes the 37M IDRs used to pre-train `IDR-PLM` as well as the generated sequences which we analyze in the paper. (This data is necessary if you would like to replicate the pre-training run.)
 
 **Datasets**: https://huggingface.co/datasets/jxliu2/idr-plm-dataset 
 
