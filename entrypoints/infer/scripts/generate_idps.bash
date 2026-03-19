@@ -48,7 +48,7 @@ CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_ste
 
 SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
 
-OUT_DIR="${REPO_ROOT}/entrypoints/infer/output"
+OUT_DIR="${REPO_ROOT}/entrypoints/infer/output/idps"
 mkdir -p "${OUT_DIR}"
 
 export PYTHONUNBUFFERED=1  
