@@ -218,6 +218,7 @@ lightning_logs
 
 # output dirs
 output/
+entrypoints/*/output/
 
 # old dirs
 old/ 
