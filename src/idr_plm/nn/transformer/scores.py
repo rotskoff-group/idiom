@@ -13,6 +13,10 @@ from idr_plm.utils.misc import tokens_to_sequence
 _PROTGPS_MODEL = None
 _PROTGPS_DEVICE = None
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_DEFAULT_PROTGPS_DIR = str(_REPO_ROOT / "models" / "protgps")
+_PROTGPS_PACKAGE_DIR = str(_REPO_ROOT / "rewards" / "protgps")
+
 COMPARTMENT_CLASSES = [
     "nuclear_speckle",
     "p-body",
@@ -52,7 +56,7 @@ def compute_fraction_alanine(tokens, token_info, device):
     return torch.tensor(fraction_alanine, device=device)
 
 
-def load_protgps_model(protgps_parent_dir="/home/protgps", device=None):
+def load_protgps_model(protgps_parent_dir=_DEFAULT_PROTGPS_DIR, device=None):
     """
     Load the ProtGPS model for predicting protein localization.
 
@@ -69,19 +73,19 @@ def load_protgps_model(protgps_parent_dir="/home/protgps", device=None):
     if _PROTGPS_MODEL is not None and _PROTGPS_DEVICE == device:
         return _PROTGPS_MODEL
 
-    # Add ProtGPS to path
-    if protgps_parent_dir not in sys.path:
-        sys.path.append(protgps_parent_dir)
+    # Add ProtGPS package (Python source) to path
+    if _PROTGPS_PACKAGE_DIR not in sys.path:
+        sys.path.append(_PROTGPS_PACKAGE_DIR)
 
     from protgps.utils.loading import get_object
 
     # Load model args and checkpoint
     args_path = os.path.join(
-        protgps_parent_dir, "checkpoints/protgps/32bf44b16a4e770a674896b81dfb3729.args"
+        protgps_parent_dir, "protgps/32bf44b16a4e770a674896b81dfb3729.args"
     )
     ckpt_path = os.path.join(
         protgps_parent_dir,
-        "checkpoints/protgps/32bf44b16a4e770a674896b81dfb3729epoch=26.ckpt",
+        "protgps/32bf44b16a4e770a674896b81dfb3729epoch=26.ckpt",
     )
 
     args = Namespace(**pickle.load(open(args_path, "rb")))
@@ -112,7 +116,7 @@ def compute_protgps_score(
     token_info,
     device,
     target_compartment="p-body",
-    protgps_parent_dir="/home/protgps",
+    protgps_parent_dir=_DEFAULT_PROTGPS_DIR,
     aggregation="max",
 ):
     """
