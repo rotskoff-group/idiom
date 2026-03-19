@@ -24,22 +24,31 @@ Requires Python ≥ 3.10 and PyTorch 2.4.0.
 
 ## Model checkpoints and data
 
-Next, download the pre- and post-trained `IDR-PLM` model checkpoints from the HuggingFace repository and move them into the `idr-plm/` project root directory.
+Next, download the pre- and post-trained `IDR-PLM` model checkpoints from the HuggingFace repository and move them into the `idr-plm/` project root directory. 
 
-**Model checkpoints**: https://huggingface.co/jxliu2/idr-plm (~26 GB)
+**Model checkpoints**: https://huggingface.co/jxliu2/idr-plm
+
+You can do so with the following commands. First, make an hf account. From the root of the cloned idr-plm directory, do: 
+
+```bash
+uv tool install hf # Install the hf cli tool 
+hf auth login # Enter your credentials 
+
+# Download models (26 GB)
+hf download jxliu2/idr-plm --local-dir ./models
+```
+
+
 
 Additional datasets which not necessary for running the code repository can be found in the following HuggingFace repository. This includes the 37M IDRs used to pre-train `IDR-PLM` as well as the generated sequences which we analyze in the paper. (However, this data is necessary if you would like to replicate pre-training.)
 
-**Datasets**: https://huggingface.co/datasets/jxliu2/idr-plm-dataset (~174 GB)
+**Datasets**: https://huggingface.co/datasets/jxliu2/idr-plm-dataset 
 
-Make an hf account. From the root of the cloned idr-plm directory, do: 
-
-```bash
-uv tool install hf
-hf auth login
-hf download jxliu2/idr-plm --local-dir ./models
+```bash 
+# Optionally download the IDR data (174 GB): 
 hf download jxliu2/idr-plm-dataset --repo-type=dataset --local-dir ./datasets
 ```
+
 
 After this, the project structure should be:
 
@@ -61,9 +70,9 @@ idr-plm/
 │   ├── custom_rewards/        # User-defined reward functions
 │   └── protgps/               # ProtGPS localization reward model
 |
-├── models/                    # Checkpoints (from HuggingFace)
+├── models/                    # Model checkpoints
 |
-└── datasets/                  # Datasets (optional, from HuggingFace)
+└── datasets/                  # Datasets (optional)
 ```
 
 
@@ -75,7 +84,7 @@ The core model is `GeometricMolTransformer`, a 12-layer causal transformer with:
 
 | Hyperparameter | Value |
 |---|---|
-| Model dimension (`d_model`) | 896 |
+| Model dimension | 896 |
 | Transformer layers | 12 |
 | Attention heads | 14 |
 | FFN type | SwiGLU (2.667× expansion) |
