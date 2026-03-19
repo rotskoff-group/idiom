@@ -210,9 +210,6 @@ __marimo__/
 slurm_out/
 
 # Keep directory scaffolds, ignore real files inside. They will be gotten from HuggingFace later by the user 
-data/*
-!data/.gitkeep
-
 models/*
 !models/.gitkeep
 
