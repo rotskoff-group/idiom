@@ -34,9 +34,9 @@ echo "===== STEP 1: GENERATE SPECIFIC IDR PROMPTS ====="
 make_infer_prompt \
     --shard   "${REPO_ROOT}/models/data/shard/0001_file.h5" \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
-    specific \
+    idr \
     --fasta        ./example_sequences.fasta \
-    --num_duplicates 100
+    --num_duplicates 1000
 
 echo; echo "===== STEP 2: GENERATE IDRs USING PROMPTS ====="
 
