@@ -95,7 +95,7 @@ inference:
   dataset_filename: /home/scratch/group_scratch/idr_plm/idr-plm/models/data/shard/0001_file.h5
   addn_args:
     use_input_residues: true
-    residues_path: /home/scratch/group_scratch/idr_plm/idr-plm/models/data/prompts/idp_prompt_100x_array.pkl
+    residues_path: /home/scratch/group_scratch/idr_plm/idr-plm/models/data/prompts/idr_prompt_array.pkl
   sampler_args:
     method: full
     sample_val: 1

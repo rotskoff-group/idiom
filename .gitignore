@@ -218,3 +218,9 @@ models/*
 
 # Lightning log directories
 lightning_logs
+
+# output dirs
+output/
+
+# old dirs
+old/ 

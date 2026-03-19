@@ -1,40 +1,56 @@
 #!/bin/bash
 #SBATCH --job-name=gen_idr
 #SBATCH --time=1-00:00:00
-#SBATCH --gpus=1
+#SBATCH --gpus=2
 #SBATCH --cpus-per-task=1
-#SBATCH --output=./slurm_out/slurm-%j.out 
+#SBATCH --output=./slurm_out/slurm-%j.out
 
-echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out 
+# You can run this script using 'sbatch infer_specific_combined.bash' or 'bash infer_specific_combined.bash'
+# If you use sbatch, make sure you first create the SLURM output directory using: 'mkdir -p ./slurm_out'
+
+echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
 echo "===== END   SLURM SCRIPT: $0 ====="
-echo; echo; echo; echo 
+echo; echo; echo; echo
 
 ###
-# Generated prompted IDRs
+# Combined script: Generate specific IDR prompts and then generate prompted IDRs
 ###
 
+# Determine repository root when using either SLURM or bash to run
 if [ -n "$SLURM_SUBMIT_DIR" ]; then
     REPO_ROOT="$(cd "$SLURM_SUBMIT_DIR" && git rev-parse --show-toplevel)"
 else
     REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fi
-ENTRYPOINT_DIR="${REPO_ROOT}/entrypoints/infer"
-cd "${ENTRYPOINT_DIR}"
+
+echo "Repo root: " ${REPO_ROOT}
 
 source "${REPO_ROOT}/.venv/bin/activate"
 
-# new FIM10 is version_3
-CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt"
+echo "===== STEP 1: GENERATE SPECIFIC IDR PROMPTS ====="
+# Make prompts for generating specific IDRs
+# Choose how many IDRs to generate per protein here (num_duplicates)
+make_infer_prompt \
+    --shard   "${REPO_ROOT}/models/data/shard/0001_file.h5" \
+    --out_dir "${REPO_ROOT}/models/data/prompts" \
+    specific \
+    --fasta        ./example_sequences.fasta \
+    --num_duplicates 100
 
-SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
+echo; echo "===== STEP 2: GENERATE IDRs USING PROMPTS ====="
 
 PROMPT_PATH="${REPO_ROOT}/models/data/prompts/idr_prompt_array.pkl"
+
+# SET YOUR DESIRED MODEL CHECKPOINT PATH HERE:
+CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Pretrained base model
+
+SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
 
 OUT_DIR="${REPO_ROOT}/entrypoints/infer/output"
 mkdir -p "${OUT_DIR}"
 
-export PYTHONUNBUFFERED=1  
+export PYTHONUNBUFFERED=1
 transformer_infer \
     "model=transformer" \
     "model.model=GeometricMolTransformer" \
@@ -74,5 +90,5 @@ transformer_infer \
     "inference.sampler_args.method=full" \
     "inference.sampler_args.sample_val=1" \
     "inference.sampler_args.temperature=1.0" \
-    "++inference.addn_args.use_input_smiles=True" \
-    "++inference.addn_args.smiles_path=$PROMPT_PATH"
+    "++inference.addn_args.use_input_residues=True" \
+    "++inference.addn_args.residues_path=$PROMPT_PATH"
