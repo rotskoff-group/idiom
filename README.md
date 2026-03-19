@@ -1,14 +1,15 @@
 # IDR-PLM
-Official repository for IDR-PLM: a protein language model for generating intrinsically disordered regions (IDRs) and intrinsically disordered proteins (IDPs), with support for reward-guided post-training via Group Relative Policy Optimization (GRPO).
+Official repository for IDR-PLM. Paper can be found: 
 
 ## Overview
 
-IDR-PLM is an autoregressive transformer trained on intrinsically disordered regions from the AlphaFold Database (AFDB). It uses a Fill-In-Middle (FIM) objective, which allows the model to generate an IDR conditioned on its flanking structured regions. After pre-training, the model can be post-trained with reinforcement learning (GRPO) to optimize any user-defined reward—for example, predicted subcellular localization via ProtGPS.
+IDR-PLM is an autoregressive transformer trained on intrinsically disordered regions from the AlphaFold Database (AFDB). The model can generate unprompted IDPs and IDRs prompted with their surrounding context. The model can be post-trained with reinforcement learning to optimize for user-defined rewards. 
 
 
 ## Environment setup
 
-First, clone and sync the repository: 
+First, clone the repository to a directory with at least 30 GB of free space (necessary for the model checkpoints). Then, `uv sync` the repository and install in editable mode. 
+
 
 ```bash
 git clone https://github.com/rotskoff-group/idr-plm.git
@@ -313,75 +314,17 @@ Training runs for 250,000 steps on 8 GPUs with mixed precision (fp16). Checkpoin
 
 ---
 
-<!-- ## Repository structure
+## Repository structure
 
 ```
 idr-plm/
-├── src/idr_plm/                         # Main Python package
-│   ├── nn/
-│   │   ├── layers/                      # Transformer building blocks
-│   │   │   ├── blocks.py                #   UnifiedTransformerBlock (SwiGLU / GELU FFN)
-│   │   │   ├── transformer_stack.py     #   TransformerStack (stacked blocks + LayerNorm)
-│   │   │   ├── mha.py                   #   Multi-head attention
-│   │   │   ├── rotary.py                #   Rotary positional embeddings (RoPE)
-│   │   │   └── regression_head.py       #   Output projection head
-│   │   └── transformer/
-│   │       ├── nn.py                    #   GeometricMolTransformer (main model)
-│   │       ├── module.py                #   PyTorch Lightning module (autoregressive + GRPO)
-│   │       ├── dataset.py               #   Dataset classes (sharded / online)
-│   │       ├── losses/
-│   │       │   ├── autoreg_loss.py      #   Cross-entropy for pre-training
-│   │       │   └── grpo_loss.py         #   GRPO loss (rewards, KL, PPO clip)
-│   │       ├── scores.py                #   IDR region extraction and scoring
-│   │       └── utils/
-│   │           ├── tokenizer.py         #   CharTokenizer
-│   │           ├── sampling.py          #   Autoregressive sampling functions
-│   │           └── misc.py              #   Policy log-probability utilities
-│   ├── scripts/
-│   │   ├── cfgs/                        # Hydra config files
-│   │   │   ├── model/transformer.yaml
-│   │   │   ├── training/transformer.yaml
-│   │   │   ├── data/transformer.yaml
-│   │   │   └── inference/transformer.yaml
-│   │   ├── data/
-│   │   │   ├── precompute.py            # transformer_precompute
-│   │   │   ├── make_infer_prompt.py     # make_infer_prompt
-│   │   │   └── make_rl_dataset.py       # make_rl_dataset
-│   │   └── transformer/
-│   │       ├── train.py                 # transformer_train
-│   │       └── inference.py             # transformer_infer
-│   └── utils/
-│       ├── sampler.py                   # TokenSampler (top-k / top-p / full)
-│       ├── data_utils.py                # HDF5 loading utilities
-│       └── misc.py                      # Sequence utilities, IDR extraction
-├── entrypoints/
-│   ├── precompute/                      # Data preparation scripts
-│   ├── train/
-│   │   ├── pre-train/pretrain.bash      # Pre-training launcher
-│   │   └── post-train/
-│   │       ├── train_rl_protgps.bash    # ProtGPS GRPO post-training
-│   │       ├── train_rl_custom.bash     # Custom reward GRPO post-training
-│   │       ├── make_rl_dataset.bash     # Build GRPO dataset from FASTA
-│   │       └── rl_sequence.fasta        # Example input FASTA
-│   └── infer/scripts/
-│       ├── infer_idp.bash               # Unprompted IDP generation
-│       ├── infer_p06748.bash            # Prompted IDR generation (example)
-│       ├── make_idp_prompts.bash        # Build IDP prompt file
-│       ├── make_specific_prompts.bash   # Build FIM prompt file from FASTA
-│       └── example_sequences.fasta     # Example input FASTA for prompts
+├── src/                                 # Main Python package
+├── entrypoints/                         # Scripts for training and inference
 ├── models/                              # Checkpoints and data (populated from HuggingFace)
-│   ├── data/                            # Shards, prompts, RL datasets
-│   ├── idr-plm/base/                    # Pre-trained base model
-│   ├── idr-plm/post_trained/            # Post-trained models (one per compartment)
-│   └── protgps/                         # ProtGPS reward model weights
-├── rewards/
-│   ├── protgps/                         # ProtGPS model code (ESM2-based classifier)
-│   └── custom_rewards/
-│       └── custom_rewards.py            # User-defined reward functions
-└── pyproject.toml
+├── rewards/                             # Reward functions and models
+├── pyproject.toml
+└── README.md
 ```
-
---- -->
 
 ## GRPO post-training details
 
