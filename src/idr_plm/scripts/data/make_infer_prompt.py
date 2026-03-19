@@ -78,7 +78,7 @@ def parse_fasta(fasta_path):
 def cmd_idp(args):
     alphabet = load_alphabet(args.shard)
     num_duplicates = args.num_duplicates
-    name = f"idp_prompt_{num_duplicates}x"
+    name = "idp_prompt"
 
     prompts = ["132"] * num_duplicates
     metadata_list = [("idp", 0, None, None, None, None, p, p) for p in prompts]
@@ -90,7 +90,7 @@ def cmd_idp(args):
 def cmd_specific(args):
     alphabet = load_alphabet(args.shard)
     num_duplicates = args.num_duplicates
-    fasta_stem = os.path.splitext(os.path.basename(args.fasta))[0]
+    # fasta_stem = os.path.splitext(os.path.basename(args.fasta))[0]
 
     all_prompts = []
     all_metadata = []
@@ -136,7 +136,7 @@ def cmd_specific(args):
         all_metadata.extend([protein_data] * num_duplicates)
 
     prompt_array = tokenize_prompts(all_prompts, alphabet)
-    name = f"{fasta_stem}_prompt_{num_duplicates}x"
+    name = "idr_prompt"
     save_outputs(name, prompt_array, all_prompts, all_metadata, args.out_dir)
 
 

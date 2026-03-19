@@ -12,4 +12,4 @@ make_infer_prompt \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
     specific \
     --fasta        ./example_sequences.fasta \
-    --num_duplicates 10000
+    --num_duplicates 1000

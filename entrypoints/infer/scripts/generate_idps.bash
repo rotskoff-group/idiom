@@ -24,10 +24,13 @@ else
     REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 fi
 
+echo "Repo root: " ${REPO_ROOT}
+
 source "${REPO_ROOT}/.venv/bin/activate"
 
 echo "===== STEP 1: GENERATE IDP PROMPTS ====="
-# Make prompts for generating IDPs
+# Make prompts for generating IDPs 
+# Choose how many IDPs to generate here (num_duplicates)
 make_infer_prompt \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
     idp \
@@ -35,12 +38,10 @@ make_infer_prompt \
 
 echo; echo "===== STEP 2: GENERATE IDPs USING PROMPTS ====="
 
-# SET YOUR DESIRED PROMPT PATH HERE: 
-# PROMPT_PATH="${REPO_ROOT}/models/data/prompts/idp_prompt_1e5x_array.pkl"
-PROMPT_PATH="${REPO_ROOT}/models/data/prompts/idp_prompt_100x_array.pkl"
+PROMPT_PATH="${REPO_ROOT}/models/data/prompts/idp_prompt_array.pkl"
 
 # SET YOUR DESIRED MODEL CHECKPOINT PATH HERE: 
-CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt"
+CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Pretrained base model 
 
 SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
 
@@ -90,4 +91,4 @@ transformer_infer \
     "++inference.addn_args.use_input_residues=True" \
     "++inference.addn_args.residues_path=$PROMPT_PATH"
 
-echo; echo "===== PIPELINE COMPLETE ====="
+
