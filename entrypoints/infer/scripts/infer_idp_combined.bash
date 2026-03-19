@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --output=./slurm_out/slurm-%j.out
 
-# You can run this script using 'sbatch infer_idp.bash' or 'bash infer_idp.bash'
+# You can run this script using 'sbatch infer_idp_combined.bash' or 'bash infer_idp_combined.bash'
 # If you use sbatch, make sure you first create the SLURM output directory using: 'mkdir -p ./slurm_out'
 
 echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out 
@@ -14,7 +14,7 @@ echo "===== END   SLURM SCRIPT: $0 ====="
 echo; echo; echo; echo 
 
 ###
-# Generate unprompted IDPs
+# Combined script: Generate IDP prompts and then generate unprompted IDPs
 ###
 
 # Determine repository root when using either SLURM or bash to run 
@@ -25,6 +25,15 @@ else
 fi
 
 source "${REPO_ROOT}/.venv/bin/activate"
+
+echo "===== STEP 1: GENERATE IDP PROMPTS ====="
+# Make prompts for generating IDPs
+make_infer_prompt \
+    --out_dir "${REPO_ROOT}/models/data/prompts" \
+    idp \
+    --num_duplicates 1000
+
+echo; echo "===== STEP 2: GENERATE IDPs USING PROMPTS ====="
 
 # SET YOUR DESIRED PROMPT PATH HERE: 
 # PROMPT_PATH="${REPO_ROOT}/models/data/prompts/idp_prompt_1e5x_array.pkl"
@@ -80,3 +89,5 @@ transformer_infer \
     "inference.sampler_args.temperature=1.0" \
     "++inference.addn_args.use_input_residues=True" \
     "++inference.addn_args.residues_path=$PROMPT_PATH"
+
+echo; echo "===== PIPELINE COMPLETE ====="
