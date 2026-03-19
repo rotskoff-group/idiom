@@ -39,5 +39,5 @@ dev = [
 transformer_precompute = "idr_plm.scripts.data.precompute:main"
 transformer_train = "idr_plm.scripts.transformer.train:main"
 transformer_infer = "idr_plm.scripts.transformer.inference:main"
-transformer_make_infer_prompt = "idr_plm.scripts.data.make_infer_prompt:main"
+make_infer_prompt = "idr_plm.scripts.data.make_infer_prompt:main"
 make_rl_dataset = "idr_plm.scripts.data.make_rl_dataset:main"
