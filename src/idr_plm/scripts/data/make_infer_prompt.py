@@ -141,19 +141,21 @@ def cmd_specific(args):
 
 
 def main():
+    _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), *[".."] * 4))
+
     parser = argparse.ArgumentParser(
         description="Make inference prompts for the transformer."
     )
     parser.add_argument(
         "--shard",
         type=str,
-        default="models/data/shard/0001_file.h5",
+        default=os.path.join(_repo_root, "models/data/shard/0001_file.h5"),
         help="Path to the precomputed shard .h5 file (default: models/data/shard/0001_file.h5)",
     )
     parser.add_argument(
         "--out_dir",
         type=str,
-        default="models/data/prompts",
+        default=os.path.join(_repo_root, "models/data/prompts"),
         help="Output directory for prompt files (default: models/data/prompts)",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

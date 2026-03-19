@@ -1,0 +1,121 @@
+model:
+  model: GeometricMolTransformer
+  load_model: null
+  load_opitimizer: null
+  model_args:
+    d_model: 896
+    unified_transformer_args:
+      n_layers: 12
+      mha_layer_indices:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      bias: false
+      mha_args:
+        num_heads: 14
+        bias: false
+        qk_layernorm: true
+        mask_mode: causal
+      scaling_factor: 1
+      ffn_type: swiglu
+      norm_type: layer_norm
+      expansion_ratio: 2.66666666667
+training:
+  resume_training_path: null
+  training_mode: autoregressive
+  manual_opt_args: {}
+  lightning_model_args:
+    optimizer: AdamW
+    optimizer_args:
+      lr: 0.0004
+    lr_scheduler: LinearWarmupCosineAnnealingLR
+    lr_scheduler_args:
+      warmup_epochs: 3000
+      max_epochs: 250000
+      eta_min: 4.0e-05
+    lr_scheduler_monitor: validation/loss
+    interval: step
+    sync_dist: true
+    on_step: false
+    lr_monitor_args:
+      logging_interval: step
+    every_epoch_checkpoint_args:
+      filename: restart_checkpoint
+      every_n_epochs: null
+      every_n_train_steps: 1000
+      save_top_k: 1
+    best_checkpoint_args:
+      filename: best_model_{step}
+      monitor: validation/loss
+      mode: min
+      save_top_k: 1
+  trainer_args:
+    accelerator: cuda
+    devices: 8
+    strategy: auto
+    max_steps: 250000
+    max_epochs: 10000
+    precision: 16-mixed
+    inference_mode: false
+    enable_progress_bar: false
+    gradient_clip_val: null
+    gradient_clip_algorithm: null
+    val_check_interval: 25000
+    accumulate_grad_batches: 1
+  logger:
+    loggertype: TensorBoard
+    project: null
+    name: null
+  seed_args:
+    seed: 42
+    workers: true
+  loss_fn: CrossEntropyLoss
+  loss_fn_args:
+    ignore_index: 23
+inference:
+  checkpoint_path: /home/scratch/group_scratch/idr_plm/idr-plm/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt
+  savedir: /home/scratch/group_scratch/idr_plm/idr-plm/entrypoints/infer/output
+  unmasking_mode: sample
+  inference_mode: autoregressive
+  batch_size: 100
+  num_batches: 1000
+  use_multi_gpu: true
+  seed_args:
+    seed: 42
+    workers: true
+  dataset_filename: /home/scratch/group_scratch/idr_plm/idr-plm/models/data/shard/0001_file.h5
+  addn_args:
+    use_input_residues: true
+    residues_path: /home/scratch/group_scratch/idr_plm/idr-plm/models/data/prompts/idp_prompt_100x_array.pkl
+  sampler_args:
+    method: full
+    sample_val: 1
+    temperature: 1.0
+data:
+  dataset_filename: null
+  dataset_split_args:
+    train: 0.99
+    val: 0.005
+    test: 0.005
+  splits: null
+  dloader_args:
+    batch_size: 256
+    num_workers: 4
+  dataset: TransformerShardedAutoregDataset
+  collate_fn: transformer_sharded_autoreg_collate_fn
+  data_in_memory: false
+  dataset_args: {}
+global_args:
+  ngpus: 1
+  dtype: float32
+  savedir: checkpoints
+  seed: 42

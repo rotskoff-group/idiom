@@ -14,9 +14,12 @@ echo; echo; echo; echo
 # Generated prompted IDRs
 ###
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENTRYPOINT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+if [ -n "$SLURM_SUBMIT_DIR" ]; then
+    REPO_ROOT="$(cd "$SLURM_SUBMIT_DIR" && git rev-parse --show-toplevel)"
+else
+    REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+fi
+ENTRYPOINT_DIR="${REPO_ROOT}/entrypoints/infer"
 cd "${ENTRYPOINT_DIR}"
 
 source "${REPO_ROOT}/.venv/bin/activate"
