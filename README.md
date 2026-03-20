@@ -1,9 +1,22 @@
 # IDR-PLM
-Official repository for IDR-PLM. Paper can be found: 
 
-## Overview
+![IDR-PLM](assets/github_fig.png)
 
-IDR-PLM is an autoregressive transformer trained on intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can be post-trained with reinforcement learning to optimize for user-defined rewards.
+## Table of contents
+- <u>[Environment setup](#environment-setup)</u>
+- <u>[Model checkpoints and data](#model-checkpoints-and-data)</u>
+  - <u>[Model architecture](#model-architecture)</u>
+- <u>[Workflows](#workflows)</u>
+  - <u>[1. Generating unprompted IDPs](#1-generating-unprompted-idps)</u>
+  - <u>[2. Generating context-conditioned IDRs](#2-generating-context-conditioned-idrs)</u>
+  - <u>[3. GRPO post-training for IDPs with a custom reward](#3-grpo-post-training-for-idps-with-a-custom-reward)</u>
+  - <u>[4. GRPO post-training for context-conditioned IDRs with a custom reward](#4-grpo-post-training-for-context-conditioned-idrs-with-a-custom-reward)</u>
+  - <u>[5. GRPO post-training for IDPs with the ProtGPS reward](#5-grpo-post-training-for-idps-with-the-protgps-reward)</u>
+  - <u>[6. GRPO post-training for context-conditioned IDRs with the ProtGPS reward](#6-grpo-post-training-for-context-conditioned-idrs-with-the-protgps-reward)</u>
+  - <u>[7. Generating sequences after post-training](#7-generating-sequences-after-post-training)</u>
+  - <u>[8. Pre-training from scratch](#8-pre-training-from-scratch)</u>
+
+IDR-PLM is an autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can be post-trained with reinforcement learning to optimize for user-defined rewards. Paper can be found at: bioarxiv link 
 
 
 ## Environment setup
