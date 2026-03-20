@@ -6,7 +6,9 @@
 #SBATCH --output=./slurm_out/slurm-%j.out
 
 # You can run this script using 'sbatch infer_idp_combined.bash' or 'bash infer_idp_combined.bash'
-# If you use sbatch, make sure you first create the SLURM output directory using: 'mkdir -p ./slurm_out'
+if [ -n "$SLURM_JOB_ID" ]; then
+    mkdir -p ./slurm_out
+fi
 
 echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out 
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
