@@ -102,7 +102,10 @@ idr-plm/
 └── datasets/                  # Datasets (optional)
 ```
 
+After installation, the example bash scripts described below can be run directly using `bash` or via SLURM using `sbatch`. 
 
+
+<!-- 
 ## Model architecture
 
 The core model is `GeometricMolTransformer`, a 12-layer causal transformer with 122M trainable parameters:
@@ -115,133 +118,175 @@ The core model is `GeometricMolTransformer`, a 12-layer causal transformer with 
 | FFN type | SwiGLU (2.667× expansion) |
 | Vocabulary size | 20 amino acids, 3 location tokens, 4 special tokens |
 | Positional encoding | Rotary (RoPE) |
-| Attention mask | Causal |
+| Attention mask | Causal | -->
 
 
 
 # Generating sequences
 
-After installation, each script can be run directly using `bash` or via SLURM using `sbatch`. All scripts automatically detect the execution context and set the repository root accordingly.
+IDR-PLM allows for the generation of unprompted intrinsically disordered proteins (IDPs) or intrinsically disordered regions (IDRs) prompted by their surrounding flanking context in a protein. 
 
 
-## Generating unprompted IDPs
+## Generating intrinsically disordered proteins
+
+To generate unprompted IDPs, execute the `generate_idps.bash` script. 
 
 ```bash
-bash entrypoints/infer/scripts/generate_idps.bash
-# or:
-sbatch entrypoints/infer/scripts/generate_idps.bash
+cd entrypoints/infer/scripts
+bash generate_idps.bash
+# or: 
+# sbatch generate_idps.bash
 ```
 
-Builds IDP prompts (no flanking context) and runs autoregressive inference. Edit `--num_duplicates` to control how many sequences are generated (default 1000) and `CKPT_PATH` to use a different checkpoint.
+This script uses the pre-trained base model described in the paper to generate unprompted IDPs. You can specify the number of IDPs to generate by modifying the `--num_duplicates` value (default 1000) in `generate_idps.bash`. 
 
-**Output** (in `entrypoints/infer/output/idps/`):
-- `tst_autoregressive.pkl` — raw generated token sequences
-- `generated_idrs.fasta` — IDR regions only (same thing for IDPs)
-- `generated_full.fasta` — full sequences with IDR coordinates in the header
-- `inference_config.yaml` — inference config
+Generated sequences are output as FASTA files in the `entrypoints/infer/output/idps` directory. The following files will be created: 
+
+- `tst_autoregressive.pkl` — Raw generated token sequences
+- `generated_idrs.fasta` — FASTA file containing the generated disordered sequences 
+- `generated_full.fasta` — Same as above, with indices of the disordered region in each sequence header header
+- `inference_config.yaml` — Inference configuration file 
 
 
 
-## Generating context-conditioned IDRs
+## Generating intrinsically disordered regions
 
-`entrypoints/infer/scripts/generate_idrs.bash` generates IDRs conditioned on flanking protein sequences (fill-in-the-middle / FIM mode).
+To generate IDRs conditioned on their surrounding context, you must provide a FASTA file containing the full-length proteins you would like to generate IDRs within. An example file is provided at: `entrypoints/infer/scripts/example_sequences.fasta`. 
 
-**Input format.** Provide a FASTA file at `entrypoints/infer/scripts/example_sequences.fasta` where each entry has the header `>ACCESSION_IDR_START-END` and the sequence is the full-length protein. The prefix and suffix flanking the IDR region are extracted automatically. For example:
+This FASTA contains two full-length protein sequences. Each sequence entry MUST have a header which ends with the string "_IDR_x-y" where x and y indicate the start and end indices (1-indexed) of the wild type IDR. For example, in the provided FASTA, the wild type IDR of the first sequence begins at 119 and ends at 242. 
 
 ```
 >P06748_IDR_119-242
 MEDSMDMDMSPLRPQNYLFGCELKADKDYHFKVDN...
+
 >P09651_IDR_186-372
 MSKSESPKEPEQLRKLFIGGLSFETTDESL...
 ```
 
+The code automatically extracts the N-terminal prefix and C-terminal suffix to the indicated IDR and uses those as the conditioning for generation. 
+
+To generate IDRs, execute the example bash script: 
+
 ```bash
-bash entrypoints/infer/scripts/generate_idrs.bash
-# or:
-sbatch entrypoints/infer/scripts/generate_idrs.bash
+cd entrypoints/infer/scripts
+bash generate_idrs.bash
+# or: 
+# sbatch generate_idrs.bash
 ```
 
-Builds FIM prompts from the FASTA and runs autoregressive inference, generating `--num_duplicates` sequences per protein in the FASTA (default 1000 each). Edit `--num_duplicates` to control this and `CKPT_PATH` to use a different checkpoint.
+This script also uses the pre-trained base model described in the paper. You can specify the number of IDRs to generate by modifying the `--num_duplicates` value (default 1000) in `generate_idrs.bash`. The script will generate `num_duplicates` IDRs for each sequence provided in the FASTA file. 
 
-**Output** (in `entrypoints/infer/output/idrs/`):
-- `tst_autoregressive.pkl` — raw generated token sequences
-- `generated_idrs.fasta` — IDR regions only (extracted from between sentinel tokens)
-- `generated_full.fasta` — full sequences with IDR coordinates in the header
-- `inference_config.yaml` — inference config
+Generated sequences are output as FASTA files in the `entrypoints/infer/output/idrs` directory. The following files will be created: 
+
+- `tst_autoregressive.pkl` — Raw generated token sequences
+- `generated_idrs.fasta` — Contains the generated IDR sequences
+- `generated_full.fasta` — Contains the full length sequences with indices of the generated disordered region in each sequence's header
+- `inference_config.yaml` — Inference configuration file 
 
 
 
----
 
 # Post-training
 
-> **Out-of-memory errors during training.** If you encounter GPU OOM errors, reduce `BATCH_SIZE` and increase `ACCUMULATE_GRAD_BATCHES` by the same factor to keep the effective batch size constant (e.g. `BATCH_SIZE=2, ACCUMULATE_GRAD_BATCHES=4` → `BATCH_SIZE=1, ACCUMULATE_GRAD_BATCHES=8`). This applies to all post-training workflows.
+Here we describe the post-training workflows that can be done with IDR-PLM. In general, post-training can be done with either a custom reward or the ProtGPS reward we use in the paper, and post-training can be used to optimize the generation of either IDPs or IDRs. 
 
-## Custom reward
+**Out-of-memory errors during training.** If you encounter GPU OOM errors during post-training, reduce the `BATCH_SIZE` hyperparameter and increase `ACCUMULATE_GRAD_BATCHES` by the same factor to keep the effective batch size constant. This applies to all post-training workflows.
 
-### IDPs
+## Custom reward functions
+
+You can define your own custom reward function in `rewards/custom_rewards/custom_rewards.py`. An example function is given: `compute_fraction_proline()`. 
+
+This example reward function extracts the disordered region from the generated sequence and calculates the fraction of proline residues as the reward. Reward values should be in the range 0 to 1. 
+
+### Optimizing IDP generation 
+
+To run this example reward function on generated unprompted IDPs, execute this script: 
 
 ```bash
 bash entrypoints/train/post-train/train_rl_idp_custom.bash
 ```
 
-Creates an IDP RL dataset and runs GRPO training with a user-defined reward. Edit `reward_function_name` in the script to point to your function (default: `compute_fraction_proline`, a worked example in `rewards/custom_rewards/custom_rewards.py`) and set `REWARD_TARGET_VALUE` to an appropriate target. Your reward function must accept `(tokens, token_info, device)` and return a scalar `torch.Tensor` on `device`.
+When you define your own custom reward function in `custom_rewards.py`, the function must begin with "compute_". Then, you should modify the configuration parameter `reward_function_name` in the bash script to be your function's name. 
 
-### IDRs
+### Optimizing prompted IDR generation 
 
-**Input format.** Provide a FASTA file at `entrypoints/train/post-train/rl_sequence.fasta` using the same `>ACCESSION_IDR_START-END` header format as the inference workflows.
+To optimize the generation of IDRs prompted with flanking context, you must provide a FASTA file containing a single protein sequence. Again, this sequence's header MUST have a header which ends with the string "_IDR_x-y" where x and y indicate the start and end indices (1-indexed) of the wild type IDR. 
+
+An example sequence is provided at `entrypoints/train/post-train/rl_sequence.fasta`. To run training, execute the bash script: 
 
 ```bash
 bash entrypoints/train/post-train/train_rl_idr_custom.bash
 ```
 
-Creates an IDR RL dataset from the FASTA and runs GRPO training with a user-defined reward. Identical to IDPs above except prompts include flanking sequence context. Edit `reward_function_name` and `REWARD_TARGET_VALUE` to match your function.
+This will use the flanking context of the IDR in the FASTA file as the prompt in generating IDRs for RL optimization. 
+
 
 ## ProtGPS reward
 
-### IDPs
+As examples, we also provide training scripts to replicate our training runs with the ProtGPS localization score as the reward. 
+
+The script used to optimize unprompted IDPs is: 
 
 ```bash
 bash entrypoints/train/post-train/train_rl_idp_protgps.bash
 # or:
-sbatch entrypoints/train/post-train/train_rl_idp_protgps.bash
+# sbatch entrypoints/train/post-train/train_rl_idp_protgps.bash
 ```
 
-Creates an IDP RL dataset and runs GRPO training using the ProtGPS subcellular localization classifier as the reward. Edit `COMPARTMENT` to select the target compartment (default: `stress_granule`) and adjust reward, length, and entropy parameters as needed. Available compartments: `nuclear_speckle`, `p-body`, `pml-body`, `post_synaptic_density`, `stress_granule`, `chromosome`, `nucleolus`, `nuclear_pore_complex`, `cajal_body`, `rna_granule`, `cell_junction`, `transcriptional`. Checkpoints are saved every 500 steps.
-
-### IDRs
-
-**Input format.** Provide a FASTA file at `entrypoints/train/post-train/rl_sequence.fasta` using the same `>ACCESSION_IDR_START-END` header format as the inference workflows.
+And a script for optimizing prompted IDRs is: 
 
 ```bash
 bash entrypoints/train/post-train/train_rl_idr_protgps.bash
 # or:
-sbatch entrypoints/train/post-train/train_rl_idr_protgps.bash
+# sbatch entrypoints/train/post-train/train_rl_idr_protgps.bash
 ```
 
-Creates an IDR RL dataset from the FASTA and runs GRPO training with the ProtGPS reward. Identical to IDPs above except prompts include flanking sequence context. Default compartment is `nucleolus`.
+## Tracking training progress using Tensorboard 
+
+To track progress on post-training runs, use Tensorboard by first navigating to the directory containing `lightning_logs` and run: 
+
+```bash
+tensorboard --logdir . 
+```
 
 ## Generating sequences after post-training
+
+To generate sequences from a post-trained model checkpoint, set the `CKPT_PATH` in `generate_idps.bash` or `generate_idrs.bash` to be the post-trained checkpoint (.ckpt) located in the lightning_log. Then run the generation script as above: 
 
 ```bash
 bash entrypoints/infer/scripts/generate_idps.bash  # or generate_idrs.bash
 ```
 
-Set `CKPT_PATH` in the script to your post-trained checkpoint before running. Otherwise identical to the generation workflows above.
-
-
 
 # Pre-training
 
+To replicate the model pre-training, you must first download the appropriate datasets from HuggingFace. 
+
+**Datasets**: https://huggingface.co/datasets/jxliu2/idr-plm-dataset
+
+From the repo root directory, execute: 
+
 ```bash
-bash entrypoints/precompute/split_parts.bash        # split raw HDF5 into parts
-sbatch entrypoints/precompute/precompute.bash       # tokenize each part (SLURM array)
-sbatch entrypoints/train/pre-train/pretrain.bash    # train for 250k steps on 8 GPUs
+# Download the IDR data (174 GB):
+# Execute from IDR-PLM root directory: 
+hf download jxliu2/idr-plm-dataset --repo-type=dataset --local-dir ./datasets
 ```
 
-Download `AFDB_IDR_90_FIM_512.h5` from HuggingFace first. The split script divides it into ~500 parts for parallel precomputation; each resulting shard contains tokenized inputs and targets. Pre-training runs for 250,000 steps with a linear warmup cosine annealing schedule; the best validation checkpoint is saved as `best_model_step_<N>.ckpt`.
+Then, execute the precompute to prepare the training sequences for model training. Note that at least 1 TB of space is required for the precompute. 
+
+```bash
+sbatch combined_precompute.bash 
+```
+
+Next, execute the training script: 
+
+```bash
+sbatch pretrain.bash 
+```
 
 # Citation
+
+If you find this work useful, please cite: 
 
 ```bibtex
 @article{liu2025idrplm,

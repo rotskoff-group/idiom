@@ -26,7 +26,7 @@ export PYTHONBREAKPOINT=ipdb.set_trace # for using breakpoint()
 export PYTHONUNBUFFERED=1
 
 # Dataset path
-DATASET_FILENAME="${REPO_ROOT}/../idr-plm_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small_parts/precompute_shards"
+DATASET_FILENAME="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_parts/precompute_shards"
 
 echo 'Start training..' 
 

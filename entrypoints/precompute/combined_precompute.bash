@@ -19,8 +19,7 @@ mkdir -p "${SCRIPT_DIR}/slurm_out"
 
 source "${REPO_ROOT}/.venv/bin/activate"
 
-# IN_FILE="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90/AFDB_IDR_90_FIM_512/AFDB_IDR_90_FIM_512.h5"
-IN_FILE="/home/scratch/group_scratch/idr_plm/idr-plm_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5"
+IN_FILE="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512.h5"
 OUT_DIR="$(dirname "${IN_FILE}")/$(basename "${IN_FILE}" .h5)_parts"
 NUM_PARTS=500
 

@@ -6,6 +6,8 @@
 #SBATCH --output=./slurm_out/slurm-%j.out
 
 # You can run this script using 'sbatch infer_idp_combined.bash' or 'bash infer_idp_combined.bash'
+
+# Create slurm_out if using SLURM 
 if [ -n "$SLURM_JOB_ID" ]; then
     mkdir -p ./slurm_out
 fi
