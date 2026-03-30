@@ -68,6 +68,8 @@ Additional datasets which are not necessary for running this code repository can
 
 This includes the 37M IDRs used to pre-train `IDR-PLM` as well as the generated sequences which we analyze in our paper. (This data is necessary if you would like to replicate pre-training.) 
 
+Add a short list of data files 
+
 ```bash
 # Optionally download the IDR data (174 GB):
 # Execute from IDR-PLM root directory: 
