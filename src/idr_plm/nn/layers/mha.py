@@ -133,7 +133,7 @@ class MultiHeadAttention(nn.Module):
                 raise ValueError(
                     "key and value should not be provided for self-attention"
                 )
-            qkv_BLD3 = self.layernorm_qkv(x)
+            qkv_BLD3 = self.layernorm_qkv(x)  # pre-LayerNorm
             query_BLD, key_BLD, value_BLD = torch.chunk(qkv_BLD3, 3, dim=-1)
             key_sequence_id = sequence_id
 
