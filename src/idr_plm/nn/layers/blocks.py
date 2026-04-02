@@ -25,7 +25,7 @@ class SwiGLU(nn.Module):
 
 def swiglu_ln_ffn(d_model, expansion_ratio, bias):
     return nn.Sequential(
-        nn.LayerNorm(d_model),
+        nn.LayerNorm(d_model),  # pre LayerNorm
         nn.Linear(
             d_model, swiglu_correction_fn(expansion_ratio, d_model) * 2, bias=bias
         ),
