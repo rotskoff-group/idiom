@@ -1,9 +1,13 @@
-# IDR-PLM
+# IDiom
 
-IDR-PLM is an autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can be post-trained with reinforcement learning to optimize for custom reward functions. The associated paper can be found at: bioarxiv link
+IDiom is an autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. The associated paper can be found at: bioarxiv link
+
+<p align="center">
+  <img src="assets/github_fig.png" alt="IDiom" width="900px" align="middle"/>
+</p>
 
 # Table of Contents
-- [IDR-PLM](#idr-plm)
+- [IDiom](#IDiom)
 - [Table of Contents](#table-of-contents)
 - [Installation](#installation)
   - [Environment setup](#environment-setup)
@@ -30,11 +34,11 @@ First, install the [uv](https://docs.astral.sh/uv/) package manager if not alrea
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Next, clone the IDR-PLM repository into a directory with at least 30 GB of free space (the space is necessary for model checkpoints) and install dependencies:
+Next, clone the IDiom repository into a directory with at least 30 GB of free space and install the dependencies:
 
 ```bash
-git clone https://github.com/rotskoff-group/idr-plm.git
-cd idr-plm
+git clone https://github.com/rotskoff-group/idiom.git
+cd idiom
 uv sync
 uv pip install -e .
 ```
@@ -43,42 +47,38 @@ uv pip install -e .
 
 ## Model checkpoints and data
 
-Next, download the `IDR-PLM` model checkpoints from the HuggingFace repository into the project root directory.
+Next, download the `IDiom` model checkpoints from the HuggingFace repository into the project root directory.
 
-**Model checkpoints**: https://huggingface.co/jxliu2/idr-plm
+**Model checkpoints**: https://huggingface.co/jxliu2/idiom
 
-You can do so with the following commands. You must first create a HuggingFace account. Then, from the root of the cloned `IDR-PLM` directory, do: 
+You can do so with the following commands. You must first create a HuggingFace account. Then, from the root of the cloned `IDiom` directory, do: 
 
 ```bash
 uv tool install hf # Install the hf cli tool
 hf auth login # Enter your credentials when prompted
 
 # Download models (26 GB)
-# Execute from IDR-PLM root directory: 
-hf download jxliu2/idr-plm --local-dir ./models
+# Execute from IDiom root directory: 
+hf download jxliu2/idiom --local-dir ./models
 ```
 
-Additional datasets which are not necessary for running this code repository can be found in the following HuggingFace repository. 
+Additional datasets which are NOT necessary for running this code repository can be found in the following HuggingFace repository: https://huggingface.co/datasets/jxliu2/idiom-datasets
 
-**Datasets**: https://huggingface.co/datasets/jxliu2/idr-plm-dataset
-
-This includes the 37M IDRs used to pre-train `IDR-PLM` as well as the generated sequences which we analyze in our paper. (This data is necessary if you would like to replicate pre-training.) 
-
-Add a short list of data files 
+This includes the 37M IDRs used to pre-train `IDiom` as well as the generated sequences which we analyze in our paper. To download this OPTIONAL data, use the following command to download the entire dataset or manually download specific files of interest from the HuggingFace URL. 
 
 ```bash
-# Optionally download the IDR data (174 GB):
-# Execute from IDR-PLM root directory: 
-hf download jxliu2/idr-plm-dataset --repo-type=dataset --local-dir ./datasets
+# OPTIONALLY download the IDR data (174 GB):
+# Execute from IDiom root directory: 
+hf download jxliu2/idiom-datasets --repo-type=dataset --local-dir ./datasets
 ```
 
 After this, the project structure should be:
 
 ```
-idr-plm/
+idiom/
 |
 ├── src/                       # Main Python package
-│   └── idr_plm/
+│   └── idiom/
 │       ├── nn/                # Model architecture
 │       ├── scripts/           # CLI entry points and Hydra configs
 │       └── utils/             # Utilities
@@ -99,33 +99,14 @@ idr-plm/
 └── datasets/                  # Datasets (optional)
 ```
 
-After installation, the example bash scripts described below can be run directly using `bash` or via SLURM using `sbatch`. 
-
-
-<!-- 
-## Model architecture
-
-The core model is `GeometricMolTransformer`, a 12-layer causal transformer with 122M trainable parameters:
-
-| Hyperparameter | Value |
-|---|---|
-| Model dimension | 896 |
-| Transformer layers | 12 |
-| Attention heads | 14 |
-| FFN type | SwiGLU (2.667× expansion) |
-| Vocabulary size | 20 amino acids, 3 location tokens, 4 special tokens |
-| Positional encoding | Rotary (RoPE) |
-| Attention mask | Causal | -->
+Now, the example bash scripts described below can be run directly using `bash` or via SLURM using `sbatch`. 
 
 
 
 # Generating sequences
 
-IDR-PLM allows for the generation of unprompted intrinsically disordered proteins (IDPs) or intrinsically disordered regions (IDRs) prompted by their surrounding flanking context in a protein. 
+IDiom allows for the generation of unprompted intrinsically disordered proteins (IDPs) or intrinsically disordered regions (IDRs) prompted by their surrounding flanking context within a protein. 
 
-<p align="center">
-  <img src="assets/github_fig.png" alt="IDR-PLM" width="900px" align="middle"/>
-</p>
 
 
 ## Generating intrinsically disordered proteins
@@ -134,9 +115,7 @@ To generate unprompted IDPs, execute the `generate_idps.bash` script.
 
 ```bash
 cd entrypoints/infer/scripts
-bash generate_idps.bash
-# or: 
-# sbatch generate_idps.bash
+bash generate_idps.bash # or: sbatch generate_idps.bash
 ```
 
 This script uses the pre-trained base model described in the paper to generate unprompted IDPs. You can specify the number of IDPs to generate by modifying the `--num_duplicates` value (default 1000) in `generate_idps.bash`. 
@@ -152,7 +131,7 @@ Generated sequences are output as FASTA files in the `entrypoints/infer/output/i
 
 ## Generating intrinsically disordered regions
 
-To generate IDRs conditioned on their surrounding context, you must provide a FASTA file containing the full-length proteins you would like to generate IDRs within. An example file is provided at: `entrypoints/infer/scripts/example_sequences.fasta`. 
+To generate IDRs conditioned on their surrounding context, you must provide a FASTA file containing the full-length protein(s) you would like to generate IDRs within. An example file is provided at: `entrypoints/infer/scripts/example_sequences.fasta`. 
 
 This FASTA contains two full-length protein sequences. Each sequence entry MUST have a header which ends with the string "_IDR_x-y" where x and y indicate the start and end indices (1-indexed) of the wild type IDR. For example, in the provided FASTA, the wild type IDR of the first sequence begins at 119 and ends at 242. 
 
@@ -170,9 +149,7 @@ To generate IDRs, execute the example bash script:
 
 ```bash
 cd entrypoints/infer/scripts
-bash generate_idrs.bash
-# or: 
-# sbatch generate_idrs.bash
+bash generate_idrs.bash # or: sbatch generate_idrs.bash
 ```
 
 This script also uses the pre-trained base model described in the paper. You can specify the number of IDRs to generate by modifying the `--num_duplicates` value (default 1000) in `generate_idrs.bash`. The script will generate `num_duplicates` IDRs for each sequence provided in the FASTA file. 
@@ -189,22 +166,22 @@ Generated sequences are output as FASTA files in the `entrypoints/infer/output/i
 
 # Post-training
 
-Here we describe the post-training workflows that can be done with IDR-PLM. In general, post-training can be done with either a custom reward or the ProtGPS reward we use in the paper, and post-training can be used to optimize the generation of either IDPs or IDRs. 
+Here we describe the post-training workflows that can be done with IDiom. Post-training can be done with any custom reward function, and post-training can be used to optimize the generation of either IDPs or IDRs. 
 
-**Out-of-memory errors during training.** If you encounter GPU OOM errors during post-training, reduce the `BATCH_SIZE` hyperparameter and increase `ACCUMULATE_GRAD_BATCHES` by the same factor to keep the effective batch size constant. This applies to all post-training workflows.
+**Out-of-memory errors during training.** If you encounter GPU OOM errors during post-training, in the training submission scripts, reduce the `BATCH_SIZE` hyperparameter and increase `ACCUMULATE_GRAD_BATCHES` by the same factor to keep the effective batch size constant. This applies to all post-training workflows.
 
 ## Custom reward functions
 
 You can define your own custom reward function in `rewards/custom_rewards/custom_rewards.py`. An example function is given: `compute_fraction_proline()`. 
 
-This example reward function extracts the disordered region from the generated sequence and calculates the fraction of proline residues as the reward. Reward values should be in the range 0 to 1. 
+This example reward function extracts the disordered region from the generated sequence and calculates the fraction of proline residues in the IDR as the reward. Reward values should be in the range 0 to 1. 
 
 ### Optimizing IDP generation 
 
-To run this example reward function on generated unprompted IDPs, execute this script: 
+To run post-training with this example reward function on generated unprompted IDPs, execute this script: 
 
 ```bash
-bash entrypoints/train/post-train/train_rl_idp_custom.bash
+bash entrypoints/train/post-train/train_rl_idp_custom.bash # or sbatch 
 ```
 
 When you define your own custom reward function in `custom_rewards.py`, the function must begin with "compute_". Then, you should modify the configuration parameter `reward_function_name` in the bash script to be your function's name. 
@@ -216,7 +193,7 @@ To optimize the generation of IDRs prompted with flanking context, you must prov
 An example sequence is provided at `entrypoints/train/post-train/rl_sequence.fasta`. To run training, execute the bash script: 
 
 ```bash
-bash entrypoints/train/post-train/train_rl_idr_custom.bash
+bash entrypoints/train/post-train/train_rl_idr_custom.bash # or sbatch 
 ```
 
 This will use the flanking context of the IDR in the FASTA file as the prompt in generating IDRs for RL optimization. 
@@ -229,17 +206,13 @@ As examples, we also provide training scripts to replicate our training runs wit
 The script used to optimize unprompted IDPs is: 
 
 ```bash
-bash entrypoints/train/post-train/train_rl_idp_protgps.bash
-# or:
-# sbatch entrypoints/train/post-train/train_rl_idp_protgps.bash
+bash entrypoints/train/post-train/train_rl_idp_protgps.bash # or sbatch 
 ```
 
 And a script for optimizing prompted IDRs is: 
 
 ```bash
-bash entrypoints/train/post-train/train_rl_idr_protgps.bash
-# or:
-# sbatch entrypoints/train/post-train/train_rl_idr_protgps.bash
+bash entrypoints/train/post-train/train_rl_idr_protgps.bash # or sbatch 
 ```
 
 ## Tracking training progress using Tensorboard 
@@ -263,14 +236,14 @@ bash entrypoints/infer/scripts/generate_idps.bash  # or generate_idrs.bash
 
 To replicate the model pre-training, you must first download the appropriate datasets from HuggingFace. 
 
-**Datasets**: https://huggingface.co/datasets/jxliu2/idr-plm-dataset
+**Datasets**: https://huggingface.co/datasets/jxliu2/idiom-datasets
 
 From the repo root directory, execute: 
 
 ```bash
 # Download the IDR data (174 GB):
-# Execute from IDR-PLM root directory: 
-hf download jxliu2/idr-plm-dataset --repo-type=dataset --local-dir ./datasets
+# Execute from IDiom root directory: 
+hf download jxliu2/idiom-datasets --repo-type=dataset --local-dir ./datasets
 ```
 
 Then, execute the precompute to prepare the training sequences for model training. Note that at least 1 TB of space is required for the precompute. 
