@@ -13,7 +13,7 @@ import pickle
 import h5py
 import numpy as np
 
-from idr_plm.scripts.data.make_infer_prompt import (
+from idiom.scripts.data.make_infer_prompt import (
     SENTINELS,
     fim_transform,
     load_alphabet,

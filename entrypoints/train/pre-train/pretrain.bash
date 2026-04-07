@@ -71,4 +71,4 @@ transformer_train \
 	"training.trainer_args.gradient_clip_algorithm=null"\
 	"training.resume_training_path=null"
 	
-	# IGNORE_INDEX is 23 for FIM IDR-PLM  
+	# IGNORE_INDEX is 23 for FIM IDIOM  

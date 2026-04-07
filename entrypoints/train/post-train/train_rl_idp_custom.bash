@@ -39,7 +39,7 @@ make_rl_dataset idp \
 
 echo; echo "===== STEP 2: RUN GRPO TRAINING ====="
 
-CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Starting with base pretrained model
+CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_243022.ckpt" # Starting with base pretrained model
 
 DATASET_FILENAME="${REPO_ROOT}/models/data/rl_datasets/${DATASET_NAME}_dataset.h5"
 

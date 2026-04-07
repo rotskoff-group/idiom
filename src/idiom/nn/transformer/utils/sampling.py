@@ -1,9 +1,9 @@
 import time
 import torch
 from torch.nn.utils.rnn import pad_sequence
-from idr_plm.nn.transformer.nn import GeometricMolTransformer
-from idr_plm.utils.sampler import TokenSampler
-from idr_plm.nn.transformer import scores
+from idiom.nn.transformer.nn import GeometricMolTransformer
+from idiom.utils.sampler import TokenSampler
+from idiom.nn.transformer import scores
 
 
 def forward_autoregressive_prompted(transformer_model, batch, token_sampler):

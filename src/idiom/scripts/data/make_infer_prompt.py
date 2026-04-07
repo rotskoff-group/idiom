@@ -13,7 +13,7 @@ import pickle
 import h5py
 import numpy as np
 
-from idr_plm.nn.transformer.utils.tokenizer import CharTokenizer
+from idiom.nn.transformer.utils.tokenizer import CharTokenizer
 
 SENTINELS = {"prefix": "1", "middle": "2", "suffix": "3"}
 

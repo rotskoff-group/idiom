@@ -1,5 +1,5 @@
 """
-Compute IDR perplexity for a set of FASTA datasets using the pre-trained IDR-PLM model.
+Compute IDR perplexity for a set of FASTA datasets using the pre-trained IDIOM model.
 
 Each dataset is sampled to 1000 sequences. Per-sequence perplexities are printed,
 followed by per-dataset summary statistics.
@@ -13,16 +13,16 @@ import statistics
 import sys
 from pathlib import Path
 
-from idr_plm.nn.transformer.module import LightningModel
-from idr_plm.nn.transformer.utils.perplexity import compute_perplexity_from_fasta
+from idiom.nn.transformer.module import LightningModel
+from idiom.nn.transformer.utils.perplexity import compute_perplexity_from_fasta
 
 
-# src/idr_plm/nn/transformer/utils/ -> repo root is 5 levels up
+# src/idiom/nn/transformer/utils/ -> repo root is 5 levels up
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 _DEFAULT_CKPT = str(
-    _REPO_ROOT / "models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt"
+    _REPO_ROOT / "models/idiom/base/version_2/checkpoints/best_model_step_243022.ckpt"
 )
 _DEFAULT_SHARD = str(_REPO_ROOT / "models/data/shard/0001_file.h5")
 

@@ -48,7 +48,7 @@ echo; echo "===== STEP 2: GENERATE IDPs USING PROMPTS ====="
 PROMPT_PATH="${REPO_ROOT}/models/data/prompts/${PROMPT_NAME}_array.pkl"
 
 # SET YOUR DESIRED MODEL CHECKPOINT PATH HERE: 
-CKPT_PATH="${REPO_ROOT}/models/idr-plm/base/version_2/checkpoints/best_model_step_243022.ckpt" # Pretrained base model 
+CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_243022.ckpt" # Pretrained base model 
 
 SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
 

@@ -10,11 +10,11 @@ from lightning.pytorch.strategies import FSDPStrategy
 import os
 import h5py
 
-from idr_plm.utils.data_utils import get_hdf5_fn, split_data_subsets
-from idr_plm.utils.misc import seed_worker
-from idr_plm.nn.transformer.module import LightningModel
-from idr_plm.nn.transformer import dataset as DSET
-from idr_plm.utils.token import aggregate_tokens_hdf5
+from idiom.utils.data_utils import get_hdf5_fn, split_data_subsets
+from idiom.utils.misc import seed_worker
+from idiom.nn.transformer.module import LightningModel
+from idiom.nn.transformer import dataset as DSET
+from idiom.utils.token import aggregate_tokens_hdf5
 
 
 @hydra.main(version_base="1.3", config_path="../cfgs", config_name="training")

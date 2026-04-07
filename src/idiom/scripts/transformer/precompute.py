@@ -6,10 +6,10 @@ from typing import Callable
 from multiprocessing import Pool
 from tqdm import tqdm
 
-from idr_plm.nn.transformer.utils import tokenizer as tokenmodule
-from idr_plm.nn.transformer.utils.tokenizer import CharTokenizer
-from idr_plm.nn.transformer.generators import input_generators as input_generators
-from idr_plm.nn.transformer.generators import target_generators as target_generators
+from idiom.nn.transformer.utils import tokenizer as tokenmodule
+from idiom.nn.transformer.utils.tokenizer import CharTokenizer
+from idiom.nn.transformer.generators import input_generators as input_generators
+from idiom.nn.transformer.generators import target_generators as target_generators
 
 
 def determine_alphabet(residues: list[str], tokenizer: CharTokenizer) -> list[str]:

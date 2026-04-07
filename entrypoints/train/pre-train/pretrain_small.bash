@@ -29,8 +29,8 @@ export PYTHONBREAKPOINT=ipdb.set_trace # for using breakpoint()
 export PYTHONUNBUFFERED=1
 
 # Dataset path
-# DATASET_FILENAME="${REPO_ROOT}/../idr-plm_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small_parts/precompute_shards"
-DATASET_FILENAME="/home/scratch/group_scratch/idr_plm/idr-plm_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small_parts/precompute_shards"
+# DATASET_FILENAME="${REPO_ROOT}/../idiom_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small_parts/precompute_shards"
+DATASET_FILENAME="/home/scratch/group_scratch/idiom/idiom_hf/for_Datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small_parts/precompute_shards"
 
 echo 'Start training..' 
 
@@ -75,4 +75,4 @@ transformer_train \
 	"training.trainer_args.gradient_clip_algorithm=null"\
 	"training.resume_training_path=null"
 	
-	# IGNORE_INDEX is 23 for FIM IDR-PLM  
+	# IGNORE_INDEX is 23 for FIM IDIOM  
