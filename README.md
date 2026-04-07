@@ -2,10 +2,6 @@
 
 IDR-PLM is an autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can be post-trained with reinforcement learning to optimize for custom reward functions. The associated paper can be found at: bioarxiv link
 
-<p align="center">
-  <img src="assets/github_fig.png" alt="IDR-PLM" width="1100px" align="middle"/>
-</p>
-
 # Table of Contents
 - [IDR-PLM](#idr-plm)
 - [Table of Contents](#table-of-contents)
@@ -126,6 +122,10 @@ The core model is `GeometricMolTransformer`, a 12-layer causal transformer with 
 # Generating sequences
 
 IDR-PLM allows for the generation of unprompted intrinsically disordered proteins (IDPs) or intrinsically disordered regions (IDRs) prompted by their surrounding flanking context in a protein. 
+
+<p align="center">
+  <img src="assets/github_fig.png" alt="IDR-PLM" width="900px" align="middle"/>
+</p>
 
 
 ## Generating intrinsically disordered proteins

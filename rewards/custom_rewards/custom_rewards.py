@@ -22,7 +22,7 @@ def compute_fraction_proline(tokens, token_info, device):
     sequence = rearrange_sequence(generated_fim_sequence)
 
     # Extract disordered region sequence
-    disordered_region, _, _ = extract_disordered_regions(sequence)
+    disordered_region, _, _ = extract_disordered_regions(generated_fim_sequence)
 
     # Count proline residues in disordered region
     proline_count = disordered_region.upper().count("P")
