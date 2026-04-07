@@ -7,7 +7,7 @@ from pathlib import Path
 from argparse import Namespace
 import random
 from Bio import pairwise2
-from idr_plm.utils.misc import tokens_to_sequence
+from idiom.utils.misc import tokens_to_sequence
 
 # Global variables for ProtGPS model caching
 _PROTGPS_MODEL = None
@@ -653,7 +653,7 @@ def get_reward_function_registry():
     3. Having the signature: compute_*(tokens, token_info, device, **kwargs)
 
     Collects from:
-    - idr_plm.nn.transformer.scores (built-in functions)
+    - idiom.nn.transformer.scores (built-in functions)
     - custom_rewards (user-defined functions, if available)
 
     Returns:

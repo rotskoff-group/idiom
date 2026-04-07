@@ -3,8 +3,8 @@ Define your custom reward functions here. Your reward function name must start w
 """
 
 import torch
-from idr_plm.nn.transformer.scores import extract_disordered_regions
-from idr_plm.utils.misc import tokens_to_sequence, rearrange_sequence
+from idiom.nn.transformer.scores import extract_disordered_regions
+from idiom.utils.misc import tokens_to_sequence
 
 
 def compute_fraction_proline(tokens, token_info, device):
@@ -19,7 +19,7 @@ def compute_fraction_proline(tokens, token_info, device):
     generated_fim_sequence = tokens_to_sequence(tokens, token_info)
 
     # Full length protein sequence, with correct order and prefix, suffix, IDR span tokens removed
-    sequence = rearrange_sequence(generated_fim_sequence)
+    # sequence = rearrange_sequence(generated_fim_sequence)
 
     # Extract disordered region sequence
     disordered_region, _, _ = extract_disordered_regions(generated_fim_sequence)

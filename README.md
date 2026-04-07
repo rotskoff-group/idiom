@@ -263,7 +263,7 @@ sbatch pretrain.bash
 If you find this work useful, please cite: 
 
 ```bibtex
-@article{liu2025idrplm,
+@article{liu2025idiom,
   author = {},
   title = {},
   journal = {bioRxiv},

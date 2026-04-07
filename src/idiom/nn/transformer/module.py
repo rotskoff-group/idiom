@@ -4,10 +4,10 @@ import torch.nn as nn
 import pl_bolts
 from lightning.pytorch.utilities import grad_norm
 
-from idr_plm.nn.transformer.nn import GeometricMolTransformer
-from idr_plm.utils.sampler import TokenSampler
-from idr_plm.nn.transformer.losses.autoreg_loss import shared_eval_autoreg
-from idr_plm.nn.transformer.losses.grpo_loss import shared_eval_grpo
+from idiom.nn.transformer.nn import GeometricMolTransformer
+from idiom.utils.sampler import TokenSampler
+from idiom.nn.transformer.losses.autoreg_loss import shared_eval_autoreg
+from idiom.nn.transformer.losses.grpo_loss import shared_eval_grpo
 
 
 class LightningModel(L.LightningModule):

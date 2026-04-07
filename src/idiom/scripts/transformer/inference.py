@@ -9,13 +9,13 @@ import os
 import torch.multiprocessing as mp
 from functools import reduce
 
-from idr_plm.nn.transformer.module import LightningModel
-from idr_plm.nn.transformer.utils.sampling import (
+from idiom.nn.transformer.module import LightningModel
+from idiom.nn.transformer.utils.sampling import (
     sample_components_from_autoregressive_transformer,
 )
-from idr_plm.utils.token import aggregate_tokens_hdf5
-from idr_plm.utils.sampler import TokenSampler
-from idr_plm.utils.misc import (
+from idiom.utils.token import aggregate_tokens_hdf5
+from idiom.utils.sampler import TokenSampler
+from idiom.utils.misc import (
     rearrange_sequence,
     extract_idr_with_indices,
 )

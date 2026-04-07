@@ -1,5 +1,5 @@
 import torch.nn as nn
-from idr_plm.nn.layers import TransformerStack, RegressionHead
+from idiom.nn.layers import TransformerStack, RegressionHead
 
 
 class GeometricMolTransformer(nn.Module):

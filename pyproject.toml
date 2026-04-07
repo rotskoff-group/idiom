@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "idr-plm"
+name = "idiom"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -37,9 +37,9 @@ dev = [
 ]
 
 [project.scripts]
-transformer_precompute = "idr_plm.scripts.transformer.precompute:main"
-transformer_train = "idr_plm.scripts.transformer.train:main"
-transformer_infer = "idr_plm.scripts.transformer.inference:main"
-make_infer_prompt = "idr_plm.scripts.data.make_infer_prompt:main"
-make_rl_dataset = "idr_plm.scripts.data.make_rl_dataset:main"
-make_precompute_parts = "idr_plm.scripts.data.make_precompute_parts:main"
+transformer_precompute = "idiom.scripts.transformer.precompute:main"
+transformer_train = "idiom.scripts.transformer.train:main"
+transformer_infer = "idiom.scripts.transformer.inference:main"
+make_infer_prompt = "idiom.scripts.data.make_infer_prompt:main"
+make_rl_dataset = "idiom.scripts.data.make_rl_dataset:main"
+make_precompute_parts = "idiom.scripts.data.make_precompute_parts:main"

@@ -1,5 +1,5 @@
 import torch
-from idr_plm.nn.transformer.nn import GeometricMolTransformer
+from idiom.nn.transformer.nn import GeometricMolTransformer
 
 
 def compute_policy_logps(model, tokens, structure, masks):

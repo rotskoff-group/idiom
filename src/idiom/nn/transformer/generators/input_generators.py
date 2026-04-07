@@ -1,5 +1,5 @@
 import numpy as np
-from idr_plm.nn.transformer.utils.tokenizer import CharTokenizer
+from idiom.nn.transformer.utils.tokenizer import CharTokenizer
 
 
 def look_ahead_residues(residues: list[str], tokenizer: CharTokenizer) -> int:
@@ -9,11 +9,10 @@ def look_ahead_residues(residues: list[str], tokenizer: CharTokenizer) -> int:
         residues: list[str]
             List of residue sequences
         tokenizer: CharTokenizer
-            Instance of CharTokenizer for splitting residue sequences into tokens
+            Instance of the CharTokenizer class for tokenizing the residue sequences
 
     Returns:
-        max_len: int
-            Maximum length of the residue sequences in numbers of tokens
+        int: The maximum length of the tokenized residue sequences
     """
     max_len = 0
     for i in range(len(residues)):
@@ -24,13 +23,10 @@ def look_ahead_residues(residues: list[str], tokenizer: CharTokenizer) -> int:
 
 
 # Base class for input generators, to be inherited by others
-class TargetGeneratorBase:
+class InputGeneratorBase:
+    # Getters have concrete implementations, but constructor and transform are not implemented
     def __init__(
-        self,
-        residues: np.ndarray,
-        tokenizer: CharTokenizer,
-        alphabet: np.ndarray,
-        targets: np.ndarray,
+        self, residues: np.ndarray, tokenizer: CharTokenizer, alphabet: np.ndarray
     ) -> None:
         self.alphabet_size = -100
         self.max_len = -100
@@ -41,7 +37,7 @@ class TargetGeneratorBase:
             "TOK_MASK": -100,
         }
 
-    def transform(self, residues: str, targets: float) -> float:
+    def transform(self, residues: str) -> np.ndarray:
         pass
 
     def get_size(self) -> int:
@@ -54,15 +50,14 @@ class TargetGeneratorBase:
         return self.max_len
 
 
-class ResiduesTarget(TargetGeneratorBase):
-    """Process residue sequences into a tokenized array with padding to maximum sequence length"""
+class ResiduesInputBasic(InputGeneratorBase):
+    """Process residue sequences into a tokenized array with padding"""
 
     def __init__(
         self,
         residues: np.ndarray,
         tokenizer: CharTokenizer,
         alphabet: np.ndarray,
-        targets: np.ndarray,
         apply_start: bool = True,
         apply_stop: bool = True,
     ) -> None:
@@ -71,26 +66,33 @@ class ResiduesTarget(TargetGeneratorBase):
             residues: np.ndarray
                 Array of residue sequences
             tokenizer: CharTokenizer
-                Instance of CharTokenizer for splitting residue sequences into tokens
+                Tokenizer for separating residue sequences into tokens
             alphabet: np.ndarray
                 Array of SORTED unique tokens
-            targets: np.ndarray
-                Array of scalar targets
             apply_start: bool
-                If True, add the start token to the start of the sequence
+                Shift the tokenized sequence by one position to the right
+                    using a start token
             apply_stop: bool
-                If True, add the stop token to the end of the sequence
+                Add the stop token to the tokenized sequence
 
         Notes:
             Converts a residue sequence into a right-padded sequence of tokens. The padding token
-            is taken as the length of the alphabet. For consistency with the residues input generator, the
-            control tokens are:
-                pad: len(alphabet)
-                start: len(alphabet) + 1
-                stop: len(alphabet) + 2
-                mask: len(alphabet) + 3
+            is taken as the length of the alphabet.
+
+            Shifting example:
+            Given a sequence of tokens with padding token 0:
+                [A, B, C, 0, 0, 0]
+            Shifting adds a start token and shifts the sequence to the right:
+                [<start>, A, B, C, 0, 0]
+            The corresponding target for this sequence will be:
+                [A, B, C, <EOS>, 0, 0]
+            Note that the lengths of both sequences are the same. The EOS token is only used in the target
+                generator. For consistency between the two, the tokens are:
+                    pad: len(alphabet)
+                    start: len(alphabet) + 1
+                    stop: len(alphabet) + 2
+                    mask: len(alphabet) + 3
         """
-        super().__init__(residues, tokenizer, alphabet, targets)
         self.tokenizer = tokenizer
         self.max_len = look_ahead_residues(residues, self.tokenizer) + 10  # buffer
         self.index_map = {char: i for i, char in enumerate(alphabet)}
@@ -101,18 +103,18 @@ class ResiduesTarget(TargetGeneratorBase):
         self.start_token = len(alphabet) + 1
         self.stop_token = len(alphabet) + 2
         self.mask_token = len(alphabet) + 3
-        self.alphabet_size = len(alphabet) + 4
+        self.alphabet_size = len(alphabet) + 4  # Accounting for all tokens
 
+        # Dictionary for keeping track of all tokens
         self.tokens = {
             "TOK_PAD": self.pad_token,
             "TOK_START": self.start_token,
             "TOK_STOP": self.stop_token,
             "TOK_MASK": self.mask_token,
         }
-        # Accounting for padding, start, and stop tokens in the alphabet.
 
-    def transform(self, residues: str, targets: float) -> tuple[np.ndarray]:
-        residues = str(residues)
+    def transform(self, residues: str) -> np.ndarray:
+        residues = str(residues)  # Type cast for safety
         tokenized_res = self.tokenizer.tokenize(residues)
         tokenized_res = [self.index_map[char] for char in tokenized_res]
         if self.apply_start:
@@ -123,4 +125,4 @@ class ResiduesTarget(TargetGeneratorBase):
         tokenized_res = tokenized_res + [self.pad_token] * (
             self.max_len - len(tokenized_res)
         )
-        return (np.array(tokenized_res),)
+        return np.array(tokenized_res)
