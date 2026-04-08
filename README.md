@@ -1,6 +1,6 @@
 # IDiom
 
-IDiom is an autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. The associated paper can be found at: bioarxiv link
+IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. The associated paper can be found at: bioarxiv link
 
 <p align="center">
   <img src="assets/github_fig.png" alt="IDiom" width="900px" align="middle"/>
@@ -217,7 +217,13 @@ bash entrypoints/train/post-train/train_rl_idr_protgps.bash # or sbatch
 
 ## Tracking training progress using Tensorboard 
 
-To track progress on post-training runs, use Tensorboard by first navigating to the directory containing `lightning_logs` and run: 
+To track progress on post-training runs, first activate the virtual environment. From the repo root:
+
+```bash
+source .venv/bin/activate 
+```
+
+Then, use Tensorboard by first navigating to the directory containing `lightning_logs` and run: 
 
 ```bash
 tensorboard --logdir . 
