@@ -1,6 +1,6 @@
 # IDiom
 
-IDiom is an autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. The associated paper can be found at: bioarxiv link
+IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. The associated paper can be found at: bioarxiv link
 
 <p align="center">
   <img src="assets/github_fig.png" alt="IDiom" width="900px" align="middle"/>
