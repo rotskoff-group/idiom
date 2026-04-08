@@ -217,7 +217,13 @@ bash entrypoints/train/post-train/train_rl_idr_protgps.bash # or sbatch
 
 ## Tracking training progress using Tensorboard 
 
-To track progress on post-training runs, use Tensorboard by first navigating to the directory containing `lightning_logs` and run: 
+To track progress on post-training runs, first activate the virtual environment. From the repo root:
+
+```bash
+source .venv/bin/activate 
+```
+
+Then, use Tensorboard by first navigating to the directory containing `lightning_logs` and run: 
 
 ```bash
 tensorboard --logdir . 
