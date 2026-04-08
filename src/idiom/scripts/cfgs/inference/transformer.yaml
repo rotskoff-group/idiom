@@ -1,0 +1,16 @@
+checkpoint_path: null
+savedir: "./"
+unmasking_mode: 'sample'
+inference_mode: 'autoregressive'
+batch_size: 100
+num_batches: 1000
+use_multi_gpu: false  # Enable multi-GPU inference if multiple GPUs available
+seed_args:
+  seed: 42
+  workers: True
+dataset_filename: null #For picking out the control tokens in the dataset
+addn_args: {} #Additional arguments needed for specific inference modes
+sampler_args:
+  method: 'full'
+  sample_val: 1
+  temperature: 1.0 
