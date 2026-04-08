@@ -1,0 +1,13 @@
+dataset_filename: null
+dataset_split_args:
+  train: 0.99
+  val: 0.005
+  test: 0.005
+splits: null
+dloader_args:
+  batch_size: 256
+  num_workers: 4
+dataset: "TransformerShardedAutoregDataset" 
+collate_fn: "transformer_sharded_autoreg_collate_fn"
+data_in_memory: False
+dataset_args: {}

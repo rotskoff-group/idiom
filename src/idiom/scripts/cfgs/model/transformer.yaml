@@ -1,0 +1,18 @@
+model: GeometricMolTransformer
+load_model: null
+load_opitimizer: null
+model_args:
+  d_model: 896
+  unified_transformer_args:
+    n_layers: 12
+    mha_layer_indices: [0,1,2,3,4,5,6,7,8,9,10,11]
+    bias: False
+    mha_args: 
+      num_heads: 14
+      bias: False
+      qk_layernorm: True
+      mask_mode: causal
+    scaling_factor: 1 
+    ffn_type: "swiglu" 
+    norm_type: "layer_norm"
+    expansion_ratio: 2.66666666667 # (8/3)

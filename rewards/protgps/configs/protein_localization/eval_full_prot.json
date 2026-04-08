@@ -1,0 +1,11 @@
+{
+    "script": "main",
+    "train_config": "configs/protein_localization/full_prot_comp_pred.json",
+    "log_dir": "protgps/logs/",
+    "available_gpus": ["0,1,2,3,4,5,6,7"],
+    "eval_args": {
+      "test": [true],
+      "from_checkpoint": [true],
+      "checkpoint_path": ["checkpoints/prtogps/32bf44b16a4e770a674896b81dfb3729epoch=26.ckpt"]
+    }
+}

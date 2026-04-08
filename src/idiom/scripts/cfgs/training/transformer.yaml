@@ -1,0 +1,51 @@
+resume_training_path: null
+training_mode: 'autoregressive'
+manual_opt_args: {} #Arguments that control manual optimization
+lightning_model_args:
+  optimizer: "AdamW"
+  optimizer_args:
+    lr: 4.0e-4
+  lr_scheduler: "LinearWarmupCosineAnnealingLR"
+  lr_scheduler_args:
+    warmup_epochs: 3000
+    max_epochs: 250000
+    eta_min: 4.0e-5
+  lr_scheduler_monitor: "validation/loss"
+  interval: "step" #Interval here is for the lr_scheduler
+  sync_dist: True
+  on_step: False
+  lr_monitor_args:
+    logging_interval: step
+  every_epoch_checkpoint_args:
+    filename: "restart_checkpoint"
+    every_n_epochs: null
+    every_n_train_steps: 1000
+    save_top_k: 1
+  best_checkpoint_args:
+    filename: "best_model_{step}"
+    monitor: "validation/loss"
+    mode: "min"
+    save_top_k: 1
+trainer_args: 
+  accelerator: "cuda"
+  devices: 8
+  strategy: "auto"
+  max_steps: 250000
+  max_epochs: 10000
+  precision: 16-mixed
+  inference_mode: False
+  enable_progress_bar: False
+  gradient_clip_val: null
+  gradient_clip_algorithm: null
+  val_check_interval: 25000
+  accumulate_grad_batches: 1
+logger:
+  loggertype: "TensorBoard" # "TensorBoard" or "Wandb"
+  project: null # null if Tensorboard. Name for Wandb project folder
+  name: null # null if Tensorboard. Name for specific run
+seed_args:
+  seed: 42
+  workers: True
+loss_fn: "CrossEntropyLoss"
+loss_fn_args:
+  ignore_index: 23
