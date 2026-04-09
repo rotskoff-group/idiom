@@ -1,23 +1,27 @@
 #!/bin/bash
-#SBATCH --job-name=gen_idr
+#SBATCH --job-name=gen_idp
 #SBATCH --time=1-00:00:00
 #SBATCH --gpus=2
 #SBATCH --cpus-per-task=1
 #SBATCH --output=./slurm_out/slurm-%j.out
 
-# You can run this script using 'sbatch infer_specific_combined.bash' or 'bash infer_specific_combined.bash'
-# If you use sbatch, make sure you first create the SLURM output directory using: 'mkdir -p ./slurm_out'
+# You can run this script using 'sbatch infer_idp_combined.bash' or 'bash infer_idp_combined.bash'
 
-echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out
+# Create slurm_out if using SLURM 
+if [ -n "$SLURM_JOB_ID" ]; then
+    mkdir -p ./slurm_out
+fi
+
+echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out 
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
 echo "===== END   SLURM SCRIPT: $0 ====="
-echo; echo; echo; echo
+echo; echo; echo; echo 
 
 ###
-# Combined script: Generate specific IDR prompts and then generate prompted IDRs
+# Combined script: Generate IDP prompts and then generate unprompted IDPs
 ###
 
-# Determine repository root when using either SLURM or bash to run
+# Determine repository root when using either SLURM or bash to run 
 if [ -n "$SLURM_SUBMIT_DIR" ]; then
     REPO_ROOT="$(cd "$SLURM_SUBMIT_DIR" && git rev-parse --show-toplevel)"
 else
@@ -28,32 +32,30 @@ echo "Repo root: " ${REPO_ROOT}
 
 source "${REPO_ROOT}/.venv/bin/activate"
 
-echo "===== STEP 1: GENERATE SPECIFIC IDR PROMPTS ====="
-# Make prompts for generating specific IDRs
-# Choose how many IDRs to generate per protein here (num_duplicates)
-PROMPT_NAME="idr_prompt_${SLURM_JOB_ID:-$$}"
+echo "===== STEP 1: GENERATE IDP PROMPTS ====="
+# Make prompts for generating IDPs
+# Choose how many IDPs to generate here (num_duplicates)
+PROMPT_NAME="idp_prompt_${SLURM_JOB_ID:-$$}"
 
 make_infer_prompt \
-    --shard   "${REPO_ROOT}/models/data/shard/0001_file.h5" \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
-    idr \
+    idp \
     --name "$PROMPT_NAME" \
-    --fasta        ./example_sequences.fasta \
     --num_duplicates 1000
 
-echo; echo "===== STEP 2: GENERATE IDRs USING PROMPTS ====="
+echo; echo "===== STEP 2: GENERATE IDPs USING PROMPTS ====="
 
 PROMPT_PATH="${REPO_ROOT}/models/data/prompts/${PROMPT_NAME}_array.pkl"
 
-# SET YOUR DESIRED MODEL CHECKPOINT PATH HERE:
-CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_243022.ckpt" # Pretrained base model
+# SET YOUR DESIRED MODEL CHECKPOINT PATH HERE: 
+CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_243022.ckpt" # Pretrained base model 
 
 SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
 
-OUT_DIR="${REPO_ROOT}/entrypoints/infer/output/idrs"
+OUT_DIR="${REPO_ROOT}/entrypoints/generate/output/idps"
 mkdir -p "${OUT_DIR}"
 
-export PYTHONUNBUFFERED=1
+export PYTHONUNBUFFERED=1  
 transformer_infer \
     "model=transformer" \
     "model.model=GeometricMolTransformer" \
@@ -95,3 +97,5 @@ transformer_infer \
     "inference.sampler_args.temperature=1.0" \
     "++inference.addn_args.use_input_residues=True" \
     "++inference.addn_args.residues_path=$PROMPT_PATH"
+
+

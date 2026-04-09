@@ -114,13 +114,13 @@ IDiom allows for the generation of unprompted intrinsically disordered proteins 
 To generate unprompted IDPs, execute the `generate_idps.bash` script. 
 
 ```bash
-cd entrypoints/infer/scripts
+cd entrypoints/generate/scripts
 bash generate_idps.bash # or: sbatch generate_idps.bash
 ```
 
 This script uses the pre-trained base model described in the paper to generate unprompted IDPs. You can specify the number of IDPs to generate by modifying the `--num_duplicates` value (default 1000) in `generate_idps.bash`. 
 
-Generated sequences are output as FASTA files in the `entrypoints/infer/output/idps` directory. The following files will be created: 
+Generated sequences are output as FASTA files in the `entrypoints/generate/output/idps` directory. The following files will be created: 
 
 - `tst_autoregressive.pkl` — Raw generated token sequences
 - `generated_idrs.fasta` — FASTA file containing the generated disordered sequences 
@@ -131,7 +131,7 @@ Generated sequences are output as FASTA files in the `entrypoints/infer/output/i
 
 ## Generating intrinsically disordered regions
 
-To generate IDRs conditioned on their surrounding context, you must provide a FASTA file containing the full-length protein(s) you would like to generate IDRs within. An example file is provided at: `entrypoints/infer/scripts/example_sequences.fasta`. 
+To generate IDRs conditioned on their surrounding context, you must provide a FASTA file containing the full-length protein(s) you would like to generate IDRs within. An example file is provided at: `entrypoints/generate/scripts/example_sequences.fasta`. 
 
 This FASTA contains two full-length protein sequences. Each sequence entry MUST have a header which ends with the string "_IDR_x-y" where x and y indicate the start and end indices (1-indexed) of the wild type IDR. For example, in the provided FASTA, the wild type IDR of the first sequence begins at 119 and ends at 242. 
 
@@ -148,13 +148,13 @@ The code automatically extracts the N-terminal prefix and C-terminal suffix to t
 To generate IDRs, execute the example bash script: 
 
 ```bash
-cd entrypoints/infer/scripts
+cd entrypoints/generate/scripts
 bash generate_idrs.bash # or: sbatch generate_idrs.bash
 ```
 
 This script also uses the pre-trained base model described in the paper. You can specify the number of IDRs to generate by modifying the `--num_duplicates` value (default 1000) in `generate_idrs.bash`. The script will generate `num_duplicates` IDRs for each sequence provided in the FASTA file. 
 
-Generated sequences are output as FASTA files in the `entrypoints/infer/output/idrs` directory. The following files will be created: 
+Generated sequences are output as FASTA files in the `entrypoints/generate/output/idrs` directory. The following files will be created: 
 
 - `tst_autoregressive.pkl` — Raw generated token sequences
 - `generated_idrs.fasta` — Contains the generated IDR sequences
@@ -234,7 +234,7 @@ tensorboard --logdir .
 To generate sequences from a post-trained model checkpoint, set the `CKPT_PATH` in `generate_idps.bash` or `generate_idrs.bash` to be the post-trained checkpoint (.ckpt) located in the lightning_log. Then run the generation script as above: 
 
 ```bash
-bash entrypoints/infer/scripts/generate_idps.bash  # or generate_idrs.bash
+bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
 ```
 
 
