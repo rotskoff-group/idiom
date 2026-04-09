@@ -54,12 +54,10 @@ Next, download the `IDiom` model checkpoints from the HuggingFace repository int
 You can do so with the following commands. You must first create a HuggingFace account. Then, from the root of the cloned `IDiom` directory, do: 
 
 ```bash
-uv tool install hf # Install the hf cli tool
-hf auth login # Enter your credentials when prompted
-
+uv tool install huggingface_hub
 # Download models (26 GB)
-# Execute from IDiom root directory: 
-hf download jxliu2/idiom --local-dir ./models
+# Execute from IDiom root directory:
+huggingface-cli download jxliu2/idiom --local-dir ./models
 ```
 
 Additional datasets which are NOT necessary for running this code repository can be found in the following HuggingFace repository: https://huggingface.co/datasets/jxliu2/idiom-datasets
