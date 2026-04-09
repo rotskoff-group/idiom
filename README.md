@@ -51,7 +51,7 @@ Next, download the `IDiom` model checkpoints from the HuggingFace repository int
 
 **Model checkpoints**: https://huggingface.co/jxliu2/idiom
 
-You can do so with the following commands. You must first create a HuggingFace account. Then, from the root of the cloned `IDiom` directory, do: 
+You can do so with the following commands. From the root of the cloned `IDiom` directory, do: 
 
 ```bash
 uv tool install huggingface_hub
