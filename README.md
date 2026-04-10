@@ -69,8 +69,15 @@ This includes the 37M IDRs used to pre-train `IDiom` as well as the generated se
 hf download jxliu2/idiom-datasets --repo-type=dataset --local-dir ./datasets
 
 # If you only want the FASTA files containing the curated IDRs, run: 
-hf download jxliu2/idiom-datasets idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_full.fasta --repo-type=dataset --local-dir ./datasets
-hf download jxliu2/idiom-datasets idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_idrs.fasta --repo-type=dataset --local-dir ./datasets
+hf download jxliu2/idiom-datasets \
+  idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_full.fasta \
+  --repo-type=dataset \
+  --local-dir ./datasets
+
+hf download jxliu2/idiom-datasets \
+  idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_idrs.fasta \
+  --repo-type=dataset \
+  --local-dir ./datasets
 ```
 
 After this, the project structure should be:
