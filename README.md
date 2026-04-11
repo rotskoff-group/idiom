@@ -51,14 +51,11 @@ Next, download the `IDiom` model checkpoints from the HuggingFace repository int
 
 **Model checkpoints**: https://huggingface.co/jxliu2/idiom
 
-You can do so with the following commands. You must first create a HuggingFace account. Then, from the root of the cloned `IDiom` directory, do: 
+You can do so with the following commands. From the root of the cloned `IDiom` directory, do: 
 
 ```bash
-uv tool install hf # Install the hf cli tool
-hf auth login # Enter your credentials when prompted
-
 # Download models (26 GB)
-# Execute from IDiom root directory: 
+# Execute from IDiom root directory:
 hf download jxliu2/idiom --local-dir ./models
 ```
 
@@ -67,9 +64,20 @@ Additional datasets which are NOT necessary for running this code repository can
 This includes the 37M IDRs used to pre-train `IDiom` as well as the generated sequences which we analyze in our paper. To download this OPTIONAL data, use the following command to download the entire dataset or manually download specific files of interest from the HuggingFace URL. 
 
 ```bash
-# OPTIONALLY download the IDR data (174 GB):
-# Execute from IDiom root directory: 
+# OPTIONALLY download the IDR data:
+# Execute from IDiom root directory (186 GB): 
 hf download jxliu2/idiom-datasets --repo-type=dataset --local-dir ./datasets
+
+# If you only want the FASTA files containing the curated IDRs (12 GB and 3 GB), run: 
+hf download jxliu2/idiom-datasets \
+  idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_full.fasta \
+  --repo-type=dataset \
+  --local-dir ./datasets
+
+hf download jxliu2/idiom-datasets \
+  idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_idrs.fasta \
+  --repo-type=dataset \
+  --local-dir ./datasets
 ```
 
 After this, the project structure should be:
