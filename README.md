@@ -92,7 +92,7 @@ idiom/
 │       └── utils/             # Utilities
 |
 ├── entrypoints/               # Scripts for training and inference
-│   ├── infer/                 # Inference scripts and output
+│   ├── generate/              # Scripts for generating sequences 
 │   ├── precompute/            # Data preprocessing scripts
 │   └── train/                 # Pre- and post-training scripts
 |
