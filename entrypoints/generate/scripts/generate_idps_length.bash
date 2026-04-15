@@ -109,3 +109,5 @@ transformer_infer \
     "++inference.addn_args.residues_path=$PROMPT_PATH" \
     "++inference.addn_args.seq_length=${SEQ_LENGTH}" \
     "++inference.addn_args.seq_length_range=${SEQ_LENGTH_RANGE}"
+
+echo Done

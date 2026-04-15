@@ -97,3 +97,5 @@ transformer_infer \
     "inference.sampler_args.temperature=1.0" \
     "++inference.addn_args.use_input_residues=True" \
     "++inference.addn_args.residues_path=$PROMPT_PATH"
+
+echo Done
