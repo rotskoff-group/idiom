@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=gen_idr
 #SBATCH --time=1-00:00:00
-#SBATCH --gpus=2
+#SBATCH --gpus=4
 #SBATCH --cpus-per-task=1
 #SBATCH --output=./slurm_out/slurm-%j.out
 
@@ -17,6 +17,9 @@ echo; echo; echo; echo
 # Combined script: Generate specific IDR prompts and then generate prompted IDRs
 ###
 
+# Choose how many IDRs to generate per protein here (num_duplicates)
+NUM_DUPLICATES=1000
+
 # Determine repository root when using either SLURM or bash to run
 if [ -n "$SLURM_SUBMIT_DIR" ]; then
     REPO_ROOT="$(cd "$SLURM_SUBMIT_DIR" && git rev-parse --show-toplevel)"
@@ -30,7 +33,6 @@ source "${REPO_ROOT}/.venv/bin/activate"
 
 echo "===== STEP 1: GENERATE SPECIFIC IDR PROMPTS ====="
 # Make prompts for generating specific IDRs
-# Choose how many IDRs to generate per protein here (num_duplicates)
 PROMPT_NAME="idr_prompt_${SLURM_JOB_ID:-$$}"
 
 make_infer_prompt \
@@ -39,7 +41,7 @@ make_infer_prompt \
     idr \
     --name "$PROMPT_NAME" \
     --fasta        ./example_sequences.fasta \
-    --num_duplicates 1000
+    --num_duplicates $NUM_DUPLICATES
 
 echo; echo "===== STEP 2: GENERATE IDRs USING PROMPTS ====="
 
