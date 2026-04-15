@@ -25,7 +25,7 @@ SEQ_LENGTH=100          # Target IDR region length (residues)
 SEQ_LENGTH_RANGE=5    # Allowed deviation (accepts lengths in [SEQ_LENGTH - SEQ_LENGTH_RANGE, SEQ_LENGTH + SEQ_LENGTH_RANGE])
 
 # Choose how many IDRs to generate per protein here (num_duplicates)
-NUM_DUPLICATES=100
+NUM_DUPLICATES=1000
 
 # Determine repository root when using either SLURM or bash to run
 if [ -n "$SLURM_SUBMIT_DIR" ]; then
@@ -48,7 +48,7 @@ make_infer_prompt \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
     idr \
     --name "$PROMPT_NAME" \
-    --fasta        ./example_sequences.fasta \
+    --fasta        ./example_sequence.fasta \
     --num_duplicates $NUM_DUPLICATES
 
 echo; echo "===== STEP 2: GENERATE LENGTH-FILTERED IDRs USING PROMPTS ====="
@@ -107,3 +107,5 @@ transformer_infer \
     "++inference.addn_args.residues_path=$PROMPT_PATH" \
     "++inference.addn_args.seq_length=${SEQ_LENGTH}" \
     "++inference.addn_args.seq_length_range=${SEQ_LENGTH_RANGE}"
+
+echo Done 
