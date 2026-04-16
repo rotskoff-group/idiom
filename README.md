@@ -1,6 +1,6 @@
 # IDiom
 
-IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. The associated paper is: [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777)
+IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. The associated preprint is: [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777)
 
 <p align="center">
   <img src="assets/github_fig.png" alt="IDiom" width="900px" align="middle"/>
@@ -15,6 +15,7 @@ IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsicall
 - [Generating sequences](#generating-sequences)
   - [Generating intrinsically disordered proteins](#generating-intrinsically-disordered-proteins)
   - [Generating intrinsically disordered regions](#generating-intrinsically-disordered-regions)
+  - [Generating sequences of a specific length](#generating-sequences-of-a-specific-length)
 - [Post-training](#post-training)
   - [Custom reward functions](#custom-reward-functions)
     - [Optimizing IDP generation](#optimizing-idp-generation)
@@ -113,7 +114,7 @@ Now, the example bash scripts described below can be run directly using `bash` o
 
 # Generating sequences
 
-IDiom allows for the generation of unprompted intrinsically disordered proteins (IDPs) or intrinsically disordered regions (IDRs) prompted by their surrounding flanking context within a protein. We have tested inference on NVIDIA GeForce RTX 4080 GPUs with 16 GB VRAM. 
+IDiom allows for the generation of unprompted intrinsically disordered proteins (IDPs) or intrinsically disordered regions (IDRs) prompted by their surrounding flanking context within a protein. We have tested inference on NVIDIA GeForce RTX 4080 GPUs with 16 GB VRAM. Sequences should be post-processed after generation to filter for sequence metrics of interest. 
 
 
 
@@ -126,7 +127,7 @@ cd entrypoints/generate/scripts
 bash generate_idps.bash # or: sbatch generate_idps.bash
 ```
 
-This script uses the pre-trained base model described in the paper to generate unprompted IDPs. You can specify the number of IDPs to generate by modifying the `--num_duplicates` value (default 1000) in `generate_idps.bash`. 
+This script uses the pre-trained base model described in the paper to generate unprompted IDPs. You can specify the number of IDPs to generate by modifying the `NUM_DUPLICATES` variable (default 1000) near the top of `generate_idps.bash`. 
 
 Generated sequences are output as FASTA files in the `entrypoints/generate/output/idps` directory. The following files will be created: 
 
@@ -160,7 +161,7 @@ cd entrypoints/generate/scripts
 bash generate_idrs.bash # or: sbatch generate_idrs.bash
 ```
 
-This script also uses the pre-trained base model described in the paper. You can specify the number of IDRs to generate by modifying the `--num_duplicates` value (default 1000) in `generate_idrs.bash`. The script will generate `num_duplicates` IDRs for each sequence provided in the FASTA file. 
+This script also uses the pre-trained base model described in the paper. You can specify the number of IDRs to generate by modifying the `NUM_DUPLICATES` variable (default 1000) near the top of `generate_idrs.bash`. The script will generate `NUM_DUPLICATES` IDRs for each sequence provided in the FASTA file. 
 
 Generated sequences are output as FASTA files in the `entrypoints/generate/output/idrs` directory. The following files will be created: 
 
@@ -169,6 +170,43 @@ Generated sequences are output as FASTA files in the `entrypoints/generate/outpu
 - `generated_full.fasta` — Contains the full length sequences with indices of the generated disordered region in each sequence's header
 - `inference_config.yaml` — Inference configuration file 
 
+
+
+
+## Generating sequences of a specific length
+
+IDiom also supports length-controlled generation, where generated sequences are filtered to only keep those whose disordered region falls within a target length window. Generation repeats automatically until the requested number of valid-length sequences has been generated.
+
+To generate IDPs of a specific length, execute the `generate_idps_length.bash` script:
+
+```bash
+cd entrypoints/generate/scripts
+bash generate_idps_length.bash # or: sbatch generate_idps_length.bash
+```
+
+To generate IDRs of a specific length, execute the `generate_idrs_length.bash` script:
+
+```bash
+cd entrypoints/generate/scripts
+bash generate_idrs_length.bash # or: sbatch generate_idrs_length.bash
+```
+
+In either script, set the following variables near the top of the file before running:
+
+- `SEQ_LENGTH` — target disordered region length in residues (default: 100)
+- `SEQ_LENGTH_RANGE` — allowed deviation from the target; sequences with IDR length within `SEQ_LENGTH +/- SEQ_LENGTH_RANGE` are kept (default: 5)
+- `NUM_DUPLICATES` — number of valid-length sequences to generate (default: 1000)
+
+Output files are written to `entrypoints/generate/output/idps_length` or `entrypoints/generate/output/idrs_length` respectively, with the same file structure as the standard generation scripts.
+
+<!-- These parameters can also be passed directly as Hydra overrides to `transformer_infer` without using the bash scripts:
+
+```bash
+transformer_infer \
+    ... \
+    "++inference.addn_args.seq_length=50" \
+    "++inference.addn_args.seq_length_range=10"
+``` -->
 
 
 
@@ -272,6 +310,10 @@ Next, execute the training script:
 sbatch pretrain.bash 
 ```
 
+# Contributing
+
+We welcome all contributions to this open-source project! Please feel free to fork the repository, raise issues, contribute reward functions, and initiate pull requests. Do not hesitate to contact the authors if you have questions, ideas, or comments. Thank you!
+
 # Citation
 
 If you find this work useful, please cite: 
@@ -283,6 +325,6 @@ If you find this work useful, please cite:
   journal = {bioRxiv},
   year = {2026},
   doi = {10.64898/2026.04.10.717777},
-  URL = {https://www.biorxiv.org/content/10.64898/2026.04.10.717777v1},
+  URL = {https://doi.org/10.64898/2026.04.10.717777},
 }
 ```

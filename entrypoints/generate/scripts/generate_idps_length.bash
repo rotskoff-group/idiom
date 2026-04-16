@@ -1,12 +1,16 @@
 #!/bin/bash
-#SBATCH --job-name=gen_idr
+#SBATCH --job-name=gen_idp_len
 #SBATCH --time=1-00:00:00
 #SBATCH --gpus=4
 #SBATCH --cpus-per-task=1
 #SBATCH --output=./slurm_out/slurm-%j.out
 
-# You can run this script using 'sbatch infer_specific_combined.bash' or 'bash infer_specific_combined.bash'
-# If you use sbatch, make sure you first create the SLURM output directory using: 'mkdir -p ./slurm_out'
+# You can run this script using 'sbatch generate_idps_length.bash' or 'bash generate_idps_length.bash'
+
+# Create slurm_out if using SLURM
+if [ -n "$SLURM_JOB_ID" ]; then
+    mkdir -p ./slurm_out
+fi
 
 echo "===== BEGIN SLURM SCRIPT: $0 =====" # Save script into slurm out
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
@@ -14,10 +18,17 @@ echo "===== END   SLURM SCRIPT: $0 ====="
 echo; echo; echo; echo
 
 ###
-# Combined script: Generate specific IDR prompts and then generate prompted IDRs
+# Combined script: Generate IDP prompts and then generate length-filtered IDPs
+#
+# Only sequences whose IDR region length falls within SEQ_LENGTH ± SEQ_LENGTH_RANGE
+# are kept. Generation repeats until num_duplicates valid sequences are collected.
 ###
 
-# Choose how many IDRs to generate per protein here (num_duplicates)
+# SET YOUR DESIRED TARGET IDR LENGTH AND TOLERANCE HERE:
+SEQ_LENGTH=100          # Target IDR region length (residues)
+SEQ_LENGTH_RANGE=5    # Allowed deviation (accepts lengths in [SEQ_LENGTH - SEQ_LENGTH_RANGE, SEQ_LENGTH + SEQ_LENGTH_RANGE])
+
+# Choose how many IDPs to generate here (num_duplicates)
 NUM_DUPLICATES=1000
 
 # Determine repository root when using either SLURM or bash to run
@@ -28,22 +39,21 @@ else
 fi
 
 echo "Repo root: " ${REPO_ROOT}
+echo "Target IDR length: ${SEQ_LENGTH} ± ${SEQ_LENGTH_RANGE} residues"
 
 source "${REPO_ROOT}/.venv/bin/activate"
 
-echo "===== STEP 1: GENERATE SPECIFIC IDR PROMPTS ====="
-# Make prompts for generating specific IDRs
-PROMPT_NAME="idr_prompt_${SLURM_JOB_ID:-$$}"
+echo "===== STEP 1: GENERATE IDP PROMPTS ====="
+# Make prompts for generating IDPs
+PROMPT_NAME="idp_prompt_${SLURM_JOB_ID:-$$}"
 
 make_infer_prompt \
-    --shard   "${REPO_ROOT}/models/data/shard/0001_file.h5" \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
-    idr \
+    idp \
     --name "$PROMPT_NAME" \
-    --fasta        ./example_sequences.fasta \
     --num_duplicates $NUM_DUPLICATES
 
-echo; echo "===== STEP 2: GENERATE IDRs USING PROMPTS ====="
+echo; echo "===== STEP 2: GENERATE LENGTH-FILTERED IDPs USING PROMPTS ====="
 
 PROMPT_PATH="${REPO_ROOT}/models/data/prompts/${PROMPT_NAME}_array.pkl"
 
@@ -52,7 +62,7 @@ CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_
 
 SHARD_PATH="${REPO_ROOT}/models/data/shard/0001_file.h5"
 
-OUT_DIR="${REPO_ROOT}/entrypoints/generate/output/idrs"
+OUT_DIR="${REPO_ROOT}/entrypoints/generate/output/idps_length"
 mkdir -p "${OUT_DIR}"
 
 export PYTHONUNBUFFERED=1
@@ -96,6 +106,8 @@ transformer_infer \
     "inference.sampler_args.sample_val=1" \
     "inference.sampler_args.temperature=1.0" \
     "++inference.addn_args.use_input_residues=True" \
-    "++inference.addn_args.residues_path=$PROMPT_PATH"
+    "++inference.addn_args.residues_path=$PROMPT_PATH" \
+    "++inference.addn_args.seq_length=${SEQ_LENGTH}" \
+    "++inference.addn_args.seq_length_range=${SEQ_LENGTH_RANGE}"
 
 echo Done

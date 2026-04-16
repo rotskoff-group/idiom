@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=gen_idp
 #SBATCH --time=1-00:00:00
-#SBATCH --gpus=2
+#SBATCH --gpus=4
 #SBATCH --cpus-per-task=1
 #SBATCH --output=./slurm_out/slurm-%j.out
 
@@ -21,6 +21,9 @@ echo; echo; echo; echo
 # Combined script: Generate IDP prompts and then generate unprompted IDPs
 ###
 
+# Choose how many IDPs to generate here (num_duplicates)
+NUM_DUPLICATES=1000
+
 # Determine repository root when using either SLURM or bash to run 
 if [ -n "$SLURM_SUBMIT_DIR" ]; then
     REPO_ROOT="$(cd "$SLURM_SUBMIT_DIR" && git rev-parse --show-toplevel)"
@@ -34,14 +37,14 @@ source "${REPO_ROOT}/.venv/bin/activate"
 
 echo "===== STEP 1: GENERATE IDP PROMPTS ====="
 # Make prompts for generating IDPs
-# Choose how many IDPs to generate here (num_duplicates)
+
 PROMPT_NAME="idp_prompt_${SLURM_JOB_ID:-$$}"
 
 make_infer_prompt \
     --out_dir "${REPO_ROOT}/models/data/prompts" \
     idp \
     --name "$PROMPT_NAME" \
-    --num_duplicates 1000
+    --num_duplicates $NUM_DUPLICATES
 
 echo; echo "===== STEP 2: GENERATE IDPs USING PROMPTS ====="
 
@@ -98,4 +101,4 @@ transformer_infer \
     "++inference.addn_args.use_input_residues=True" \
     "++inference.addn_args.residues_path=$PROMPT_PATH"
 
-
+echo Done
