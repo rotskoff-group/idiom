@@ -56,17 +56,19 @@ class TransformerStack(nn.Module):
         else:
             raise ValueError("Unknown norm_type passed")
 
-    def forward(self, x, sequence_id):
+    def forward(self, x, sequence_id, return_hidden_states=False):
         """
         Forward pass of the TransformerStack.
 
         Args:
             x (torch.Tensor): The input tensor of shape (batch_size, sequence_length, d_model).
             sequence_id (torch.Tensor): The sequence ID tensor of shape (batch_size, sequence_length).
+            return_hidden_states (bool): If True, return the output of each block as a list.
 
         Returns:
             post_norm: The output tensor of shape (batch_size, sequence_length, d_model).
             pre_norm: The embedding of shape (batch_size, sequence_length, d_model).
+            hidden_states: List of per-block outputs (empty list if return_hidden_states=False).
         """
         *batch_dims, _ = x.shape
         if sequence_id is None:
@@ -74,9 +76,12 @@ class TransformerStack(nn.Module):
                 size=batch_dims, dtype=torch.int64, device=x.device
             )
 
+        hidden_states = []
         for block in self.blocks:
             x = block(
                 x=x,
                 sequence_id=sequence_id,
             )
-        return self.norm(x), x
+            if return_hidden_states:
+                hidden_states.append(x)
+        return self.norm(x), x, hidden_states
