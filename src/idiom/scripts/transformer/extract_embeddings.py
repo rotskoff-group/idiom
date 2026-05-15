@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import h5py
 import numpy as np
@@ -20,21 +21,74 @@ from idiom.nn.transformer.generators.input_generators import ResiduesInputBasic
 from idiom.nn.transformer.generators.target_generators import ResiduesTarget
 from idiom.scripts.transformer.precompute import determine_alphabet, run_process_parallel
 
+_IDR_PATTERN = re.compile(r"_IDR_(\d+)-(\d+)")
+
+
+def _parse_fasta_to_fim(fasta_path: str, max_sequences: int | None) -> list[str]:
+    """Parse a FASTA file with _IDR_x-y headers and return FIM-formatted sequences.
+
+    Headers must contain _IDR_x-y (1-indexed, inclusive) to define the IDR region.
+    FIM format: 1{prefix}3{suffix}2{IDR}
+    Sequences without a valid _IDR_ annotation are skipped with a warning.
+    """
+    sequences = []
+    header = None
+    seq_parts = []
+
+    def _flush():
+        if header is None:
+            return
+        m = _IDR_PATTERN.search(header)
+        if m is None:
+            print(f"Warning: no _IDR_x-y found in header '{header}', skipping")
+            return
+        idr_start_1 = int(m.group(1))
+        idr_end_1 = int(m.group(2))
+        seq = "".join(seq_parts)
+        idr_start_0 = idr_start_1 - 1
+        idr_end_0 = idr_end_1 - 1
+        prefix = seq[:idr_start_0]
+        idr = seq[idr_start_0 : idr_end_0 + 1]
+        suffix = seq[idr_end_0 + 1 :]
+        sequences.append(f"1{prefix}3{suffix}2{idr}")
+
+    with open(fasta_path) as fh:
+        for line in fh:
+            line = line.rstrip()
+            if line.startswith(">"):
+                _flush()
+                header = line[1:]
+                seq_parts = []
+            elif line:
+                seq_parts.append(line)
+    _flush()
+
+    if max_sequences is not None:
+        sequences = sequences[:max_sequences]
+    print(f"Parsed {len(sequences):,} FIM-formatted sequences from {fasta_path}")
+    return sequences
+
+
+def _load_residues(dataset_filename: str, max_sequences: int | None) -> list[str]:
+    """Load residue strings from an H5 file or a FASTA file with _IDR_ headers."""
+    if dataset_filename.endswith(".fasta") or dataset_filename.endswith(".fa"):
+        return _parse_fasta_to_fim(dataset_filename, max_sequences)
+    with h5py.File(dataset_filename, "r") as f:
+        total = len(f["residues"])
+        n = min(total, max_sequences) if max_sequences is not None else total
+        return [f["residues"][i].decode("utf-8") for i in range(n)]
+
 
 def _precompute_to_tempfile(
-    raw_path: str,
-    max_sequences: int | None,
+    residues: list[str],
+    source_label: str,
     num_workers: int,
 ) -> str:
-    """Tokenize raw sequences into a temporary shard HDF5 and return its path.
+    """Tokenize residue strings into a temporary shard HDF5 and return its path.
 
     The caller is responsible for deleting the file when done.
     """
-    with h5py.File(raw_path, "r") as f:
-        total = len(f["residues"])
-        n = min(total, max_sequences) if max_sequences is not None else total
-        residues = [f["residues"][i].decode("utf-8") for i in range(n)]
-    print(f"Tokenizing {len(residues):,} sequences from {raw_path}...")
+    print(f"Tokenizing {len(residues):,} sequences from {source_label}...")
 
     tokenizer = CharTokenizer()
     alphabet = determine_alphabet(residues, tokenizer)
@@ -398,8 +452,9 @@ def main(cfg) -> None:
         num_gpus = 1
     print(f"Using {num_gpus} GPU(s)")
 
+    residues = _load_residues(dataset_filename, max_sequences)
     temp_shard_path = _precompute_to_tempfile(
-        dataset_filename, max_sequences, num_precompute_workers
+        residues, dataset_filename, num_precompute_workers
     )
 
     try:
