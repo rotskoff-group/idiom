@@ -94,6 +94,7 @@ idiom/
 │       └── utils/             # Utilities
 |
 ├── entrypoints/               # Scripts for training and inference
+│   ├── extract_activations/   # Scripts for extracting residual stream activations
 │   ├── generate/              # Scripts for generating sequences 
 │   ├── precompute/            # Data preprocessing scripts
 │   └── train/                 # Pre- and post-training scripts
