@@ -23,6 +23,7 @@ IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsicall
   - [ProtGPS reward](#protgps-reward)
   - [Tracking training progress using Tensorboard](#tracking-training-progress-using-tensorboard)
   - [Generating sequences after post-training](#generating-sequences-after-post-training)
+- [Extracting activations](#extracting-activations)
 - [Pre-training](#pre-training)
 - [Citation](#citation)
 
@@ -282,6 +283,39 @@ To generate sequences from a post-trained model checkpoint, set the `CKPT_PATH` 
 ```bash
 bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
 ```
+
+
+# Extracting activations
+
+Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model over a set of sequences and saves the per-layer activations to an HDF5 file. Activations can also be extracted from any post-trained model. 
+
+```bash
+cd entrypoints/extract_activations/scripts
+bash extract_activations.bash # or: sbatch extract_activations.bash
+```
+
+As an example, the script extracts activations from all 12 transformer blocks for the two example proteins in `entrypoints/generate/scripts/example_sequences.fasta`. To run on your own sequences, set `DATA_PATH` near the top of the script to: 
+
+- a FASTA file whose sequence headers end with `_IDR_x-y` or 
+- a raw sequences `.h5` file containing a `residues` field
+
+The following options can be adjusted near the top of the script:
+
+- `++extract.layers` — 0-indexed transformer blocks to extract (e.g. `[11]` for the last block only, or `[0,1,2,3,4,5,6,7,8,9,10,11]` for all blocks).
+- `++extract.pooling` — `token` saves one activation vector per residue (per-position); `mean` saves a single mean-pooled vector per sequence.
+- `++extract.save_dtype` — `float16` (default) or `float32`.
+- `++extract.max_sequences` — cap the number of sequences processed (`null` = all)
+- `++extract.use_multi_gpu` — set to `true` and increase `--gpus` to parallelize activation extraction 
+
+Activations are written to `entrypoints/extract_activations/output/activations.h5` with the following structure:
+
+- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (`token` pooling) or `[num_sequences, d_model]` (`mean` pooling)
+- `activations/layer_<i>/seq_idx` — index of the sequence each row belongs to
+- `activations/layer_<i>/pos_idx` — token position within the sequence (`token` pooling only)
+- `sequences/tokens` — token IDs for each sequence
+- `sequences/strings` — residue string for each sequence
+- `metadata/alphabet`, `metadata/layers` — the token alphabet and the list of extracted layers
+- `extract_config.yaml` — the extraction configuration, written alongside the output file
 
 
 # Pre-training
