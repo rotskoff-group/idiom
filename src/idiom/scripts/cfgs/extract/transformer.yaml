@@ -2,7 +2,7 @@ checkpoint_path: null          # path to .ckpt file
 dataset_filename: null         # path to a precomputed shard (.h5 or directory of shards),
                                # OR a raw sequences file with a "residues" field
                                # (e.g. AFDB_IDR_90_FIM_512.h5) — precompute runs automatically
-output_path: embeddings.h5     # path for output HDF5 file
+output_path: activations.h5    # path for output HDF5 file
 layers: [11]                   # 0-indexed block outputs; 11 = last block (pre-final-norm)
 pooling: token                 # "token" (per-position) or "mean" (mean-pooled per sequence)
 batch_size: 256

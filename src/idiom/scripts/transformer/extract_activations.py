@@ -19,7 +19,10 @@ from idiom.utils.token import aggregate_tokens_hdf5
 from idiom.nn.transformer.utils.tokenizer import CharTokenizer
 from idiom.nn.transformer.generators.input_generators import ResiduesInputBasic
 from idiom.nn.transformer.generators.target_generators import ResiduesTarget
-from idiom.scripts.transformer.precompute import determine_alphabet, run_process_parallel
+from idiom.scripts.transformer.precompute import (
+    determine_alphabet,
+    run_process_parallel,
+)
 
 _IDR_PATTERN = re.compile(r"_IDR_(\d+)-(\d+)")
 
@@ -172,7 +175,9 @@ def _extract_on_gpu(
         lightning_model.model.eval()
         lightning_model.to(device)
 
-        get_hdf5 = lambda: [h5py.File(dataset_filename, "r")]
+        def get_hdf5():
+            return [h5py.File(dataset_filename, "r")]
+
         dataset = TransformerShardedAutoregDataset(get_hdf5_data=get_hdf5)
         subset = Subset(dataset, range(start_idx, end_idx))
         dataloader = DataLoader(
@@ -220,7 +225,10 @@ def _extract_on_gpu(
                 "tokens", shape=(0,), maxshape=(None,), dtype=vlen_int, chunks=(256,)
             )
             strings_ds = hf.create_dataset(
-                "strings", shape=(0,), maxshape=(None,), dtype=h5py.string_dtype(),
+                "strings",
+                shape=(0,),
+                maxshape=(None,),
+                dtype=h5py.string_dtype(),
                 chunks=(256,),
             )
 
@@ -230,9 +238,14 @@ def _extract_on_gpu(
             res_fh = h5py.File(dataset_filename, "r")
             try:
                 for batch in dataloader:
-                    structural_tokens, src_tokens, src_key_pad_mask, _, _, sequence_id = (
-                        batch
-                    )
+                    (
+                        structural_tokens,
+                        src_tokens,
+                        src_key_pad_mask,
+                        _,
+                        _,
+                        sequence_id,
+                    ) = batch
                     B = src_tokens.shape[0]
 
                     with torch.no_grad():
@@ -249,7 +262,11 @@ def _extract_on_gpu(
                         hs = (
                             hidden_states[layer_idx]
                             .cpu()
-                            .to(torch.float16 if save_dtype == "float16" else torch.float32)
+                            .to(
+                                torch.float16
+                                if save_dtype == "float16"
+                                else torch.float32
+                            )
                             .numpy()
                         )  # [B, L, D]
                         grp = layer_grps[layer_idx]
@@ -269,12 +286,12 @@ def _extract_on_gpu(
                                 dtype=np.int32,
                             )
                         else:
-                            emb_chunks, seq_idx_chunks, pos_idx_chunks = [], [], []
+                            act_chunks, seq_idx_chunks, pos_idx_chunks = [], [], []
                             for b in range(B):
                                 valid_pos = np.where(valid_mask[b].numpy())[0]
                                 if len(valid_pos) == 0:
                                     continue
-                                emb_chunks.append(hs[b, valid_pos])
+                                act_chunks.append(hs[b, valid_pos])
                                 seq_idx_chunks.append(
                                     np.full(
                                         len(valid_pos),
@@ -284,14 +301,14 @@ def _extract_on_gpu(
                                 )
                                 pos_idx_chunks.append(valid_pos.astype(np.int32))
 
-                            if emb_chunks:
-                                emb_all = np.concatenate(emb_chunks, axis=0)
+                            if act_chunks:
+                                act_all = np.concatenate(act_chunks, axis=0)
                                 seq_idx_all = np.concatenate(seq_idx_chunks)
                                 pos_idx_all = np.concatenate(pos_idx_chunks)
                                 old = grp["data"].shape[0]
-                                new = old + len(emb_all)
+                                new = old + len(act_all)
                                 grp["data"].resize(new, axis=0)
-                                grp["data"][old:new] = emb_all
+                                grp["data"][old:new] = act_all
                                 grp["seq_idx"].resize(new, axis=0)
                                 grp["seq_idx"][old:new] = seq_idx_all
                                 grp["pos_idx"].resize(new, axis=0)
@@ -307,9 +324,13 @@ def _extract_on_gpu(
                     strings_ds.resize(old + B, axis=0)
                     for b in range(B):
                         valid_pos = np.where(valid_mask[b].numpy())[0]
-                        tokens_ds[old + b] = src_tokens[b, valid_pos].numpy().astype(np.int16)
+                        tokens_ds[old + b] = (
+                            src_tokens[b, valid_pos].numpy().astype(np.int16)
+                        )
                         raw = res_fh["residues"][global_seq_offset + b]
-                        strings_ds[old + b] = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+                        strings_ds[old + b] = (
+                            raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+                        )
 
                     global_seq_offset += B
                     n_processed += B
@@ -348,10 +369,10 @@ def _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_inf
             sample_dtype = f0[f"layer_{layers[0]}"]["data"].dtype
             has_pos_idx = pooling == "token"
 
-        # Pre-create resizable embedding datasets
-        emb_grps = {}
+        # Pre-create resizable activation datasets
+        act_grps = {}
         for layer_idx in layers:
-            grp = out.create_group(f"embeddings/layer_{layer_idx}")
+            grp = out.create_group(f"activations/layer_{layer_idx}")
             with h5py.File(first_temp, "r") as f0:
                 d_model = f0[f"layer_{layer_idx}"]["data"].shape[1]
             grp.create_dataset(
@@ -372,7 +393,7 @@ def _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_inf
                     dtype=np.int32,
                     chunks=(4096,),
                 )
-            emb_grps[layer_idx] = grp
+            act_grps[layer_idx] = grp
 
         vlen_int = h5py.vlen_dtype(np.dtype("int16"))
         tokens_ds = out.create_dataset(
@@ -397,7 +418,7 @@ def _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_inf
                 continue
             with h5py.File(temp_path, "r") as tmp:
                 for layer_idx in layers:
-                    grp = emb_grps[layer_idx]
+                    grp = act_grps[layer_idx]
                     src = tmp[f"layer_{layer_idx}"]
 
                     n_new = src["data"].shape[0]
@@ -425,7 +446,7 @@ def _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_inf
             os.remove(temp_path)
             print(f"Merged GPU {gpu_id} temp file")
 
-    print(f"Embeddings saved to {output_path}")
+    print(f"Activations saved to {output_path}")
 
 
 @hydra.main(version_base="1.3", config_path="../cfgs", config_name="extract")
@@ -461,7 +482,7 @@ def main(cfg) -> None:
         with h5py.File(temp_shard_path, "r") as f:
             token_info = aggregate_tokens_hdf5(f)
             total_sequences = len(f["res_tokens"])
-        print(f"Extracting embeddings for {total_sequences:,} sequences")
+        print(f"Extracting activations for {total_sequences:,} sequences")
         print(f"Layers: {layers}, pooling: {pooling}, dtype: {save_dtype}")
 
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -482,7 +503,10 @@ def main(cfg) -> None:
             if gpu_id < remainder:
                 start_idx = gpu_id * (sequences_per_gpu + 1)
             else:
-                start_idx = remainder * (sequences_per_gpu + 1) + (gpu_id - remainder) * sequences_per_gpu
+                start_idx = (
+                    remainder * (sequences_per_gpu + 1)
+                    + (gpu_id - remainder) * sequences_per_gpu
+                )
             end_idx = start_idx + sequences_per_gpu + extra
             print(f"GPU {gpu_id}: sequences {start_idx}–{end_idx - 1}")
 
