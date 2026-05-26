@@ -288,7 +288,7 @@ bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
 
 # Extracting activations
 
-Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model over a set of sequences and saves the per-layer activations for every token position to an HDF5 file. Activations can also be extracted from any post-trained model. Note that activations are extracted for EVERY token position, including FIM special tokens `1`, `2`, and `3`. These special tokens act as attention sinks and should typically be filtered out prior to downstream analysis. Activation extraction can be done using the following command: 
+Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model over a set of sequences and saves the per-layer activations for every token position to an HDF5 file. Activations can also be extracted from any post-trained model. Note that activations are extracted for EVERY token position, including FIM special tokens `1`, `2`, and `3`. These special tokens act as attention sinks and should typically be filtered out prior to downstream analysis. Activations from control tokens (`BOS`, `EOS`, `PAD`, and `MASK`) are not extracted. Activation extraction can be done using the following command: 
 
 ```bash
 cd entrypoints/extract_activations/scripts
