@@ -153,6 +153,84 @@ def _precompute_to_tempfile(
     return temp_path
 
 
+def _load_model(model_args, training_args, token_info, checkpoint_path, device):
+    """Build LightningModel, load checkpoint, set eval, move to device."""
+    lightning_model = LightningModel(
+        model_args=model_args, token_info=token_info, training_args=training_args
+    )
+    lightning_model.load_model_from_checkpoint(checkpoint_path)
+    lightning_model.model.eval()
+    lightning_model.to(device)
+    return lightning_model
+
+
+def _build_dataloader(dataset_filename, start_idx, end_idx, batch_size):
+    """DataLoader over [start_idx, end_idx) of the precomputed shard."""
+
+    def get_hdf5():
+        return [h5py.File(dataset_filename, "r")]
+
+    dataset = TransformerShardedAutoregDataset(get_hdf5_data=get_hdf5)
+    subset = Subset(dataset, range(start_idx, end_idx))
+    return DataLoader(
+        subset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=transformer_sharded_autoreg_collate_fn,
+        num_workers=0,
+    )
+
+
+def _get_ctrl_token_ids(token_info):
+    """Token ids for PAD/START/STOP/MASK — filtered from saved activations/tokens."""
+    return torch.tensor(
+        [int(v) for k, v in token_info["input"]["TOK"].items() if k != "TOK_MAX_SIZE"],
+        dtype=torch.long,
+    )
+
+
+def _init_output_h5(hf, layers, d_model, np_dtype):
+    """Create per-layer activation groups + tokens/strings datasets in an open H5 file."""
+    layer_grps = {}
+    for layer_idx in layers:
+        grp = hf.create_group(f"layer_{layer_idx}")
+        grp.create_dataset(
+            "data",
+            shape=(0, d_model),
+            maxshape=(None, d_model),
+            dtype=np_dtype,
+            chunks=(1024, d_model),
+        )
+        grp.create_dataset(
+            "seq_idx",
+            shape=(0,),
+            maxshape=(None,),
+            dtype=np.int32,
+            chunks=(4096,),
+        )
+        grp.create_dataset(
+            "pos_idx",
+            shape=(0,),
+            maxshape=(None,),
+            dtype=np.int32,
+            chunks=(4096,),
+        )
+        layer_grps[layer_idx] = grp
+
+    vlen_int = h5py.vlen_dtype(np.dtype("int16"))
+    tokens_ds = hf.create_dataset(
+        "tokens", shape=(0,), maxshape=(None,), dtype=vlen_int, chunks=(256,)
+    )
+    strings_ds = hf.create_dataset(
+        "strings",
+        shape=(0,),
+        maxshape=(None,),
+        dtype=h5py.string_dtype(),
+        chunks=(256,),
+    )
+    return layer_grps, tokens_ds, strings_ds
+
+
 def _extract_on_gpu(
     gpu_id,
     start_idx,
@@ -169,41 +247,17 @@ def _extract_on_gpu(
 ):
     try:
         device = f"cuda:{gpu_id}"
-
-        lightning_model = LightningModel(
-            model_args=model_args, token_info=token_info, training_args=training_args
+        lightning_model = _load_model(
+            model_args, training_args, token_info, checkpoint_path, device
         )
-        lightning_model.load_model_from_checkpoint(checkpoint_path)
-        lightning_model.model.eval()
-        lightning_model.to(device)
-
-        def get_hdf5():
-            return [h5py.File(dataset_filename, "r")]
-
-        dataset = TransformerShardedAutoregDataset(get_hdf5_data=get_hdf5)
-        subset = Subset(dataset, range(start_idx, end_idx))
-        dataloader = DataLoader(
-            subset,
-            batch_size=batch_size,
-            shuffle=False,
-            collate_fn=transformer_sharded_autoreg_collate_fn,
-            num_workers=0,
-        )
+        dataloader = _build_dataloader(dataset_filename, start_idx, end_idx, batch_size)
 
         d_model = model_args["model_args"]["d_model"]
         np_dtype = np.float16 if save_dtype == "float16" else np.float32
 
         # Control tokens (PAD/START/STOP/MASK) are filtered from all saved
         # activations and tokens
-        ctrl_token_ids = torch.tensor(
-            [
-                int(v)
-                for k, v in token_info["input"]["TOK"].items()
-                if k != "TOK_MAX_SIZE"
-            ],
-            dtype=torch.long,
-        )
-
+        ctrl_token_ids = _get_ctrl_token_ids(token_info)
         print("ctrl_token_ids", ctrl_token_ids)
         # For idiom, these are 23, 24, 25, 26
         # Non-control tokens: 20 residues (0-19) and 3 FIM tokens (20-22)
@@ -211,42 +265,8 @@ def _extract_on_gpu(
 
         temp_path = os.path.join(savedir, f"gpu_{gpu_id}_temp.h5")
         with h5py.File(temp_path, "w") as hf:
-            layer_grps = {}
-            for layer_idx in layers:
-                grp = hf.create_group(f"layer_{layer_idx}")
-                grp.create_dataset(
-                    "data",
-                    shape=(0, d_model),
-                    maxshape=(None, d_model),
-                    dtype=np_dtype,
-                    chunks=(1024, d_model),
-                )
-                grp.create_dataset(
-                    "seq_idx",
-                    shape=(0,),
-                    maxshape=(None,),
-                    dtype=np.int32,
-                    chunks=(4096,),
-                )
-                grp.create_dataset(
-                    "pos_idx",
-                    shape=(0,),
-                    maxshape=(None,),
-                    dtype=np.int32,
-                    chunks=(4096,),
-                )
-                layer_grps[layer_idx] = grp
-
-            vlen_int = h5py.vlen_dtype(np.dtype("int16"))
-            tokens_ds = hf.create_dataset(
-                "tokens", shape=(0,), maxshape=(None,), dtype=vlen_int, chunks=(256,)
-            )
-            strings_ds = hf.create_dataset(
-                "strings",
-                shape=(0,),
-                maxshape=(None,),
-                dtype=h5py.string_dtype(),
-                chunks=(256,),
+            layer_grps, tokens_ds, strings_ds = _init_output_h5(
+                hf, layers, d_model, np_dtype
             )
 
             global_seq_offset = start_idx
