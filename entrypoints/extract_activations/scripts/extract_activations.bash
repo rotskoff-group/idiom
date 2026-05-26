@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=extract
 #SBATCH --time=1-00:00:00
-#SBATCH --gpus=1
+#SBATCH --gpus=2
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --output=./slurm_out/slurm-%j.out
@@ -48,7 +48,8 @@ CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_
 #   - a FASTA with "_IDR_x-y" headers (tokenized into FIM format automatically, as below),
 #   - a raw sequences .h5 file with a "residues" field, or
 #   - a precomputed shard (.h5).
-DATA_PATH="${REPO_ROOT}/entrypoints/generate/scripts/example_sequences.fasta"
+# DATA_PATH="${REPO_ROOT}/entrypoints/generate/scripts/example_sequences.fasta"
+DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here 
 
 OUT_DIR="${REPO_ROOT}/entrypoints/extract_activations/output"
 OUTPUT_PATH="${OUT_DIR}/activations.h5"
@@ -67,13 +68,14 @@ transformer_extract \
     "++extract.checkpoint_path=$CKPT_PATH" \
     "++extract.dataset_filename=$DATA_PATH" \
     "++extract.output_path=$OUTPUT_PATH" \
-    "++extract.layers=[0,1,2,3,4,5,6,7,8,9,10,11]" \
-    "++extract.pooling=token" \
+    "++extract.layers=[11]" \
     "++extract.batch_size=128" \
-    "++extract.save_dtype=float16" \
+    "++extract.save_dtype=float32" \
     "++extract.num_precompute_workers=8" \
     "++extract.max_sequences=null" \
-    "++extract.use_multi_gpu=false"
+    "++extract.use_multi_gpu=true"
+
+# "++extract.layers=[0,1,2,3,4,5,6,7,8,9,10,11]" \
 
 echo
 echo "Completed activation extraction"

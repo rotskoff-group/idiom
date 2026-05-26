@@ -79,6 +79,11 @@ def _load_residues(dataset_filename: str, max_sequences: int | None) -> list[str
     with h5py.File(dataset_filename, "r") as f:
         total = len(f["residues"])
         n = min(total, max_sequences) if max_sequences is not None else total
+        # "residues" dataset must be stored as bytes (utf-8 encoded)
+        assert h5py.check_string_dtype(f["residues"].dtype).encoding == "utf-8", (
+            f"Expected 'residues' dataset to be utf-8 encoded bytes, "
+            f"got dtype {f['residues'].dtype}"
+        )
         return [f["residues"][i].decode("utf-8") for i in range(n)]
 
 
@@ -114,8 +119,6 @@ def _precompute_to_tempfile(
 
     processed_inputs = np.array([np.array(x) for x in processed_inputs])
     processed_targets = np.array([np.array(x) for x in processed_targets])
-    # targets are stored with a trailing size-1 dim to match existing shard format
-    processed_targets = processed_targets[:, np.newaxis, :]
 
     input_pad = input_gen.get_ctrl_tokens()["TOK_PAD"]
     sequence_id = (processed_inputs != input_pad).astype(processed_inputs.dtype)
@@ -160,7 +163,6 @@ def _extract_on_gpu(
     token_info,
     dataset_filename,
     layers,
-    pooling,
     save_dtype,
     savedir,
     checkpoint_path,
@@ -191,6 +193,22 @@ def _extract_on_gpu(
         d_model = model_args["model_args"]["d_model"]
         np_dtype = np.float16 if save_dtype == "float16" else np.float32
 
+        # Control tokens (PAD/START/STOP/MASK) are filtered from all saved
+        # activations and tokens
+        ctrl_token_ids = torch.tensor(
+            [
+                int(v)
+                for k, v in token_info["input"]["TOK"].items()
+                if k != "TOK_MAX_SIZE"
+            ],
+            dtype=torch.long,
+        )
+
+        print("ctrl_token_ids", ctrl_token_ids)
+        # For idiom, these are 23, 24, 25, 26
+        # Non-control tokens: 20 residues (0-19) and 3 FIM tokens (20-22)
+        # For non-control, those are not the actual token indicies, just counting
+
         temp_path = os.path.join(savedir, f"gpu_{gpu_id}_temp.h5")
         with h5py.File(temp_path, "w") as hf:
             layer_grps = {}
@@ -210,14 +228,13 @@ def _extract_on_gpu(
                     dtype=np.int32,
                     chunks=(4096,),
                 )
-                if pooling == "token":
-                    grp.create_dataset(
-                        "pos_idx",
-                        shape=(0,),
-                        maxshape=(None,),
-                        dtype=np.int32,
-                        chunks=(4096,),
-                    )
+                grp.create_dataset(
+                    "pos_idx",
+                    shape=(0,),
+                    maxshape=(None,),
+                    dtype=np.int32,
+                    chunks=(4096,),
+                )
                 layer_grps[layer_idx] = grp
 
             vlen_int = h5py.vlen_dtype(np.dtype("int16"))
@@ -256,7 +273,8 @@ def _extract_on_gpu(
                             return_hidden_states=True,
                         )
 
-                    valid_mask = ~src_key_pad_mask  # [B, L], True = real token
+                    # True = real residue token or 1,2,3 FIM token (ie not PAD/START/STOP/MASK)
+                    valid_mask = ~torch.isin(src_tokens, ctrl_token_ids)
 
                     for layer_idx in layers:
                         hs = (
@@ -271,48 +289,33 @@ def _extract_on_gpu(
                         )  # [B, L, D]
                         grp = layer_grps[layer_idx]
 
-                        if pooling == "mean":
-                            valid_float = valid_mask.float().numpy()  # [B, L]
-                            counts = valid_float.sum(axis=1, keepdims=True).clip(min=1)
-                            pooled = (hs * valid_float[:, :, None]).sum(axis=1) / counts
-                            old = grp["data"].shape[0]
-                            new = old + B
-                            grp["data"].resize(new, axis=0)
-                            grp["data"][old:new] = pooled.astype(np_dtype)
-                            grp["seq_idx"].resize(new, axis=0)
-                            grp["seq_idx"][old:new] = np.arange(
-                                global_seq_offset,
-                                global_seq_offset + B,
-                                dtype=np.int32,
-                            )
-                        else:
-                            act_chunks, seq_idx_chunks, pos_idx_chunks = [], [], []
-                            for b in range(B):
-                                valid_pos = np.where(valid_mask[b].numpy())[0]
-                                if len(valid_pos) == 0:
-                                    continue
-                                act_chunks.append(hs[b, valid_pos])
-                                seq_idx_chunks.append(
-                                    np.full(
-                                        len(valid_pos),
-                                        global_seq_offset + b,
-                                        dtype=np.int32,
-                                    )
+                        act_chunks, seq_idx_chunks, pos_idx_chunks = [], [], []
+                        for b in range(B):
+                            valid_pos = np.where(valid_mask[b].numpy())[0]
+                            if len(valid_pos) == 0:
+                                continue
+                            act_chunks.append(hs[b, valid_pos])
+                            seq_idx_chunks.append(
+                                np.full(
+                                    len(valid_pos),
+                                    global_seq_offset + b,
+                                    dtype=np.int32,
                                 )
-                                pos_idx_chunks.append(valid_pos.astype(np.int32))
+                            )
+                            pos_idx_chunks.append(valid_pos.astype(np.int32))
 
-                            if act_chunks:
-                                act_all = np.concatenate(act_chunks, axis=0)
-                                seq_idx_all = np.concatenate(seq_idx_chunks)
-                                pos_idx_all = np.concatenate(pos_idx_chunks)
-                                old = grp["data"].shape[0]
-                                new = old + len(act_all)
-                                grp["data"].resize(new, axis=0)
-                                grp["data"][old:new] = act_all
-                                grp["seq_idx"].resize(new, axis=0)
-                                grp["seq_idx"][old:new] = seq_idx_all
-                                grp["pos_idx"].resize(new, axis=0)
-                                grp["pos_idx"][old:new] = pos_idx_all
+                        if act_chunks:
+                            act_all = np.concatenate(act_chunks, axis=0)
+                            seq_idx_all = np.concatenate(seq_idx_chunks)
+                            pos_idx_all = np.concatenate(pos_idx_chunks)
+                            old = grp["data"].shape[0]
+                            new = old + len(act_all)
+                            grp["data"].resize(new, axis=0)
+                            grp["data"][old:new] = act_all
+                            grp["seq_idx"].resize(new, axis=0)
+                            grp["seq_idx"][old:new] = seq_idx_all
+                            grp["pos_idx"].resize(new, axis=0)
+                            grp["pos_idx"][old:new] = pos_idx_all
 
                     # Free GPU memory held by hidden_states before the next forward pass
                     del hidden_states
@@ -353,7 +356,7 @@ def _extract_on_gpu(
         traceback.print_exc()
 
 
-def _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_info):
+def _merge_temp_files(savedir, num_gpus, output_path, layers, token_info):
     alphabet = token_info.get("alphabet", None)
 
     with h5py.File(output_path, "w") as out:
@@ -367,7 +370,6 @@ def _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_inf
         first_temp = os.path.join(savedir, "gpu_0_temp.h5")
         with h5py.File(first_temp, "r") as f0:
             sample_dtype = f0[f"layer_{layers[0]}"]["data"].dtype
-            has_pos_idx = pooling == "token"
 
         # Pre-create resizable activation datasets
         act_grps = {}
@@ -385,14 +387,13 @@ def _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_inf
             grp.create_dataset(
                 "seq_idx", shape=(0,), maxshape=(None,), dtype=np.int32, chunks=(4096,)
             )
-            if has_pos_idx:
-                grp.create_dataset(
-                    "pos_idx",
-                    shape=(0,),
-                    maxshape=(None,),
-                    dtype=np.int32,
-                    chunks=(4096,),
-                )
+            grp.create_dataset(
+                "pos_idx",
+                shape=(0,),
+                maxshape=(None,),
+                dtype=np.int32,
+                chunks=(4096,),
+            )
             act_grps[layer_idx] = grp
 
         vlen_int = h5py.vlen_dtype(np.dtype("int16"))
@@ -430,9 +431,8 @@ def _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_inf
                     grp["data"][old:] = src["data"][()]
                     grp["seq_idx"].resize(old + n_new, axis=0)
                     grp["seq_idx"][old:] = src["seq_idx"][()]
-                    if has_pos_idx and "pos_idx" in src:
-                        grp["pos_idx"].resize(old + n_new, axis=0)
-                        grp["pos_idx"][old:] = src["pos_idx"][()]
+                    grp["pos_idx"].resize(old + n_new, axis=0)
+                    grp["pos_idx"][old:] = src["pos_idx"][()]
 
                 n_toks = tmp["tokens"].shape[0]
                 if n_toks > 0:
@@ -461,7 +461,18 @@ def main(cfg) -> None:
     dataset_filename = extract_args["dataset_filename"]
     output_path = extract_args["output_path"]
     layers = list(extract_args["layers"])
-    pooling = extract_args["pooling"]
+    # Validate layers against the model's transformer depth
+    n_layers = model_args["model_args"]["unified_transformer_args"]["n_layers"]
+    if not layers:
+        raise ValueError("extract.layers must be non-empty")
+    if len(set(layers)) != len(layers):
+        raise ValueError(f"extract.layers contains duplicates: {layers}")
+    out_of_range = [li for li in layers if not (0 <= li < n_layers)]
+    if out_of_range:
+        raise ValueError(
+            f"extract.layers contains out-of-range indices {out_of_range}; "
+            f"valid range for this {n_layers}-layer model is 0..{n_layers - 1}"
+        )
     batch_size = extract_args["batch_size"]
     max_sequences = extract_args.get("max_sequences", None)
     save_dtype = extract_args.get("save_dtype", "float16")
@@ -483,7 +494,7 @@ def main(cfg) -> None:
             token_info = aggregate_tokens_hdf5(f)
             total_sequences = len(f["res_tokens"])
         print(f"Extracting activations for {total_sequences:,} sequences")
-        print(f"Layers: {layers}, pooling: {pooling}, dtype: {save_dtype}")
+        print(f"Layers: {layers}, dtype: {save_dtype}")
 
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
         savedir = os.path.dirname(os.path.abspath(output_path))
@@ -522,7 +533,6 @@ def main(cfg) -> None:
                     token_info,
                     temp_shard_path,
                     layers,
-                    pooling,
                     save_dtype,
                     savedir,
                     checkpoint_path,
@@ -535,7 +545,7 @@ def main(cfg) -> None:
             p.join()
 
         print("All GPU processes complete, merging results...")
-        _merge_temp_files(savedir, num_gpus, output_path, layers, pooling, token_info)
+        _merge_temp_files(savedir, num_gpus, output_path, layers, token_info)
 
     finally:
         if os.path.exists(temp_shard_path):

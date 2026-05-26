@@ -288,7 +288,7 @@ bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
 
 # Extracting activations
 
-Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model over a set of sequences and saves the per-layer activations to an HDF5 file. Activations can also be extracted from any post-trained model. 
+Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model over a set of sequences and saves the per-layer activations for every token position to an HDF5 file. Activations can also be extracted from any post-trained model. Note that activations are extracted for EVERY token position, including FIM special tokens `1`, `2`, and `3`. These special tokens act as attention sinks and should typically be filtered out prior to downstream analysis. Activation extraction can be done using the following command: 
 
 ```bash
 cd entrypoints/extract_activations/scripts
@@ -297,22 +297,21 @@ bash extract_activations.bash # or: sbatch extract_activations.bash
 
 As an example, the script extracts activations from all 12 transformer blocks for the two example proteins in `entrypoints/generate/scripts/example_sequences.fasta`. To run on your own sequences, set `DATA_PATH` near the top of the script to: 
 
-- a FASTA file whose sequence headers end with `_IDR_x-y` or 
-- a raw sequences `.h5` file containing a `residues` field
+- A FASTA file whose sequence headers end with `_IDR_x-y` or 
+- A raw sequences `.h5` file containing a `residues` field, where the sequences in the `residues` field are already transformed into a fill-in-the-middle format with the `1`, `2`, and `3` characters present. The `residues` dataset must use an h5py utf-8 string dtype `bytes`.  
 
 The following options can be adjusted near the top of the script:
 
-- `++extract.layers` — 0-indexed transformer blocks to extract (e.g. `[11]` for the last block only, or `[0,1,2,3,4,5,6,7,8,9,10,11]` for all blocks).
-- `++extract.pooling` — `token` saves one activation vector per residue (per-position); `mean` saves a single mean-pooled vector per sequence.
-- `++extract.save_dtype` — `float16` (default) or `float32`.
-- `++extract.max_sequences` — cap the number of sequences processed (`null` = all)
+- `++extract.layers` — 0-indexed transformer blocks to extract activations from (e.g. `[11]` for the last block only, or `[0,1,2,3,4,5,6,7,8,9,10,11]` for all blocks)
+- `++extract.save_dtype` — `float16` (default) or `float32`
+- `++extract.max_sequences` — cap the maximum number of sequences processed (`null` = all)
 - `++extract.use_multi_gpu` — set to `true` and increase `--gpus` to parallelize activation extraction 
 
 Activations are written to `entrypoints/extract_activations/output/activations.h5` with the following structure:
 
-- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (`token` pooling) or `[num_sequences, d_model]` (`mean` pooling)
+- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (one row per non-control token)
 - `activations/layer_<i>/seq_idx` — index of the sequence each row belongs to
-- `activations/layer_<i>/pos_idx` — token position within the sequence (`token` pooling only)
+- `activations/layer_<i>/pos_idx` — token position within the sequence (in the original tokenized input, including control tokens)
 - `sequences/tokens` — token IDs for each sequence
 - `sequences/strings` — residue string for each sequence
 - `metadata/alphabet`, `metadata/layers` — the token alphabet and the list of extracted layers

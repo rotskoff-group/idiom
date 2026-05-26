@@ -4,7 +4,6 @@ dataset_filename: null         # path to a precomputed shard (.h5 or directory o
                                # (e.g. AFDB_IDR_90_FIM_512.h5) — precompute runs automatically
 output_path: activations.h5    # path for output HDF5 file
 layers: [11]                   # 0-indexed block outputs; 11 = last block (pre-final-norm)
-pooling: token                 # "token" (per-position) or "mean" (mean-pooled per sequence)
 batch_size: 256
 max_sequences: null            # null = all; set this when using a raw sequences file to
                                # avoid tokenizing the entire dataset into memory
