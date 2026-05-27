@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import tempfile
@@ -5,9 +6,10 @@ import time
 import h5py
 import numpy as np
 import torch
+import torch.multiprocessing as mp
 import hydra
 import lightning as L
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from omegaconf import OmegaConf
 
 from idiom.nn.transformer.module import LightningModel
@@ -180,13 +182,22 @@ def _load_model(model_args, training_args, token_info, checkpoint_path, device):
     return lightning_model
 
 
-def _build_dataloader(dataset_filename, batch_size):
-    """DataLoader over every sequence in the precomputed shard."""
+def _build_dataloader(dataset_filename, batch_size, seq_start=None, seq_end=None):
+    """DataLoader over a (sub)range of sequences in the precomputed tempfile.
+
+    When ``seq_start`` / ``seq_end`` are given, wraps the underlying dataset in a
+    ``Subset`` so only that half-open range is iterated. Used to scope one shard's
+    work to its assigned sequences during multi-shard extraction.
+    """
 
     def get_hdf5():
         return [h5py.File(dataset_filename, "r")]
 
     dataset = TransformerShardedAutoregDataset(get_hdf5_data=get_hdf5)
+    if seq_start is not None or seq_end is not None:
+        seq_start = 0 if seq_start is None else seq_start
+        seq_end = len(dataset) if seq_end is None else seq_end
+        dataset = Subset(dataset, range(seq_start, seq_end))
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -204,12 +215,23 @@ def _get_ctrl_token_ids(token_info) -> torch.Tensor:
     )
 
 
-def _init_output_h5(hf, layers, d_model, np_dtype, alphabet):
-    """Create the canonical output layout and return per-layer + per-sequence handles."""
+def _init_output_h5(
+    hf, layers, d_model, np_dtype, alphabet, shard_idx, num_shards, seq_start, seq_end
+):
+    """Create the canonical per-shard output layout and return handles.
+
+    Per-shard metadata identifies the shard's position in the wider sharded
+    extraction so downstream readers can stitch shards without re-scanning.
+    ``seq_idx`` written into the activation rows is GLOBAL across shards.
+    """
     meta = hf.create_group("metadata")
     meta.create_dataset("layers", data=np.array(layers, dtype=np.int32))
     if alphabet is not None:
         meta.create_dataset("alphabet", data=alphabet)
+    meta.create_dataset("shard_idx", data=np.int32(shard_idx))
+    meta.create_dataset("num_shards", data=np.int32(num_shards))
+    meta.create_dataset("seq_start", data=np.int64(seq_start))
+    meta.create_dataset("seq_end", data=np.int64(seq_end))
 
     layer_grps = {}
     for layer_idx in layers:
@@ -255,47 +277,61 @@ def _init_output_h5(hf, layers, d_model, np_dtype, alphabet):
     return layer_grps, tokens_ds, strings_ds
 
 
-def _extract(
+def _extract_shard(
+    lightning_model,
+    gpu_id,
+    shard_idx,
+    num_shards,
+    seq_start,
+    seq_end,
     batch_size,
     model_args,
-    training_args,
     token_info,
     dataset_filename,
     layers,
     save_dtype,
-    output_path,
-    checkpoint_path,
+    output_dir,
 ):
-    device = "cuda:0"
-    lightning_model = _load_model(
-        model_args, training_args, token_info, checkpoint_path, device
-    )
-    dataloader = _build_dataloader(dataset_filename, batch_size)
+    """Extract one shard's sequence range and write its HDF5 file.
+
+    Returns a dict of per-layer row counts (used by the manifest writer).
+    """
+    device = f"cuda:{gpu_id}"
+    dataloader = _build_dataloader(dataset_filename, batch_size, seq_start, seq_end)
 
     d_model = model_args["model_args"]["d_model"]
     np_dtype = np.float16 if save_dtype == "float16" else np.float32
     torch_dtype = torch.float16 if save_dtype == "float16" else torch.float32
 
-    # Only PAD/START/STOP/MASK are filtered from saved rows — FIM markers
-    # ('1', '3', '2') are kept like any other residue token.
     ctrl_token_ids = _get_ctrl_token_ids(token_info)
-    print(f"ctrl_token_ids={ctrl_token_ids.tolist()}")
-
     alphabet = token_info.get("alphabet", None)
-    total_sequences = len(dataloader.dataset)
+
+    output_path = os.path.join(output_dir, f"shard_{shard_idx:04d}.h5")
+    shard_total = seq_end - seq_start
+    log_prefix = f"[gpu {gpu_id} shard {shard_idx:04d}/{num_shards}]"
 
     res_fh = h5py.File(dataset_filename, "r")
+    rows_per_layer = {layer_idx: 0 for layer_idx in layers}
     try:
         with h5py.File(output_path, "w") as hf:
             layer_grps, tokens_ds, strings_ds = _init_output_h5(
-                hf, layers, d_model, np_dtype, alphabet
+                hf,
+                layers,
+                d_model,
+                np_dtype,
+                alphabet,
+                shard_idx=shard_idx,
+                num_shards=num_shards,
+                seq_start=seq_start,
+                seq_end=seq_end,
             )
 
-            global_seq_offset = 0
+            global_seq_offset = seq_start
             t_start = time.monotonic()
-            seq_at_last_log = 0
-            log_every = batch_size * 10
-            print(f"Starting extraction over {total_sequences:,} sequences")
+            print(
+                f"{log_prefix} starting: seqs [{seq_start}, {seq_end}) = {shard_total:,}",
+                flush=True,
+            )
             for batch in dataloader:
                 (
                     structural_tokens,
@@ -362,6 +398,7 @@ def _extract(
                         grp["seq_idx"][old:new] = seq_idx_all
                         grp["pos_idx"].resize(new, axis=0)
                         grp["pos_idx"][old:new] = pos_idx_all
+                        rows_per_layer[layer_idx] = new
 
                 # Free GPU memory held by hidden_states before the next forward pass
                 del hidden_states
@@ -381,30 +418,140 @@ def _extract(
                     )
 
                 global_seq_offset += B
-
-                if (
-                    global_seq_offset - seq_at_last_log >= log_every
-                    or global_seq_offset == total_sequences
-                ):
-                    elapsed = time.monotonic() - t_start
-                    rate = global_seq_offset / max(elapsed, 1e-9)
-                    eta = (
-                        (total_sequences - global_seq_offset) / rate
-                        if rate > 0
-                        else float("inf")
-                    )
-                    print(
-                        f"[{_fmt_hms(elapsed)}] {global_seq_offset:,}/{total_sequences:,} "
-                        f"({100 * global_seq_offset / total_sequences:.1f}%)  ETA {_fmt_hms(eta)}",
-                        flush=True,
-                    )
-                    seq_at_last_log = global_seq_offset
     finally:
         res_fh.close()
 
     print(
-        f"Activations saved to {output_path} (took {_fmt_hms(time.monotonic() - t_start)})"
+        f"{log_prefix} done: {output_path} "
+        f"(took {_fmt_hms(time.monotonic() - t_start)})",
+        flush=True,
     )
+    return rows_per_layer
+
+
+def _run_gpu_worker(
+    gpu_id,
+    shard_indices,
+    shard_ranges,
+    num_shards,
+    batch_size,
+    model_args,
+    training_args,
+    token_info,
+    dataset_filename,
+    layers,
+    save_dtype,
+    output_dir,
+    checkpoint_path,
+    result_queue,
+):
+    """Entry point for one GPU process. Loads the model once, processes its shards."""
+    try:
+        device = f"cuda:{gpu_id}"
+        lightning_model = _load_model(
+            model_args, training_args, token_info, checkpoint_path, device
+        )
+        for shard_idx in shard_indices:
+            seq_start, seq_end = shard_ranges[shard_idx]
+            rows = _extract_shard(
+                lightning_model,
+                gpu_id,
+                shard_idx,
+                num_shards,
+                seq_start,
+                seq_end,
+                batch_size,
+                model_args,
+                token_info,
+                dataset_filename,
+                layers,
+                save_dtype,
+                output_dir,
+            )
+            result_queue.put(
+                {
+                    "shard_idx": shard_idx,
+                    "seq_start": seq_start,
+                    "seq_end": seq_end,
+                    "rows_per_layer": rows,
+                }
+            )
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        result_queue.put({"error": str(e), "gpu_id": gpu_id})
+
+
+def _compute_shard_ranges(total_sequences: int, num_shards: int):
+    """Split ``[0, total_sequences)`` into ``num_shards`` contiguous half-open ranges.
+
+    Excess (when ``total_sequences % num_shards != 0``) is distributed across
+    the first ``remainder`` shards, each getting one extra sequence — matches
+    the assignment policy the old multi-GPU code used.
+    """
+    base = total_sequences // num_shards
+    remainder = total_sequences % num_shards
+    ranges = []
+    start = 0
+    for k in range(num_shards):
+        size = base + (1 if k < remainder else 0)
+        ranges.append((start, start + size))
+        start += size
+    return ranges
+
+
+def _assign_shards_to_gpus(num_shards: int, num_gpus: int):
+    """Contiguous-block assignment: GPU g gets a slice of shard indices.
+
+    Each GPU handles roughly ``num_shards // num_gpus`` shards in sequence
+    order, which keeps tempfile reads roughly contiguous per GPU.
+    """
+    base = num_shards // num_gpus
+    rem = num_shards % num_gpus
+    assignment: list[list[int]] = []
+    start = 0
+    for g in range(num_gpus):
+        size = base + (1 if g < rem else 0)
+        assignment.append(list(range(start, start + size)))
+        start += size
+    return assignment
+
+
+def _write_manifest(
+    output_dir, cfg, total_sequences, layers, save_dtype, alphabet, shard_results
+):
+    """Write a JSON inventory of the sharded output for downstream readers."""
+    alphabet_list = None
+    if alphabet is not None:
+        alphabet_list = [
+            a.decode("utf-8") if isinstance(a, (bytes, np.bytes_)) else str(a)
+            for a in alphabet
+        ]
+    shards_sorted = sorted(shard_results, key=lambda d: d["shard_idx"])
+    manifest = {
+        "num_shards": len(shards_sorted),
+        "total_sequences": total_sequences,
+        "layers": list(map(int, layers)),
+        "save_dtype": save_dtype,
+        "alphabet": alphabet_list,
+        "shards": [
+            {
+                "shard_idx": int(s["shard_idx"]),
+                "file": f"shard_{int(s['shard_idx']):04d}.h5",
+                "seq_start": int(s["seq_start"]),
+                "seq_end": int(s["seq_end"]),
+                "rows_per_layer": {
+                    int(k): int(v) for k, v in s["rows_per_layer"].items()
+                },
+            }
+            for s in shards_sorted
+        ],
+    }
+    path = os.path.join(output_dir, "manifest.json")
+    with open(path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"Wrote manifest: {path}")
 
 
 @hydra.main(version_base="1.3", config_path="../cfgs", config_name="extract")
@@ -417,7 +564,7 @@ def main(cfg) -> None:
 
     checkpoint_path = extract_args["checkpoint_path"]
     dataset_filename = extract_args["dataset_filename"]
-    output_path = extract_args["output_path"]
+    output_dir = extract_args["output_dir"]
     layers = list(extract_args["layers"])
     # Validate layers against the model's transformer depth
     n_layers = model_args["model_args"]["unified_transformer_args"]["n_layers"]
@@ -434,10 +581,27 @@ def main(cfg) -> None:
     batch_size = extract_args["batch_size"]
     max_sequences = extract_args.get("max_sequences", None)
     save_dtype = extract_args.get("save_dtype", "float16")
-    num_precompute_workers = extract_args.get("num_precompute_workers", 4)
+    num_shards = int(extract_args["num_shards"])
+    if num_shards < 1:
+        raise ValueError(f"extract.num_shards must be >= 1, got {num_shards}")
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for activation extraction")
+    num_gpus = torch.cuda.device_count()
+    print(f"Detected {num_gpus} GPU(s)")
+
+    # Resolve CPU budget for the precompute step from SLURM (or fall back).
+    slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
+    num_cpus = int(slurm_cpus) if slurm_cpus else (os.cpu_count() or 1)
+    npw_cfg = extract_args.get("num_precompute_workers", None)
+    num_precompute_workers = int(npw_cfg) if npw_cfg else num_cpus
+    num_precompute_workers = min(num_precompute_workers, num_cpus)
+    print(
+        f"Using {num_precompute_workers} CPU workers for precompute (SLURM_CPUS_PER_TASK={slurm_cpus})"
+    )
+
+    # Multiple GPU subprocesses will open the tempfile concurrently for reading.
+    os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
     residues = _load_residues(dataset_filename, max_sequences)
     temp_shard_path = _precompute_to_tempfile(
@@ -448,23 +612,104 @@ def main(cfg) -> None:
         with h5py.File(temp_shard_path, "r") as f:
             token_info = aggregate_tokens_hdf5(f)
             total_sequences = len(f["res_tokens"])
-        print(f"Extracting activations for {total_sequences:,} sequences")
+        # Don't create more shards than there are sequences.
+        if num_shards > total_sequences:
+            print(
+                f"num_shards={num_shards} > total_sequences={total_sequences}; "
+                f"reducing to {total_sequences}"
+            )
+            num_shards = total_sequences
+
+        shard_ranges = _compute_shard_ranges(total_sequences, num_shards)
+        gpu_assignment = _assign_shards_to_gpus(num_shards, num_gpus)
+
+        print(f"Extracting {total_sequences:,} sequences into {num_shards} shard(s)")
         print(f"Layers: {layers}, dtype: {save_dtype}")
+        for g, shards in enumerate(gpu_assignment):
+            if not shards:
+                continue
+            first, last = shards[0], shards[-1]
+            r0 = shard_ranges[first][0]
+            r1 = shard_ranges[last][1]
+            print(
+                f"  GPU {g}: shards [{first:04d}..{last:04d}] → seqs [{r0:,}..{r1:,})"
+            )
 
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        savedir = os.path.dirname(os.path.abspath(output_path))
-        OmegaConf.save(cfg, os.path.join(savedir, "extract_config.yaml"))
+        os.makedirs(os.path.abspath(output_dir), exist_ok=True)
+        OmegaConf.save(cfg, os.path.join(output_dir, "extract_config.yaml"))
 
-        _extract(
-            batch_size,
-            model_args,
-            training_args,
-            token_info,
-            temp_shard_path,
+        try:
+            mp.set_start_method("spawn", force=True)
+        except RuntimeError:
+            pass
+        result_queue: "mp.Queue" = mp.Queue()
+        processes = []
+        t_start_all = time.monotonic()
+        for gpu_id, shard_indices in enumerate(gpu_assignment):
+            if not shard_indices:
+                continue
+            p = mp.Process(
+                target=_run_gpu_worker,
+                args=(
+                    gpu_id,
+                    shard_indices,
+                    shard_ranges,
+                    num_shards,
+                    batch_size,
+                    model_args,
+                    training_args,
+                    token_info,
+                    temp_shard_path,
+                    layers,
+                    save_dtype,
+                    output_dir,
+                    checkpoint_path,
+                    result_queue,
+                ),
+            )
+            p.start()
+            processes.append(p)
+
+        # Drain the queue concurrently so a slow consumer doesn't block producers.
+        shard_results: list[dict] = []
+        errors: list[dict] = []
+        expected = num_shards
+        while len(shard_results) + len(errors) < expected:
+            msg = result_queue.get()
+            if "error" in msg:
+                errors.append(msg)
+            else:
+                shard_results.append(msg)
+            done = len(shard_results) + len(errors)
+            elapsed = time.monotonic() - t_start_all
+            rate = done / max(elapsed, 1e-9)
+            eta = (expected - done) / rate if rate > 0 else float("inf")
+            print(
+                f"[overall {_fmt_hms(elapsed)}] {done}/{expected} shards done  ETA {_fmt_hms(eta)}",
+                flush=True,
+            )
+
+        for p in processes:
+            p.join()
+
+        if errors:
+            for e in errors:
+                print(f"GPU {e.get('gpu_id', '?')} error: {e['error']}", flush=True)
+            raise RuntimeError(f"{len(errors)} shard worker(s) failed; see logs above")
+
+        alphabet = token_info.get("alphabet", None)
+        _write_manifest(
+            output_dir,
+            cfg,
+            total_sequences,
             layers,
             save_dtype,
-            output_path,
-            checkpoint_path,
+            alphabet,
+            shard_results,
+        )
+        print(
+            f"All shards complete in {_fmt_hms(time.monotonic() - t_start_all)} "
+            f"→ {output_dir}"
         )
 
     finally:

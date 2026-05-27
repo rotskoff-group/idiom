@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=extract
 #SBATCH --time=1-00:00:00
-#SBATCH --gpus=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --gpus=4
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128G
 #SBATCH --output=./slurm_out/slurm-%j.out
 
 # You can run this script using 'sbatch extract_activations.bash' or 'bash extract_activations.bash'
@@ -53,8 +53,9 @@ DATA_PATH="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM
 # DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here 
 
 OUT_DIR="${REPO_ROOT}/entrypoints/extract_activations/output"
-OUTPUT_PATH="${OUT_DIR}/activations.h5"
-mkdir -p "${OUT_DIR}"
+OUTPUT_DIR="${OUT_DIR}/activations_layer_8"
+NSHARDS=64
+mkdir -p "${OUTPUT_DIR}"
 
 echo "Starting activation extraction"
 
@@ -68,11 +69,12 @@ transformer_extract \
     "extract=transformer" \
     "++extract.checkpoint_path=$CKPT_PATH" \
     "++extract.dataset_filename=$DATA_PATH" \
-    "++extract.output_path=$OUTPUT_PATH" \
+    "++extract.output_dir=$OUTPUT_DIR" \
     "++extract.layers=[8]" \
     "++extract.batch_size=256" \
     "++extract.save_dtype=float32" \
-    "++extract.num_precompute_workers=8" \
+    "++extract.num_precompute_workers=null" \
+    "++extract.num_shards=$NSHARDS" \
     "++extract.max_sequences=null"
 
 # "++extract.layers=[0,1,2,3,4,5,6,7,8,9,10,11]" \

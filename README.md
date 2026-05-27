@@ -288,7 +288,7 @@ bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
 
 # Extracting activations
 
-Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model (or any post-trained checkpoint) over a set of sequences and saves the per-layer activations to an HDF5 file. Only control tokens (`BOS`, `EOS`, `PAD`, `MASK`) are filtered out; activations for residue tokens and for the FIM markers `1`, `3`, `2` are all kept. The FIM segment a residue belongs to can be recovered by scanning `sequences/strings[seq_idx]` (or `sequences/tokens[seq_idx]`) for the surrounding `1`/`3`/`2` markers. Activation extraction can be done using the following command: 
+Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model (or any post-trained checkpoint) over a set of sequences and writes the per-layer activations to a directory of HDF5 *shards*. Only control tokens (`BOS`, `EOS`, `PAD`, `MASK`) are filtered out; activations for residue tokens and for the FIM markers `1`, `3`, `2` are all kept. The FIM segment a residue belongs to can be recovered by scanning `sequences/strings[seq_idx]` (or `sequences/tokens[seq_idx]`) for the surrounding `1`/`3`/`2` markers. Extraction parallelises automatically across all GPUs SLURM gives the job; sequences are split contiguously into `num_shards` files. Activation extraction can be done using the following command: 
 
 ```bash
 cd entrypoints/extract_activations/scripts
@@ -305,17 +305,31 @@ The following options can be adjusted near the top of the script:
 - `++extract.layers` — 0-indexed transformer blocks to extract activations from (e.g. `[11]` for the last block only, or `[0,1,2,3,4,5,6,7,8,9,10,11]` for all blocks)
 - `++extract.save_dtype` — `float16` or `float32`
 - `++extract.max_sequences` — cap the maximum number of sequences processed (`null` = all)
+- `++extract.num_shards` — number of output shard files; sequences are split into contiguous ranges, distributed contiguously across the available GPUs
 
-Activations are written to `entrypoints/extract_activations/output/activations.h5` with the following structure:
+Activations are written to `entrypoints/extract_activations/output/activations/` as a directory of shards plus a manifest:
+
+```
+activations/
+  extract_config.yaml      # the extraction configuration
+  manifest.json            # shard inventory: per-shard seq_start/seq_end and per-layer row counts
+  shard_0000.h5
+  shard_0001.h5
+  ...
+  shard_NNNN.h5
+```
+
+Each shard has the layout:
 
 - `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (one row per kept token; only control tokens `BOS/EOS/PAD/MASK` are filtered out, so residues and FIM markers `1/3/2` are all included)
-- `activations/layer_<i>/seq_idx` — index of the sequence each row belongs to
+- `activations/layer_<i>/seq_idx` — global sequence index for each row (consistent across all shards)
 - `activations/layer_<i>/pos_idx` — 0-based position of the row within `sequences/tokens[seq_idx]` and `sequences/strings[seq_idx]`
-- `sequences/tokens` — kept token IDs for each sequence (variable-length; includes `1/3/2`)
-- `sequences/strings` — raw FIM-formatted residue string for each sequence (includes `1/2/3` markers)
-- `metadata/alphabet`, `metadata/layers` — the token alphabet and the list of extracted layers
-- `extract_config.yaml` — the extraction configuration, written alongside the output file
-- To obtain the IDR-only activations for a sequence `s`, let `i = sequences/strings[s].index('2')` and take rows with `seq_idx == s` and `pos_idx > i`. The prefix-only and suffix-only slices are bounded analogously by the `1` and `3` markers.
+- `sequences/tokens` — kept token IDs for each sequence in this shard (variable-length; includes `1/3/2`)
+- `sequences/strings` — raw FIM-formatted residue string for each sequence in this shard
+- `metadata/alphabet`, `metadata/layers` — token alphabet and extracted layers
+- `metadata/shard_idx`, `metadata/num_shards`, `metadata/seq_start`, `metadata/seq_end` — this shard's identity and the global sequence range it covers (half-open)
+
+To obtain the IDR-only activations for a sequence `s`: locate the shard with `seq_start <= s < seq_end`, then within that shard let `i = sequences/strings[s].index('2')` and take rows with `seq_idx == s` and `pos_idx > i`. The prefix-only and suffix-only slices are bounded analogously by the `1` and `3` markers.
 
 
 # Pre-training
