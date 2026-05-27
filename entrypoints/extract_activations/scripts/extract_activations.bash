@@ -49,7 +49,8 @@ CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_
 #   - a raw sequences .h5 file with a "residues" field, or
 #   - a precomputed shard (.h5).
 # DATA_PATH="${REPO_ROOT}/entrypoints/generate/scripts/example_sequences.fasta"
-DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here 
+DATA_PATH="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here
+# DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here 
 
 OUT_DIR="${REPO_ROOT}/entrypoints/extract_activations/output"
 OUTPUT_PATH="${OUT_DIR}/activations.h5"
@@ -68,7 +69,7 @@ transformer_extract \
     "++extract.checkpoint_path=$CKPT_PATH" \
     "++extract.dataset_filename=$DATA_PATH" \
     "++extract.output_path=$OUTPUT_PATH" \
-    "++extract.layers=[11]" \
+    "++extract.layers=[10,11]" \
     "++extract.batch_size=128" \
     "++extract.save_dtype=float32" \
     "++extract.num_precompute_workers=8" \

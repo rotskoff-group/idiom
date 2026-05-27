@@ -288,14 +288,14 @@ bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
 
 # Extracting activations
 
-Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model over a set of sequences and saves the per-layer activations for every token position to an HDF5 file. Activations can also be extracted from any post-trained model. Note that activations are extracted for EVERY token position, including FIM special tokens `1`, `2`, and `3`. These special tokens act as attention sinks and should typically be filtered out prior to downstream analysis. Activations from control tokens (`BOS`, `EOS`, `PAD`, and `MASK`) are not extracted. Activation extraction can be done using the following command: 
+Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model (or any post-trained checkpoint) over a set of sequences and saves the per-layer activations to an HDF5 file. Note that only residue positions are saved. Both control tokens (`BOS`, `EOS`, `PAD`, `MASK`) and the FIM markers `1`, `3`, `2` are filtered out during extraction. Each saved row is labeled with a `fim_segment` value (`1` = prefix, `3` = suffix, `2` = IDR) so the segment that a residue came from can be identified. Activation extraction can be done using the following command: 
 
 ```bash
 cd entrypoints/extract_activations/scripts
 bash extract_activations.bash # or: sbatch extract_activations.bash
 ```
 
-As an example, the script extracts activations from all 12 transformer blocks for the two example proteins in `entrypoints/generate/scripts/example_sequences.fasta`. To run on your own sequences, set `DATA_PATH` near the top of the script to: 
+As an example, the script extracts activations from the last transformer block for the two example proteins in `entrypoints/generate/scripts/example_sequences.fasta`. To run on your own sequences, set `DATA_PATH` near the top of the script to: 
 
 - A FASTA file whose sequence headers end with `_IDR_x-y` or 
 - A raw sequences `.h5` file containing a `residues` field, where the sequences in the `residues` field are already transformed into a fill-in-the-middle format with the `1`, `2`, and `3` characters present. The `residues` dataset must use an h5py utf-8 string dtype `bytes`.  
@@ -309,13 +309,17 @@ The following options can be adjusted near the top of the script:
 
 Activations are written to `entrypoints/extract_activations/output/activations.h5` with the following structure:
 
-- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (one row per non-control token)
-- `activations/layer_<i>/seq_idx` — index of the sequence each row belongs to
-- `activations/layer_<i>/pos_idx` — token position within the sequence (in the original tokenized input, including control tokens)
-- `sequences/tokens` — token IDs for each sequence
-- `sequences/strings` — residue string for each sequence
+- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (one row per kept residue; control tokens `BOS/EOS/PAD/MASK` and FIM markers `1/2/3` are filtered out)
+- `activations/layer_<i>/seq_idx` — index of the sequence each row belongs to (global, across all GPUs)
+- `activations/layer_<i>/pos_idx` — token position within the original tokenized sequence (control tokens and FIM markers included in the count)
+- `activations/layer_<i>/local_pos_idx` — rank of the row among kept residues in its sequence (i.e. index into the matching `aligned_strings` entry)
+- `activations/layer_<i>/fim_segment` — FIM segment label for each row: `1` = prefix, `3` = suffix, `2` = IDR
+- `sequences/tokens` — kept token IDs for each sequence (variable-length, control/FIM tokens removed)
+- `sequences/strings` — raw FIM-formatted residue string for each sequence (includes `1/2/3` markers)
+- `sequences/aligned_strings` — residue string with one character per kept activation row, aligned 1-to-1 with `data` rows of the same `seq_idx`
 - `metadata/alphabet`, `metadata/layers` — the token alphabet and the list of extracted layers
 - `extract_config.yaml` — the extraction configuration, written alongside the output file
+- To obtain the IDR-only activations for a sequence, mask with `fim_segment == 2`.
 
 
 # Pre-training
