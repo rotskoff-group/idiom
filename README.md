@@ -288,7 +288,7 @@ bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
 
 # Extracting activations
 
-Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model (or any post-trained checkpoint) over a set of sequences and saves the per-layer activations to an HDF5 file. Note that only residue positions are saved. Both control tokens (`BOS`, `EOS`, `PAD`, `MASK`) and the FIM markers `1`, `3`, `2` are filtered out during extraction. Each saved row is labeled with a `fim_segment` value (`1` = prefix, `3` = suffix, `2` = IDR) so the segment that a residue came from can be identified. Activation extraction can be done using the following command: 
+Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model (or any post-trained checkpoint) over a set of sequences and saves the per-layer activations to an HDF5 file. Only control tokens (`BOS`, `EOS`, `PAD`, `MASK`) are filtered out; activations for residue tokens and for the FIM markers `1`, `3`, `2` are all kept. The FIM segment a residue belongs to can be recovered by scanning `sequences/strings[seq_idx]` (or `sequences/tokens[seq_idx]`) for the surrounding `1`/`3`/`2` markers. Activation extraction can be done using the following command: 
 
 ```bash
 cd entrypoints/extract_activations/scripts
@@ -305,21 +305,17 @@ The following options can be adjusted near the top of the script:
 - `++extract.layers` — 0-indexed transformer blocks to extract activations from (e.g. `[11]` for the last block only, or `[0,1,2,3,4,5,6,7,8,9,10,11]` for all blocks)
 - `++extract.save_dtype` — `float16` or `float32`
 - `++extract.max_sequences` — cap the maximum number of sequences processed (`null` = all)
-- `++extract.use_multi_gpu` — set to `true` and increase `--gpus` to parallelize activation extraction 
 
 Activations are written to `entrypoints/extract_activations/output/activations.h5` with the following structure:
 
-- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (one row per kept residue; control tokens `BOS/EOS/PAD/MASK` and FIM markers `1/2/3` are filtered out)
-- `activations/layer_<i>/seq_idx` — index of the sequence each row belongs to (global, across all GPUs)
-- `activations/layer_<i>/pos_idx` — token position within the original tokenized sequence (control tokens and FIM markers included in the count)
-- `activations/layer_<i>/local_pos_idx` — rank of the row among kept residues in its sequence (i.e. index into the matching `aligned_strings` entry)
-- `activations/layer_<i>/fim_segment` — FIM segment label for each row: `1` = prefix, `3` = suffix, `2` = IDR
-- `sequences/tokens` — kept token IDs for each sequence (variable-length, control/FIM tokens removed)
+- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (one row per kept token; only control tokens `BOS/EOS/PAD/MASK` are filtered out, so residues and FIM markers `1/3/2` are all included)
+- `activations/layer_<i>/seq_idx` — index of the sequence each row belongs to
+- `activations/layer_<i>/pos_idx` — 0-based position of the row within `sequences/tokens[seq_idx]` and `sequences/strings[seq_idx]`
+- `sequences/tokens` — kept token IDs for each sequence (variable-length; includes `1/3/2`)
 - `sequences/strings` — raw FIM-formatted residue string for each sequence (includes `1/2/3` markers)
-- `sequences/aligned_strings` — residue string with one character per kept activation row, aligned 1-to-1 with `data` rows of the same `seq_idx`
 - `metadata/alphabet`, `metadata/layers` — the token alphabet and the list of extracted layers
 - `extract_config.yaml` — the extraction configuration, written alongside the output file
-- To obtain the IDR-only activations for a sequence, mask with `fim_segment == 2`.
+- To obtain the IDR-only activations for a sequence `s`, let `i = sequences/strings[s].index('2')` and take rows with `seq_idx == s` and `pos_idx > i`. The prefix-only and suffix-only slices are bounded analogously by the `1` and `3` markers.
 
 
 # Pre-training

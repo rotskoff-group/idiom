@@ -1,13 +1,13 @@
 import os
 import re
 import tempfile
+import time
 import h5py
 import numpy as np
 import torch
-import torch.multiprocessing as mp
 import hydra
 import lightning as L
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 
 from idiom.nn.transformer.module import LightningModel
@@ -23,14 +23,17 @@ from idiom.scripts.transformer.precompute import (
     determine_alphabet,
     run_process_parallel,
 )
-from idiom.utils.extract_helpers import (
-    _alphabet_chars,
-    _compute_fim_segments,
-    _get_ctrl_token_ids,
-    _get_filter_token_ids,
-)
 
 _IDR_PATTERN = re.compile(r"_IDR_(\d+)-(\d+)")
+
+
+def _fmt_hms(seconds: float) -> str:
+    if not np.isfinite(seconds):
+        return "--:--:--"
+    s = int(seconds)
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h:d}:{m:02d}:{sec:02d}"
 
 
 def _parse_fasta_to_fim(fasta_path: str, max_sequences: int | None) -> list[str]:
@@ -79,7 +82,14 @@ def _parse_fasta_to_fim(fasta_path: str, max_sequences: int | None) -> list[str]
 
 
 def _load_residues(dataset_filename: str, max_sequences: int | None) -> list[str]:
-    """Load residue strings from an H5 file or a FASTA file with _IDR_ headers."""
+    """Load FIM-formatted residue strings.
+
+    Accepts either:
+      - a FASTA (.fasta/.fa) with ``_IDR_x-y`` headers — converted to FIM format
+        ``1{prefix}3{suffix}2{IDR}`` here, or
+      - an HDF5 file with a ``residues`` field whose strings are already in
+        FIM format.
+    """
     if dataset_filename.endswith(".fasta") or dataset_filename.endswith(".fa"):
         return _parse_fasta_to_fim(dataset_filename, max_sequences)
     with h5py.File(dataset_filename, "r") as f:
@@ -170,16 +180,15 @@ def _load_model(model_args, training_args, token_info, checkpoint_path, device):
     return lightning_model
 
 
-def _build_dataloader(dataset_filename, start_idx, end_idx, batch_size):
-    """DataLoader over [start_idx, end_idx) of the precomputed shard."""
+def _build_dataloader(dataset_filename, batch_size):
+    """DataLoader over every sequence in the precomputed shard."""
 
     def get_hdf5():
         return [h5py.File(dataset_filename, "r")]
 
     dataset = TransformerShardedAutoregDataset(get_hdf5_data=get_hdf5)
-    subset = Subset(dataset, range(start_idx, end_idx))
     return DataLoader(
-        subset,
+        dataset,
         batch_size=batch_size,
         shuffle=False,
         collate_fn=transformer_sharded_autoreg_collate_fn,
@@ -187,73 +196,66 @@ def _build_dataloader(dataset_filename, start_idx, end_idx, batch_size):
     )
 
 
-def _init_output_h5(hf, layers, d_model, np_dtype):
-    """Create per-layer activation groups + tokens/strings datasets in an open H5 file."""
+def _get_ctrl_token_ids(token_info) -> torch.Tensor:
+    """Token ids for PAD/START/STOP/MASK — the only ids filtered from saved rows."""
+    return torch.tensor(
+        [int(v) for k, v in token_info["input"]["TOK"].items() if k != "TOK_MAX_SIZE"],
+        dtype=torch.long,
+    )
+
+
+def _init_output_h5(hf, layers, d_model, np_dtype, alphabet):
+    """Create the canonical output layout and return per-layer + per-sequence handles."""
+    meta = hf.create_group("metadata")
+    meta.create_dataset("layers", data=np.array(layers, dtype=np.int32))
+    if alphabet is not None:
+        meta.create_dataset("alphabet", data=alphabet)
+
     layer_grps = {}
     for layer_idx in layers:
-        grp = hf.create_group(f"layer_{layer_idx}")
+        grp = hf.create_group(f"activations/layer_{layer_idx}")
         grp.create_dataset(
             "data",
             shape=(0, d_model),
             maxshape=(None, d_model),
             dtype=np_dtype,
-            chunks=(1024, d_model),
+            chunks=(256, d_model),
         )
         grp.create_dataset(
             "seq_idx",
             shape=(0,),
             maxshape=(None,),
             dtype=np.int32,
-            chunks=(4096,),
+            chunks=(65536,),
         )
         grp.create_dataset(
             "pos_idx",
             shape=(0,),
             maxshape=(None,),
             dtype=np.int32,
-            chunks=(4096,),
-        )
-        grp.create_dataset(
-            "local_pos_idx",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=np.int32,
-            chunks=(4096,),
-        )
-        grp.create_dataset(
-            "fim_segment",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=np.int8,
-            chunks=(4096,),
+            chunks=(65536,),
         )
         layer_grps[layer_idx] = grp
 
     vlen_int = h5py.vlen_dtype(np.dtype("int16"))
     tokens_ds = hf.create_dataset(
-        "tokens", shape=(0,), maxshape=(None,), dtype=vlen_int, chunks=(256,)
+        "sequences/tokens",
+        shape=(0,),
+        maxshape=(None,),
+        dtype=vlen_int,
+        chunks=(4096,),
     )
     strings_ds = hf.create_dataset(
-        "strings",
+        "sequences/strings",
         shape=(0,),
         maxshape=(None,),
         dtype=h5py.string_dtype(),
-        chunks=(256,),
+        chunks=(4096,),
     )
-    aligned_strings_ds = hf.create_dataset(
-        "aligned_strings",
-        shape=(0,),
-        maxshape=(None,),
-        dtype=h5py.string_dtype(),
-        chunks=(256,),
-    )
-    return layer_grps, tokens_ds, strings_ds, aligned_strings_ds
+    return layer_grps, tokens_ds, strings_ds
 
 
-def _extract_on_gpu(
-    gpu_id,
-    start_idx,
-    end_idx,
+def _extract(
     batch_size,
     model_args,
     training_args,
@@ -261,311 +263,148 @@ def _extract_on_gpu(
     dataset_filename,
     layers,
     save_dtype,
-    savedir,
+    output_path,
     checkpoint_path,
 ):
+    device = "cuda:0"
+    lightning_model = _load_model(
+        model_args, training_args, token_info, checkpoint_path, device
+    )
+    dataloader = _build_dataloader(dataset_filename, batch_size)
+
+    d_model = model_args["model_args"]["d_model"]
+    np_dtype = np.float16 if save_dtype == "float16" else np.float32
+    torch_dtype = torch.float16 if save_dtype == "float16" else torch.float32
+
+    # Only PAD/START/STOP/MASK are filtered from saved rows — FIM markers
+    # ('1', '3', '2') are kept like any other residue token.
+    ctrl_token_ids = _get_ctrl_token_ids(token_info)
+    print(f"ctrl_token_ids={ctrl_token_ids.tolist()}")
+
+    alphabet = token_info.get("alphabet", None)
+    total_sequences = len(dataloader.dataset)
+
+    res_fh = h5py.File(dataset_filename, "r")
     try:
-        device = f"cuda:{gpu_id}"
-        lightning_model = _load_model(
-            model_args, training_args, token_info, checkpoint_path, device
-        )
-        dataloader = _build_dataloader(dataset_filename, start_idx, end_idx, batch_size)
-
-        d_model = model_args["model_args"]["d_model"]
-        np_dtype = np.float16 if save_dtype == "float16" else np.float32
-
-        # PAD/START/STOP/MASK and FIM markers ('1','3','2') are all filtered from
-        # saved activations/tokens. Residues are labeled by which FIM segment they
-        # belong to (1=prefix, 3=suffix, 2=IDR).
-        ctrl_token_ids = _get_ctrl_token_ids(token_info)
-        filter_token_ids, fim_id_to_label = _get_filter_token_ids(token_info)
-        print(
-            f"ctrl_token_ids={ctrl_token_ids.tolist()} "
-            f"fim_id_to_label={fim_id_to_label}"
-        )
-        alphabet_chars = _alphabet_chars(token_info)
-
-        temp_path = os.path.join(savedir, f"gpu_{gpu_id}_temp.h5")
-        with h5py.File(temp_path, "w") as hf:
-            layer_grps, tokens_ds, strings_ds, aligned_strings_ds = _init_output_h5(
-                hf, layers, d_model, np_dtype
+        with h5py.File(output_path, "w") as hf:
+            layer_grps, tokens_ds, strings_ds = _init_output_h5(
+                hf, layers, d_model, np_dtype, alphabet
             )
 
-            global_seq_offset = start_idx
-            n_processed = 0
+            global_seq_offset = 0
+            t_start = time.monotonic()
+            seq_at_last_log = 0
+            log_every = batch_size * 10
+            print(f"Starting extraction over {total_sequences:,} sequences")
+            for batch in dataloader:
+                (
+                    structural_tokens,
+                    src_tokens,
+                    src_key_pad_mask,
+                    _,
+                    _,
+                    sequence_id,
+                ) = batch
+                B = src_tokens.shape[0]
 
-            res_fh = h5py.File(dataset_filename, "r")
-            try:
-                for batch in dataloader:
-                    (
-                        structural_tokens,
-                        src_tokens,
-                        src_key_pad_mask,
-                        _,
-                        _,
-                        sequence_id,
-                    ) = batch
-                    B = src_tokens.shape[0]
-
-                    with torch.no_grad():
-                        _, hidden_states = lightning_model.model(
-                            src_tokens.to(device),
-                            structural_tokens.to(device),
-                            sequence_id.to(device),
-                            return_hidden_states=True,
-                        )
-
-                    # True iff a residue token (i.e. not PAD/START/STOP/MASK and not a
-                    # FIM marker '1'/'3'/'2'). The kept rows match `aligned_strings`.
-                    valid_mask = ~torch.isin(src_tokens, filter_token_ids)
-                    fim_segments = _compute_fim_segments(
-                        src_tokens,
-                        fim_id_to_label,
-                        ctrl_token_ids,
-                        global_seq_offset,
+                with torch.no_grad():
+                    _, hidden_states = lightning_model.model(
+                        src_tokens.to(device),
+                        structural_tokens.to(device),
+                        sequence_id.to(device),
+                        return_hidden_states=True,
                     )
 
-                    for layer_idx in layers:
-                        hs = (
-                            hidden_states[layer_idx]
-                            .cpu()
-                            .to(
-                                torch.float16
-                                if save_dtype == "float16"
-                                else torch.float32
-                            )
-                            .numpy()
-                        )  # [B, L, D]
-                        grp = layer_grps[layer_idx]
+                # True iff not PAD/START/STOP/MASK. FIM markers '1'/'3'/'2'
+                # pass through and are saved alongside residues.
+                valid_mask = ~torch.isin(src_tokens, ctrl_token_ids)
+                valid_mask_np = valid_mask.numpy()
 
-                        (
-                            act_chunks,
-                            seq_idx_chunks,
-                            pos_idx_chunks,
-                            local_pos_chunks,
-                            fim_seg_chunks,
-                        ) = ([], [], [], [], [])
-                        for b in range(B):
-                            valid_pos = np.where(valid_mask[b].numpy())[0]
-                            if len(valid_pos) == 0:
-                                continue
-                            act_chunks.append(hs[b, valid_pos])
-                            seq_idx_chunks.append(
-                                np.full(
-                                    len(valid_pos),
-                                    global_seq_offset + b,
-                                    dtype=np.int32,
-                                )
-                            )
-                            pos_idx_chunks.append(valid_pos.astype(np.int32))
-                            local_pos_chunks.append(
-                                np.arange(len(valid_pos), dtype=np.int32)
-                            )
-                            fim_seg_chunks.append(fim_segments[b, valid_pos])
-
-                        if act_chunks:
-                            act_all = np.concatenate(act_chunks, axis=0)
-                            seq_idx_all = np.concatenate(seq_idx_chunks)
-                            pos_idx_all = np.concatenate(pos_idx_chunks)
-                            local_pos_all = np.concatenate(local_pos_chunks)
-                            fim_seg_all = np.concatenate(fim_seg_chunks)
-                            old = grp["data"].shape[0]
-                            new = old + len(act_all)
-                            grp["data"].resize(new, axis=0)
-                            grp["data"][old:new] = act_all
-                            grp["seq_idx"].resize(new, axis=0)
-                            grp["seq_idx"][old:new] = seq_idx_all
-                            grp["pos_idx"].resize(new, axis=0)
-                            grp["pos_idx"][old:new] = pos_idx_all
-                            grp["local_pos_idx"].resize(new, axis=0)
-                            grp["local_pos_idx"][old:new] = local_pos_all
-                            grp["fim_segment"].resize(new, axis=0)
-                            grp["fim_segment"][old:new] = fim_seg_all
-
-                    # Free GPU memory held by hidden_states before the next forward pass
-                    del hidden_states
-                    torch.cuda.empty_cache()
-
-                    # Store kept token sequences, raw residue strings, and the
-                    # aligned residue strings (one char per kept activation row).
-                    old = tokens_ds.shape[0]
-                    tokens_ds.resize(old + B, axis=0)
-                    strings_ds.resize(old + B, axis=0)
-                    aligned_strings_ds.resize(old + B, axis=0)
-                    for b in range(B):
-                        valid_pos = np.where(valid_mask[b].numpy())[0]
-                        kept_ids = src_tokens[b, valid_pos].numpy()
-                        tokens_ds[old + b] = kept_ids.astype(np.int16)
-                        raw = res_fh["residues"][global_seq_offset + b]
-                        strings_ds[old + b] = (
-                            raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
-                        )
-                        aligned_strings_ds[old + b] = "".join(
-                            alphabet_chars[int(tid)] for tid in kept_ids
-                        )
-
-                    global_seq_offset += B
-                    n_processed += B
-
-                    if gpu_id == 0 and n_processed % (batch_size * 20) < batch_size:
-                        total = end_idx - start_idx
-                        print(
-                            f"GPU {gpu_id}: {n_processed}/{total} sequences "
-                            f"({100 * n_processed / total:.1f}%)"
-                        )
-            finally:
-                res_fh.close()
-
-        print(f"GPU {gpu_id}: Done — saved to {temp_path}")
-
-    except Exception as e:
-        import traceback
-
-        print(f"GPU {gpu_id}: Error — {e}")
-        traceback.print_exc()
-
-
-def _merge_temp_files(savedir, num_gpus, output_path, layers, token_info):
-    alphabet = token_info.get("alphabet", None)
-
-    with h5py.File(output_path, "w") as out:
-        # Metadata
-        meta = out.create_group("metadata")
-        if alphabet is not None:
-            meta.create_dataset("alphabet", data=alphabet)
-        meta.create_dataset("layers", data=np.array(layers, dtype=np.int32))
-
-        # Determine dtype and d_model from first temp file
-        first_temp = os.path.join(savedir, "gpu_0_temp.h5")
-        with h5py.File(first_temp, "r") as f0:
-            sample_dtype = f0[f"layer_{layers[0]}"]["data"].dtype
-
-        # Pre-create resizable activation datasets
-        act_grps = {}
-        for layer_idx in layers:
-            grp = out.create_group(f"activations/layer_{layer_idx}")
-            with h5py.File(first_temp, "r") as f0:
-                d_model = f0[f"layer_{layer_idx}"]["data"].shape[1]
-            grp.create_dataset(
-                "data",
-                shape=(0, d_model),
-                maxshape=(None, d_model),
-                dtype=sample_dtype,
-                chunks=(1024, d_model),
-            )
-            grp.create_dataset(
-                "seq_idx", shape=(0,), maxshape=(None,), dtype=np.int32, chunks=(4096,)
-            )
-            grp.create_dataset(
-                "pos_idx",
-                shape=(0,),
-                maxshape=(None,),
-                dtype=np.int32,
-                chunks=(4096,),
-            )
-            grp.create_dataset(
-                "local_pos_idx",
-                shape=(0,),
-                maxshape=(None,),
-                dtype=np.int32,
-                chunks=(4096,),
-            )
-            grp.create_dataset(
-                "fim_segment",
-                shape=(0,),
-                maxshape=(None,),
-                dtype=np.int8,
-                chunks=(4096,),
-            )
-            act_grps[layer_idx] = grp
-
-        vlen_int = h5py.vlen_dtype(np.dtype("int16"))
-        tokens_ds = out.create_dataset(
-            "sequences/tokens",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=vlen_int,
-            chunks=(256,),
-        )
-        strings_ds = out.create_dataset(
-            "sequences/strings",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=h5py.string_dtype(),
-            chunks=(256,),
-        )
-        aligned_strings_ds = out.create_dataset(
-            "sequences/aligned_strings",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=h5py.string_dtype(),
-            chunks=(256,),
-        )
-
-        # Copy fixed-shape activation datasets in chunks (avoid loading all rows
-        # into RAM at once) and batch-write vlen/string datasets in slices
-        # (avoid one HDF5 call per sequence).
-        row_chunk = 1_000_000
-        str_chunk = 4096
-
-        for gpu_id in range(num_gpus):
-            temp_path = os.path.join(savedir, f"gpu_{gpu_id}_temp.h5")
-            if not os.path.exists(temp_path):
-                print(f"Warning: temp file for GPU {gpu_id} not found, skipping")
-                continue
-            with h5py.File(temp_path, "r") as tmp:
-                for layer_idx in layers:
-                    grp = act_grps[layer_idx]
-                    src = tmp[f"layer_{layer_idx}"]
-
-                    n_new = src["data"].shape[0]
-                    if n_new == 0:
+                # Precompute per-row metadata once and share across layers.
+                seq_idx_chunks, pos_idx_chunks, per_seq_valid_pos = [], [], []
+                for b in range(B):
+                    valid_pos = np.where(valid_mask_np[b])[0]
+                    per_seq_valid_pos.append(valid_pos)
+                    if len(valid_pos) == 0:
                         continue
+                    seq_idx_chunks.append(
+                        np.full(len(valid_pos), global_seq_offset + b, dtype=np.int32)
+                    )
+                    pos_idx_chunks.append(np.arange(len(valid_pos), dtype=np.int32))
 
-                    old = grp["data"].shape[0]
-                    grp["data"].resize(old + n_new, axis=0)
-                    grp["seq_idx"].resize(old + n_new, axis=0)
-                    grp["pos_idx"].resize(old + n_new, axis=0)
-                    grp["local_pos_idx"].resize(old + n_new, axis=0)
-                    grp["fim_segment"].resize(old + n_new, axis=0)
-                    for start in range(0, n_new, row_chunk):
-                        stop = min(start + row_chunk, n_new)
-                        grp["data"][old + start : old + stop] = src["data"][start:stop]
-                        grp["seq_idx"][old + start : old + stop] = src["seq_idx"][
-                            start:stop
-                        ]
-                        grp["pos_idx"][old + start : old + stop] = src["pos_idx"][
-                            start:stop
-                        ]
-                        grp["local_pos_idx"][old + start : old + stop] = src[
-                            "local_pos_idx"
-                        ][start:stop]
-                        grp["fim_segment"][old + start : old + stop] = src[
-                            "fim_segment"
-                        ][start:stop]
+                if seq_idx_chunks:
+                    seq_idx_all = np.concatenate(seq_idx_chunks)
+                    pos_idx_all = np.concatenate(pos_idx_chunks)
+                else:
+                    seq_idx_all = np.zeros(0, dtype=np.int32)
+                    pos_idx_all = np.zeros(0, dtype=np.int32)
 
-                n_toks = tmp["tokens"].shape[0]
-                if n_toks > 0:
-                    old_t = tokens_ds.shape[0]
-                    tokens_ds.resize(old_t + n_toks, axis=0)
-                    strings_ds.resize(old_t + n_toks, axis=0)
-                    aligned_strings_ds.resize(old_t + n_toks, axis=0)
-                    for start in range(0, n_toks, str_chunk):
-                        stop = min(start + str_chunk, n_toks)
-                        tokens_ds[old_t + start : old_t + stop] = tmp["tokens"][
-                            start:stop
-                        ]
-                        strings_ds[old_t + start : old_t + stop] = tmp["strings"][
-                            start:stop
-                        ]
-                        aligned_strings_ds[old_t + start : old_t + stop] = tmp[
-                            "aligned_strings"
-                        ][start:stop]
+                for layer_idx in layers:
+                    hs = (
+                        hidden_states[layer_idx].cpu().to(torch_dtype).numpy()
+                    )  # [B, L, D]
+                    grp = layer_grps[layer_idx]
 
-            os.remove(temp_path)
-            print(f"Merged GPU {gpu_id} temp file")
+                    act_chunks = []
+                    for b in range(B):
+                        valid_pos = per_seq_valid_pos[b]
+                        if len(valid_pos) == 0:
+                            continue
+                        act_chunks.append(hs[b, valid_pos])
 
-    print(f"Activations saved to {output_path}")
+                    if act_chunks:
+                        act_all = np.concatenate(act_chunks, axis=0)
+                        old = grp["data"].shape[0]
+                        new = old + len(act_all)
+                        grp["data"].resize(new, axis=0)
+                        grp["data"][old:new] = act_all
+                        grp["seq_idx"].resize(new, axis=0)
+                        grp["seq_idx"][old:new] = seq_idx_all
+                        grp["pos_idx"].resize(new, axis=0)
+                        grp["pos_idx"][old:new] = pos_idx_all
+
+                # Free GPU memory held by hidden_states before the next forward pass
+                del hidden_states
+                torch.cuda.empty_cache()
+
+                # Per-sequence kept token ids + raw FIM-formatted residue string.
+                old = tokens_ds.shape[0]
+                tokens_ds.resize(old + B, axis=0)
+                strings_ds.resize(old + B, axis=0)
+                for b in range(B):
+                    valid_pos = per_seq_valid_pos[b]
+                    kept_ids = src_tokens[b, valid_pos].numpy()
+                    tokens_ds[old + b] = kept_ids.astype(np.int16)
+                    raw = res_fh["residues"][global_seq_offset + b]
+                    strings_ds[old + b] = (
+                        raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+                    )
+
+                global_seq_offset += B
+
+                if (
+                    global_seq_offset - seq_at_last_log >= log_every
+                    or global_seq_offset == total_sequences
+                ):
+                    elapsed = time.monotonic() - t_start
+                    rate = global_seq_offset / max(elapsed, 1e-9)
+                    eta = (
+                        (total_sequences - global_seq_offset) / rate
+                        if rate > 0
+                        else float("inf")
+                    )
+                    print(
+                        f"[{_fmt_hms(elapsed)}] {global_seq_offset:,}/{total_sequences:,} "
+                        f"({100 * global_seq_offset / total_sequences:.1f}%)  ETA {_fmt_hms(eta)}",
+                        flush=True,
+                    )
+                    seq_at_last_log = global_seq_offset
+    finally:
+        res_fh.close()
+
+    print(
+        f"Activations saved to {output_path} (took {_fmt_hms(time.monotonic() - t_start)})"
+    )
 
 
 @hydra.main(version_base="1.3", config_path="../cfgs", config_name="extract")
@@ -597,11 +436,8 @@ def main(cfg) -> None:
     save_dtype = extract_args.get("save_dtype", "float16")
     num_precompute_workers = extract_args.get("num_precompute_workers", 4)
 
-    num_gpus = torch.cuda.device_count()
-    use_multi_gpu = extract_args.get("use_multi_gpu", False) and num_gpus > 1
-    if not use_multi_gpu:
-        num_gpus = 1
-    print(f"Using {num_gpus} GPU(s)")
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for activation extraction")
 
     residues = _load_residues(dataset_filename, max_sequences)
     temp_shard_path = _precompute_to_tempfile(
@@ -619,52 +455,17 @@ def main(cfg) -> None:
         savedir = os.path.dirname(os.path.abspath(output_path))
         OmegaConf.save(cfg, os.path.join(savedir, "extract_config.yaml"))
 
-        sequences_per_gpu = total_sequences // num_gpus
-        remainder = total_sequences % num_gpus
-
-        try:
-            mp.set_start_method("spawn", force=True)
-        except RuntimeError:
-            pass
-
-        processes = []
-        for gpu_id in range(num_gpus):
-            extra = 1 if gpu_id < remainder else 0
-            if gpu_id < remainder:
-                start_idx = gpu_id * (sequences_per_gpu + 1)
-            else:
-                start_idx = (
-                    remainder * (sequences_per_gpu + 1)
-                    + (gpu_id - remainder) * sequences_per_gpu
-                )
-            end_idx = start_idx + sequences_per_gpu + extra
-            print(f"GPU {gpu_id}: sequences {start_idx}–{end_idx - 1}")
-
-            p = mp.Process(
-                target=_extract_on_gpu,
-                args=(
-                    gpu_id,
-                    start_idx,
-                    end_idx,
-                    batch_size,
-                    model_args,
-                    training_args,
-                    token_info,
-                    temp_shard_path,
-                    layers,
-                    save_dtype,
-                    savedir,
-                    checkpoint_path,
-                ),
-            )
-            p.start()
-            processes.append(p)
-
-        for p in processes:
-            p.join()
-
-        print("All GPU processes complete, merging results...")
-        _merge_temp_files(savedir, num_gpus, output_path, layers, token_info)
+        _extract(
+            batch_size,
+            model_args,
+            training_args,
+            token_info,
+            temp_shard_path,
+            layers,
+            save_dtype,
+            output_path,
+            checkpoint_path,
+        )
 
     finally:
         if os.path.exists(temp_shard_path):

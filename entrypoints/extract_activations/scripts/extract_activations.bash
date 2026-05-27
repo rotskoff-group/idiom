@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=extract
 #SBATCH --time=1-00:00:00
-#SBATCH --gpus=2
+#SBATCH --gpus=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --output=./slurm_out/slurm-%j.out
@@ -45,9 +45,9 @@ CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_
 # CKPT_PATH="${REPO_ROOT}/models/idiom/post_trained/protgps_reward/version_59380_4_stress_granule_target_len_100_lr_5e-6/checkpoints/step_step_001500.ckpt" # stress_granule
 
 # Input sequences. This may be either:
-#   - a FASTA with "_IDR_x-y" headers (tokenized into FIM format automatically, as below),
-#   - a raw sequences .h5 file with a "residues" field, or
-#   - a precomputed shard (.h5).
+#   - a FASTA with "_IDR_x-y" headers (tokenized into FIM format 1{prefix}3{suffix}2{IDR}
+#     automatically), or
+#   - an .h5 file with a "residues" field of already-FIM-formatted residue strings.
 # DATA_PATH="${REPO_ROOT}/entrypoints/generate/scripts/example_sequences.fasta"
 DATA_PATH="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here
 # DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here 
@@ -69,12 +69,11 @@ transformer_extract \
     "++extract.checkpoint_path=$CKPT_PATH" \
     "++extract.dataset_filename=$DATA_PATH" \
     "++extract.output_path=$OUTPUT_PATH" \
-    "++extract.layers=[11]" \
-    "++extract.batch_size=128" \
+    "++extract.layers=[8]" \
+    "++extract.batch_size=256" \
     "++extract.save_dtype=float32" \
     "++extract.num_precompute_workers=8" \
-    "++extract.max_sequences=null" \
-    "++extract.use_multi_gpu=true"
+    "++extract.max_sequences=null"
 
 # "++extract.layers=[0,1,2,3,4,5,6,7,8,9,10,11]" \
 
