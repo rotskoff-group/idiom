@@ -2,8 +2,8 @@
 #SBATCH --job-name=extract
 #SBATCH --time=1-00:00:00
 #SBATCH --gpus=4
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=128G
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
 #SBATCH --output=./slurm_out/slurm-%j.out
 
 # You can run this script using 'sbatch extract_activations.bash' or 'bash extract_activations.bash'
@@ -49,8 +49,8 @@ CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_
 #     automatically), or
 #   - an .h5 file with a "residues" field of already-FIM-formatted residue strings.
 # DATA_PATH="${REPO_ROOT}/entrypoints/generate/scripts/example_sequences.fasta"
-DATA_PATH="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here
-# DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here 
+# DATA_PATH="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here
+DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_100k.h5" 
 
 OUT_DIR="${REPO_ROOT}/entrypoints/extract_activations/output"
 OUTPUT_DIR="${OUT_DIR}/activations_layer_8"
