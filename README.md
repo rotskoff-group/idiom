@@ -303,7 +303,7 @@ As an example, the script extracts activations from the last transformer block f
 The following options can be adjusted near the top of the script:
 
 - `++extract.layers` — 0-indexed transformer blocks to extract activations from (e.g. `[11]` for the last block only, or `[0,1,2,3,4,5,6,7,8,9,10,11]` for all blocks)
-- `++extract.save_dtype` — `float16` (default) or `float32`
+- `++extract.save_dtype` — `float16` or `float32`
 - `++extract.max_sequences` — cap the maximum number of sequences processed (`null` = all)
 - `++extract.use_multi_gpu` — set to `true` and increase `--gpus` to parallelize activation extraction 
 

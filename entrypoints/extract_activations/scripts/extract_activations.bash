@@ -69,7 +69,7 @@ transformer_extract \
     "++extract.checkpoint_path=$CKPT_PATH" \
     "++extract.dataset_filename=$DATA_PATH" \
     "++extract.output_path=$OUTPUT_PATH" \
-    "++extract.layers=[10,11]" \
+    "++extract.layers=[11]" \
     "++extract.batch_size=128" \
     "++extract.save_dtype=float32" \
     "++extract.num_precompute_workers=8" \
