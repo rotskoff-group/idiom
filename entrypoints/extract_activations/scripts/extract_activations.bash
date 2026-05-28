@@ -56,7 +56,7 @@ DATA_PATH='/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/sae_seque
 # OUT_DIR="${REPO_ROOT}/entrypoints/extract_activations/output"
 OUT_DIR="/home/scratch/group_scratch/idr_plm/2026-05-27_activations"
 OUTPUT_DIR="${OUT_DIR}/activations_layer_8_1M"
-NSHARDS=16
+NSHARDS=128
 mkdir -p "${OUTPUT_DIR}"
 
 echo "Starting activation extraction"
@@ -73,7 +73,7 @@ transformer_extract \
     "++extract.dataset_filename=$DATA_PATH" \
     "++extract.output_dir=$OUTPUT_DIR" \
     "++extract.layers=[8]" \
-    "++extract.batch_size=256" \
+    "++extract.batch_size=128" \
     "++extract.save_dtype=float32" \
     "++extract.num_precompute_workers=null" \
     "++extract.num_shards=$NSHARDS" \
