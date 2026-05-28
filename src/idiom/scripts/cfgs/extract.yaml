@@ -1,0 +1,10 @@
+defaults:
+  - model: transformer
+  - training: transformer
+  - extract: transformer
+  - _self_
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .

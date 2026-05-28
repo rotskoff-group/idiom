@@ -66,6 +66,7 @@ class GeometricMolTransformer(nn.Module):
         batch_access_indices=None,
         use_cache_here=False,
         inference_iteration=None,
+        return_hidden_states=False,
     ):
         """Args:
         src: Source sequence - (batch_size, sequence length)
@@ -73,6 +74,8 @@ class GeometricMolTransformer(nn.Module):
         batch_access_indices: Optional tensor mapping current batch positions to original cache positions
         use_cache_here: Whether to use KV-caching for this forward pass
         inference_iteration: Current inference iteration for debugging purposes
+        return_hidden_states: If True, return (logits, hidden_states) where hidden_states is a list
+            of per-block output tensors, shape [B, L, D], indexed 0 to n_layers-1.
         """
         # (batch_size, sequence_length, 1)
         if self.smi_token_embedding is not None:
@@ -87,16 +90,13 @@ class GeometricMolTransformer(nn.Module):
             structural_token_embedding = 0
         embedding = res_token_embedding + structural_token_embedding
         # embedding.shape = [B, L, D]
-        x, _ = self.transformer(
+        x, _, hidden_states = self.transformer(
             embedding,
             sequence_id,
-            # batch_access_indices=batch_access_indices,
-            # use_cache_here=use_cache_here,
-            # inference_iteration=inference_iteration,
+            return_hidden_states=return_hidden_states,
         )
         # Here, x.shape = [B, L, D]
-        x = self.out(
-            x
-        )  # out() is RegressionHead from embeddings_dim to vocabulary size
-        # Here, x.shape = [B, L, E] where E is vocab size
-        return x  # These are the logits returned to the self.model() call in module.py
+        logits = self.out(x)  # [B, L, vocab_size]
+        if return_hidden_states:
+            return logits, hidden_states
+        return logits

@@ -1,0 +1,12 @@
+checkpoint_path: null          # path to .ckpt file
+dataset_filename: null         # FASTA (.fasta/.fa) with `_IDR_x-y` headers (FIM format
+                               # 1{prefix}3{suffix}2{IDR} is applied automatically), OR an
+                               # HDF5 with a "residues" field of already-FIM-formatted strings
+output_dir: activations_out    # directory to write `shard_NNNN.h5` files + manifest.json
+layers: [8]                   # 0-indexed block outputs; 11 = last block (pre-final-norm)
+batch_size: 256
+max_sequences: null            # null = all; set this when using a raw sequences file to
+                               # avoid tokenizing the entire dataset into memory
+save_dtype: float32            # float16 or float32
+num_precompute_workers: null   # null = auto from SLURM_CPUS_PER_TASK or os.cpu_count()
+num_shards: 128                # number of output shard files; sequences split contiguously

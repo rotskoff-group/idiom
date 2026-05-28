@@ -1,6 +1,6 @@
 # IDiom
 
-IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. The associated preprint is: [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777)
+IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. Hidden state activations can also be extracted from the transformer residual streams for downstream tasks. The associated preprint is: [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777)
 
 <p align="center">
   <img src="assets/github_fig.png" alt="IDiom" width="900px" align="middle"/>
@@ -23,6 +23,7 @@ IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsicall
   - [ProtGPS reward](#protgps-reward)
   - [Tracking training progress using Tensorboard](#tracking-training-progress-using-tensorboard)
   - [Generating sequences after post-training](#generating-sequences-after-post-training)
+- [Extracting activations](#extracting-activations)
 - [Pre-training](#pre-training)
 - [Citation](#citation)
 
@@ -93,6 +94,7 @@ idiom/
 │       └── utils/             # Utilities
 |
 ├── entrypoints/               # Scripts for training and inference
+│   ├── extract_activations/   # Scripts for extracting residual stream activations
 │   ├── generate/              # Scripts for generating sequences 
 │   ├── precompute/            # Data preprocessing scripts
 │   └── train/                 # Pre- and post-training scripts
@@ -282,6 +284,52 @@ To generate sequences from a post-trained model checkpoint, set the `CKPT_PATH` 
 ```bash
 bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
 ```
+
+
+# Extracting activations
+
+Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model (or any post-trained checkpoint) over a set of sequences and writes the per-layer activations to a directory of HDF5 *shards*. Only control tokens (`BOS`, `EOS`, `PAD`, `MASK`) are filtered out; activations for residue tokens and for the FIM markers `1`, `3`, `2` are all kept. The FIM segment a residue belongs to can be recovered by scanning `sequences/strings[seq_idx]` (or `sequences/tokens[seq_idx]`) for the surrounding `1`/`3`/`2` markers. Extraction parallelises automatically across all GPUs SLURM gives the job; sequences are split contiguously into `num_shards` files. Activation extraction can be done using the following command: 
+
+```bash
+cd entrypoints/extract_activations/scripts
+bash extract_activations.bash # or: sbatch extract_activations.bash
+```
+
+As an example, the script extracts activations from the last transformer block for the two example proteins in `entrypoints/generate/scripts/example_sequences.fasta`. To run on your own sequences, set `DATA_PATH` near the top of the script to: 
+
+- A FASTA file whose sequence headers end with `_IDR_x-y` or 
+- A raw sequences `.h5` file containing a `residues` field, where the sequences in the `residues` field are already transformed into a fill-in-the-middle format with the `1`, `2`, and `3` characters present. The `residues` dataset must use an h5py utf-8 string dtype `bytes`.  
+
+The following options can be adjusted near the top of the script:
+
+- `++extract.layers` — 0-indexed transformer blocks to extract activations from (e.g. `[11]` for the last block only, or `[0,1,2,3,4,5,6,7,8,9,10,11]` for all blocks)
+- `++extract.save_dtype` — `float16` or `float32`
+- `++extract.max_sequences` — cap the maximum number of sequences processed (`null` = all)
+- `++extract.num_shards` — number of output shard files; sequences are split into contiguous ranges, distributed contiguously across the available GPUs
+
+Activations are written to `entrypoints/extract_activations/output/activations/` as a directory of shards plus a manifest:
+
+```
+activations/
+  extract_config.yaml      # the extraction configuration
+  manifest.json            # shard inventory: per-shard seq_start/seq_end and per-layer row counts
+  shard_0000.h5
+  shard_0001.h5
+  ...
+  shard_NNNN.h5
+```
+
+Each shard has the layout:
+
+- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (one row per kept token; only control tokens `BOS/EOS/PAD/MASK` are filtered out, so residues and FIM markers `1/3/2` are all included)
+- `activations/layer_<i>/seq_idx` — global sequence index for each row (consistent across all shards)
+- `activations/layer_<i>/pos_idx` — 0-based position of the row within `sequences/tokens[seq_idx]` and `sequences/strings[seq_idx]`
+- `sequences/tokens` — kept token IDs for each sequence in this shard (variable-length; includes `1/3/2`)
+- `sequences/strings` — raw FIM-formatted residue string for each sequence in this shard
+- `metadata/alphabet`, `metadata/layers` — token alphabet and extracted layers
+- `metadata/shard_idx`, `metadata/num_shards`, `metadata/seq_start`, `metadata/seq_end` — this shard's identity and the global sequence range it covers (half-open)
+
+To obtain the IDR-only activations for a sequence `s`: locate the shard with `seq_start <= s < seq_end`, then within that shard let `i = sequences/strings[s].index('2')` and take rows with `seq_idx == s` and `pos_idx > i`. The prefix-only and suffix-only slices are bounded analogously by the `1` and `3` markers.
 
 
 # Pre-training
