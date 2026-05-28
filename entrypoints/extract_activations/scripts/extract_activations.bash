@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=extract
 #SBATCH --time=1-00:00:00
-#SBATCH --gpus=4
+#SBATCH --gpus=2
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
 #SBATCH --output=./slurm_out/slurm-%j.out
@@ -50,11 +50,13 @@ CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_
 #   - an .h5 file with a "residues" field of already-FIM-formatted residue strings.
 # DATA_PATH="${REPO_ROOT}/entrypoints/generate/scripts/example_sequences.fasta"
 # DATA_PATH="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here
-DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_100k.h5" 
+# DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_100k.h5" 
+DATA_PATH='/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_1M.h5'
 
-OUT_DIR="${REPO_ROOT}/entrypoints/extract_activations/output"
-OUTPUT_DIR="${OUT_DIR}/activations_layer_8"
-NSHARDS=64
+# OUT_DIR="${REPO_ROOT}/entrypoints/extract_activations/output"
+OUT_DIR="/home/scratch/group_scratch/idr_plm/2026-05-27_activations"
+OUTPUT_DIR="${OUT_DIR}/activations_layer_8_1M"
+NSHARDS=16
 mkdir -p "${OUTPUT_DIR}"
 
 echo "Starting activation extraction"

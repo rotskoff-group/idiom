@@ -3,6 +3,7 @@ import os
 import re
 import tempfile
 import time
+from datetime import timedelta
 import h5py
 import numpy as np
 import torch
@@ -27,15 +28,6 @@ from idiom.scripts.transformer.precompute import (
 )
 
 _IDR_PATTERN = re.compile(r"_IDR_(\d+)-(\d+)")
-
-
-def _fmt_hms(seconds: float) -> str:
-    if not np.isfinite(seconds):
-        return "--:--:--"
-    s = int(seconds)
-    h, rem = divmod(s, 3600)
-    m, sec = divmod(rem, 60)
-    return f"{h:d}:{m:02d}:{sec:02d}"
 
 
 def _parse_fasta_to_fim(fasta_path: str, max_sequences: int | None) -> list[str]:
@@ -92,7 +84,7 @@ def _load_residues(dataset_filename: str, max_sequences: int | None) -> list[str
       - an HDF5 file with a ``residues`` field whose strings are already in
         FIM format.
     """
-    if dataset_filename.endswith(".fasta") or dataset_filename.endswith(".fa"):
+    if dataset_filename.endswith((".fasta", ".fa")):
         return _parse_fasta_to_fim(dataset_filename, max_sequences)
     with h5py.File(dataset_filename, "r") as f:
         total = len(f["residues"])
@@ -140,7 +132,7 @@ def _precompute_to_tempfile(
 
     input_pad = input_gen.get_ctrl_tokens()["TOK_PAD"]
     sequence_id = (processed_inputs != input_pad).astype(processed_inputs.dtype)
-    struct_tokens = np.ones(processed_inputs.shape) * input_pad
+    struct_tokens = np.full(processed_inputs.shape, input_pad)
 
     fd, temp_path = tempfile.mkstemp(suffix=".h5", prefix="idiom_extract_")
     os.close(fd)
@@ -171,17 +163,6 @@ def _precompute_to_tempfile(
     return temp_path
 
 
-def _load_model(model_args, training_args, token_info, checkpoint_path, device):
-    """Build LightningModel, load checkpoint, set eval, move to device."""
-    lightning_model = LightningModel(
-        model_args=model_args, token_info=token_info, training_args=training_args
-    )
-    lightning_model.load_model_from_checkpoint(checkpoint_path)
-    lightning_model.model.eval()
-    lightning_model.to(device)
-    return lightning_model
-
-
 def _build_dataloader(dataset_filename, batch_size, seq_start=None, seq_end=None):
     """DataLoader over a (sub)range of sequences in the precomputed tempfile.
 
@@ -207,224 +188,233 @@ def _build_dataloader(dataset_filename, batch_size, seq_start=None, seq_end=None
     )
 
 
+# Slab the activation dataset is chunked by. Picked to be roughly 4096*896*4 ≈ 14 MB
+# per chunk — large enough that sequential slab reads are one or two chunks,
+# small enough that h5py's per-chunk overhead stays negligible.
+DATA_CHUNK_ROWS = 4096
+
+
 def _get_ctrl_token_ids(token_info) -> torch.Tensor:
-    """Token ids for PAD/START/STOP/MASK — the only ids filtered from saved rows."""
+    """Token ids for PAD/START/STOP/MASK — never saved as activation rows."""
     return torch.tensor(
         [int(v) for k, v in token_info["input"]["TOK"].items() if k != "TOK_MAX_SIZE"],
         dtype=torch.long,
     )
 
 
-def _init_output_h5(
-    hf, layers, d_model, np_dtype, alphabet, shard_idx, num_shards, seq_start, seq_end
-):
-    """Create the canonical per-shard output layout and return handles.
+def _get_fim_token_ids(token_info) -> torch.Tensor:
+    """Token ids for FIM markers '1'/'3'/'2'.
 
-    Per-shard metadata identifies the shard's position in the wider sharded
-    extraction so downstream readers can stitch shards without re-scanning.
-    ``seq_idx`` written into the activation rows is GLOBAL across shards.
+    Looked up against the alphabet stored on the precompute tempfile (which is
+    the same alphabet the tokenizer uses, since ``ResiduesInputBasic`` builds
+    ``index_map = {char: i for i, char in enumerate(alphabet)}``). Raises if any
+    marker is missing — that would indicate a non-FIM extraction and the caller
+    almost certainly didn't mean to drop those rows.
     """
-    meta = hf.create_group("metadata")
-    meta.create_dataset("layers", data=np.array(layers, dtype=np.int32))
-    if alphabet is not None:
-        meta.create_dataset("alphabet", data=alphabet)
-    meta.create_dataset("shard_idx", data=np.int32(shard_idx))
-    meta.create_dataset("num_shards", data=np.int32(num_shards))
-    meta.create_dataset("seq_start", data=np.int64(seq_start))
-    meta.create_dataset("seq_end", data=np.int64(seq_end))
+    alphabet = token_info.get("alphabet", None)
+    if alphabet is None:
+        raise RuntimeError(
+            "No alphabet in token_info; cannot identify FIM marker token ids."
+        )
+    alpha_list = [
+        a.decode("utf-8") if isinstance(a, (bytes, np.bytes_)) else str(a)
+        for a in alphabet
+    ]
+    try:
+        ids = [alpha_list.index("1"), alpha_list.index("3"), alpha_list.index("2")]
+    except ValueError as e:
+        raise RuntimeError(
+            f"FIM marker missing from alphabet {alpha_list!r}: {e}"
+        ) from e
+    return torch.tensor(ids, dtype=torch.long)
 
-    layer_grps = {}
-    for layer_idx in layers:
-        grp = hf.create_group(f"activations/layer_{layer_idx}")
-        grp.create_dataset(
-            "data",
-            shape=(0, d_model),
-            maxshape=(None, d_model),
-            dtype=np_dtype,
-            chunks=(256, d_model),
-        )
-        grp.create_dataset(
-            "seq_idx",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=np.int32,
-            chunks=(65536,),
-        )
-        grp.create_dataset(
-            "pos_idx",
-            shape=(0,),
-            maxshape=(None,),
-            dtype=np.int32,
-            chunks=(65536,),
-        )
-        layer_grps[layer_idx] = grp
 
-    vlen_int = h5py.vlen_dtype(np.dtype("int16"))
-    tokens_ds = hf.create_dataset(
-        "sequences/tokens",
-        shape=(0,),
-        maxshape=(None,),
-        dtype=vlen_int,
-        chunks=(4096,),
-    )
-    strings_ds = hf.create_dataset(
-        "sequences/strings",
-        shape=(0,),
-        maxshape=(None,),
-        dtype=h5py.string_dtype(),
-        chunks=(4096,),
-    )
-    return layer_grps, tokens_ds, strings_ds
+def _write_shard_output(
+    output_path,
+    layers,
+    d_model,
+    np_dtype,
+    alphabet,
+    per_layer_arrays,
+    seq_strings,
+):
+    """Write the final per-shard HDF5 in one shot with pre-shuffled rows.
+
+    ``per_layer_arrays`` maps ``layer_idx`` → ``(data, seq_idx, pos_idx)`` where
+    the three arrays have already been jointly permuted (so reading any
+    contiguous range of rows gives a uniform random sample of the shard).
+    Activation rows for FIM markers are NOT in these arrays; ``pos_idx`` still
+    indexes positions in ``sequences/strings[seq_idx]`` (the raw FIM string is
+    unchanged), so the row → (sequence, position) mapping is preserved.
+    """
+    with h5py.File(output_path, "w") as hf:
+        meta = hf.create_group("metadata")
+        meta.create_dataset("layers", data=np.array(layers, dtype=np.int32))
+        if alphabet is not None:
+            meta.create_dataset("alphabet", data=alphabet)
+
+        for layer_idx in layers:
+            data, seq_idx, pos_idx = per_layer_arrays[layer_idx]
+            grp = hf.create_group(f"activations/layer_{layer_idx}")
+            n = int(data.shape[0])
+            data_chunks = (min(DATA_CHUNK_ROWS, max(n, 1)), d_model)
+            grp.create_dataset(
+                "data",
+                data=data,
+                dtype=np_dtype,
+                chunks=data_chunks,
+            )
+            idx_chunks = (min(65536, max(n, 1)),)
+            grp.create_dataset(
+                "seq_idx",
+                data=seq_idx,
+                dtype=np.int32,
+                chunks=idx_chunks,
+            )
+            grp.create_dataset(
+                "pos_idx",
+                data=pos_idx,
+                dtype=np.int32,
+                chunks=idx_chunks,
+            )
+
+        hf.create_dataset(
+            "sequences/strings",
+            data=np.array(seq_strings, dtype=object),
+            dtype=h5py.string_dtype(),
+        )
 
 
 def _extract_shard(
+    *,
     lightning_model,
-    gpu_id,
+    device,
     shard_idx,
-    num_shards,
     seq_start,
     seq_end,
     batch_size,
-    model_args,
-    token_info,
+    ctrl_token_ids,
+    skip_token_ids,
+    d_model,
+    alphabet,
     dataset_filename,
     layers,
     save_dtype,
     output_dir,
+    shuffle_seed,
 ):
     """Extract one shard's sequence range and write its HDF5 file.
 
+    Activation rows for control tokens (PAD/START/STOP/MASK) AND for the FIM
+    markers '1'/'3'/'2' are dropped at write time. Within each shard the
+    surviving rows are jointly permuted using a deterministic per-shard seed,
+    so any sequential read of the shard is a uniform random sample of its
+    residue tokens.
+
     Returns a dict of per-layer row counts (used by the manifest writer).
     """
-    device = f"cuda:{gpu_id}"
     dataloader = _build_dataloader(dataset_filename, batch_size, seq_start, seq_end)
-
-    d_model = model_args["model_args"]["d_model"]
     np_dtype = np.float16 if save_dtype == "float16" else np.float32
     torch_dtype = torch.float16 if save_dtype == "float16" else torch.float32
-
-    ctrl_token_ids = _get_ctrl_token_ids(token_info)
-    alphabet = token_info.get("alphabet", None)
-
     output_path = os.path.join(output_dir, f"shard_{shard_idx:04d}.h5")
-    shard_total = seq_end - seq_start
-    log_prefix = f"[gpu {gpu_id} shard {shard_idx:04d}/{num_shards}]"
+
+    per_layer_chunks: dict[int, list[np.ndarray]] = {li: [] for li in layers}
+    seq_idx_chunks: list[np.ndarray] = []
+    pos_idx_chunks: list[np.ndarray] = []
+    seq_strings: list[str] = []
 
     res_fh = h5py.File(dataset_filename, "r")
-    rows_per_layer = {layer_idx: 0 for layer_idx in layers}
     try:
-        with h5py.File(output_path, "w") as hf:
-            layer_grps, tokens_ds, strings_ds = _init_output_h5(
-                hf,
-                layers,
-                d_model,
-                np_dtype,
-                alphabet,
-                shard_idx=shard_idx,
-                num_shards=num_shards,
-                seq_start=seq_start,
-                seq_end=seq_end,
-            )
+        global_seq_offset = seq_start
+        for batch in dataloader:
+            structural_tokens, src_tokens, _, _, _, sequence_id = batch
+            B = src_tokens.shape[0]
 
-            global_seq_offset = seq_start
-            t_start = time.monotonic()
-            print(
-                f"{log_prefix} starting: seqs [{seq_start}, {seq_end}) = {shard_total:,}",
-                flush=True,
-            )
-            for batch in dataloader:
-                (
-                    structural_tokens,
-                    src_tokens,
-                    src_key_pad_mask,
-                    _,
-                    _,
-                    sequence_id,
-                ) = batch
-                B = src_tokens.shape[0]
+            with torch.no_grad():
+                _, hidden_states = lightning_model.model(
+                    src_tokens.to(device),
+                    structural_tokens.to(device),
+                    sequence_id.to(device),
+                    return_hidden_states=True,
+                )
 
-                with torch.no_grad():
-                    _, hidden_states = lightning_model.model(
-                        src_tokens.to(device),
-                        structural_tokens.to(device),
-                        sequence_id.to(device),
-                        return_hidden_states=True,
+            # valid_mask: tokens kept by the model (not PAD/START/STOP/MASK) —
+            #             gives the FIM-string position index via its cumulative index.
+            # residue_mask: valid AND not a FIM marker — the rows we save.
+            valid_mask_np = (~torch.isin(src_tokens, ctrl_token_ids)).numpy()
+            residue_mask_np = (~torch.isin(src_tokens, skip_token_ids)).numpy()
+
+            per_seq_residue_pos: list[np.ndarray] = []
+            for b in range(B):
+                valid_pos = np.where(valid_mask_np[b])[0]
+                residue_pos = np.where(residue_mask_np[b])[0]
+                per_seq_residue_pos.append(residue_pos)
+
+                if len(residue_pos) > 0:
+                    # pos in the raw FIM string = index within the kept-token
+                    # (valid_pos) sequence. valid_pos is strictly increasing,
+                    # so np.searchsorted gives that index in O(K).
+                    pos_in_fim = np.searchsorted(valid_pos, residue_pos).astype(
+                        np.int32
                     )
-
-                # True iff not PAD/START/STOP/MASK. FIM markers '1'/'3'/'2'
-                # pass through and are saved alongside residues.
-                valid_mask = ~torch.isin(src_tokens, ctrl_token_ids)
-                valid_mask_np = valid_mask.numpy()
-
-                # Precompute per-row metadata once and share across layers.
-                seq_idx_chunks, pos_idx_chunks, per_seq_valid_pos = [], [], []
-                for b in range(B):
-                    valid_pos = np.where(valid_mask_np[b])[0]
-                    per_seq_valid_pos.append(valid_pos)
-                    if len(valid_pos) == 0:
-                        continue
                     seq_idx_chunks.append(
-                        np.full(len(valid_pos), global_seq_offset + b, dtype=np.int32)
+                        np.full(len(residue_pos), global_seq_offset + b, dtype=np.int32)
                     )
-                    pos_idx_chunks.append(np.arange(len(valid_pos), dtype=np.int32))
+                    pos_idx_chunks.append(pos_in_fim)
 
-                if seq_idx_chunks:
-                    seq_idx_all = np.concatenate(seq_idx_chunks)
-                    pos_idx_all = np.concatenate(pos_idx_chunks)
-                else:
-                    seq_idx_all = np.zeros(0, dtype=np.int32)
-                    pos_idx_all = np.zeros(0, dtype=np.int32)
+                raw = res_fh["residues"][global_seq_offset + b]
+                seq_strings.append(
+                    raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+                )
 
-                for layer_idx in layers:
-                    hs = (
-                        hidden_states[layer_idx].cpu().to(torch_dtype).numpy()
-                    )  # [B, L, D]
-                    grp = layer_grps[layer_idx]
-
-                    act_chunks = []
-                    for b in range(B):
-                        valid_pos = per_seq_valid_pos[b]
-                        if len(valid_pos) == 0:
-                            continue
-                        act_chunks.append(hs[b, valid_pos])
-
-                    if act_chunks:
-                        act_all = np.concatenate(act_chunks, axis=0)
-                        old = grp["data"].shape[0]
-                        new = old + len(act_all)
-                        grp["data"].resize(new, axis=0)
-                        grp["data"][old:new] = act_all
-                        grp["seq_idx"].resize(new, axis=0)
-                        grp["seq_idx"][old:new] = seq_idx_all
-                        grp["pos_idx"].resize(new, axis=0)
-                        grp["pos_idx"][old:new] = pos_idx_all
-                        rows_per_layer[layer_idx] = new
-
-                # Free GPU memory held by hidden_states before the next forward pass
-                del hidden_states
-                torch.cuda.empty_cache()
-
-                # Per-sequence kept token ids + raw FIM-formatted residue string.
-                old = tokens_ds.shape[0]
-                tokens_ds.resize(old + B, axis=0)
-                strings_ds.resize(old + B, axis=0)
+            for layer_idx in layers:
+                hs = hidden_states[layer_idx].cpu().to(torch_dtype).numpy()  # [B,L,D]
                 for b in range(B):
-                    valid_pos = per_seq_valid_pos[b]
-                    kept_ids = src_tokens[b, valid_pos].numpy()
-                    tokens_ds[old + b] = kept_ids.astype(np.int16)
-                    raw = res_fh["residues"][global_seq_offset + b]
-                    strings_ds[old + b] = (
-                        raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
-                    )
+                    residue_pos = per_seq_residue_pos[b]
+                    if len(residue_pos) == 0:
+                        continue
+                    per_layer_chunks[layer_idx].append(hs[b, residue_pos])
 
-                global_seq_offset += B
+            global_seq_offset += B
     finally:
         res_fh.close()
 
-    print(
-        f"{log_prefix} done: {output_path} "
-        f"(took {_fmt_hms(time.monotonic() - t_start)})",
-        flush=True,
+    # Concat across all batches; permute jointly with a per-shard RNG.
+    if seq_idx_chunks:
+        seq_idx_all = np.concatenate(seq_idx_chunks)
+        pos_idx_all = np.concatenate(pos_idx_chunks)
+    else:
+        seq_idx_all = np.zeros(0, dtype=np.int32)
+        pos_idx_all = np.zeros(0, dtype=np.int32)
+    n_rows = len(seq_idx_all)
+
+    rng = np.random.default_rng(int(shuffle_seed) + int(shard_idx))
+    perm = rng.permutation(n_rows) if n_rows > 0 else np.zeros(0, dtype=np.int64)
+
+    per_layer_arrays: dict[int, tuple] = {}
+    rows_per_layer: dict[int, int] = {}
+    for layer_idx in layers:
+        if per_layer_chunks[layer_idx]:
+            data_all = np.concatenate(per_layer_chunks[layer_idx], axis=0)
+        else:
+            data_all = np.zeros((0, d_model), dtype=np_dtype)
+        assert len(data_all) == n_rows, (
+            f"layer {layer_idx}: data rows {len(data_all)} != index rows {n_rows}"
+        )
+        if n_rows > 0:
+            data_all = data_all[perm]
+        per_layer_arrays[layer_idx] = (data_all, seq_idx_all[perm], pos_idx_all[perm])
+        rows_per_layer[layer_idx] = int(len(data_all))
+        per_layer_chunks[layer_idx] = []  # drop ref ASAP — these are large
+
+    _write_shard_output(
+        output_path=output_path,
+        layers=layers,
+        d_model=d_model,
+        np_dtype=np_dtype,
+        alphabet=alphabet,
+        per_layer_arrays=per_layer_arrays,
+        seq_strings=seq_strings,
     )
     return rows_per_layer
 
@@ -433,40 +423,55 @@ def _run_gpu_worker(
     gpu_id,
     shard_indices,
     shard_ranges,
-    num_shards,
     batch_size,
     model_args,
     training_args,
     token_info,
+    d_model,
+    alphabet,
     dataset_filename,
     layers,
     save_dtype,
     output_dir,
     checkpoint_path,
+    shuffle_seed,
     result_queue,
 ):
     """Entry point for one GPU process. Loads the model once, processes its shards."""
     try:
         device = f"cuda:{gpu_id}"
-        lightning_model = _load_model(
-            model_args, training_args, token_info, checkpoint_path, device
+        lightning_model = LightningModel(
+            model_args=model_args, token_info=token_info, training_args=training_args
         )
+        lightning_model.load_model_from_checkpoint(checkpoint_path)
+        lightning_model.model.eval()
+        lightning_model.to(device)
+
+        ctrl_token_ids = _get_ctrl_token_ids(token_info)
+        fim_token_ids = _get_fim_token_ids(token_info)
+        # Union of ids that must NOT appear as activation rows. Control tokens
+        # are already stripped from the model input as pads; FIM markers are
+        # valid input tokens we explicitly drop from the saved activations.
+        skip_token_ids = torch.unique(torch.cat([ctrl_token_ids, fim_token_ids]))
+
         for shard_idx in shard_indices:
             seq_start, seq_end = shard_ranges[shard_idx]
             rows = _extract_shard(
-                lightning_model,
-                gpu_id,
-                shard_idx,
-                num_shards,
-                seq_start,
-                seq_end,
-                batch_size,
-                model_args,
-                token_info,
-                dataset_filename,
-                layers,
-                save_dtype,
-                output_dir,
+                lightning_model=lightning_model,
+                device=device,
+                shard_idx=shard_idx,
+                seq_start=seq_start,
+                seq_end=seq_end,
+                batch_size=batch_size,
+                ctrl_token_ids=ctrl_token_ids,
+                skip_token_ids=skip_token_ids,
+                d_model=d_model,
+                alphabet=alphabet,
+                dataset_filename=dataset_filename,
+                layers=layers,
+                save_dtype=save_dtype,
+                output_dir=output_dir,
+                shuffle_seed=shuffle_seed,
             )
             result_queue.put(
                 {
@@ -483,43 +488,26 @@ def _run_gpu_worker(
         result_queue.put({"error": str(e), "gpu_id": gpu_id})
 
 
-def _compute_shard_ranges(total_sequences: int, num_shards: int):
-    """Split ``[0, total_sequences)`` into ``num_shards`` contiguous half-open ranges.
+def _partition(n: int, k: int) -> list[tuple[int, int]]:
+    """Split ``[0, n)`` into ``k`` contiguous half-open ranges.
 
-    Excess (when ``total_sequences % num_shards != 0``) is distributed across
-    the first ``remainder`` shards, each getting one extra sequence — matches
-    the assignment policy the old multi-GPU code used.
+    Excess (when ``n % k != 0``) goes to the first ``n % k`` ranges, each
+    getting one extra element. Used for both the sequence→shard split and the
+    shard→GPU split — contiguous-block assignment keeps tempfile reads
+    sequential per worker.
     """
-    base = total_sequences // num_shards
-    remainder = total_sequences % num_shards
+    base, rem = divmod(n, k)
     ranges = []
     start = 0
-    for k in range(num_shards):
-        size = base + (1 if k < remainder else 0)
+    for i in range(k):
+        size = base + (1 if i < rem else 0)
         ranges.append((start, start + size))
         start += size
     return ranges
 
 
-def _assign_shards_to_gpus(num_shards: int, num_gpus: int):
-    """Contiguous-block assignment: GPU g gets a slice of shard indices.
-
-    Each GPU handles roughly ``num_shards // num_gpus`` shards in sequence
-    order, which keeps tempfile reads roughly contiguous per GPU.
-    """
-    base = num_shards // num_gpus
-    rem = num_shards % num_gpus
-    assignment: list[list[int]] = []
-    start = 0
-    for g in range(num_gpus):
-        size = base + (1 if g < rem else 0)
-        assignment.append(list(range(start, start + size)))
-        start += size
-    return assignment
-
-
 def _write_manifest(
-    output_dir, cfg, total_sequences, layers, save_dtype, alphabet, shard_results
+    output_dir, total_sequences, layers, save_dtype, alphabet, shard_results
 ):
     """Write a JSON inventory of the sharded output for downstream readers."""
     alphabet_list = None
@@ -620,20 +608,17 @@ def main(cfg) -> None:
             )
             num_shards = total_sequences
 
-        shard_ranges = _compute_shard_ranges(total_sequences, num_shards)
-        gpu_assignment = _assign_shards_to_gpus(num_shards, num_gpus)
+        d_model = model_args["model_args"]["d_model"]
+        alphabet = token_info.get("alphabet", None)
+
+        shard_ranges = _partition(total_sequences, num_shards)
+        # GPU g owns the contiguous block of shard indices [s, e).
+        gpu_assignment = [
+            list(range(s, e)) for s, e in _partition(num_shards, num_gpus)
+        ]
 
         print(f"Extracting {total_sequences:,} sequences into {num_shards} shard(s)")
         print(f"Layers: {layers}, dtype: {save_dtype}")
-        for g, shards in enumerate(gpu_assignment):
-            if not shards:
-                continue
-            first, last = shards[0], shards[-1]
-            r0 = shard_ranges[first][0]
-            r1 = shard_ranges[last][1]
-            print(
-                f"  GPU {g}: shards [{first:04d}..{last:04d}] → seqs [{r0:,}..{r1:,})"
-            )
 
         os.makedirs(os.path.abspath(output_dir), exist_ok=True)
         OmegaConf.save(cfg, os.path.join(output_dir, "extract_config.yaml"))
@@ -645,6 +630,7 @@ def main(cfg) -> None:
         result_queue: "mp.Queue" = mp.Queue()
         processes = []
         t_start_all = time.monotonic()
+        shuffle_seed = int(training_args["seed_args"]["seed"])
         for gpu_id, shard_indices in enumerate(gpu_assignment):
             if not shard_indices:
                 continue
@@ -654,23 +640,24 @@ def main(cfg) -> None:
                     gpu_id,
                     shard_indices,
                     shard_ranges,
-                    num_shards,
                     batch_size,
                     model_args,
                     training_args,
                     token_info,
+                    d_model,
+                    alphabet,
                     temp_shard_path,
                     layers,
                     save_dtype,
                     output_dir,
                     checkpoint_path,
+                    shuffle_seed,
                     result_queue,
                 ),
             )
             p.start()
             processes.append(p)
 
-        # Drain the queue concurrently so a slow consumer doesn't block producers.
         shard_results: list[dict] = []
         errors: list[dict] = []
         expected = num_shards
@@ -681,13 +668,8 @@ def main(cfg) -> None:
             else:
                 shard_results.append(msg)
             done = len(shard_results) + len(errors)
-            elapsed = time.monotonic() - t_start_all
-            rate = done / max(elapsed, 1e-9)
-            eta = (expected - done) / rate if rate > 0 else float("inf")
-            print(
-                f"[overall {_fmt_hms(elapsed)}] {done}/{expected} shards done  ETA {_fmt_hms(eta)}",
-                flush=True,
-            )
+            elapsed = timedelta(seconds=int(time.monotonic() - t_start_all))
+            print(f"{done}/{expected} shards done — elapsed {elapsed}", flush=True)
 
         for p in processes:
             p.join()
@@ -697,25 +679,13 @@ def main(cfg) -> None:
                 print(f"GPU {e.get('gpu_id', '?')} error: {e['error']}", flush=True)
             raise RuntimeError(f"{len(errors)} shard worker(s) failed; see logs above")
 
-        alphabet = token_info.get("alphabet", None)
         _write_manifest(
-            output_dir,
-            cfg,
-            total_sequences,
-            layers,
-            save_dtype,
-            alphabet,
-            shard_results,
-        )
-        print(
-            f"All shards complete in {_fmt_hms(time.monotonic() - t_start_all)} "
-            f"→ {output_dir}"
+            output_dir, total_sequences, layers, save_dtype, alphabet, shard_results
         )
 
     finally:
         if os.path.exists(temp_shard_path):
             os.remove(temp_shard_path)
-            print(f"Removed temporary shard: {temp_shard_path}")
 
 
 if __name__ == "__main__":
