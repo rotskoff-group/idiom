@@ -23,11 +23,42 @@ from idiom.nn.transformer.utils.tokenizer import CharTokenizer
 from idiom.nn.transformer.generators.input_generators import ResiduesInputBasic
 from idiom.nn.transformer.generators.target_generators import ResiduesTarget
 from idiom.scripts.transformer.precompute import (
-    determine_alphabet,
     run_process_parallel,
 )
 
 _IDR_PATTERN = re.compile(r"_IDR_(\d+)-(\d+)")
+
+# The base model's FIXED token vocabulary: FIM markers (1/2/3) + the 20 standard
+# amino acids, in the sorted order used at training. Token ids are positions in
+# this list and MUST line up with the model's embedding rows. NEVER derive the
+# alphabet from the input data: a single non-standard residue (e.g. selenocysteine
+# 'U', pyrrolysine 'O', or 'X'/'B'/'Z') would shift every id from that letter
+# onward and silently scramble *all* activations. Any sequence containing a
+# character outside this set is dropped before tokenization.
+CANONICAL_ALPHABET = sorted("123ACDEFGHIKLMNPQRSTVWY")
+_CANONICAL_SET = frozenset(CANONICAL_ALPHABET)
+
+
+def _drop_noncanonical(sequences: list[str]) -> list[str]:
+    """Drop FIM strings containing any character outside CANONICAL_ALPHABET.
+
+    Guards extraction against out-of-vocab residues poisoning the token mapping.
+    Reports how many sequences were dropped and which characters triggered it.
+    """
+    kept, dropped, bad = [], 0, set()
+    for s in sequences:
+        extra = set(s) - _CANONICAL_SET
+        if extra:
+            dropped += 1
+            bad |= extra
+        else:
+            kept.append(s)
+    if dropped:
+        print(
+            f"WARNING: dropped {dropped} sequence(s) containing non-canonical "
+            f"characters {sorted(bad)} (allowed: {''.join(CANONICAL_ALPHABET)})"
+        )
+    return kept
 
 
 def _parse_fasta_to_fim(fasta_path: str, max_sequences: int | None) -> list[str]:
@@ -85,7 +116,7 @@ def _load_residues(dataset_filename: str, max_sequences: int | None) -> list[str
         FIM format.
     """
     if dataset_filename.endswith((".fasta", ".fa")):
-        return _parse_fasta_to_fim(dataset_filename, max_sequences)
+        return _drop_noncanonical(_parse_fasta_to_fim(dataset_filename, max_sequences))
     with h5py.File(dataset_filename, "r") as f:
         total = len(f["residues"])
         n = min(total, max_sequences) if max_sequences is not None else total
@@ -94,7 +125,9 @@ def _load_residues(dataset_filename: str, max_sequences: int | None) -> list[str
             f"Expected 'residues' dataset to be utf-8 encoded bytes, "
             f"got dtype {f['residues'].dtype}"
         )
-        return [f["residues"][i].decode("utf-8") for i in range(n)]
+        return _drop_noncanonical(
+            [f["residues"][i].decode("utf-8") for i in range(n)]
+        )
 
 
 def _precompute_to_tempfile(
@@ -109,7 +142,13 @@ def _precompute_to_tempfile(
     print(f"Tokenizing {len(residues):,} sequences from {source_label}...")
 
     tokenizer = CharTokenizer()
-    alphabet = determine_alphabet(residues, tokenizer)
+    # Pin the alphabet to the model's fixed training vocabulary — do NOT derive it
+    # from `residues`. Deriving is unsafe in BOTH directions: an extra character
+    # (e.g. 'U') shifts ids, and a *missing* canonical residue (small/biased input
+    # sets) would also shift ids. Inputs are already filtered to this set upstream.
+    alphabet = list(CANONICAL_ALPHABET)
+    leftover = set("".join(residues)) - _CANONICAL_SET
+    assert not leftover, f"non-canonical chars survived filtering: {sorted(leftover)}"
 
     input_gen = ResiduesInputBasic(
         residues, tokenizer, alphabet, apply_start=True, apply_stop=False

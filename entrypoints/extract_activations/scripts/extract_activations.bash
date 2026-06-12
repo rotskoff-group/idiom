@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=extract
 #SBATCH --time=1-00:00:00
-#SBATCH --gpus=2
+#SBATCH --gpus=4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
 #SBATCH --output=./slurm_out/slurm-%j.out
@@ -51,11 +51,16 @@ CKPT_PATH="${REPO_ROOT}/models/idiom/base/version_2/checkpoints/best_model_step_
 # DATA_PATH="${REPO_ROOT}/entrypoints/generate/scripts/example_sequences.fasta"
 # DATA_PATH="${REPO_ROOT}/datasets/idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_small.h5" # 100k sequences here
 # DATA_PATH="/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_100k.h5" 
-DATA_PATH='/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_1M.h5'
+# DATA_PATH='/home/scratch/jxliu2/code_repos/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_1M.h5'
+# DATA_PATH='/data2/scratch/jxliu2/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_1M.h5'
+# DATA_PATH='/data2/scratch/jxliu2/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_5M.h5'
+DATA_PATH='/data2/scratch/jxliu2/idiom/datasets/idr_datasets/sae_sequences/AFDB_IDR_90_FIM_512_sae_132_100k.h5'
 
 # OUT_DIR="${REPO_ROOT}/entrypoints/extract_activations/output"
-OUT_DIR="/home/scratch/group_scratch/idr_plm/2026-05-27_activations"
-OUTPUT_DIR="${OUT_DIR}/activations_layer_8_1M"
+# OUT_DIR="/home/scratch/group_scratch/idr_plm/2026-05-27_activations"
+OUT_DIR='/data2/scratch/group_scratch/idr_plm/2026-05-28_sae'
+# OUTPUT_DIR="${OUT_DIR}/activations_layer_8_5M"
+OUTPUT_DIR="${OUT_DIR}/activations_layer_8_100k"
 NSHARDS=128
 mkdir -p "${OUTPUT_DIR}"
 
@@ -73,7 +78,7 @@ transformer_extract \
     "++extract.dataset_filename=$DATA_PATH" \
     "++extract.output_dir=$OUTPUT_DIR" \
     "++extract.layers=[8]" \
-    "++extract.batch_size=128" \
+    "++extract.batch_size=1024" \
     "++extract.save_dtype=float32" \
     "++extract.num_precompute_workers=null" \
     "++extract.num_shards=$NSHARDS" \
