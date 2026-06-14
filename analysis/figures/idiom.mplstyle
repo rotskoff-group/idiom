@@ -1,0 +1,60 @@
+patch.linewidth: 1.0
+
+patch.facecolor: 348ABD  # blue
+patch.edgecolor: 110d1b
+patch.antialiased: True
+
+font.size: 14.0
+font.sans-serif: Liberation Sans
+
+lines.linewidth: 2.5
+lines.markersize: 7
+
+axes.linewidth: 2.5
+axes.facecolor: white
+axes.edgecolor: 110d1b
+axes.grid: False
+axes.titlesize: 23
+axes.labelsize: 23
+axes.labelcolor: 110d1b
+axes.axisbelow: True       # grid/ticks are below elements (e.g., lines, text)
+
+axes.prop_cycle: cycler('color', ["#00386b", "#00679f", "#1b9ad0", "#54cffb", "#fbac41", "#fa8f34", "#f87026", "#f54b1a"])
+
+# diverging ['#00386b', '#00679f', '#1b9ad0', '#54cffb', '#fbac41', '#fa8f34', '#f87026', '#f54b1a']
+# sequential ['#001f4d', '#00386b', '#00538a', '#0070a9', '#008eca', '#05adea', '#4dcbff', '#78ecff']
+# red = "#f54b1a"
+# pink = "#d19eb1"
+# orange = "#d3772e"
+# yellow = "#ebe85d"
+# green = "#0f6852"
+# lightblue = "#01abe9"
+# darkblue = "#1b346c"
+# tan = "#e5c39e"
+# darktan = "#af9e73"
+# grey = "#c3ced0"
+# darkgrey = "#9dadc4"
+# black = "#110d1b"
+# white = "#f1f8f1"
+
+xtick.color: 25282A
+xtick.major.width: 1.75
+xtick.minor.width: 1.5
+xtick.direction: out
+
+ytick.color: 25282A
+ytick.direction: out
+ytick.major.width: 1.75
+ytick.minor.width: 1.5
+
+xtick.labelsize: 23
+ytick.labelsize: 23
+
+figure.facecolor: white
+figure.edgecolor: 0.50
+
+text.usetex         : False
+text.latex.preamble : \usepackage{amsmath}
+
+legend.frameon      : False
+legend.fontsize     : 20

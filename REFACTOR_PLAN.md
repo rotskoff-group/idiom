@@ -360,3 +360,9 @@ Legend: ☐ todo · ◐ in progress · ☑ done
   (paper bucket). pyproject: repointed `idiom_feature_dataset`, pytest `pythonpath=[src,.]`,
   wheel ships only `src/idiom`. Artifacts (`models/`/`datasets/`) → gitignored, HF-hosted.
   61/61 CPU green.
+- **2026-06-14** — Moved `models/` (27G) + `datasets/` (177G) out of the repo to scratch
+  safekeeping; removed their `.gitignore` blocks (repo is now pure code; artifacts → HF).
+- **2026-06-14** — Scaffolded P6 **figure plumbing**: `analysis/figures/{idiom.mplstyle,_style.py}`
+  (`use_style` + `save_fig` writing to `$IDIOM_FIG_DIR` = the overleaf `figs/`, filename = LaTeX
+  `\includegraphics` path) + `bash/figures.bash`. Figure scripts live in `analysis/figures/`,
+  output into the manuscript repo. 64/64 CPU green.
