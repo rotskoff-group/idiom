@@ -29,6 +29,7 @@ checkpoints or h5 layouts must remain readable. We make clean breaks freely.
 | D3 | SAE activations | **Fully streaming, regenerated per run** — an `ActivationStore` runs the frozen model live during SAE training; residue-only positions; no activation h5. |
 | D4 | Training framework | **Keep PyTorch Lightning** (pretrain / GRPO / SAE). |
 | D5 | Model size | Config-driven **GPT-2 family** (head_dim 64): **12L/d768/12h (small — test) → 24L/d1024/16h (medium — primary) → 36L/d1280/20h (large)**. Factories `idiom_12l/24l/36l`. |
+| D20 | Repo structure & artifacts | **Three buckets, one repo:** `src/idiom/` (lean shipped library — `model/data/train/sae/utils/configs`; `analysis/` folded into `sae/`), `data_pipeline/` (pretraining corpus build: extract/cluster/split/filters — repo-only, not shipped), `analysis/` (downstream paper analysis + figures + eval — repo-only). Boundary test: *does a `pip install idiom` user need it to run the model?* Heavy deps behind a `[paper]` extra. **Large artifacts (`models/`, `datasets/`) are gitignored, regenerable, never in git or the wheel** — distributed via **HF Hub** (`jxliu2/idiom-*` models/SAEs + `jxliu2/idiom-datasets`); users get them via `from_pretrained` (auto-download) or `hf download --local-dir`. Runs happen in dated `group_scratch/.../YYYY-MM-DD_x/` dirs, not git. |
 | D19 | Keep legacy code | During the refactor, **keep the legacy `idiom.nn` / `idiom.scripts` / `rewards/` (and the separate `idiomatics` repo) in place for reference** — don't delete. New code reimplements faithfully (esp. RL: quadratic length/entropy penalties + `-scale*(raw-target)^2` shaping, matching the known-good runs). Prune only once v2 is validated. |
 | D18 | SFT | Supervised fine-tuning shares the **same** `LitAutoregressive` module as pretraining. Differences live in config/data only: **completion-only loss mask** (loss on the IDR + STOP, via `RecordDataset(completion_only=True)`) and **warm-start** from a pretrained ckpt (`init_from`). One entrypoint (`idiom_train`), two flat configs (`pretrain.yaml` / `sft.yaml`). |
 | D17 | Model architecture | **RMSNorm + SwiGLU + QK-norm (RMSNorm) + RoPE + bias-off + tied embeddings**, SDPA attention with a KV cache. Modernizes the legacy ESM-style block's LayerNorm→RMSNorm; keeps SwiGLU/QK-norm/no-bias; swaps rel-pos-bias→RoPE; drops structural tokens (D8). Causal via SDPA `is_causal` (right-pad + causal ⇒ no pad mask needed). |
@@ -353,3 +354,9 @@ Legend: ☐ todo · ◐ in progress · ☑ done
   residues → top-k SAE features + FIM strings as a `.npy`+`.json` directory (no h5); `FeatureDataset`
   reader switched to it (mmap), `pos_idx` residue-aligned. Viewer/annotation now have their input.
   **61/61 CPU green.** Next: P6 (analysis & figures).
+- **2026-06-14** — **Repo reorg (D20).** Folded `src/idiom/analysis/` → `src/idiom/sae/`
+  (feature_activations/build_feature_dataset/feature_viewer). Moved `src/idiom/data/curation/`
+  → top-level **`data_pipeline/`** (pretraining corpus build). Created top-level **`analysis/`**
+  (paper bucket). pyproject: repointed `idiom_feature_dataset`, pytest `pythonpath=[src,.]`,
+  wheel ships only `src/idiom`. Artifacts (`models/`/`datasets/`) → gitignored, HF-hosted.
+  61/61 CPU green.

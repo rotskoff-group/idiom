@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from idiom.data.curation.extract import extract_idrs
+from data_pipeline.extract import extract_idrs
 
 
 def test_single_central_idr():

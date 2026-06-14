@@ -25,6 +25,23 @@ def test_build_reward_composes():
     assert abs(reward(idr) - 1.0) < 1e-6
 
 
+def test_custom_reward_module(tmp_path):
+    # A user drops a *.py with @register_reward; reward.module imports it before lookup.
+    mod = tmp_path / "myrew.py"
+    mod.write_text(
+        "from idiom.train.grpo.rewards import register_reward\n"
+        "@register_reward('always_one')\n"
+        "def always_one(idr):\n    return 1.0\n"
+    )
+    rcfg = _reward_cfg(
+        name="always_one",
+        module=str(mod),
+        length={"enabled": False, "target_length": 100, "width": 1.0, "weight": 1.0},
+    )
+    reward = build_reward(rcfg)
+    assert reward("ACDE") == 1.0
+
+
 def test_build_wires_module_and_prompts():
     cfg = OmegaConf.create({
         "seed": 0,

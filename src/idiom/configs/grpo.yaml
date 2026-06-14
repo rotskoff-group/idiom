@@ -29,6 +29,7 @@ grpo:
   normalize_advantage: true
 
 reward:                      # base reward + optional shaping/length/entropy (sweep-tuned defaults)
+  module: null               # optional: a user module / *.py with @register_reward, imported first
   name: fraction_proline     # any registered reward, or 'protgps' (operator-registered)
   shaping: {enabled: false, target: 0.9, scale: 1.0}
   length:  {enabled: true, target_length: 100, width: 1.0, weight: 1.0}

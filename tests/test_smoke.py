@@ -4,7 +4,6 @@ from idiom.utils.device import is_cpu_only, resolve_device
 
 
 def test_package_skeleton_imports():
-    import idiom.analysis  # noqa: F401
     import idiom.data  # noqa: F401
     import idiom.model  # noqa: F401
     import idiom.sae  # noqa: F401

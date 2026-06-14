@@ -12,8 +12,8 @@ latency flat as the HDF5 grows — the cost moves to the one-time load and RAM
 footprint (~``N_res * (8*k + 16)`` bytes; e.g. ~3 GB at 11M residues, k=32).
 
 Run:
-    streamlit run src/idiom/analysis/feature_viewer.py -- \\
-        --features ./data/feature_dataset_L6.h5
+    streamlit run src/idiom/sae/feature_viewer.py -- \\
+        --features ./data/feature_dataset_L6
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import html
 import numpy as np
 import streamlit as st
 
-from idiom.analysis.feature_activations import FeatureDataset
+from idiom.sae.feature_activations import FeatureDataset
 
 
 def _parse_args() -> argparse.Namespace:

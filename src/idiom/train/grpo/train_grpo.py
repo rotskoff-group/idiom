@@ -22,8 +22,28 @@ from idiom.train.grpo.lit_grpo import LitGRPO
 from idiom.train.grpo.rewards import entropy_reward, get_reward, length_reward, quadratic_shaping
 
 
+def _register_custom_rewards(spec: str | None) -> None:
+    """Import a user module so its ``@register_reward`` decorators run before reward lookup.
+
+    ``spec`` is a dotted module path (e.g. ``analysis.my_rewards``) or a ``*.py`` file path. The
+    module just needs ``@register_reward("name") def f(idr: str) -> float: ...`` at import time.
+    """
+    if not spec:
+        return
+    import importlib
+    import importlib.util
+
+    if spec.endswith(".py"):
+        mod_spec = importlib.util.spec_from_file_location("idiom_custom_rewards", spec)
+        module = importlib.util.module_from_spec(mod_spec)
+        mod_spec.loader.exec_module(module)
+    else:
+        importlib.import_module(spec)
+
+
 def build_reward(rcfg: DictConfig) -> Callable[[str], float]:
-    base = get_reward(rcfg.name)  # 'protgps' must be registered by the operator beforehand
+    _register_custom_rewards(rcfg.get("module"))  # user rewards (or operator-registered protgps)
+    base = get_reward(rcfg.name)
 
     def reward(idr: str) -> float:
         r = base(idr)

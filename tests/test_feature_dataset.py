@@ -1,7 +1,7 @@
 """P5 feature-dataset tests (CPU-only): build -> read -> reduce, with residue alignment."""
 
-from idiom.analysis.build_feature_dataset import build_feature_dataset
-from idiom.analysis.feature_activations import (
+from idiom.sae.build_feature_dataset import build_feature_dataset
+from idiom.sae.feature_activations import (
     FeatureDataset,
     feature_trace_for_sequence,
     top_n_sequences,

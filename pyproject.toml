@@ -56,13 +56,18 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# "src" -> the idiom library; "." -> top-level data_pipeline/ and analysis/ (repo-only, not shipped)
+pythonpath = ["src", "."]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/idiom"]  # ship only the library; data_pipeline/ and analysis/ stay repo-only
 
 [project.scripts]
 idiom_train = "idiom.train.train:main"
 idiom_grpo = "idiom.train.grpo.train_grpo:main"
 idiom_sae = "idiom.sae.train_sae:main"
 idiom_extract = "idiom.model.export:main"
-idiom_feature_dataset = "idiom.analysis.build_feature_dataset:main"
+idiom_feature_dataset = "idiom.sae.build_feature_dataset:main"
 transformer_precompute = "idiom.scripts.transformer.precompute:main"
 transformer_train = "idiom.scripts.transformer.train:main"
 transformer_infer = "idiom.scripts.transformer.inference:main"
