@@ -1,0 +1,38 @@
+# SAE training config (flat, D6). Streaming activations from a frozen IDiom (no h5).
+#   idiom_sae model_ckpt=/path/pretrained.ckpt data.fasta=/path/records.fasta layer=8
+seed: 0
+device: auto
+model_ckpt: ???              # pretrained IDiom checkpoint (arch must match `model` below)
+
+model:
+  n_layers: 24
+  d_model: 1024
+  n_heads: 16
+  max_seq_len: 1024
+
+layer: 8                     # residual-stream block to train the SAE on
+
+data:
+  fasta: ???                 # record FASTA whose activations feed the SAE
+  fim_full_prob: 0.5
+  record_batch_size: 16      # sequences per model forward (re-batched into sae_batch_size)
+
+sae_batch_size: 4096         # activation rows per SAE step
+buffer_size: 262144          # shuffling-buffer rows before draining
+init_b_dec_from_mean: true
+
+sae:
+  k: 32
+  expansion_factor: 32
+  activation: topk           # topk | groupmax
+  multi_topk: false
+  auxk_alpha: 0.03125
+  dead_feature_tokens: 10000000
+  warmup_steps: 1000
+
+trainer:
+  max_steps: 100000
+  accelerator: auto
+  devices: 1
+
+out_dir: ${oc.env:IDIOM_OUT,./runs}/sae

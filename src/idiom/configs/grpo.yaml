@@ -1,0 +1,43 @@
+# GRPO post-training config (flat, D6).
+#   idiom_grpo init_from=/path/pretrained.ckpt reward.name=protgps prompts.mode=denovo
+seed: 0
+device: auto
+init_from: ???               # required: pretrained checkpoint to optimize
+
+prompts:
+  mode: denovo               # denovo ("132") | record (per-protein flank prompts)
+  n: 1000                    # denovo: number of prompts
+  fasta: null                # record mode: FASTA of proteins (_IDR_x-y headers)
+  n_per: 1000                # record mode: copies per protein
+  batch_size: 8              # distinct prompts per step (each -> group_size completions)
+
+model:                       # MUST match the pretrained checkpoint
+  n_layers: 24
+  d_model: 1024
+  n_heads: 16
+  max_seq_len: 1024
+
+grpo:
+  group_size: 8
+  max_new_tokens: 256
+  lr: 5.0e-6
+  beta_kl: 0.02
+  eps_clip: 0.2
+  temperature: 1.0
+  top_k: null
+  top_p: null
+  normalize_advantage: true
+
+reward:                      # base reward + optional shaping/length/entropy (sweep-tuned defaults)
+  name: fraction_proline     # any registered reward, or 'protgps' (operator-registered)
+  shaping: {enabled: false, target: 0.9, scale: 1.0}
+  length:  {enabled: true, target_length: 100, width: 1.0, weight: 1.0}
+  entropy: {enabled: true, target_entropy: 2.7, width: 0.2, weight: 1.0}
+
+trainer:
+  max_steps: 1500
+  accelerator: auto
+  devices: 1
+  gradient_clip_val: 1.0
+
+out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo

@@ -1,0 +1,35 @@
+# Pretraining config (flat, D6). Override on the CLI, e.g.:
+#   idiom_train data.train_fasta=/path/train.fasta model.n_layers=12 model.d_model=768 model.n_heads=12
+seed: 0
+device: auto                 # auto | cpu | cuda
+init_from: null              # set to a .ckpt to warm-start (see sft.yaml)
+
+data:
+  train_fasta: ???           # required: per-split record FASTA from curation
+  val_fasta: null
+  fim_full_prob: 0.5         # full-context vs 132 augmentation
+  completion_only: false     # pretraining: loss on every token
+  batch_size: 64
+  num_workers: 8
+
+model:                       # defaults = GPT-2 medium (24L); 12L test = n_layers=12 d_model=768 n_heads=12
+  n_layers: 24
+  d_model: 1024
+  n_heads: 16
+  max_seq_len: 1024
+
+optim:
+  lr: 3.0e-4
+  warmup_steps: 2000
+  weight_decay: 0.1
+  min_lr_ratio: 0.1
+
+trainer:
+  max_steps: 250000
+  accelerator: auto
+  devices: 1
+  precision: bf16-mixed
+  val_check_interval: 25000
+  gradient_clip_val: 1.0
+
+out_dir: ${oc.env:IDIOM_OUT,./runs}/pretrain

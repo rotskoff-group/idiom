@@ -1,0 +1,116 @@
+"""GRPO post-training LightningModule.
+
+Each step: expand every prompt into ``group_size`` completions (generated with the KV-cached
+sampler), reward each decoded IDR, compute group-normalized advantages, then the DAPO GRPO
+loss against a frozen reference. Prompts in a batch are assumed equal length (the typical GRPO
+setup — a prompt repeated, or one compartment's flank prompt); length-bucket if mixing.
+"""
+
+from __future__ import annotations
+
+import copy
+from collections.abc import Callable
+
+import lightning as L
+import torch
+
+from idiom.data.tokenizer import Tokenizer
+from idiom.model.config import ModelConfig
+from idiom.model.sampling import generate
+from idiom.model.transformer import IDiomTransformer
+from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_logprobs
+
+
+class LitGRPO(L.LightningModule):
+    def __init__(
+        self,
+        cfg: ModelConfig,
+        reward_fn: Callable[[str], float],
+        *,
+        group_size: int = 8,
+        max_new_tokens: int = 256,
+        lr: float = 5e-6,
+        beta_kl: float = 0.02,
+        eps_clip: float = 0.2,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+        top_p: float | None = None,
+        normalize_advantage: bool = True,
+        tokenizer: Tokenizer | None = None,
+    ) -> None:
+        super().__init__()
+        self.cfg = cfg
+        self.model = IDiomTransformer(cfg)
+        # Frozen reference = the initial policy; the KL penalty keeps the policy near it.
+        self.reference = copy.deepcopy(self.model).eval()
+        self.reference.requires_grad_(False)
+
+        self.reward_fn = reward_fn
+        self.tok = tokenizer or Tokenizer()
+        self.group_size = group_size
+        self.max_new_tokens = max_new_tokens
+        self.lr = lr
+        self.beta_kl = beta_kl
+        self.eps_clip = eps_clip
+        self.temperature = temperature
+        self.top_k = top_k
+        self.top_p = top_p
+        self.normalize_advantage = normalize_advantage
+
+    @classmethod
+    def init_from_checkpoint(cls, ckpt_path, cfg, reward_fn, **kwargs) -> "LitGRPO":
+        lit = cls(cfg, reward_fn, **kwargs)
+        state = torch.load(ckpt_path, map_location="cpu")["state_dict"]
+        model_state = {k[len("model.") :]: v for k, v in state.items() if k.startswith("model.")}
+        lit.model.load_state_dict(model_state)
+        lit.reference.load_state_dict(model_state)
+        return lit
+
+    def _decode_idr(self, completion: torch.Tensor) -> str:
+        ids: list[int] = []
+        for i in completion.tolist():
+            if i in (self.tok.stop_id, self.tok.pad_id):
+                break  # completion ends at the first STOP/PAD
+            ids.append(i)
+        return self.tok.decode(ids)  # residue string (controls already skipped by decode)
+
+    def training_step(self, batch: torch.Tensor, batch_idx: int):
+        prompts = batch  # [B, P], equal-length prompts
+        rep = prompts.repeat_interleave(self.group_size, dim=0)  # [B*G, P]
+        BG, P = rep.shape
+
+        with torch.no_grad():  # rollouts are off-policy data; no grad through generation
+            completions = generate(
+                self.model, rep, max_new_tokens=self.max_new_tokens, temperature=self.temperature,
+                top_k=self.top_k, top_p=self.top_p, tokenizer=self.tok,
+            )
+        T = completions.size(1)
+
+        start = torch.full((BG, 1), self.tok.start_id, dtype=torch.long, device=rep.device)
+        full = torch.cat([start, rep, completions], dim=1)  # [B*G, 1+P+T]
+
+        # completion mask over targets (= full[:, 1:]): the T completion positions, minus pad.
+        mask = torch.zeros(BG, P + T, device=rep.device)
+        mask[:, P:] = (completions != self.tok.pad_id).float()
+
+        rewards = torch.tensor(
+            [self.reward_fn(self._decode_idr(completions[i])) for i in range(BG)],
+            device=rep.device, dtype=torch.float,
+        )
+        advantages = group_advantages(rewards, self.group_size, normalize=self.normalize_advantage)
+
+        policy_logp = sequence_logprobs(self.model, full)
+        with torch.no_grad():
+            ref_logp = sequence_logprobs(self.reference, full)
+        loss = grpo_loss(
+            policy_logp, ref_logp, advantages, mask, beta_kl=self.beta_kl, eps_clip=self.eps_clip
+        )
+
+        self.log_dict(
+            {"train/loss": loss, "train/reward": rewards.mean(), "train/reward_std": rewards.std()},
+            prog_bar=True, on_step=True,
+        )
+        return loss
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.model.parameters(), lr=self.lr)

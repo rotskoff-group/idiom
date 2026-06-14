@@ -17,7 +17,7 @@ dependencies = [
     "ipdb>=0.13.13",
     "ipython>=8.38.0",
     "lightning>=2.6.0",
-    "lightning-bolts>=0.7.0",
+    "lightning-bolts>=0.7.0",  # legacy LinearWarmupCosineAnnealingLR; removed in P3
     "matplotlib>=3.10.9",
     "pip>=25.0",
     "pre-commit>=4.5.1",
@@ -27,7 +27,20 @@ dependencies = [
     "torch-geometric>=2.7.0",
     "torchvision==0.19.0",
     "tqdm>=4.67.1",
+    # --- merged from idiomatics (SAE / analysis) ---
+    "omegaconf>=2.3.0",
+    "wandb>=0.18.0",
+    "pandas>=2.2",
+    "loguru>=0.7",
+    "anthropic>=0.18.0",      # SAE feature annotation (P6)
+    "umap-learn>=0.5.6",      # feature clustering (P6)
+    "sparrow",               # IDR biophysics metrics (P6)
+    "streamlit>=1.39",       # SAE feature viewer (analysis/feature_viewer.py)
+    "setuptools<81",
 ]
+
+[tool.uv.sources]
+sparrow = { git = "https://github.com/idptools/sparrow.git" }
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -37,9 +50,19 @@ include = [
 [dependency-groups]
 dev = [
     "ruff>=0.14.13",
+    "pytest>=8.0",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
 [project.scripts]
+idiom_train = "idiom.train.train:main"
+idiom_grpo = "idiom.train.grpo.train_grpo:main"
+idiom_sae = "idiom.sae.train_sae:main"
+idiom_extract = "idiom.model.export:main"
+idiom_feature_dataset = "idiom.analysis.build_feature_dataset:main"
 transformer_precompute = "idiom.scripts.transformer.precompute:main"
 transformer_train = "idiom.scripts.transformer.train:main"
 transformer_infer = "idiom.scripts.transformer.inference:main"
