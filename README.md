@@ -1,370 +1,93 @@
 # IDiom
 
-IDiom is a 122M parameter autoregressive transformer trained on 37M intrinsically disordered regions from the AlphaFold Database. The model can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions. Hidden state activations can also be extracted from the transformer residual streams for downstream tasks. The associated preprint is: [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777)
+IDiom is an autoregressive transformer for **generating and designing intrinsically disordered
+protein regions (IDRs)**. Trained on ~37M IDRs from the AlphaFold Database with a
+fill-in-the-middle objective, it generates fully disordered proteins (IDPs) de novo, or IDRs
+conditioned on their flanking structured context, and can be post-trained with reinforcement
+learning to optimize custom rewards. Sparse autoencoders (SAEs) on its residual stream make the
+learned features interpretable and steerable.
 
-<p align="center">
-  <img src="assets/github_fig.png" alt="IDiom" width="900px" align="middle"/>
-</p>
+Preprint: [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777)
 
-# Table of Contents
-- [IDiom](#IDiom)
-- [Table of Contents](#table-of-contents)
-- [Installation](#installation)
-  - [Environment setup](#environment-setup)
-  - [Model checkpoints and data](#model-checkpoints-and-data)
-- [Generating sequences](#generating-sequences)
-  - [Generating intrinsically disordered proteins](#generating-intrinsically-disordered-proteins)
-  - [Generating intrinsically disordered regions](#generating-intrinsically-disordered-regions)
-  - [Generating sequences of a specific length](#generating-sequences-of-a-specific-length)
-- [Post-training](#post-training)
-  - [Custom reward functions](#custom-reward-functions)
-    - [Optimizing IDP generation](#optimizing-idp-generation)
-    - [Optimizing prompted IDR generation](#optimizing-prompted-idr-generation)
-  - [ProtGPS reward](#protgps-reward)
-  - [Tracking training progress using Tensorboard](#tracking-training-progress-using-tensorboard)
-  - [Generating sequences after post-training](#generating-sequences-after-post-training)
-- [Extracting activations](#extracting-activations)
-- [Pre-training](#pre-training)
-- [Citation](#citation)
-
-# Installation
-
-## Environment setup
-First, install the [uv](https://docs.astral.sh/uv/) package manager if not already installed:
+## Install
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# directly from GitHub (no PyPI needed):
+pip install git+https://github.com/rotskoff-group/idiom.git
+
+# or from source (for training / reproduction):
+git clone https://github.com/rotskoff-group/idiom.git && cd idiom && uv sync && uv pip install -e .
 ```
 
-Next, clone the IDiom repository into a directory with at least 30 GB of free space and install the dependencies:
+(A `pip install idiom` from PyPI may be offered later.)
+
+## Quickstart
+
+```python
+from idiom import IDiom
+
+model = IDiom.from_pretrained("jxliu2/idiom-medium")     # downloads weights from HF
+
+# de-novo IDPs
+idrs = model.generate_idp(n=100, temperature=1.0)
+
+# IDRs conditioned on flanking context (0-based, half-open coords)
+idrs = model.generate_idr(protein_seq, idr_start, idr_end, n=100)
+
+# residual-stream embeddings for downstream tasks
+emb = model.embed("proteins.fasta", layers=[8], pool="mean")
+```
+
+FASTA-first from the command line:
 
 ```bash
-git clone https://github.com/rotskoff-group/idiom.git
-cd idiom
-uv sync
-uv pip install -e .
+idiom_generate idp --model jxliu2/idiom-medium --n 1000 --out idps.fasta
+idiom_generate idr --model jxliu2/idiom-medium --fasta proteins.fasta --n 1000 --out idrs.fasta
+#   ^ input headers end with _IDR_x-y (1-based, inclusive), e.g. >P06748_IDR_119-242
 ```
 
+CPU works (slow); a GPU is used automatically when present.
 
+## Models & data (HuggingFace)
 
-## Model checkpoints and data
+Weights and datasets are hosted on the Hub, not in this repo:
 
-Next, download the `IDiom` model checkpoints from the HuggingFace repository into the project root directory.
+- `jxliu2/idiom-medium`, `jxliu2/idiom-large` — base models (`from_pretrained`)
+- `jxliu2/idiom-rl` — per-compartment RL-post-trained checkpoints
+- `jxliu2/idiom-sae` — sparse autoencoders by layer
+- `jxliu2/idiom-datasets` — curated IDR corpus, generated sequences, feature datasets, eval sets
 
-**Model checkpoints**: https://huggingface.co/jxliu2/idiom
+## Repository layout
 
-You can do so with the following commands. From the root of the cloned `IDiom` directory, do: 
+Only `src/idiom/` ships in the pip package; the rest is clone-only.
+
+| Path | Role |
+|------|------|
+| `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + interpretability), public `IDiom` API |
+| `data_pipeline/` | offline pretraining-corpus build (AFDB → IDR extraction → cluster → split → filters) |
+| `analysis/` | paper analysis + figure scripts |
+| `rewards/` | GRPO reward definitions + the vendored ProtGPS reward model |
+| `bash/` | example SLURM scripts for every entrypoint |
+
+## Training / interpretability (CLIs)
+
+| Command | Does |
+|---------|------|
+| `idiom_train` | pretrain (and SFT via `--config-name sft`) |
+| `idiom_grpo` | GRPO/ProtGPS post-training |
+| `idiom_sae` | train a top-k SAE on a layer (streaming activations) |
+| `idiom_feature_dataset` | build the per-residue SAE feature dataset |
+| `idiom_extract` | export residual-stream embeddings from a FASTA |
+| `idiom_generate` | FASTA-first generation (inference) |
+
+Configs are flat Hydra YAMLs (`src/idiom/configs/`); the `bash/` scripts show every override
+explicitly. Example:
 
 ```bash
-# Download models (26 GB)
-# Execute from IDiom root directory:
-hf download jxliu2/idiom --local-dir ./models
+idiom_sae model_ckpt=/path/model.ckpt data.fasta=/path/records.fasta layer=8 sae.k=32
 ```
 
-Additional datasets which are NOT necessary for running this code repository can be found in the following HuggingFace repository: https://huggingface.co/datasets/jxliu2/idiom-datasets
-
-This includes the 37M IDRs used to pre-train `IDiom` as well as the generated sequences which we analyze in our paper. To download this OPTIONAL data, use the following command to download the entire dataset or manually download specific files of interest from the HuggingFace URL. 
-
-```bash
-# OPTIONALLY download the IDR data:
-# Execute from IDiom root directory (186 GB): 
-hf download jxliu2/idiom-datasets --repo-type=dataset --local-dir ./datasets
-
-# If you only want the FASTA files containing the curated IDRs (12 GB and 3 GB), run: 
-hf download jxliu2/idiom-datasets \
-  idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_full.fasta \
-  --repo-type=dataset \
-  --local-dir ./datasets
-
-hf download jxliu2/idiom-datasets \
-  idr_datasets/training_sequences/AFDB_IDR_90_FIM_512_idrs.fasta \
-  --repo-type=dataset \
-  --local-dir ./datasets
-```
-
-After this, the project structure should be:
-
-```
-idiom/
-|
-├── src/                       # Main Python package
-│   └── idiom/
-│       ├── nn/                # Model architecture
-│       ├── scripts/           # CLI entry points and Hydra configs
-│       └── utils/             # Utilities
-|
-├── entrypoints/               # Scripts for training and inference
-│   ├── extract_activations/   # Scripts for extracting residual stream activations
-│   ├── generate/              # Scripts for generating sequences 
-│   ├── precompute/            # Data preprocessing scripts
-│   └── train/                 # Pre- and post-training scripts
-|
-├── rewards/                   # Reward functions and models
-│   ├── custom_rewards/        # Custom reward functions
-│   └── protgps/               # ProtGPS localization reward model
-|
-├── models/                    # Model checkpoints
-|
-├── assets/                    # Images
-|
-└── datasets/                  # Datasets (optional)
-```
-
-Now, the example bash scripts described below can be run directly using `bash` or via SLURM using `sbatch`. 
-
-
-
-# Generating sequences
-
-IDiom allows for the generation of unprompted intrinsically disordered proteins (IDPs) or intrinsically disordered regions (IDRs) prompted by their surrounding flanking context within a protein. We have tested inference on NVIDIA GeForce RTX 4080 GPUs with 16 GB VRAM. Sequences should be post-processed after generation to filter for sequence metrics of interest. 
-
-
-
-## Generating intrinsically disordered proteins
-
-To generate unprompted IDPs, execute the `generate_idps.bash` script. 
-
-```bash
-cd entrypoints/generate/scripts
-bash generate_idps.bash # or: sbatch generate_idps.bash
-```
-
-This script uses the pre-trained base model described in the paper to generate unprompted IDPs. You can specify the number of IDPs to generate by modifying the `NUM_DUPLICATES` variable (default 1000) near the top of `generate_idps.bash`. 
-
-Generated sequences are output as FASTA files in the `entrypoints/generate/output/idps` directory. The following files will be created: 
-
-- `tst_autoregressive.pkl` — Raw generated token sequences
-- `generated_idrs.fasta` — FASTA file containing the generated disordered sequences 
-- `generated_full.fasta` — Same as above, with indices of the disordered region in each sequence header header
-- `inference_config.yaml` — Inference configuration file 
-
-
-
-## Generating intrinsically disordered regions
-
-To generate IDRs conditioned on their surrounding context, you must provide a FASTA file containing the full-length protein(s) you would like to generate IDRs within. An example file is provided at: `entrypoints/generate/scripts/example_sequences.fasta`. 
-
-This FASTA contains two full-length protein sequences. Each sequence entry MUST have a header which ends with the string "_IDR_x-y" where x and y indicate the start and end indices (1-indexed) of the wild type IDR. For example, in the provided FASTA, the wild type IDR of the first sequence begins at 119 and ends at 242. 
-
-```
->P06748_IDR_119-242
-MEDSMDMDMSPLRPQNYLFGCELKADKDYHFKVDN...
-
->P09651_IDR_186-372
-MSKSESPKEPEQLRKLFIGGLSFETTDESL...
-```
-
-The code automatically extracts the N-terminal prefix and C-terminal suffix to the indicated IDR and uses those as the conditioning for generation. 
-
-To generate IDRs, execute the example bash script: 
-
-```bash
-cd entrypoints/generate/scripts
-bash generate_idrs.bash # or: sbatch generate_idrs.bash
-```
-
-This script also uses the pre-trained base model described in the paper. You can specify the number of IDRs to generate by modifying the `NUM_DUPLICATES` variable (default 1000) near the top of `generate_idrs.bash`. The script will generate `NUM_DUPLICATES` IDRs for each sequence provided in the FASTA file. 
-
-Generated sequences are output as FASTA files in the `entrypoints/generate/output/idrs` directory. The following files will be created: 
-
-- `tst_autoregressive.pkl` — Raw generated token sequences
-- `generated_idrs.fasta` — Contains the generated IDR sequences
-- `generated_full.fasta` — Contains the full length sequences with indices of the generated disordered region in each sequence's header
-- `inference_config.yaml` — Inference configuration file 
-
-
-
-
-## Generating sequences of a specific length
-
-IDiom also supports length-controlled generation, where generated sequences are filtered to only keep those whose disordered region falls within a target length window. Generation repeats automatically until the requested number of valid-length sequences has been generated.
-
-To generate IDPs of a specific length, execute the `generate_idps_length.bash` script:
-
-```bash
-cd entrypoints/generate/scripts
-bash generate_idps_length.bash # or: sbatch generate_idps_length.bash
-```
-
-To generate IDRs of a specific length, execute the `generate_idrs_length.bash` script:
-
-```bash
-cd entrypoints/generate/scripts
-bash generate_idrs_length.bash # or: sbatch generate_idrs_length.bash
-```
-
-In either script, set the following variables near the top of the file before running:
-
-- `SEQ_LENGTH` — target disordered region length in residues (default: 100)
-- `SEQ_LENGTH_RANGE` — allowed deviation from the target; sequences with IDR length within `SEQ_LENGTH +/- SEQ_LENGTH_RANGE` are kept (default: 5)
-- `NUM_DUPLICATES` — number of valid-length sequences to generate (default: 1000)
-
-Output files are written to `entrypoints/generate/output/idps_length` or `entrypoints/generate/output/idrs_length` respectively, with the same file structure as the standard generation scripts.
-
-<!-- These parameters can also be passed directly as Hydra overrides to `transformer_infer` without using the bash scripts:
-
-```bash
-transformer_infer \
-    ... \
-    "++inference.addn_args.seq_length=50" \
-    "++inference.addn_args.seq_length_range=10"
-``` -->
-
-
-
-# Post-training
-
-Here we describe the post-training workflows that can be done with IDiom. Post-training can be done with any custom reward function, and post-training can be used to optimize the generation of either IDPs or IDRs. We have tested post-training on NVIDIA GeForce RTX 4080 GPUs with 16 GB VRAM. 
-
-**Out-of-memory errors during training.** If you encounter GPU OOM errors during post-training, in the training submission scripts, reduce the `BATCH_SIZE` hyperparameter and increase `ACCUMULATE_GRAD_BATCHES` by the same factor to keep the effective batch size constant. This applies to all post-training workflows.
-
-## Custom reward functions
-
-You can define your own custom reward function in `rewards/custom_rewards/custom_rewards.py`. An example function is given: `compute_fraction_proline()`. 
-
-This example reward function extracts the disordered region from the generated sequence and calculates the fraction of proline residues in the IDR as the reward. Reward values should be in the range 0 to 1. 
-
-### Optimizing IDP generation 
-
-To run post-training with this example reward function on generated unprompted IDPs, execute this script: 
-
-```bash
-bash entrypoints/train/post-train/train_rl_idp_custom.bash # or sbatch 
-```
-
-When you define your own custom reward function in `custom_rewards.py`, the function must begin with "compute_". Then, you should modify the configuration parameter `reward_function_name` in the bash script to be your function's name. 
-
-### Optimizing prompted IDR generation 
-
-To optimize the generation of IDRs prompted with flanking context, you must provide a FASTA file containing a single protein sequence. Again, this sequence's header MUST have a header which ends with the string "_IDR_x-y" where x and y indicate the start and end indices (1-indexed) of the wild type IDR. 
-
-An example sequence is provided at `entrypoints/train/post-train/rl_sequence.fasta`. To run training, execute the bash script: 
-
-```bash
-bash entrypoints/train/post-train/train_rl_idr_custom.bash # or sbatch 
-```
-
-This will use the flanking context of the IDR in the FASTA file as the prompt in generating IDRs for RL optimization. 
-
-
-## ProtGPS reward
-
-As examples, we also provide training scripts to replicate our training runs with the ProtGPS localization score as the reward. 
-
-The script used to optimize unprompted IDPs is: 
-
-```bash
-bash entrypoints/train/post-train/train_rl_idp_protgps.bash # or sbatch 
-```
-
-And a script for optimizing prompted IDRs is: 
-
-```bash
-bash entrypoints/train/post-train/train_rl_idr_protgps.bash # or sbatch 
-```
-
-## Tracking training progress using Tensorboard 
-
-To track progress on post-training runs, first activate the virtual environment. From the repo root:
-
-```bash
-source .venv/bin/activate 
-```
-
-Then, use Tensorboard by first navigating to the directory containing `lightning_logs` and run: 
-
-```bash
-tensorboard --logdir . 
-```
-
-## Generating sequences after post-training
-
-To generate sequences from a post-trained model checkpoint, set the `CKPT_PATH` in `generate_idps.bash` or `generate_idrs.bash` to be the post-trained checkpoint (.ckpt) located in the lightning_log. Then run the generation script as above: 
-
-```bash
-bash entrypoints/generate/scripts/generate_idps.bash  # or generate_idrs.bash
-```
-
-
-# Extracting activations
-
-Residual stream activations after each transformer block can also be extracted from IDiom for downstream analysis. The `extract_activations.bash` script runs the pre-trained base model (or any post-trained checkpoint) over a set of sequences and writes the per-layer activations to a directory of HDF5 *shards*. Only control tokens (`BOS`, `EOS`, `PAD`, `MASK`) are filtered out; activations for residue tokens and for the FIM markers `1`, `3`, `2` are all kept. The FIM segment a residue belongs to can be recovered by scanning `sequences/strings[seq_idx]` (or `sequences/tokens[seq_idx]`) for the surrounding `1`/`3`/`2` markers. Extraction parallelises automatically across all GPUs SLURM gives the job; sequences are split contiguously into `num_shards` files. Activation extraction can be done using the following command: 
-
-```bash
-cd entrypoints/extract_activations/scripts
-bash extract_activations.bash # or: sbatch extract_activations.bash
-```
-
-As an example, the script extracts activations from the last transformer block for the two example proteins in `entrypoints/generate/scripts/example_sequences.fasta`. To run on your own sequences, set `DATA_PATH` near the top of the script to: 
-
-- A FASTA file whose sequence headers end with `_IDR_x-y` or 
-- A raw sequences `.h5` file containing a `residues` field, where the sequences in the `residues` field are already transformed into a fill-in-the-middle format with the `1`, `2`, and `3` characters present. The `residues` dataset must use an h5py utf-8 string dtype `bytes`.  
-
-The following options can be adjusted near the top of the script:
-
-- `++extract.layers` — 0-indexed transformer blocks to extract activations from (e.g. `[11]` for the last block only, or `[0,1,2,3,4,5,6,7,8,9,10,11]` for all blocks)
-- `++extract.save_dtype` — `float16` or `float32`
-- `++extract.max_sequences` — cap the maximum number of sequences processed (`null` = all)
-- `++extract.num_shards` — number of output shard files; sequences are split into contiguous ranges, distributed contiguously across the available GPUs
-
-Activations are written to `entrypoints/extract_activations/output/activations/` as a directory of shards plus a manifest:
-
-```
-activations/
-  extract_config.yaml      # the extraction configuration
-  manifest.json            # shard inventory: per-shard seq_start/seq_end and per-layer row counts
-  shard_0000.h5
-  shard_0001.h5
-  ...
-  shard_NNNN.h5
-```
-
-Each shard has the layout:
-
-- `activations/layer_<i>/data` — activation matrix for block `i`, shape `[num_tokens, d_model]` (one row per kept token; only control tokens `BOS/EOS/PAD/MASK` are filtered out, so residues and FIM markers `1/3/2` are all included)
-- `activations/layer_<i>/seq_idx` — global sequence index for each row (consistent across all shards)
-- `activations/layer_<i>/pos_idx` — 0-based position of the row within `sequences/tokens[seq_idx]` and `sequences/strings[seq_idx]`
-- `sequences/tokens` — kept token IDs for each sequence in this shard (variable-length; includes `1/3/2`)
-- `sequences/strings` — raw FIM-formatted residue string for each sequence in this shard
-- `metadata/alphabet`, `metadata/layers` — token alphabet and extracted layers
-- `metadata/shard_idx`, `metadata/num_shards`, `metadata/seq_start`, `metadata/seq_end` — this shard's identity and the global sequence range it covers (half-open)
-
-To obtain the IDR-only activations for a sequence `s`: locate the shard with `seq_start <= s < seq_end`, then within that shard let `i = sequences/strings[s].index('2')` and take rows with `seq_idx == s` and `pos_idx > i`. The prefix-only and suffix-only slices are bounded analogously by the `1` and `3` markers.
-
-
-# Pre-training
-
-To replicate the model pre-training, you must first download the appropriate datasets from HuggingFace. 
-
-**Datasets**: https://huggingface.co/datasets/jxliu2/idiom-datasets
-
-From the repo root directory, execute: 
-
-```bash
-# Download the IDR data (186 GB):
-# Execute from IDiom root directory: 
-hf download jxliu2/idiom-datasets --repo-type=dataset --local-dir ./datasets
-```
-
-Then, execute the precompute to prepare the training sequences for model training. Note that at least 1 TB of space is required for the precompute. 
-
-```bash
-sbatch combined_precompute.bash 
-```
-
-Next, execute the training script: 
-
-```bash
-sbatch pretrain.bash 
-```
-
-# Contributing
-
-We welcome all contributions to this open-source project! Please feel free to fork the repository, raise issues, contribute reward functions, and initiate pull requests. Do not hesitate to contact the authors if you have questions, ideas, or comments. Thank you!
-
-# Citation
-
-If you find this work useful, please cite: 
+## Citation
 
 ```bibtex
 @article{liu2026idiom,

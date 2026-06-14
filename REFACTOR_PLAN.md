@@ -371,3 +371,9 @@ Legend: ☐ todo · ◐ in progress · ☑ done
   root `entrypoints/`, `rewards/custom_rewards/` (kept `rewards/protgps/`). Dropped 7 stale
   `transformer_*`/`make_*` console-scripts and the `lightning-bolts` + `torch-geometric` deps.
   Scrubbed stale `idiom.nn`/`h5py`/`pl_bolts` docstring refs. Repo is now v2-only; 64/64 CPU green.
+- **2026-06-14** — **Public API + README.** `idiom.api.IDiom` (`from_pretrained`/`save_pretrained`
+  via config.json + safetensors, `from_lightning_checkpoint`; `generate_idp`/`generate_idr`,
+  FASTA wrappers, `embed`); `idiom/__init__` exports `IDiom`/`Tokenizer`/`SparseCoder`/`fim`/
+  `ModelConfig`; new `idiom_generate` inference CLI; `safetensors` dep. README rewritten for v2
+  (install, quickstart, HF artifacts, layout, CLIs). `rewards/example_rewards.py` + README; .gitignore
+  trimmed. **70/70 CPU green.**
