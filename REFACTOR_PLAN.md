@@ -366,3 +366,8 @@ Legend: ☐ todo · ◐ in progress · ☑ done
   (`use_style` + `save_fig` writing to `$IDIOM_FIG_DIR` = the overleaf `figs/`, filename = LaTeX
   `\includegraphics` path) + `bash/figures.bash`. Figure scripts live in `analysis/figures/`,
   output into the manuscript repo. 64/64 CPU green.
+- **2026-06-14** — **Legacy removed** (backed up to `tmp/idiom_backup_2026-06-14` + git history).
+  Deleted `src/idiom/nn/`, `src/idiom/scripts/`, legacy `utils/{data_utils,misc,sampler,token}.py`,
+  root `entrypoints/`, `rewards/custom_rewards/` (kept `rewards/protgps/`). Dropped 7 stale
+  `transformer_*`/`make_*` console-scripts and the `lightning-bolts` + `torch-geometric` deps.
+  Scrubbed stale `idiom.nn`/`h5py`/`pl_bolts` docstring refs. Repo is now v2-only; 64/64 CPU green.

@@ -26,7 +26,7 @@ class FeatureDataset:
     """Reader over a feature-activation HDF5.
 
     Opens once, exposes the per-residue arrays plus a few common reductions.
-    By default the arrays stay as lazy h5py datasets (slicing hits disk). Pass
+    By default the arrays stay memory-mapped (slicing hits disk). Pass
     ``in_memory=True`` to pull them fully into RAM, in which case every reduction
     below operates on numpy arrays with no further disk I/O — slicing such as
     ``fd.top_indices[:]`` then becomes a cheap view instead of a disk read. This

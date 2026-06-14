@@ -4,9 +4,8 @@ v2: autoregressive pretraining LightningModule with a custom warmup-cosine sched
 (no pl_bolts), and a GRPO/ProtGPS post-training path whose online generation uses the
 KV-cached sampler from ``idiom.model``.
 
-Status: P3 — `LitAutoregressive` (shared by pretrain + SFT) + warmup-cosine schedule landed.
-GRPO (P4) and the Hydra entrypoint/configs are next. Migration source: legacy
-``idiom.nn.transformer.{module,losses}``.
+`LitAutoregressive` (shared by pretrain + SFT) + warmup-cosine schedule, and the GRPO
+post-training path (`train/grpo/`).
 """
 
 from idiom.train.lit_autoregressive import LitAutoregressive

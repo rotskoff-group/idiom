@@ -4,8 +4,8 @@ v2: sequence-only ``IDiomTransformer`` (structural tokens removed), RoPE-only
 positional encoding, and KV-cached autoregressive decoding (prefill + single-token
 steps) shared by inference and GRPO online generation.
 
-Status: P2 — core landed (config, RoPE, RMSNorm, KV-cache attention, transformer). Sampling
-+ the shared activation extractor (D14) are next. Migration source: legacy ``idiom.nn``.
+Sequence-only RMSNorm/SwiGLU/RoPE transformer with a KV cache, plus sampling and the shared
+residual-stream activation extractor.
 """
 
 from idiom.model.attention import KVCache

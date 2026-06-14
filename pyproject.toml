@@ -17,14 +17,12 @@ dependencies = [
     "ipdb>=0.13.13",
     "ipython>=8.38.0",
     "lightning>=2.6.0",
-    "lightning-bolts>=0.7.0",  # legacy LinearWarmupCosineAnnealingLR; removed in P3
     "matplotlib>=3.10.9",
     "pip>=25.0",
     "pre-commit>=4.5.1",
     "scikit-learn>=1.7.2",
     "tensorboard>=2.20.0",
     "torch==2.4.0",
-    "torch-geometric>=2.7.0",
     "torchvision==0.19.0",
     "tqdm>=4.67.1",
     # --- merged from idiomatics (SAE / analysis) ---
@@ -68,10 +66,3 @@ idiom_grpo = "idiom.train.grpo.train_grpo:main"
 idiom_sae = "idiom.sae.train_sae:main"
 idiom_extract = "idiom.model.export:main"
 idiom_feature_dataset = "idiom.sae.build_feature_dataset:main"
-transformer_precompute = "idiom.scripts.transformer.precompute:main"
-transformer_train = "idiom.scripts.transformer.train:main"
-transformer_infer = "idiom.scripts.transformer.inference:main"
-transformer_extract = "idiom.scripts.transformer.extract_activations:main"
-make_infer_prompt = "idiom.scripts.data.make_infer_prompt:main"
-make_rl_dataset = "idiom.scripts.data.make_rl_dataset:main"
-make_precompute_parts = "idiom.scripts.data.make_precompute_parts:main"
