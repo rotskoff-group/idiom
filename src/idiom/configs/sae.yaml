@@ -36,3 +36,11 @@ trainer:
   devices: 1
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/sae
+
+# Hydra run/sweep dir -> experiment dir (keeps the repo clean); override via IDIOM_OUT.
+hydra:
+  run:
+    dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}

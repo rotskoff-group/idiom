@@ -95,8 +95,9 @@ operator-run via Slurm):
    records (79% of 73M kept). Header `{base}_IDR_{x}-{y}` → master id `{base}_{x-1}-{y-1}` (verified).
 4. **DisProt dedup** (`dedup.py` + `dedup.bash`) — drop record IDRs ≥50% id to any DisProt IDR,
    **IDR-vs-IDR** (ESM-2 params `--min-seq-id 0.5 -c 0.8 -s 7`).
-   - **4b. [FUTURE] TM/SignalP/coiled-coil filter** — DeepTMHMM + SignalP + coiled-coil removal,
-     slots in here (after dedup, before split). Not yet implemented.
+   - **4b. [OPTIONAL] Signal-peptide filter** (`signalp_filter.py` + `.bash`) — SignalP 6 (fast,
+     GPU) trims/drops IDRs overlapping an N-terminal signal peptide. TM/β/coiled-coil/zinc dropped
+     as negligible; DeepTMHMM removed (see lab journal 2026-06-15). Slots after dedup, before split.
 5. **split** (`split.py`) — plain **random, record-level** 99/0.5/0.5 → `train/val/test.fasta` for
    `RecordDataModule`.
 

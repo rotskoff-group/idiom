@@ -4,7 +4,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
-#SBATCH --mem=256GB
+#SBATCH --mem=512GB
 #
 # Curation stage 4 — DisProt leakage dedup (mmseqs, heavy). Removes record-FASTA IDRs that are
 # >=50% identical to any benchmark DisProt IDR (ESM-2 recipe), IDR-vs-IDR, cov-mode 0. Self-

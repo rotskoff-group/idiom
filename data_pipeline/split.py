@@ -49,20 +49,24 @@ def main() -> None:
 
     ap = argparse.ArgumentParser(description="Stage 5: random train/val/test split of a record FASTA.")
     ap.add_argument("--fasta", required=True, help="DisProt-deduped record FASTA")
-    ap.add_argument("--out-dir", required=True, help="dir for train/val/test.fasta")
+    ap.add_argument("--out-dir", help="output dir (default: alongside --fasta)")
+    ap.add_argument("--prefix", help="output basename prefix (default: input filename stem)")
     ap.add_argument("--fractions", type=float, nargs=3, default=(0.99, 0.005, 0.005))
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
+    in_path = Path(args.fasta)
+    out = Path(args.out_dir) if args.out_dir else in_path.parent
+    prefix = args.prefix or in_path.stem  # e.g. AFDB_..._dedup_disprot -> {prefix}_{split}.fasta
     records = list(_iter_fasta(args.fasta))
     train, val, test = split_records(records, tuple(args.fractions), seed=args.seed)
-    out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     for name, recs in (("train", train), ("val", val), ("test", test)):
-        with (out / f"{name}.fasta").open("w") as fh:
+        path = out / f"{prefix}_{name}.fasta"
+        with path.open("w") as fh:
             for header, seq in recs:
                 fh.write(f"{header}\n{seq}\n")
-        print(f"{name}: {len(recs):,} records")
+        print(f"{name}: {len(recs):,} records -> {path}")
 
 
 if __name__ == "__main__":

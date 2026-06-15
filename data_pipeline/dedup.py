@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from idiom.data.io import read_records
+from idiom.data.io import parse_idr_header
 
 from data_pipeline.disprot import DEFAULT_DISPROT_JSON, disprot_idr_records
 
@@ -39,15 +39,34 @@ def disprot_idr_fasta(
 
 
 def write_idr_fasta(record_fasta: str, out_path: str) -> int:
-    """Re-emit a record FASTA as IDR-only sequences, keyed by the *same* `_IDR_x-y` header token.
+    """Re-emit a record FASTA as IDR-only sequences, keyed by the *same* header token.
 
-    So an mmseqs hit on this FASTA names exactly the record to drop. Returns count written.
+    So an mmseqs hit on this FASTA names exactly the record to drop. Streams line-by-line (the
+    record FASTA is ~27 GB / 57.8M records — do **not** materialize it). Returns count written.
     """
     n = 0
-    with open(out_path, "w") as out:
-        for r in read_records(record_fasta):
-            out.write(f">{r.accession}_IDR_{r.idr_start + 1}-{r.idr_end}\n{r.full_seq[r.idr_start : r.idr_end]}\n")
+
+    def emit(out, token, full_seq):
+        nonlocal n
+        try:
+            _acc, start, end = parse_idr_header(token)
+        except ValueError:
+            return
+        if 0 <= start < end <= len(full_seq):
+            out.write(f">{token}\n{full_seq[start:end]}\n")
             n += 1
+
+    with open(record_fasta) as fin, open(out_path, "w") as out:
+        token, seq = None, []
+        for line in fin:
+            if line.startswith(">"):
+                if token is not None:
+                    emit(out, token, "".join(seq))
+                token, seq = line[1:].split()[0], []
+            else:
+                seq.append(line.strip())
+        if token is not None:
+            emit(out, token, "".join(seq))
     return n
 
 

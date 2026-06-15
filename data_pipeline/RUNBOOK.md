@@ -69,11 +69,19 @@ v1 `idr-plm-figures` `utils.utils`), shared with the SI figures so dedup and fig
 against the *exact same* set: 'D' consensus regions, IDR ≥ 30, full seq ≤ **1020** (v1 was 512;
 raised to match the corpus cap), full IDPs removed by v1's fuzzy ±1 rule → **1,665** DisProt IDRs.
 
-## 4b. TM / SignalP / coiled-coil filter  *(FUTURE — placeholder)*
+## 4b. Signal-peptide filter  (`signalp_filter.py` / `signalp_filter.bash`)  *(optional)*
 
-Drop records whose protein has a transmembrane region (DeepTMHMM), signal peptide (SignalP), or
-coiled-coil — these are ordered/structured features that pollute the IDR corpus. Slots in here,
-**after** DisProt dedup and **before** split. Not yet implemented.
+N-terminal signal peptides (flexible, low-pLDDT in AlphaFold) get mislabelled as IDRs — ~14% of
+records have an IDR overlapping a signal. SignalP 6 (fast, GPU-converted) flags them with a
+cleavage site; a record overlaps the signal iff its IDR `start < cs`. Slots in **after** DisProt
+dedup and **before** split. `trim` (cut to the cleavage site = mature N-terminus, keep remainder if
+≥30 aa) or `drop`; keep only confident calls (`--min-prob`).
+
+Investigated and **not used**: transmembrane / β-barrel / coiled-coil / zinc-finger filtering. The
+pLDDT segmentation already excludes folded regions, so those intrude into <0.5% of IDR spans;
+DeepTMHMM (TM+signal) was ported to GPU but is too slow at corpus scale, and regex/hydrophobicity
+rules can't recover signal peptides without removing real IDRs (see paper-repo lab journal,
+2026-06-15). Signal peptides are the only material contaminant, hence SignalP-only here.
 
 ## 5. Random split (99 / 0.5 / 0.5)  (`split.py`)
 

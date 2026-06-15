@@ -59,6 +59,25 @@ class IDiomTransformer(nn.Module):
         if cfg.tie_embeddings:
             self.lm_head.weight = self.embed.weight
 
+        # GPT-style init: small std keeps init logits ~0, so initial CE ~ ln(vocab) instead of the
+        # ~sqrt(d_model) blow-up from PyTorch's default Embedding std=1.0 (tied -> lm_head too).
+        # Residual-stream writers (attn `wo`, ffn `w_down`) are scaled by 1/sqrt(2*n_layers) so the
+        # residual variance doesn't grow with depth.
+        for module in self.modules():  # not self.apply(): Rope defines its own .apply(q,k,positions)
+            self._init_weights(module)
+        for name, p in self.named_parameters():
+            if name.endswith("wo.weight") or name.endswith("w_down.weight"):
+                nn.init.normal_(p, mean=0.0, std=0.02 / (2 * cfg.n_layers) ** 0.5)
+
+    @staticmethod
+    def _init_weights(module: nn.Module) -> None:
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
     def forward(self, tokens: Tensor, *, cache: KVCache | None = None, return_hidden_states: bool = False):
         B, L = tokens.shape
         past = cache.length if cache is not None else 0
