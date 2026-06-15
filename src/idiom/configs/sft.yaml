@@ -2,7 +2,10 @@
 #   idiom_train --config-name sft init_from=/path/pretrained.ckpt data.train_fasta=/path/sft.fasta
 seed: 0
 device: auto
-init_from: ???               # required: the pretrained checkpoint to fine-tune
+init_from: ???               # required: the pretrained checkpoint to fine-tune (weights-only warm start)
+resume_from: null            # true mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
+wandb_project: idiom         # wandb project (needs `wandb login` / WANDB_API_KEY; WANDB_MODE=offline to disable)
+run_name: null               # optional wandb run name
 
 data:
   train_fasta: ???           # required: the (usually small, curated) SFT record FASTA
@@ -31,7 +34,7 @@ trainer:
   precision: bf16-mixed
   gradient_clip_val: 1.0
 
-out_dir: ${oc.env:IDIOM_OUT,./runs}/sft
+out_dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor/runs}/sft
 
 # Hydra run/sweep dir -> experiment dir (keeps the repo clean); override via IDIOM_OUT.
 hydra:

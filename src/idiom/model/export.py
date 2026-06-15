@@ -69,6 +69,7 @@ def main() -> None:
     import argparse
 
     from idiom.model import idiom_12l, idiom_24l, idiom_36l
+    from idiom.model.config import ModelConfig
     from idiom.model.io import load_pretrained
     from idiom.utils.device import resolve_device
 
@@ -76,14 +77,24 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Export IDiom residual-stream embeddings from a FASTA.")
     p.add_argument("--fasta", required=True)
     p.add_argument("--ckpt", required=True)
-    p.add_argument("--size", choices=list(sizes), default="24l", help="architecture of the ckpt")
+    p.add_argument("--size", choices=list(sizes), default="24l", help="named architecture of the ckpt")
+    # Custom arch (overrides --size): for checkpoints that aren't a named size.
+    p.add_argument("--n-layers", type=int)
+    p.add_argument("--d-model", type=int)
+    p.add_argument("--n-heads", type=int)
+    p.add_argument("--max-seq-len", type=int, default=1024)
     p.add_argument("--layers", type=int, nargs="+", required=True)
     p.add_argument("--pool", choices=["mean", "none"], default="mean")
     p.add_argument("--out", required=True)
     args = p.parse_args()
 
+    if args.n_layers and args.d_model and args.n_heads:
+        cfg = ModelConfig(n_layers=args.n_layers, d_model=args.d_model,
+                          n_heads=args.n_heads, max_seq_len=args.max_seq_len)
+    else:
+        cfg = sizes[args.size]()
     device = resolve_device()
-    model = load_pretrained(args.ckpt, sizes[args.size](), device=device)
+    model = load_pretrained(args.ckpt, cfg, device=device)
     emb = embed_fasta(model, args.fasta, args.layers, pool=args.pool, device=device)
     write_embeddings(emb, args.out)
 

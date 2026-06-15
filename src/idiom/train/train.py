@@ -12,6 +12,7 @@ from pathlib import Path
 import hydra
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.loggers import WandbLogger
 from loguru import logger as log
 from omegaconf import DictConfig, OmegaConf
 
@@ -51,12 +52,20 @@ def run(cfg: DictConfig) -> None:
     OmegaConf.save(cfg, out_dir / "config.yaml")
 
     lit, dm = build(cfg)
+    wandb_logger = WandbLogger(
+        project=cfg.get("wandb_project", "idiom"), name=cfg.get("run_name"), save_dir=str(out_dir)
+    )
+    wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
     trainer = L.Trainer(
         **OmegaConf.to_container(cfg.trainer, resolve=True),
         callbacks=[ModelCheckpoint(dirpath=out_dir / "checkpoints", save_last=True)],
+        logger=wandb_logger,
         default_root_dir=out_dir,
     )
-    trainer.fit(lit, datamodule=dm)
+    # resume_from restores optimizer state + global step + LR schedule + RNG (a true mid-run resume,
+    # e.g. after preemption); distinct from init_from, which is a weights-only warm start. Mutually
+    # exclusive — set at most one.
+    trainer.fit(lit, datamodule=dm, ckpt_path=cfg.get("resume_from"))
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="pretrain")

@@ -11,6 +11,7 @@ from pathlib import Path
 import hydra
 import lightning as L
 import torch
+from lightning.pytorch.loggers import WandbLogger
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
@@ -64,10 +65,14 @@ def run(cfg: DictConfig) -> None:
     if cfg.init_b_dec_from_mean:
         lit.init_b_dec_from_mean(store.mean_activation())
     dl = DataLoader(store, batch_size=None)  # the store already yields [B, d_model] batches
-    trainer = L.Trainer(
-        **OmegaConf.to_container(cfg.trainer, resolve=True), default_root_dir=out_dir
+    wandb_logger = WandbLogger(
+        project=cfg.get("wandb_project", "idiom-sae"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
-    trainer.fit(lit, train_dataloaders=dl)
+    wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
+    trainer = L.Trainer(
+        **OmegaConf.to_container(cfg.trainer, resolve=True), logger=wandb_logger, default_root_dir=out_dir
+    )
+    trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
     torch.save(lit.sae.state_dict(), out_dir / "ae.pt")  # loads via SparseCoder.from_pretrained
 
 

@@ -3,6 +3,7 @@
 seed: 0
 device: auto
 model_ckpt: ???              # pretrained IDiom checkpoint (arch must match `model` below)
+resume_from: null            # mid-run resume (optimizer/step/RNG) from a .ckpt
 
 model:
   n_layers: 24
@@ -35,7 +36,7 @@ trainer:
   accelerator: auto
   devices: 1
 
-out_dir: ${oc.env:IDIOM_OUT,./runs}/sae
+out_dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor/runs}/sae
 
 # Hydra run/sweep dir -> experiment dir (keeps the repo clean); override via IDIOM_OUT.
 hydra:

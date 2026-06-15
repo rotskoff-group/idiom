@@ -13,6 +13,7 @@ from pathlib import Path
 import hydra
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.loggers import WandbLogger
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
@@ -87,12 +88,17 @@ def run(cfg: DictConfig) -> None:
 
     lit, ds = build(cfg)
     dl = DataLoader(ds, batch_size=cfg.prompts.batch_size, shuffle=True, collate_fn=collate_prompts)
+    wandb_logger = WandbLogger(
+        project=cfg.get("wandb_project", "idiom-grpo"), name=cfg.get("run_name"), save_dir=str(out_dir)
+    )
+    wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
     trainer = L.Trainer(
         **OmegaConf.to_container(cfg.trainer, resolve=True),
         callbacks=[ModelCheckpoint(dirpath=out_dir / "checkpoints", save_last=True)],
+        logger=wandb_logger,
         default_root_dir=out_dir,
     )
-    trainer.fit(lit, train_dataloaders=dl)
+    trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
 
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="grpo")

@@ -2,37 +2,41 @@
 #   idiom_train data.train_fasta=/path/train.fasta model.n_layers=12 model.d_model=768 model.n_heads=12
 seed: 0
 device: auto                 # auto | cpu | cuda
-init_from: null              # set to a .ckpt to warm-start (see sft.yaml)
+init_from: null              # weights-only warm start from a .ckpt (see sft.yaml)
+resume_from: null            # true mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
+wandb_project: idiom         # wandb project (needs `wandb login` / WANDB_API_KEY; WANDB_MODE=offline to disable)
+run_name: null               # optional wandb run name
 
 data:
   train_fasta: ???           # required: per-split record FASTA from curation
   val_fasta: null
   fim_full_prob: 0.5         # full-context vs 132 augmentation
   completion_only: false     # pretraining: loss on every token
-  batch_size: 64
+  batch_size: 32             # PER-GPU; global = batch_size * devices * accumulate_grad_batches
   num_workers: 8
 
-model:                       # defaults = GPT-2 medium (24L); 12L test = n_layers=12 d_model=768 n_heads=12
+model:                       # GPT-2 medium (24L), the primary retrain; small=12L/768/12, large=36L/1280/20
   n_layers: 24
   d_model: 1024
   n_heads: 16
-  max_seq_len: 1024
+  max_seq_len: 1024          # v2 context (paper was 512)
 
-optim:
-  lr: 3.0e-4
-  warmup_steps: 2000
-  weight_decay: 0.1
+optim:                       # paper recipe: AdamW, lr 4e-4, NO weight decay, warmup 3k -> cosine to 10%
+  lr: 4.0e-4
+  warmup_steps: 3000
+  weight_decay: 0.0
   min_lr_ratio: 0.1
 
-trainer:
+trainer:                     # global batch 1024 = 32/GPU * 8 GPUs * accum 4 (medium @1024 fits 32/GPU)
   max_steps: 250000
   accelerator: auto
-  devices: 1
+  devices: 8
   precision: bf16-mixed
   val_check_interval: 25000
-  gradient_clip_val: 1.0
+  gradient_clip_val: 0.0     # paper: no gradient clipping
+  accumulate_grad_batches: 4
 
-out_dir: ${oc.env:IDIOM_OUT,./runs}/pretrain
+out_dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor/runs}/pretrain
 
 # Hydra run/sweep dir -> experiment dir (keeps the repo clean); override via IDIOM_OUT.
 hydra:
