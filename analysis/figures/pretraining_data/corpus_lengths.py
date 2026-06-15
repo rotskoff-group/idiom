@@ -16,8 +16,8 @@ import numpy as np
 from analysis.figures._style import COLORS, save_fig, use_style
 
 DEFAULT_H5 = (
-    "/data2/scratch/group_scratch/idr_plm/0000_dump/rsync_sherlock/AFDB/AFDB/"
-    "AFDB_v4_idr_alldata/clustering/AFDB_IDR_90_alldata.h5"
+    "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data/pretraining/AFDB/"
+    "clustering_90/AFDB_IDR_90_alldata.h5"
 )
 
 

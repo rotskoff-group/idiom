@@ -26,8 +26,16 @@ python analysis/figures/pretraining_data/corpus_plddt.py --n 200000
 | `generation/` | (main / various) | generated-sequence analyses |
 
 ### `pretraining_data/` (current)
-All read the curated master `clustering_90/AFDB_IDR_90_alldata.h5`:
+`corpus_*` read the curated master `clustering_90/AFDB_IDR_90_alldata.h5`:
 - `corpus_lengths.py` — IDR + protein length distributions (Fig S1).
 - `corpus_plddt.py` — mean IDR pLDDT + max protein pLDDT (Fig S2).
 - `corpus_plddt_regions.py` — IDR vs non-IDR region pLDDT (per-protein, per-residue, joint).
 - `corpus_idr_fraction.py` — IDR fraction of each protein (analogue of legacy `pct_idr.py`).
+
+`corpus_composition.py` reads the **filtered** record FASTA
+(`intermediate/AFDB_IDR_90_len1020_rm_full_low_plddt.fasta`) — AA composition + enrichment,
+IDR vs non-IDR.
+
+`composition_vs_disprot.py` — training IDRs vs DisProt IDRs as relative enrichment over the CATH
+baseline (`reference/cath/`, `reference/disprot/`). Replicates the v1
+`figure_scripts/idps_dp_idrs/composition.py` analysis (training/DisProt only; no generated sets yet).

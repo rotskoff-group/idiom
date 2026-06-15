@@ -4,7 +4,7 @@ patch.facecolor: 348ABD  # blue
 patch.edgecolor: 110d1b
 patch.antialiased: True
 
-font.size: 23.0
+font.size: 18.0
 font.sans-serif: Liberation Sans
 
 lines.linewidth: 2.5
@@ -14,8 +14,8 @@ axes.linewidth: 2.5
 axes.facecolor: white
 axes.edgecolor: 110d1b
 axes.grid: False
-axes.titlesize: 23
-axes.labelsize: 23
+axes.titlesize: 20
+axes.labelsize: 20
 axes.labelcolor: 110d1b
 axes.axisbelow: True       # grid/ticks are below elements (e.g., lines, text)
 
@@ -47,8 +47,8 @@ ytick.direction: out
 ytick.major.width: 1.75
 ytick.minor.width: 1.5
 
-xtick.labelsize: 23
-ytick.labelsize: 23
+xtick.labelsize: 18
+ytick.labelsize: 18
 
 figure.facecolor: white
 figure.edgecolor: 0.50
@@ -57,4 +57,4 @@ text.usetex         : False
 text.latex.preamble : \usepackage{amsmath}
 
 legend.frameon      : False
-legend.fontsize     : 23
+legend.fontsize     : 18
