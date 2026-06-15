@@ -26,6 +26,7 @@ htmlcov/
 
 # Run outputs & logs (results live in scratch / the overleaf repo, not here)
 slurm_out/
+*.out
 lightning_logs/
 output/
 runs/

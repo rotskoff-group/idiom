@@ -21,17 +21,21 @@ def _windowed_mean(plddt: np.ndarray, window: int) -> np.ndarray:
     return np.convolve(padded, np.ones(window) / window, mode="valid")  # centered moving average
 
 
-def extract_idrs(
+def _segment(
     plddt: np.ndarray,
     *,
     folded_thresh: float = 80.0,
     disordered_thresh: float = 70.0,
     min_seg_length: int = 10,
-    min_idr_length: int = 30,
-    max_idr_length: int = 4096,
     window: int = 15,
-) -> list[tuple[int, int]]:
-    """Return IDR spans as 0-based half-open ``(start, end)`` pairs (``idr = seq[start:end]``)."""
+) -> list[tuple[str, int, int]]:
+    """Label the protein into merged ``folded``/``disordered`` runs (``(label, start, end_incl)``).
+
+    The shared core of curation: window-average the pLDDT, threshold-label each residue, drop
+    too-short folded/disordered runs to gap, relabel gaps by their neighbours, merge adjacent
+    same-label runs. :func:`extract_idrs` then keeps the disordered runs; :func:`has_folded_segment`
+    asks whether any folded run survives.
+    """
     plddt = np.asarray(plddt, dtype=float)
     avg = _windowed_mean(plddt, window)
     n = len(avg)
@@ -84,10 +88,57 @@ def extract_idrs(
             merged[-1] = (plab, ps, e)
         else:
             merged.append((lab, s, e))
+    return merged
 
+
+def extract_idrs(
+    plddt: np.ndarray,
+    *,
+    folded_thresh: float = 80.0,
+    disordered_thresh: float = 70.0,
+    min_seg_length: int = 10,
+    min_idr_length: int = 30,
+    max_idr_length: int = 4096,
+    window: int = 15,
+) -> list[tuple[int, int]]:
+    """Return IDR spans as 0-based half-open ``(start, end)`` pairs (``idr = seq[start:end]``)."""
+    merged = _segment(
+        plddt,
+        folded_thresh=folded_thresh,
+        disordered_thresh=disordered_thresh,
+        min_seg_length=min_seg_length,
+        window=window,
+    )
     # keep disordered runs in the length band; return half-open spans
     out: list[tuple[int, int]] = []
     for lab, s, e in merged:
         if lab == "disordered" and min_idr_length <= (e - s + 1) <= max_idr_length:
             out.append((s, e + 1))  # inclusive end -> half-open
     return out
+
+
+def has_folded_segment(
+    plddt: np.ndarray,
+    *,
+    folded_thresh: float = 80.0,
+    disordered_thresh: float = 70.0,
+    min_seg_length: int = 10,
+    window: int = 15,
+) -> bool:
+    """True iff the protein has a surviving folded region (a high-pLDDT structured domain).
+
+    The *aggressive* fully-disordered criterion: a protein with **no** folded run is dropped as
+    "fully low-pLDDT". Stricter than ``max(avg) < 80`` — a protein whose only high-pLDDT residues
+    form a sub-``min_seg_length`` blip has no surviving folded run and is dropped here, whereas a
+    max-threshold would keep it. Keeps only sequences with both low- and high-pLDDT regions.
+    """
+    return any(
+        lab == "folded"
+        for lab, _, _ in _segment(
+            plddt,
+            folded_thresh=folded_thresh,
+            disordered_thresh=disordered_thresh,
+            min_seg_length=min_seg_length,
+            window=window,
+        )
+    )

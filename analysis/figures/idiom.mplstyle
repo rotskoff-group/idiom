@@ -4,7 +4,7 @@ patch.facecolor: 348ABD  # blue
 patch.edgecolor: 110d1b
 patch.antialiased: True
 
-font.size: 14.0
+font.size: 23.0
 font.sans-serif: Liberation Sans
 
 lines.linewidth: 2.5
@@ -57,4 +57,4 @@ text.usetex         : False
 text.latex.preamble : \usepackage{amsmath}
 
 legend.frameon      : False
-legend.fontsize     : 20
+legend.fontsize     : 23
