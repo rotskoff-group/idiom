@@ -15,7 +15,7 @@ import argparse
 import h5py
 import numpy as np
 
-from analysis.figures._style import COLORS, save_fig, use_style
+from analysis.figures._style import COLORS, row_fig, save_fig, use_style
 
 DEFAULT_H5 = (
     "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data/pretraining/AFDB/"
@@ -31,7 +31,6 @@ def main() -> None:
     args = ap.parse_args()
 
     use_style()
-    import matplotlib.pyplot as plt
 
     with h5py.File(args.h5, "r") as f:
         idr_len = f["idr_length"][: args.n].astype(np.float64)
@@ -40,17 +39,17 @@ def main() -> None:
     partial = pct[pct < 100.0]
     frac_full = 100.0 * np.mean(pct >= 100.0)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4.6))
+    fig, (ax1, ax2) = row_fig(2)
 
     ax1.hist(pct, bins=np.linspace(0, 100, 51), color=COLORS["darkblue"])
     ax1.set_xlabel("IDR fraction of protein (%)")
     ax1.set_ylabel("count")
-    ax1.set_title(f"all records (n = {len(pct):,}; {frac_full:.0f}% are whole-protein)", fontsize=16)
+    ax1.set_title(f"all records (n = {len(pct):,}; {frac_full:.0f}% are whole-protein)")
 
     ax2.hist(partial, bins=np.linspace(0, 100, 51), color=COLORS["lightblue"])
     ax2.set_xlabel("IDR fraction of protein (%)")
     ax2.set_ylabel("count")
-    ax2.set_title(f"excluding whole-protein IDRs (n = {len(partial):,})", fontsize=16)
+    ax2.set_title(f"excluding whole-protein IDRs (n = {len(partial):,})")
 
     fig.tight_layout()
     print("saved", save_fig(fig, args.name, subdir="si_figs/dataset"))

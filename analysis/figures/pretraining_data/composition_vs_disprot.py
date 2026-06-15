@@ -13,14 +13,13 @@ from __future__ import annotations
 
 import argparse
 import itertools
-import json
 from collections import Counter
-from pathlib import Path
 
 import numpy as np
 
-from analysis.figures._style import COLORS, save_fig, use_style
+from analysis.figures._style import COLORS, row_fig, save_fig, use_style
 from analysis.figures.pretraining_data.corpus_composition import iter_records
+from data_pipeline.disprot import disprot_idr_records
 
 RES = "ACDEFGHIKLMNPQRSTVWY"
 DATA = "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data"
@@ -39,26 +38,22 @@ def composition(seqs) -> np.ndarray:
     return np.array([counts[a] / total for a in RES]) if total else np.zeros(len(RES))
 
 
-def disprot_idrs(json_path, min_idr_length=30, max_seq_length=1020):
-    """DisProt 'D' (disordered) consensus regions: idr length>=min, full seq<=max, non-IDP.
+def disprot_regions(json_path, min_idr_length=30, max_seq_length=1020):
+    """Yield `(idr_seq, full_len)` for the canonical benchmark DisProt IDR set.
 
-    `max_seq_length=1020` matches the training-corpus protein-length cap (was 512 in v1).
+    Backed by `data_pipeline.disprot` (v1-parity: 'D' regions, idr >= min, full seq <= max,
+    full IDPs removed by the fuzzy +/-1 rule) so every DisProt-vs-corpus figure and the dedup
+    query use the *same* set. `max_seq_length=1020` matches the corpus cap (was 512 in v1).
     """
-    data = json.loads(Path(json_path).read_text())
-    entries = data if isinstance(data, list) else next(v for v in data.values() if isinstance(v, list))
-    out = []
-    for e in entries:
-        acc, seq = e.get("acc"), e.get("sequence")
-        if not (acc and seq) or len(seq) > max_seq_length:
-            continue
-        for r in e.get("disprot_consensus", {}).get("Structural state", []):
-            s, en = r.get("start"), r.get("end")
-            if r.get("type") != "D" or not (isinstance(s, int) and isinstance(en, int)):
-                continue
-            idr = seq[s - 1 : en]
-            if len(idr) >= min_idr_length and len(idr) < len(seq):
-                out.append(idr)
-    return out
+    for _acc, _idx, _s, _e, idr, full in disprot_idr_records(
+        json_path, min_idr_length=min_idr_length, max_seq_length=max_seq_length
+    ):
+        yield idr, len(full)
+
+
+def disprot_idrs(json_path, min_idr_length=30, max_seq_length=1020):
+    """DisProt 'D' IDR substrings passing :func:`disprot_regions`' filter."""
+    return [idr for idr, _ in disprot_regions(json_path, min_idr_length, max_seq_length)]
 
 
 def fasta_seqs(path, min_len=30, max_len=512):
@@ -88,7 +83,6 @@ def main() -> None:
     args = ap.parse_args()
 
     use_style()
-    import matplotlib.pyplot as plt
 
     train_idr = [seq[s:e] for _, seq, s, e in itertools.islice(iter_records(args.train_fasta), args.n)]
     dp_idr = disprot_idrs(args.disprot_json, args.disprot_min_idr, args.disprot_max_len)
@@ -103,7 +97,7 @@ def main() -> None:
     aas = np.array(list(RES))[order]
     x = np.arange(len(RES))
 
-    fig, ax = plt.subplots(figsize=(12, 4.6))
+    fig, ax = row_fig(1)
     ax.axhline(1.0, color=COLORS["black"], ls="--", lw=1.2, label="CATH reference")
     ax.bar(x - 0.2, train_e[order], width=0.4, color=COLORS["darkblue"], label="training IDRs")
     ax.bar(x + 0.2, dp_e[order], width=0.4, color=COLORS["green"], label="DisProt IDRs")

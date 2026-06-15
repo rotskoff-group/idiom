@@ -15,40 +15,27 @@ CLI subcommands let that bash build the two FASTAs and apply the removal:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from idiom.data.io import read_records
 
-DEFAULT_DISPROT_JSON = (
-    "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data/reference/disprot/"
-    "DisProt release_2025_06 with_ambiguous_evidences.json"
-)
+from data_pipeline.disprot import DEFAULT_DISPROT_JSON, disprot_idr_records
 
 
 def disprot_idr_fasta(
-    json_path: str, out_path: str, *, min_idr_length: int = 30, exclude_full_idps: bool = True
+    json_path: str, out_path: str, *, min_idr_length: int = 30, max_seq_length: int = 1020
 ) -> int:
-    """Write DisProt 'D' (disordered) consensus regions as an IDR FASTA. Returns count written."""
-    data = json.loads(Path(json_path).read_text())
-    entries = data if isinstance(data, list) else next(v for v in data.values() if isinstance(v, list))
-    n = 0
+    """Write the benchmark DisProt IDRs as the dedup query FASTA. Returns count written.
+
+    Uses the canonical parser (`data_pipeline.disprot`) so the query is exactly the DisProt IDR
+    set the figures/benchmark use: 'D' regions, idr >= min, full seq <= max (1020 = corpus cap),
+    full IDPs removed. Headers keep the `{acc}_{idx}_{start}-{end}` token.
+    """
+    records = disprot_idr_records(json_path, min_idr_length=min_idr_length, max_seq_length=max_seq_length)
     with open(out_path, "w") as out:
-        for entry in entries:
-            acc, seq = entry.get("acc"), entry.get("sequence")
-            states = entry.get("disprot_consensus", {}).get("Structural state", [])
-            if not (acc and seq and isinstance(states, list)):
-                continue
-            for idx, region in enumerate(states):
-                s, e = region.get("start"), region.get("end")
-                if region.get("type") != "D" or not (isinstance(s, int) and isinstance(e, int)):
-                    continue
-                idr = seq[s - 1 : e]  # DisProt is 1-based inclusive
-                if len(idr) < min_idr_length or (exclude_full_idps and len(idr) >= len(seq)):
-                    continue
-                out.write(f">{acc}_{idx}_{s}-{e}\n{idr}\n")
-                n += 1
-    return n
+        for acc, idx, s, e, idr, _full in records:
+            out.write(f">{acc}_{idx}_{s}-{e}\n{idr}\n")
+    return len(records)
 
 
 def write_idr_fasta(record_fasta: str, out_path: str) -> int:
@@ -92,6 +79,7 @@ def main() -> None:
 
     p = sub.add_parser("disprot-fasta", help="DisProt JSON -> IDR FASTA (search query)")
     p.add_argument("--json", default=DEFAULT_DISPROT_JSON)
+    p.add_argument("--max-seq-len", type=int, default=1020, help="full-seq cap (match corpus)")
     p.add_argument("--out", required=True)
 
     p = sub.add_parser("idr-fasta", help="record FASTA -> IDR-only FASTA (search target)")
@@ -105,7 +93,8 @@ def main() -> None:
 
     args = ap.parse_args()
     if args.cmd == "disprot-fasta":
-        print(f"wrote {disprot_idr_fasta(args.json, args.out):,} DisProt IDRs -> {args.out}")
+        n = disprot_idr_fasta(args.json, args.out, max_seq_length=args.max_seq_len)
+        print(f"wrote {n:,} DisProt IDRs -> {args.out}")
     elif args.cmd == "idr-fasta":
         print(f"wrote {write_idr_fasta(args.fasta, args.out):,} IDRs -> {args.out}")
     elif args.cmd == "remove":

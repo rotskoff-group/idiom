@@ -87,10 +87,12 @@ On-the-fly store; **no FIM materialization**. Stages (pure cores CPU-tested; mms
 operator-run via Slurm):
 1. **extract** (`extract.extract_idrs`) — done; produced the master.
 2. **cluster** 90% + `find_fastas_in_h5.py` — done; produced the 73M master.
-3. **filter** (`filter_length_plddt.py`, `python -m data_pipeline.filter_length_plddt`) — master h5 → record FASTA, applying
-   `passes_length` (≤1020) and `is_fully_low_plddt` (= `not extract.has_folded_segment`, the
-   **aggressive** no-folded-segment criterion: drops proteins with no folded *segment*, stricter
-   than `max(plddt)<80`).
+3. **filter** (`filter_length_plddt.py`; Slurm `bash data_pipeline/filter_length_plddt.bash`) —
+   master h5 → record FASTA, applying `passes_length` (≤1020) and `is_fully_low_plddt`
+   (= `not extract.has_folded_segment`, the **aggressive** no-folded-segment criterion, stricter
+   than `max(plddt)<80`). **DONE (2026-06-14):** →
+   `pretraining/AFDB/intermediate/AFDB_IDR_90_len1020_rm_full_low_plddt.fasta` = **57,788,195**
+   records (79% of 73M kept). Header `{base}_IDR_{x}-{y}` → master id `{base}_{x-1}-{y-1}` (verified).
 4. **DisProt dedup** (`dedup.py` + `dedup.bash`) — drop record IDRs ≥50% id to any DisProt IDR,
    **IDR-vs-IDR** (ESM-2 params `--min-seq-id 0.5 -c 0.8 -s 7`).
    - **4b. [FUTURE] TM/SignalP/coiled-coil filter** — DeepTMHMM + SignalP + coiled-coil removal,
@@ -103,11 +105,22 @@ reference only; the two filters were baked into v1 `make_AFDB_FIM.py` (no standa
 ever existed).
 
 ## Manuscript & figures
-- Figure scripts: `analysis/figures/` (run with `PYTHONPATH=/data2/scratch/jxliu2/idiom`). Use
-  `_style.use_style()` (loads `idiom.mplstyle`, font **Liberation Sans** installed in `~/.fonts`)
-  and `save_fig(fig, name, subdir="si_figs/<topic>")` → `$IDIOM_FIG_DIR` = the manuscript `figs/`
-  dir. **The filename IS the LaTeX `\includegraphics` path.** SI figs under
-  `si_figs/{dataset,disorder,biophysics,curves,sae}/`.
+- Figure scripts: `analysis/figures/<section>/` (sections mirror SI topics: `pretraining_data/` →
+  `si_figs/dataset/`, plus `disorder/ biophysics/ training_curves/ sae/ generation/`; see
+  `analysis/figures/README.md`). Run with `PYTHONPATH=/data2/scratch/jxliu2/idiom` (or
+  `bash bash/figures.bash`). Use `_style.use_style()` (loads `idiom.mplstyle`, font **Liberation
+  Sans** in `~/.fonts`) and `save_fig(fig, name, subdir="si_figs/<topic>")` → `$IDIOM_FIG_DIR` =
+  the manuscript `figs/` dir. **The filename IS the LaTeX `\includegraphics` path.**
+- **Consistency conventions:** build figures with `_style.row_fig(ncols)` — one shared canvas
+  (`FIG_WIDTH=15, ROW_HEIGHT=5`) so every figure renders at the same page size and fonts scale
+  identically under `\includegraphics[width=\linewidth]`. The mplstyle sets a single type hierarchy
+  (titles/axis-labels 20, ticks/legend/base 18) — **don't override `fontsize=` per-figure**; keep
+  titles short (put counts in the caption). Ongoing: port the v1 analysis from
+  `idr-plm-figures/.../figure_scripts/` into these sections (the `idps_dp_idrs/` suite is the
+  train/DisProt/generated comparison set; generated panels wait for a trained model).
+- **Goal: replicate the v1 `idr-plm-figures/src/idr_plm_figures` analysis/plotting** (it made the
+  first IDiom draft) under `analysis/`. Reference baselines live in idiom_data `reference/`
+  (`cath/`, `disprot/`).
 - Manuscript repo: `/data2/scratch/jxliu2/papers/overleaf/IDiom-manuscript-v1` (own git → GitHub
   `jxliu2/IDiom-manuscript-v1`; SI under `\appendix`). **After ANY `.tex` change, recompile:**
   `PATH=/data2/scratch/jxliu2/tmp/bin tectonic --synctex --keep-logs main.tex`. Keep paper-text

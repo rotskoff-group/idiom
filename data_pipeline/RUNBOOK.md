@@ -64,6 +64,11 @@ srun -c 64 --mem 64GB -t 12:00:00 bash data_pipeline/dedup.bash train_candidates
 
 (ESM-2 params: `mmseqs search --min-seq-id 0.5 -c 0.8 --cov-mode 0 -s 7 --max-seqs 300`.)
 
+The DisProt query set comes from the **canonical parser** `data_pipeline/disprot.py` (ported from
+v1 `idr-plm-figures` `utils.utils`), shared with the SI figures so dedup and figures dedup/compare
+against the *exact same* set: 'D' consensus regions, IDR ≥ 30, full seq ≤ **1020** (v1 was 512;
+raised to match the corpus cap), full IDPs removed by v1's fuzzy ±1 rule → **1,665** DisProt IDRs.
+
 ## 4b. TM / SignalP / coiled-coil filter  *(FUTURE — placeholder)*
 
 Drop records whose protein has a transmembrane region (DeepTMHMM), signal peptide (SignalP), or

@@ -14,7 +14,7 @@ import argparse
 import h5py
 import numpy as np
 
-from analysis.figures._style import COLORS, save_fig, use_style
+from analysis.figures._style import COLORS, row_fig, save_fig, use_style
 
 DEFAULT_H5 = (
     "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data/pretraining/AFDB/"
@@ -30,7 +30,6 @@ def main() -> None:
     args = ap.parse_args()
 
     use_style()
-    import matplotlib.pyplot as plt
 
     with h5py.File(args.h5, "r") as f:
         idr = f["idr_plddt"][: args.n]
@@ -38,20 +37,20 @@ def main() -> None:
     mean_idr = np.array([x.mean() for x in idr], dtype=np.float32)
     max_full = np.array([x.max() for x in full], dtype=np.float32)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4.6))
+    fig, (ax1, ax2) = row_fig(2)
 
     ax1.hist(mean_idr, bins=80, range=(0, 100), color=COLORS["darkblue"])
     ax1.axvline(70, color=COLORS["red"], lw=1.5, ls="--")
     ax1.set_xlabel("mean IDR pLDDT")
     ax1.set_ylabel("count")
-    ax1.set_title(f"IDRs (n = {len(mean_idr):,})", fontsize=18)
+    ax1.set_title(f"IDRs (n = {len(mean_idr):,})")
 
     ax2.hist(max_full, bins=80, range=(0, 100), color=COLORS["lightblue"])
     ax2.axvline(80, color=COLORS["red"], lw=1.5, ls="--")
     frac = 100 * np.mean(max_full < 80)
     ax2.set_xlabel("max protein pLDDT")
     ax2.set_ylabel("count")
-    ax2.set_title(f"proteins (max < 80: {frac:.0f}%)", fontsize=18)
+    ax2.set_title(f"proteins (max < 80: {frac:.0f}%)")
 
     fig.tight_layout()
     print("saved", save_fig(fig, args.name, subdir="si_figs/dataset"))

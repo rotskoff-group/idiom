@@ -176,7 +176,7 @@ Legend: ☐ todo · ◐ in progress · ☑ done
 - Docstring `:mod:`/`:class:` cross-refs still say `idiomatics`/`idiom_interface` — cleaned in
   the P2 model port (cosmetic, no runtime effect).
 
-### P1 — Data (on-the-fly, no token h5)  ◐ (runtime path done; curation drivers operator-run)
+### P1 — Data (on-the-fly, no token h5)  ◐ (runtime path done; curation stage 3 run → 57.79M-record FASTA; dedup/split pending)
 - ☑ `data/tokenizer.py`: fixed-alphabet char tokenizer, deterministic id map, `encode/decode`,
   `is_residue`/`is_fim` predicates + `residue_mask` (the residue-only selector for extraction).
 - ☑ `data/fim.py`: `fim_full` / `fim_132` + `residue_source_positions` (alignment map for
@@ -258,8 +258,14 @@ Legend: ☐ todo · ◐ in progress · ☑ done
   to the FIM string. `FeatureDataset` reader switched to that layout; viewer/annotation consume it.
 - (Per-layer SAE sweep `layer × k × expansion` is covered by `sae_sweep.bash` / Hydra multirun.)
 
-### P6 — Analysis & figures  ☐
-- ☐ Move `idr-plm-figures/figure_scripts` → `analysis/figures/`, parameterized (no hardcoded paths).
+### P6 — Analysis & figures  ◐ (pretraining-data SI figures done; rest pending)
+- ◐ Port `idr-plm-figures/figure_scripts` → `analysis/figures/<section>/`, parameterized. Sections
+  scaffolded (`pretraining_data/ disorder/ biophysics/ training_curves/ sae/ generation/`).
+  **`pretraining_data/` done:** corpus_lengths, corpus_plddt, corpus_plddt_regions,
+  corpus_idr_fraction, corpus_composition, composition_vs_disprot (train vs DisProt rel. to CATH).
+  Shared geometry via `_style.row_fig` (15×5 canvas); mplstyle type hierarchy 20/18.
+- ☐ idps_dp_idrs suite remainder: lengths, plddt, sparrow metrics + W1, slims, mmseqs id
+  (generated-sequence panels wait for a trained model).
 - ☐ Interpretability modules: feature ratios, biophysics/SLiM P/R/F1, annotation+HDBSCAN, steering eval.
 - ☐ Shared `metrics/`: sparrow, ELM-SLiM, mmseqs novelty, disorder preds.
 - ☐ Restore the Streamlit/plotly **feature viewer** (`visualization/feature_viewer.py`) + deps.
@@ -377,3 +383,15 @@ Legend: ☐ todo · ◐ in progress · ☑ done
   `ModelConfig`; new `idiom_generate` inference CLI; `safetensors` dep. README rewritten for v2
   (install, quickstart, HF artifacts, layout, CLIs). `rewards/example_rewards.py` + README; .gitignore
   trimmed. **70/70 CPU green.**
+- **2026-06-14** — **Curation pipeline built + stage 3 run.** `data_pipeline/{extract(+has_folded_segment),
+  filter_length_plddt,dedup,split}.py` (+ `dedup.bash`, `filter_length_plddt.bash`, `_legacy_reference/`);
+  RUNBOOK rewritten to the v2 flow (filter → DisProt dedup → [TM/SignalP/coiled-coil, future] → random
+  split). Verified AFDB lineage (110.5M→53M reps→73M master→37M v1). Ran stage 3 on the 73M master →
+  `…/intermediate/AFDB_IDR_90_len1020_rm_full_low_plddt.fasta` = **57.79M** records (IDR coords verified
+  against the master). Length cap **1020** (= max_len−4); fully-disordered drop = aggressive
+  no-folded-segment. AGENTS.md added. Curation tests green.
+- **2026-06-14** — **Pretraining-data SI figures.** `analysis/figures/` reorganized into topic sections;
+  `_style.row_fig` (shared 15×5 canvas) + mplstyle type hierarchy (20/18) for cross-figure consistency.
+  Six `pretraining_data/` figures (lengths, pLDDT, pLDDT-regions, IDR-fraction, composition,
+  composition-vs-DisProt-rel-CATH) into the SI; CATH baseline → idiom_data `reference/cath/`. Began
+  replicating the v1 `idr-plm-figures` analysis suite (P6).

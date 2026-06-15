@@ -18,7 +18,7 @@ import argparse
 import h5py
 import numpy as np
 
-from analysis.figures._style import COLORS, save_fig, use_style
+from analysis.figures._style import COLORS, row_fig, save_fig, use_style
 
 DEFAULT_H5 = (
     "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data/pretraining/AFDB/"
@@ -34,7 +34,6 @@ def main() -> None:
     args = ap.parse_args()
 
     use_style()
-    import matplotlib.pyplot as plt
 
     with h5py.File(args.h5, "r") as f:
         acc = f["accession_ids"][: args.n]
@@ -68,7 +67,7 @@ def main() -> None:
     idr_res = np.concatenate(idr_res)
     non_res = np.concatenate(non_res)
 
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(17, 4.8))
+    fig, (ax1, ax2, ax3) = row_fig(3)
     blue, orange = COLORS["darkblue"], COLORS["orange"]
 
     # (a) per-protein mean pLDDT
@@ -77,7 +76,7 @@ def main() -> None:
     ax1.hist(non_mean, bins=bins, color=orange, alpha=0.65, label="non-IDR")
     ax1.set_xlabel("mean pLDDT per protein region")
     ax1.set_ylabel("count")
-    ax1.set_title(f"per-protein means (n = {len(idr_mean):,})", fontsize=18)
+    ax1.set_title(f"per-protein means (n = {len(idr_mean):,})")
     ax1.legend(frameon=False)
 
     # (b) pooled per-residue pLDDT (density: very different residue counts)
@@ -87,7 +86,7 @@ def main() -> None:
     ax2.axvline(80, color=COLORS["grey"], lw=1.2, ls="--")
     ax2.set_xlabel("per-residue pLDDT")
     ax2.set_ylabel("density")
-    ax2.set_title(f"per-residue (n = {len(idr_res) + len(non_res):,})", fontsize=18)
+    ax2.set_title(f"per-residue (n = {len(idr_res) + len(non_res):,})")
     ax2.legend(frameon=False)
 
     # (c) joint per-protein non-IDR vs IDR mean pLDDT
@@ -96,7 +95,7 @@ def main() -> None:
     ax3.plot([0, 100], [0, 100], color=COLORS["grey"], lw=1.0, ls="--")
     ax3.set_xlabel("mean non-IDR pLDDT")
     ax3.set_ylabel("mean IDR pLDDT")
-    ax3.set_title("joint (per protein)", fontsize=18)
+    ax3.set_title("joint (per protein)")
     fig.colorbar(h[3], ax=ax3, label="count")
 
     fig.tight_layout()

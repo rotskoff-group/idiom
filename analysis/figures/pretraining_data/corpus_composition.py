@@ -16,7 +16,7 @@ from collections import Counter
 
 import numpy as np
 
-from analysis.figures._style import COLORS, save_fig, use_style
+from analysis.figures._style import COLORS, row_fig, save_fig, use_style
 from idiom.data.io import parse_idr_header
 
 RESIDUES = "ACDEFGHIKLMNPQRSTVWY"
@@ -38,6 +38,8 @@ def iter_records(path):
                 acc, start, end = parse_idr_header(header)
                 yield acc, line, start, end
                 header = None
+
+
 DEFAULT_FASTA = (
     "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data/pretraining/AFDB/"
     "intermediate/AFDB_IDR_90_len1020_rm_full_low_plddt.fasta"
@@ -52,7 +54,6 @@ def main() -> None:
     args = ap.parse_args()
 
     use_style()
-    import matplotlib.pyplot as plt
 
     idr_counts: Counter = Counter()
     non_counts: Counter = Counter()
@@ -83,7 +84,7 @@ def main() -> None:
     x = np.arange(len(RESIDUES))
     blue, orange = COLORS["darkblue"], COLORS["orange"]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 4.8))
+    fig, (ax1, ax2) = row_fig(2)
 
     ax1.bar(x - 0.2, idr_freq[order] * 100, width=0.4, color=blue, label="IDR")
     ax1.bar(x + 0.2, non_freq[order] * 100, width=0.4, color=orange, label="non-IDR")
@@ -91,7 +92,7 @@ def main() -> None:
     ax1.set_xticklabels(aas)
     ax1.set_xlabel("amino acid")
     ax1.set_ylabel("frequency (%)")
-    ax1.set_title("composition", fontsize=18)
+    ax1.set_title("composition")
     ax1.legend(frameon=False)
 
     colors = [blue if e > 0 else orange for e in enrich[order]]
@@ -101,9 +102,8 @@ def main() -> None:
     ax2.set_xticklabels(aas)
     ax2.set_xlabel("amino acid")
     ax2.set_ylabel(r"$\log_2$(IDR / non-IDR)")
-    ax2.set_title("enrichment in IDRs", fontsize=18)
+    ax2.set_title("enrichment in IDRs")
 
-    fig.suptitle(f"filtered training corpus (n = {idr_tot + non_tot:,} residues)", fontsize=16)
     fig.tight_layout()
     print("saved", save_fig(fig, args.name, subdir="si_figs/dataset"))
 

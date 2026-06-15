@@ -34,6 +34,18 @@ def use_style() -> None:
     plt.style.use(str(STYLE))
 
 
+# Shared figure geometry: every single-row figure uses ONE canvas size regardless of panel count.
+# Since the manuscript includes figures at \linewidth, a constant figure *width* makes the fonts
+# scale identically across figures, and a constant height makes them render at the same page size.
+FIG_WIDTH = 15.0
+ROW_HEIGHT = 5.0
+
+
+def row_fig(ncols: int = 1, **kwargs):
+    """Standard single-row figure: ``plt.subplots(1, ncols)`` on the shared (FIG_WIDTH, ROW_HEIGHT)."""
+    return plt.subplots(1, ncols, figsize=(FIG_WIDTH, ROW_HEIGHT), **kwargs)
+
+
 def fig_dir() -> Path:
     """The manuscript ``figs/`` directory (``IDIOM_FIG_DIR``)."""
     d = os.environ.get("IDIOM_FIG_DIR")
