@@ -1,10 +1,28 @@
 """P4 GRPO entrypoint tests (CPU-only): composite reward + build() wiring."""
 
+from dataclasses import asdict
+
+import torch
 from omegaconf import OmegaConf
 
+from idiom.model import IDiomTransformer, ModelConfig
 from idiom.train.grpo import LitGRPO
 from idiom.train.grpo.data import PromptDataset
 from idiom.train.grpo.train_grpo import build, build_reward
+
+TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len=64)
+
+
+def _ckpt(tmp_path):
+    """Self-describing pretrained ckpt for GRPO to warm-start from."""
+    m = IDiomTransformer(TINY)
+    ckpt = tmp_path / "pretrained.ckpt"
+    torch.save(
+        {"state_dict": {f"model.{k}": v for k, v in m.state_dict().items()},
+         "hyper_parameters": {"model_cfg": asdict(TINY)}},
+        ckpt,
+    )
+    return ckpt
 
 
 def _reward_cfg(**over):
@@ -54,11 +72,10 @@ def test_shipped_example_rewards_register():
     assert get_reward("aromatic_fraction")("FWYA") == 0.75  # 3 of 4 are aromatic
 
 
-def test_build_wires_module_and_prompts():
+def test_build_wires_module_and_prompts(tmp_path):
     cfg = OmegaConf.create({
         "seed": 0,
-        "init_from": None,
-        "model": {"n_layers": 2, "d_model": 32, "n_heads": 4, "max_seq_len": 64, "vocab_size": 27},
+        "init_from": str(_ckpt(tmp_path)),  # GRPO warm-starts; arch read from this ckpt
         "grpo": {"group_size": 2, "max_new_tokens": 6, "lr": 5e-6, "beta_kl": 0.02,
                  "eps_clip": 0.2, "temperature": 1.0, "top_k": None, "top_p": None,
                  "normalize_advantage": True},
@@ -66,5 +83,5 @@ def test_build_wires_module_and_prompts():
         "prompts": {"mode": "denovo", "n": 16, "fasta": None, "n_per": 1, "batch_size": 4},
     })
     lit, ds = build(cfg)
-    assert isinstance(lit, LitGRPO) and lit.group_size == 2
+    assert isinstance(lit, LitGRPO) and lit.group_size == 2 and lit.cfg == TINY
     assert isinstance(ds, PromptDataset) and len(ds) == 16

@@ -9,7 +9,6 @@ controls: ``temperature`` (0 = greedy), ``top_k``, ``top_p``.
 from __future__ import annotations
 
 import torch
-import torch.nn.functional as F
 from torch import Tensor
 
 from idiom.data.tokenizer import Tokenizer

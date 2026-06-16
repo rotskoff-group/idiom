@@ -12,12 +12,6 @@ prompts:
   n_per: 1000                # record mode: copies per protein
   batch_size: 8              # distinct prompts per step (each -> group_size completions)
 
-model:                       # MUST match the pretrained checkpoint
-  n_layers: 24
-  d_model: 1024
-  n_heads: 16
-  max_seq_len: 1024
-
 grpo:
   group_size: 8
   max_new_tokens: 256

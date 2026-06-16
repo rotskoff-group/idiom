@@ -50,10 +50,16 @@ def test_warmup_cosine_shape():
 
 def test_init_from_checkpoint_roundtrip(tmp_path):
     # Save a pretrained module, warm-start a new one, and confirm weights transfer (SFT path).
+    # The arch is recovered from the (self-describing) checkpoint, not re-declared.
     lit = LitAutoregressive(TINY)
     ckpt = tmp_path / "pre.ckpt"
-    torch.save({"state_dict": {f"model.{k}": v for k, v in lit.model.state_dict().items()}}, ckpt)
-    sft = LitAutoregressive.init_from_checkpoint(str(ckpt), TINY, lr=1e-5)
+    torch.save(
+        {"state_dict": {f"model.{k}": v for k, v in lit.model.state_dict().items()},
+         "hyper_parameters": dict(lit.hparams)},
+        ckpt,
+    )
+    sft = LitAutoregressive.init_from_checkpoint(str(ckpt), lr=1e-5)
+    assert sft.cfg == TINY
     for (k, a), (_, b) in zip(lit.model.state_dict().items(), sft.model.state_dict().items()):
         assert torch.equal(a, b), k
 

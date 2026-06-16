@@ -17,7 +17,6 @@ from lightning.pytorch.loggers import WandbLogger
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from idiom.model.config import ModelConfig
 from idiom.train.grpo.data import collate_prompts, denovo_prompts, record_prompts
 from idiom.train.grpo.lit_grpo import LitGRPO
 from idiom.train.grpo.rewards import entropy_reward, get_reward, length_reward, quadratic_shaping
@@ -65,13 +64,9 @@ def build_reward(rcfg: DictConfig) -> Callable[[str], float]:
 
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     reward = build_reward(cfg.reward)
-    model_cfg = ModelConfig(**OmegaConf.to_container(cfg.model, resolve=True))
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
-
-    if cfg.get("init_from"):
-        lit = LitGRPO.init_from_checkpoint(cfg.init_from, model_cfg, reward, **grpo_kw)
-    else:
-        lit = LitGRPO(model_cfg, reward, **grpo_kw)
+    # GRPO always warm-starts from a pretrained policy; architecture is read from that checkpoint
+    lit = LitGRPO.init_from_checkpoint(cfg.init_from, reward, **grpo_kw)
 
     if cfg.prompts.mode == "denovo":
         ds = denovo_prompts(cfg.prompts.n)

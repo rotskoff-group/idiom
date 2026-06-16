@@ -15,11 +15,7 @@ data:
   batch_size: 32
   num_workers: 8
 
-model:                       # MUST match the pretrained checkpoint's architecture
-  n_layers: 24
-  d_model: 1024
-  n_heads: 16
-  max_seq_len: 1024
+# (no `model:` block — SFT warm-starts from init_from, whose architecture is read from the checkpoint)
 
 optim:
   lr: 1.0e-5                 # gentle, to not wash out pretraining

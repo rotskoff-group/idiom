@@ -2,7 +2,7 @@
 
 import torch
 
-from idiom import IDiom, ModelConfig
+from idiom import IDiom, IDiomSAE, ModelConfig
 from idiom.model import IDiomTransformer
 from idiom.data.tokenizer import RESIDUES
 
@@ -58,3 +58,35 @@ def test_embed(tmp_path):
     emb = _idiom().embed(fa, layers=[1], pool="mean")
     values, index = emb[1]
     assert values.shape == (1, TINY.d_model) and index[0]["accession"] == "A"
+
+
+def _idiom_sae(host):
+    from idiom.sae import SparseCoder
+
+    sae = SparseCoder(TINY.d_model, num_latents=TINY.d_model * 4, k=8)
+    return IDiomSAE(sae, host, layer=1)
+
+
+def test_idiomsae_save_and_from_pretrained_roundtrip(tmp_path):
+    host = _idiom()
+    sae = _idiom_sae(host)
+    host.save_pretrained(tmp_path / "rel")  # so the recorded host_model can be auto-loaded
+    sdir = tmp_path / "sae_rel"
+    sae.save_pretrained(sdir, host_model=str(tmp_path / "rel"))
+    assert (sdir / "sae_config.json").exists() and (sdir / "sae.safetensors").exists()
+
+    loaded = IDiomSAE.from_pretrained(sdir)  # no model= -> host auto-loaded from sae_config
+    assert loaded.layer == 1
+    x = torch.randn(5, TINY.d_model)
+    assert torch.allclose(sae.sae.encode_dense(x), loaded.sae.encode_dense(x), atol=1e-5)
+
+
+def test_idiomsae_encode_and_steer(tmp_path):
+    host = _idiom()
+    sae = _idiom_sae(host)
+    fa = tmp_path / "p.fasta"
+    fa.write_text(">A_IDR_3-9\nMEDSKVDNRPQACDEFG\n")
+    feats, accs = sae.encode(fa, pool="mean")
+    assert feats.shape == (1, sae.sae.num_latents) and accs == ["A"]
+    seqs = sae.steer_generate(feature=0, strength=1.0, n=2, max_new_tokens=6, temperature=0)
+    assert len(seqs) == 2 and all(isinstance(s, str) for s in seqs)

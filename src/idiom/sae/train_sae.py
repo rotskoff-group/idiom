@@ -10,7 +10,6 @@ from pathlib import Path
 
 import hydra
 import lightning as L
-import torch
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
@@ -18,9 +17,9 @@ from torch.utils.data import DataLoader
 from idiom.data.dataset import RecordDataset, make_collate
 from idiom.data.io import read_records
 from idiom.data.tokenizer import Tokenizer
-from idiom.model.config import ModelConfig
 from idiom.model.io import load_pretrained
 from idiom.sae.activation_store import ActivationStore
+from idiom.sae.io import save_sae
 from idiom.sae.lit_sae import LitSAE
 from idiom.utils.device import resolve_device
 
@@ -28,8 +27,8 @@ from idiom.utils.device import resolve_device
 def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     device = resolve_device(cfg.device)
     tok = Tokenizer()
-    model_cfg = ModelConfig(**OmegaConf.to_container(cfg.model, resolve=True))
-    model = load_pretrained(cfg.model_ckpt, model_cfg, device=device)
+    model = load_pretrained(cfg.model_ckpt, device=device)  # arch read from the checkpoint
+    model_cfg = model.cfg
 
     records = RecordDataset(
         read_records(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len, fim_full_prob=cfg.data.fim_full_prob
@@ -73,7 +72,8 @@ def run(cfg: DictConfig) -> None:
         **OmegaConf.to_container(cfg.trainer, resolve=True), logger=wandb_logger, default_root_dir=out_dir
     )
     trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
-    torch.save(lit.sae.state_dict(), out_dir / "ae.pt")  # loads via SparseCoder.from_pretrained
+    # canonical SAE release (host_model + layer recorded): loads via idiom.IDiomSAE.from_pretrained
+    save_sae(lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer)
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="sae")

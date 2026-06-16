@@ -71,29 +71,18 @@ def build_feature_dataset(
 def main() -> None:
     import argparse
 
-    from idiom.data.io import read_records
-    from idiom.model import idiom_12l, idiom_24l, idiom_36l
-    from idiom.model.io import load_pretrained
-    from idiom.sae import load_sae
-    from idiom.utils.device import resolve_device
+    from idiom import IDiomSAE
 
-    sizes = {"12l": idiom_12l, "24l": idiom_24l, "36l": idiom_36l}
     p = argparse.ArgumentParser(description="Build an SAE feature-activation dataset from a FASTA.")
+    p.add_argument("--sae", required=True, help="trained SAE release dir (host model + layer read from it)")
     p.add_argument("--fasta", required=True)
-    p.add_argument("--ckpt", required=True)
-    p.add_argument("--size", choices=list(sizes), default="24l")
-    p.add_argument("--sae", required=True, help="trained SAE state_dict (ae.pt)")
-    p.add_argument("--layer", type=int, required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--batch-size", type=int, default=16)
     args = p.parse_args()
 
-    device = resolve_device()
-    model = load_pretrained(args.ckpt, sizes[args.size](), device=device)
-    sae = load_sae(args.sae, device=device)
-    build_feature_dataset(
-        model, sae, read_records(args.fasta), args.layer, args.out,
-        device=device, batch_size=args.batch_size,
+    # the SAE release carries its host model + layer, so nothing else need be specified
+    IDiomSAE.from_pretrained(args.sae).build_feature_dataset(
+        args.fasta, args.out, batch_size=args.batch_size,
     )
 
 

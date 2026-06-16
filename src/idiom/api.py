@@ -50,6 +50,13 @@ class IDiom:
 
     # --- load / save (HF-style) ---
     @classmethod
+    def load(cls, name_or_path: str | Path, *, device="auto") -> "IDiom":
+        """Format-agnostic load: a local training ``.ckpt`` file, a released dir, or an HF repo id."""
+        if Path(name_or_path).is_file():  # a Lightning .ckpt
+            return cls.from_lightning_checkpoint(name_or_path, device=device)
+        return cls.from_pretrained(name_or_path, device=device)
+
+    @classmethod
     def from_pretrained(cls, name_or_path: str | Path, *, device="auto") -> "IDiom":
         from safetensors.torch import load_model  # noqa: PLC0415
 
@@ -69,12 +76,12 @@ class IDiom:
         return d
 
     @classmethod
-    def from_lightning_checkpoint(cls, ckpt_path, cfg: ModelConfig, *, device="auto") -> "IDiom":
-        """Wrap a training ``.ckpt`` (e.g. to then ``save_pretrained`` a release)."""
+    def from_lightning_checkpoint(cls, ckpt_path, *, device="auto") -> "IDiom":
+        """Wrap a training ``.ckpt`` (e.g. to then ``save_pretrained`` a release); arch read from it."""
         from idiom.model.io import load_pretrained  # noqa: PLC0415
 
         dev = resolve_device(device)
-        return cls(load_pretrained(ckpt_path, cfg, device=dev), device=dev)
+        return cls(load_pretrained(ckpt_path, device=dev), device=dev)
 
     # --- generation ---
     def _decode_idr(self, row: torch.Tensor) -> str:
@@ -121,6 +128,137 @@ class IDiom:
     def embed(self, fasta, layers: list[int], *, pool: str = "mean"):
         """Residual-stream embeddings (D14). See ``idiom.model.export.embed_fasta``."""
         return embed_fasta(self.model, fasta, layers, pool=pool, tokenizer=self.tok, device=self.device)
+
+
+class IDiomSAE:
+    """Public API for a sparse autoencoder trained on an :class:`IDiom` residual stream.
+
+    An SAE is only meaningful together with its **host model** and the **layer** it reads, so this
+    wrapper bundles ``(IDiom, layer, SparseCoder)``. The release dir records the host model + layer,
+    so an SAE is self-describing about where it mounts — ``idiom_sae`` writes exactly this format.
+
+        from idiom import IDiom, IDiomSAE
+        sae   = IDiomSAE.from_pretrained("jxliu2/idiom-medium-sae-L8")   # host auto-loaded
+        feats = sae.encode(fasta)                              # feature activations
+        seqs  = sae.steer_generate(feature=1234, strength=0.5, n=100)
+        fid   = sae.fidelity(records_fasta)
+    """
+
+    def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None):
+        self.sae = sae.eval().to(model.device)
+        self.host = model
+        self.layer = int(layer)
+        self.host_model = host_model
+
+    # convenience pass-throughs to the host model
+    @property
+    def model(self) -> IDiomTransformer:
+        return self.host.model
+
+    @property
+    def tok(self) -> Tokenizer:
+        return self.host.tok
+
+    @property
+    def device(self) -> torch.device:
+        return self.host.device
+
+    # --- load / save (HF-style, mirrors IDiom) ---
+    @classmethod
+    def from_pretrained(cls, name_or_path, *, model: IDiom | None = None, device="auto") -> "IDiomSAE":
+        """Load a released SAE dir (``sae_config.json`` + ``sae.safetensors``).
+
+        ``model`` is the host :class:`IDiom`; if omitted, it is loaded from the ``host_model`` recorded
+        in the SAE config (HF repo id or local dir).
+        """
+        from idiom.sae.io import load_sae  # noqa: PLC0415
+
+        d = _resolve(name_or_path)
+        sae, cfg = load_sae(d, device=resolve_device(device))
+        if model is None:
+            if not cfg.get("host_model"):
+                raise ValueError(
+                    f"{d} records no host_model; pass model=IDiom.from_pretrained(...) explicitly."
+                )
+            model = IDiom.load(cfg["host_model"], device=device)
+        return cls(sae, model, cfg["layer"], host_model=cfg.get("host_model"))
+
+    def save_pretrained(self, out_dir, *, host_model: str | None = None) -> Path:
+        """Write the release dir (``sae_config.json`` + ``sae.safetensors``); ``host_model`` (repo id
+        / path) is recorded so the SAE can later self-load its host."""
+        from idiom.sae.io import save_sae  # noqa: PLC0415
+
+        return save_sae(self.sae, out_dir, host_model=host_model or self.host_model, layer=self.layer)
+
+    # --- feature activations ---
+    @torch.no_grad()
+    def encode(self, fasta, *, pool: str = "mean", idr_only: bool = True):
+        """SAE feature activations for each record's residues.
+
+        ``pool="none"`` → ``(acts[N_res, num_latents], index)`` per residue (index rows carry
+        ``accession``/``source_pos``/``is_idr``). ``pool="mean"`` → ``(acts[N_seq, num_latents],
+        accessions)`` averaged over each record's IDR residues (or all residues if ``idr_only=False``).
+        """
+        emb = embed_fasta(self.model, fasta, [self.layer], pool="none", tokenizer=self.tok, device=self.device)
+        values, index = emb[self.layer]
+        x = torch.from_numpy(values).to(self.device)
+        feats = self.sae.encode_dense(x).cpu().numpy()
+        if pool == "none":
+            return feats, index
+        import numpy as np  # noqa: PLC0415
+
+        rows: dict[str, list[int]] = {}
+        for i, row in enumerate(index):
+            if idr_only and not row.get("is_idr", True):
+                continue
+            rows.setdefault(row["accession"], []).append(i)
+        accs = list(rows)
+        pooled = np.stack([feats[rows[a]].mean(0) for a in accs]) if accs else np.empty((0, feats.shape[1]))
+        return pooled, accs
+
+    @torch.no_grad()
+    def build_feature_dataset(self, fasta, out_dir, *, batch_size: int = 16) -> Path:
+        """Write the offline per-residue feature-activation dataset (for the feature viewer)."""
+        from idiom.data.io import read_records  # noqa: PLC0415
+        from idiom.sae.build_feature_dataset import build_feature_dataset as _bfd  # noqa: PLC0415
+
+        return _bfd(self.model, self.sae, read_records(fasta), self.layer, out_dir,
+                    tokenizer=self.tok, device=self.device, batch_size=batch_size)
+
+    # --- steering ---
+    @torch.no_grad()
+    def steer_generate(self, feature, strength, *, n: int = 100, mode: str = "add_direction",
+                       prompt: str | None = None, max_new_tokens: int = 256, temperature: float = 1.0,
+                       top_k: int | None = None, top_p: float | None = None, seed: int | None = None) -> list[str]:
+        """Generate IDRs with ``feature`` steered on the SAE's layer. Returns residue strings."""
+        from idiom.sae.steering import SteeringSpec, steer_generation  # noqa: PLC0415
+
+        spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode)
+        gen = torch.Generator(device=self.device).manual_seed(seed) if seed is not None else None
+        prompt_tokens = self.tok.encode(prompt) if prompt else None
+        out = steer_generation(
+            self.model, self.sae, spec, prompt_tokens=prompt_tokens, n_samples=n,
+            max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
+            tokenizer=self.tok, generator=gen,
+        )
+        return [self.host._decode_idr(row) for row in out]
+
+    # --- fidelity ---
+    @torch.no_grad()
+    def fidelity(self, fasta, *, batch_size: int = 16, fim_full_prob: float = 0.5):
+        """Substitution-loss fidelity (``loss_clean``/``loss_sae``/``loss_ablate``,
+        ``pct_loss_recovered``) over a record FASTA."""
+        from torch.utils.data import DataLoader  # noqa: PLC0415
+
+        from idiom.data.dataset import RecordDataset, make_collate  # noqa: PLC0415
+        from idiom.data.io import read_records  # noqa: PLC0415
+        from idiom.sae.fidelity import compute_fidelity  # noqa: PLC0415
+
+        ds = RecordDataset(read_records(fasta), self.tok, max_len=self.model.cfg.max_seq_len,
+                           fim_full_prob=fim_full_prob)
+        dl = DataLoader(ds, batch_size=batch_size, collate_fn=make_collate(self.tok.pad_id))
+        return compute_fidelity(self.model, self.sae, self.layer, dl, pad_id=self.tok.pad_id,
+                                tokenizer=self.tok, device=self.device)
 
 
 def _write_fasta(records: list[tuple[str, str]], path) -> Path:

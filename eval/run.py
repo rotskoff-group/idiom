@@ -25,17 +25,9 @@ def main() -> None:
     from eval.distances import w1_table
     from eval.metrics import FEATURES, features_table, summarize
     from eval.validity import validity_stats
-    from idiom.model import idiom_12l, idiom_24l, idiom_36l
-    from idiom.model.config import ModelConfig
 
-    sizes = {"12l": idiom_12l, "24l": idiom_24l, "36l": idiom_36l}
     p = argparse.ArgumentParser(description="Fast-profile evaluation of an IDiom checkpoint.")
-    p.add_argument("--ckpt", required=True, help="lightning .ckpt")
-    p.add_argument("--size", choices=list(sizes), default="24l", help="named arch")
-    p.add_argument("--n-layers", type=int)
-    p.add_argument("--d-model", type=int)
-    p.add_argument("--n-heads", type=int)
-    p.add_argument("--max-seq-len", type=int, default=1024)
+    p.add_argument("--ckpt", required=True, help="lightning .ckpt or released model dir (arch read from it)")
     p.add_argument("--generations", help="FASTA of pre-made sequences (skip generation)")
     p.add_argument("--generate-n", type=int, default=10000, help="de-novo IDPs to generate if no --generations")
     p.add_argument("--max-new-tokens", type=int, default=256)
@@ -53,12 +45,11 @@ def main() -> None:
     p.add_argument("--wandb-project", help="if set, log metrics to this wandb project")
     args = p.parse_args()
 
-    if args.n_layers and args.d_model and args.n_heads:
-        cfg = ModelConfig(n_layers=args.n_layers, d_model=args.d_model,
-                          n_heads=args.n_heads, max_seq_len=args.max_seq_len)
+    # arch is read from the artifact: a released dir via config.json, a .ckpt via its hparams
+    if Path(args.ckpt).is_dir():
+        idiom = IDiom.from_pretrained(args.ckpt, device="auto")
     else:
-        cfg = sizes[args.size]()
-    idiom = IDiom.from_lightning_checkpoint(args.ckpt, cfg, device="auto")
+        idiom = IDiom.from_lightning_checkpoint(args.ckpt, device="auto")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -106,7 +97,7 @@ def main() -> None:
     if args.test_fasta:
         from eval.perplexity import perplexity
         results["perplexity"] = perplexity(
-            idiom.model, args.test_fasta, max_len=cfg.max_seq_len,
+            idiom.model, args.test_fasta, max_len=idiom.model.cfg.max_seq_len,
             device=idiom.device, max_records=args.ppl_max_records)
 
     # 4. write outputs

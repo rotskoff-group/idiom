@@ -2,14 +2,8 @@
 #   idiom_sae model_ckpt=/path/pretrained.ckpt data.fasta=/path/records.fasta layer=8
 seed: 0
 device: auto
-model_ckpt: ???              # pretrained IDiom checkpoint (arch must match `model` below)
+model_ckpt: ???              # pretrained IDiom checkpoint; the model architecture is read from it
 resume_from: null            # mid-run resume (optimizer/step/RNG) from a .ckpt
-
-model:
-  n_layers: 24
-  d_model: 1024
-  n_heads: 16
-  max_seq_len: 1024
 
 layer: 8                     # residual-stream block to train the SAE on
 

@@ -22,20 +22,21 @@ from idiom.train.lit_autoregressive import LitAutoregressive
 
 
 def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
-    model_cfg = ModelConfig(**OmegaConf.to_container(cfg.model, resolve=True))
     optim = OmegaConf.to_container(cfg.optim, resolve=True)
     optim["max_steps"] = cfg.trainer.max_steps  # scheduler shares the trainer's horizon
 
     if cfg.get("init_from"):
-        lit = LitAutoregressive.init_from_checkpoint(cfg.init_from, model_cfg, **optim)
+        # SFT: warm start; architecture comes from the pretrained checkpoint, not the config
+        lit = LitAutoregressive.init_from_checkpoint(cfg.init_from, **optim)
         log.info(f"Warm-started from {cfg.init_from}")
     else:
-        lit = LitAutoregressive(model_cfg, **optim)
+        # pretraining: this is where the architecture is defined
+        lit = LitAutoregressive(ModelConfig(**OmegaConf.to_container(cfg.model, resolve=True)), **optim)
 
     dm = RecordDataModule(
         cfg.data.train_fasta,
         cfg.data.get("val_fasta"),
-        max_len=model_cfg.max_seq_len,
+        max_len=lit.cfg.max_seq_len,
         fim_full_prob=cfg.data.fim_full_prob,
         completion_only=cfg.data.completion_only,
         batch_size=cfg.data.batch_size,

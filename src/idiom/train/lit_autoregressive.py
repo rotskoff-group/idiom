@@ -8,6 +8,8 @@ trains on every token (all-True mask); SFT trains only on the IDR completion
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 import lightning as L
 import torch
 import torch.nn.functional as F
@@ -31,6 +33,9 @@ class LitAutoregressive(L.LightningModule):
     ) -> None:
         super().__init__()
         self.cfg = cfg
+        # Persist the architecture in the checkpoint so downstream loaders never need to
+        # re-declare it (model/io.load_pretrained reads hparams["model_cfg"]).
+        self.save_hyperparameters({"model_cfg": asdict(cfg)})
         self.model = IDiomTransformer(cfg)
         self.lr = lr
         self.warmup_steps = warmup_steps
@@ -40,10 +45,15 @@ class LitAutoregressive(L.LightningModule):
         self.min_lr_ratio = min_lr_ratio
 
     @classmethod
-    def init_from_checkpoint(cls, ckpt_path: str, cfg: ModelConfig, **kwargs) -> "LitAutoregressive":
-        """Build a module and load model weights from a prior Lightning ckpt (for SFT)."""
-        lit = cls(cfg, **kwargs)
-        state = torch.load(ckpt_path, map_location="cpu")["state_dict"]
+    def init_from_checkpoint(cls, ckpt_path: str, **kwargs) -> "LitAutoregressive":
+        """Build a module and load model weights from a prior Lightning ckpt (for SFT).
+
+        Architecture is read from the checkpoint (self-describing); never re-declared.
+        """
+        from idiom.model.io import config_from_checkpoint  # noqa: PLC0415
+
+        lit = cls(config_from_checkpoint(ckpt_path), **kwargs)
+        state = torch.load(ckpt_path, map_location="cpu", weights_only=False)["state_dict"]
         model_state = {k[len("model.") :]: v for k, v in state.items() if k.startswith("model.")}
         lit.model.load_state_dict(model_state)
         return lit

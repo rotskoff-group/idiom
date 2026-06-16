@@ -11,6 +11,7 @@ residue masking via ``Tokenizer.residue_mask``, steered generation via the KV-ca
 See REFACTOR_PLAN.md (P5).
 """
 
-from idiom.sae.sparse_coder import SparseCoder, build_sae, load_sae
+from idiom.sae.io import load_sae, save_sae
+from idiom.sae.sparse_coder import SparseCoder, build_sae
 
-__all__ = ["SparseCoder", "build_sae", "load_sae"]
+__all__ = ["SparseCoder", "build_sae", "load_sae", "save_sae"]

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable
+from dataclasses import asdict
 
 import lightning as L
 import torch
@@ -40,6 +41,9 @@ class LitGRPO(L.LightningModule):
     ) -> None:
         super().__init__()
         self.cfg = cfg
+        # Architecture travels with the checkpoint (read back by model/io.load_pretrained).
+        # Only the config — reward_fn/tokenizer are not serializable hyperparameters.
+        self.save_hyperparameters({"model_cfg": asdict(cfg)})
         self.model = IDiomTransformer(cfg)
         # Frozen reference = the initial policy; the KL penalty keeps the policy near it.
         self.reference = copy.deepcopy(self.model).eval()
@@ -58,9 +62,12 @@ class LitGRPO(L.LightningModule):
         self.normalize_advantage = normalize_advantage
 
     @classmethod
-    def init_from_checkpoint(cls, ckpt_path, cfg, reward_fn, **kwargs) -> "LitGRPO":
-        lit = cls(cfg, reward_fn, **kwargs)
-        state = torch.load(ckpt_path, map_location="cpu")["state_dict"]
+    def init_from_checkpoint(cls, ckpt_path, reward_fn, **kwargs) -> "LitGRPO":
+        """Warm-start GRPO from a pretrained ckpt; arch read from it (self-describing)."""
+        from idiom.model.io import config_from_checkpoint  # noqa: PLC0415
+
+        lit = cls(config_from_checkpoint(ckpt_path), reward_fn, **kwargs)
+        state = torch.load(ckpt_path, map_location="cpu", weights_only=False)["state_dict"]
         model_state = {k[len("model.") :]: v for k, v in state.items() if k.startswith("model.")}
         lit.model.load_state_dict(model_state)
         lit.reference.load_state_dict(model_state)

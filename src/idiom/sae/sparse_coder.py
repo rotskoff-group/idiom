@@ -177,30 +177,6 @@ class SparseCoder(nn.Module):
         parallel = einops.einsum(self.W_dec.grad, self.W_dec.data, "f d, f d -> f")
         self.W_dec.grad -= einops.einsum(parallel, self.W_dec.data, "f, f d -> f d")
 
-    # --- (de)serialization: single self-contained state_dict ---
-    @classmethod
-    def from_pretrained(
-        cls,
-        path: str,
-        *,
-        activation: Literal["topk", "groupmax"] = "topk",
-        multi_topk: bool = False,
-        device: str | torch.device | None = None,
-    ) -> SparseCoder:
-        state = torch.load(path, map_location=device or "cpu")
-        num_latents, d_in = state["W_dec"].shape
-        k = int(state["k"].item())
-        sae = cls(
-            d_in,
-            num_latents=num_latents,
-            k=k,
-            activation=activation,
-            multi_topk=multi_topk,
-        )
-        sae.load_state_dict(state)
-        return sae.to(device) if device is not None else sae
-
-
 # Naming aliases for convenience / continuity.
 TopKSAE = SparseCoder
 Sae = SparseCoder
@@ -222,16 +198,4 @@ def build_sae(
         activation=activation,
         multi_topk=multi_topk,
         normalize_decoder=normalize_decoder,
-    )
-
-
-def load_sae(
-    path: str,
-    *,
-    activation: Literal["topk", "groupmax"] = "topk",
-    multi_topk: bool = False,
-    device: str | torch.device | None = None,
-) -> SparseCoder:
-    return SparseCoder.from_pretrained(
-        path, activation=activation, multi_topk=multi_topk, device=device
     )
