@@ -62,17 +62,21 @@ def run(cfg: DictConfig) -> None:
     if not has_val:  # no held-out set (e.g. SFT) -> turn the val loop off entirely
         trainer_kw["limit_val_batches"] = 0
         trainer_kw["num_sanity_val_steps"] = 0
-    # Keep the 3 best checkpoints by val/loss (saved at each validation) plus a rolling last.ckpt for
-    # resume. Without a val set (e.g. SFT) there is no metric to rank, so keep only last.ckpt.
+    # Two checkpoint streams: (1) a frequent rolling last.ckpt (every ckpt_every_n_steps train steps)
+    # so a preempted/timed-out run resumes losing at most that many steps, independent of the much
+    # rarer validation cadence; (2) the 3 best by val/loss, saved at each validation (when a val set
+    # exists). The rolling callback alone owns last.ckpt (save_top_k=0 -> it only writes last.ckpt).
     ckpt_dir = out_dir / "checkpoints"
-    ckpt_cb = (
-        ModelCheckpoint(dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3, save_last=True)
-        if has_val
-        else ModelCheckpoint(dirpath=ckpt_dir, save_last=True)
-    )
+    every_n = int(cfg.get("ckpt_every_n_steps", 2000))
+    callbacks = [
+        ModelCheckpoint(dirpath=ckpt_dir, save_top_k=0, save_last=True, every_n_train_steps=every_n),
+        LearningRateMonitor(logging_interval="step"),
+    ]
+    if has_val:
+        callbacks.insert(0, ModelCheckpoint(dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3))
     trainer = L.Trainer(
         **trainer_kw,
-        callbacks=[ckpt_cb, LearningRateMonitor(logging_interval="step")],
+        callbacks=callbacks,
         logger=wandb_logger,
         default_root_dir=out_dir,
     )

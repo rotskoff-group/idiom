@@ -4,6 +4,7 @@ seed: 0
 device: auto                 # auto | cpu | cuda
 init_from: null              # weights-only warm start from a .ckpt (see sft.yaml)
 resume_from: null            # true mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
+ckpt_every_n_steps: 2000     # rolling last.ckpt cadence (preemption-safe resume; independent of val)
 wandb_project: idiom         # wandb project (needs `wandb login` / WANDB_API_KEY; WANDB_MODE=offline to disable)
 run_name: null               # optional wandb run name
 
