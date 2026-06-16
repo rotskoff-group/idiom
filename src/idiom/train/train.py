@@ -11,7 +11,7 @@ from pathlib import Path
 
 import hydra
 import lightning as L
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 from loguru import logger as log
 from omegaconf import DictConfig, OmegaConf
@@ -72,7 +72,7 @@ def run(cfg: DictConfig) -> None:
     )
     trainer = L.Trainer(
         **trainer_kw,
-        callbacks=[ckpt_cb],
+        callbacks=[ckpt_cb, LearningRateMonitor(logging_interval="step")],
         logger=wandb_logger,
         default_root_dir=out_dir,
     )

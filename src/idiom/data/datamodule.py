@@ -14,7 +14,7 @@ import lightning as L
 from torch.utils.data import DataLoader
 
 from idiom.data.dataset import RecordDataset, make_collate
-from idiom.data.io import read_records
+from idiom.data.record_store import open_or_build
 from idiom.data.tokenizer import Tokenizer
 
 
@@ -50,8 +50,10 @@ class RecordDataModule(L.LightningDataModule):
         self.test_set: RecordDataset | None = None
 
     def _build(self, path: str | Path) -> RecordDataset:
+        # open_or_build returns a memory-mapped RecordStore (auto-built once, DDP-safe), so every
+        # rank shares one copy via the OS page cache instead of each re-parsing the FASTA into RAM.
         return RecordDataset(
-            read_records(path),
+            open_or_build(path),
             self.tok,
             max_len=self.max_len,
             fim_full_prob=self.fim_full_prob,

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import random
 
+import numpy as np
 import torch
 from loguru import logger as log
 from torch.nn.utils.rnn import pad_sequence
@@ -26,6 +27,7 @@ from torch.utils.data import Dataset
 
 from idiom.data.fim import fim_132, fim_full
 from idiom.data.io import Record
+from idiom.data.record_store import RecordStore
 from idiom.data.tokenizer import Tokenizer
 
 # A full example is START + ``1{prefix}3{suffix}2{IDR}``: the 3 FIM markers + START over the
@@ -70,19 +72,29 @@ class RecordDataset(Dataset):
         self.completion_only = bool(completion_only)
         self._rng = random.Random(seed)
 
-        records = list(records)  # materialize (may be a generator) so we can filter + index
-        keep = max_protein_len(self.max_len)
-        # Filter on the full-context length (the longer variant) so any sampled example fits.
-        self.records = [r for r in records if len(r.full_seq) <= keep]
-        n_drop = len(records) - len(self.records)
-        if n_drop:
-            log.info(f"RecordDataset: dropped {n_drop} record(s) longer than max_len={self.max_len}")
+        keep = max_protein_len(self.max_len)  # filter on the full-context length so any sample fits
+        if isinstance(records, RecordStore):
+            # Memory-mapped store: never materialize Records; keep an index of the rows that fit.
+            self.store: RecordStore | None = records
+            self.records = None
+            self._keep = np.nonzero(records.seq_lengths() <= keep)[0]
+            n_total = len(records)
+            n_kept = len(self._keep)
+        else:
+            self.store = None
+            records = list(records)  # materialize (may be a generator) so we can filter + index
+            self.records = [r for r in records if len(r.full_seq) <= keep]
+            self._keep = None
+            n_total = len(records)
+            n_kept = len(self.records)
+        if n_total - n_kept:
+            log.info(f"RecordDataset: dropped {n_total - n_kept} record(s) longer than max_len={self.max_len}")
 
     def __len__(self) -> int:
-        return len(self.records)
+        return len(self._keep) if self.store is not None else len(self.records)
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        rec = self.records[i]
+        rec = self.store[int(self._keep[i])] if self.store is not None else self.records[i]
         variant = "full" if self._rng.random() < self.fim_full_prob else "132"  # per-sample augmentation
         x, y = record_to_example(rec, self.tok, variant=variant)
         if self.completion_only:

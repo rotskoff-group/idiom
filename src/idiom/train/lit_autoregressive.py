@@ -13,6 +13,7 @@ from dataclasses import asdict
 import lightning as L
 import torch
 import torch.nn.functional as F
+from lightning.pytorch.utilities import grad_norm
 
 from idiom.model.config import ModelConfig
 from idiom.model.transformer import IDiomTransformer
@@ -77,6 +78,11 @@ class LitAutoregressive(L.LightningModule):
         loss = self._masked_loss(self.model(x), y, mask)
         self.log("val/loss", loss, prog_bar=True, on_epoch=True, sync_dist=True)
         return loss
+
+    def on_before_optimizer_step(self, optimizer):
+        # Log per-parameter + total L2 gradient norms (grad_2.0_norm/*), matching the previous
+        # IDiom version's pretrain logging.
+        self.log_dict(grad_norm(self, norm_type=2))
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
