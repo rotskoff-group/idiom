@@ -15,7 +15,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from idiom.data.dataset import RecordDataset, make_collate
-from idiom.data.io import read_records
+from idiom.data.record_store import open_or_build
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.io import load_pretrained
 from idiom.sae.activation_store import ActivationStore
@@ -31,7 +31,7 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     model_cfg = model.cfg
 
     records = RecordDataset(
-        read_records(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len, fim_full_prob=cfg.data.fim_full_prob
+        open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len, fim_full_prob=cfg.data.fim_full_prob
     )
     record_loader = DataLoader(
         records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id)
