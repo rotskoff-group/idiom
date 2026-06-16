@@ -39,6 +39,7 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     store = ActivationStore(
         model, record_loader, cfg.layer, sae_batch_size=cfg.sae_batch_size,
         buffer_size=cfg.buffer_size, device=device, tokenizer=tok,
+        region=cfg.get("region", "all"),
     )
     lit = LitSAE(
         d_in=model_cfg.d_model,

@@ -49,6 +49,11 @@ class Tokenizer:
         self.start_id = self._stoi["<start>"]
         self.stop_id = self._stoi["<stop>"]
         self.mask_id = self._stoi["<mask>"]
+        # FIM marker ids (1=prefix, 2=middle/IDR opener, 3=suffix). The MIDDLE marker splits a
+        # FIM string into flanks (residues before it) and the IDR (residues after it).
+        self.fim_prefix_id = self._stoi["1"]
+        self.fim_middle_id = self._stoi["2"]
+        self.fim_suffix_id = self._stoi["3"]
 
     # --- validation ---
     def is_canonical(self, seq: str) -> bool:

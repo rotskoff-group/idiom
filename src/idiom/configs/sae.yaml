@@ -5,7 +5,8 @@ device: auto
 model_ckpt: ???              # pretrained IDiom checkpoint; the model architecture is read from it
 resume_from: null            # mid-run resume (optimizer/step/RNG) from a .ckpt
 
-layer: 8                     # residual-stream block to train the SAE on
+layer: 8                     # residual-stream block to train the SAE on (must be < n_layers)
+region: all                  # residues feeding the SAE: all | idr | non_idr (split at the '2' marker)
 
 data:
   fasta: ???                 # record FASTA whose activations feed the SAE

@@ -27,6 +27,7 @@ class ActivationStore(IterableDataset):
         device: str | torch.device = "cpu",
         tokenizer: Tokenizer | None = None,
         drop_markers: bool = True,
+        region: str = "all",
     ) -> None:
         self.model = model.eval().to(device)
         self.record_loader = record_loader  # yields (input, target, mask) or input tokens [B, L]
@@ -36,6 +37,7 @@ class ActivationStore(IterableDataset):
         self.device = torch.device(device)
         self.tok = tokenizer or Tokenizer()
         self.drop_markers = drop_markers
+        self.region = region  # "all" | "idr" | "non_idr" (residues kept relative to the '2' marker)
 
     def _input_tokens(self, batch) -> torch.Tensor:
         x = batch[0] if isinstance(batch, (tuple, list)) else batch  # RecordDataset yields a triple
@@ -44,7 +46,8 @@ class ActivationStore(IterableDataset):
     @torch.no_grad()
     def _acts(self, tokens: torch.Tensor) -> torch.Tensor:
         out = extract_activations(
-            self.model, tokens, [self.layer], tokenizer=self.tok, drop_markers=self.drop_markers
+            self.model, tokens, [self.layer], tokenizer=self.tok,
+            drop_markers=self.drop_markers, region=self.region,
         )
         return out[self.layer].values  # [N_residues, d_model]
 

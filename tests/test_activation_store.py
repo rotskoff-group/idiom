@@ -7,6 +7,7 @@ from idiom.data.dataset import RecordDataset, make_collate
 from idiom.data.io import Record
 from idiom.data.tokenizer import Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
+from idiom.model.activations import extract_activations
 from idiom.sae import SparseCoder
 from idiom.sae.activation_store import ActivationStore
 from idiom.sae.lit_sae import LitSAE
@@ -33,6 +34,29 @@ def test_store_yields_dmodel_batches():
 
 def test_mean_activation_shape():
     assert _store().mean_activation(max_batches=2).shape == (TINY.d_model,)
+
+
+def test_region_split_idr_vs_non_idr():
+    """idr + non_idr partition all residues; counts match the FIM span (9 IDR + 8 flank / seq)."""
+    model = IDiomTransformer(TINY)
+    ds = RecordDataset(RECS, TOK, max_len=64, fim_full_prob=1.0)  # every sample is 'full'
+    x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
+    n_all = extract_activations(model, x, [1], tokenizer=TOK, region="all")[1].values.size(0)
+    n_idr = extract_activations(model, x, [1], tokenizer=TOK, region="idr")[1].values.size(0)
+    n_non = extract_activations(model, x, [1], tokenizer=TOK, region="non_idr")[1].values.size(0)
+    assert n_idr + n_non == n_all
+    # full_seq len 17, IDR=[3,12) -> 9 IDR residues, 8 flank residues per sequence, x8 sequences
+    assert n_idr == 9 * 8 and n_non == 8 * 8
+
+
+def test_region_on_denovo_132_format():
+    """de-novo '132{IDR}' has no flanks: region=idr keeps all 9 IDR/seq, non_idr keeps none."""
+    model = IDiomTransformer(TINY)
+    ds = RecordDataset(RECS, TOK, max_len=64, fim_full_prob=0.0)  # every sample is '132'
+    x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
+    n_idr = extract_activations(model, x, [1], tokenizer=TOK, region="idr")[1].values.size(0)
+    n_non = extract_activations(model, x, [1], tokenizer=TOK, region="non_idr")[1].values.size(0)
+    assert n_idr == 9 * 8 and n_non == 0
 
 
 def test_lit_sae_step_on_streamed_acts():
