@@ -78,8 +78,9 @@ class LitGRPO(L.LightningModule):
         for i in completion.tolist():
             if i in (self.tok.stop_id, self.tok.pad_id):
                 break  # completion ends at the first STOP/PAD
-            ids.append(i)
-        return self.tok.decode(ids)  # residue string (controls already skipped by decode)
+            if self.tok.is_residue(i):
+                ids.append(i)  # residues only; drop stray FIM markers (1/2/3) the model may emit
+        return self.tok.decode(ids)  # clean residue string for the reward fn (e.g. ProtGPS/ESM)
 
     def training_step(self, batch: torch.Tensor, batch_idx: int):
         prompts = batch  # [B, P], equal-length prompts
