@@ -1,6 +1,7 @@
-"""SI figure: amino-acid composition of IDR vs non-IDR regions of the filtered training corpus.
+"""SI figure: amino-acid composition of IDR vs non-IDR regions of the final training corpus.
 
-Runs on the curation stage-3 output FASTA (length + fully-low-pLDDT filtered, `_IDR_x-y` records).
+Runs on the final curation FASTA (length + fully-low-pLDDT filtered, DisProt-deduped, signal-peptide
+trimmed; `_IDR_x-y` records).
 Records are grouped by protein so a protein's other IDRs are excluded from its non-IDR residues.
 Left: per-residue AA frequency, IDR vs non-IDR (ordered/flanking). Right: log2 enrichment
 (IDR / non-IDR), the compositional signature of disorder. AAs sorted by enrichment.
@@ -42,7 +43,7 @@ def iter_records(path):
 
 DEFAULT_FASTA = (
     "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data/pretraining/AFDB/"
-    "intermediate/AFDB_IDR_90_len1020_rm_full_low_plddt.fasta"
+    "intermediate/AFDB_IDR_90_len1020_rm_full_low_plddt_dedup_disprot_signalp.fasta"
 )
 
 

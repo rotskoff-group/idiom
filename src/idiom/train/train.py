@@ -58,12 +58,21 @@ def run(cfg: DictConfig) -> None:
     )
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
     trainer_kw = OmegaConf.to_container(cfg.trainer, resolve=True)
-    if not cfg.data.get("val_fasta"):  # no held-out set (e.g. SFT) -> turn the val loop off entirely
+    has_val = bool(cfg.data.get("val_fasta"))
+    if not has_val:  # no held-out set (e.g. SFT) -> turn the val loop off entirely
         trainer_kw["limit_val_batches"] = 0
         trainer_kw["num_sanity_val_steps"] = 0
+    # Keep the 3 best checkpoints by val/loss (saved at each validation) plus a rolling last.ckpt for
+    # resume. Without a val set (e.g. SFT) there is no metric to rank, so keep only last.ckpt.
+    ckpt_dir = out_dir / "checkpoints"
+    ckpt_cb = (
+        ModelCheckpoint(dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3, save_last=True)
+        if has_val
+        else ModelCheckpoint(dirpath=ckpt_dir, save_last=True)
+    )
     trainer = L.Trainer(
         **trainer_kw,
-        callbacks=[ModelCheckpoint(dirpath=out_dir / "checkpoints", save_last=True)],
+        callbacks=[ckpt_cb],
         logger=wandb_logger,
         default_root_dir=out_dir,
     )
