@@ -73,7 +73,12 @@ def run(cfg: DictConfig) -> None:
         LearningRateMonitor(logging_interval="step"),
     ]
     if has_val:
-        callbacks.insert(0, ModelCheckpoint(dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3))
+        # auto_insert_metric_name=False + explicit underscore filename -> "epoch_0_step_25000.ckpt"
+        # instead of Lightning's default "epoch=0-step=25000.ckpt" (the '=' is a pain to shell-quote).
+        callbacks.insert(0, ModelCheckpoint(
+            dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3,
+            filename="epoch_{epoch}_step_{step}", auto_insert_metric_name=False,
+        ))
     trainer = L.Trainer(
         **trainer_kw,
         callbacks=callbacks,
