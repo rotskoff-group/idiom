@@ -81,8 +81,9 @@ class RecordDataModule(L.LightningDataModule):
     def train_dataloader(self) -> DataLoader:
         return self._loader(self.train_set, shuffle=True)
 
-    def val_dataloader(self) -> DataLoader:
-        return self._loader(self.val_set, shuffle=False)
+    def val_dataloader(self) -> DataLoader | None:
+        # None -> Lightning skips validation entirely (e.g. SFT with no held-out set)
+        return self._loader(self.val_set, shuffle=False) if self.val_set is not None else None
 
-    def test_dataloader(self) -> DataLoader:
-        return self._loader(self.test_set, shuffle=False)
+    def test_dataloader(self) -> DataLoader | None:
+        return self._loader(self.test_set, shuffle=False) if self.test_set is not None else None

@@ -27,3 +27,13 @@ def test_datamodule_batches(tmp_path):
     # every row starts with START; padding uses pad_id.
     assert (x[:, 0] == TOK.start_id).all()
     assert x.max().item() <= TOK.mask_id
+
+
+def test_no_val_fasta_skips_validation(tmp_path):
+    # SFT often has no held-out set: val_dataloader must be None so Lightning skips validation
+    tr = tmp_path / "train.fasta"
+    tr.write_text(TRAIN)
+    dm = RecordDataModule(tr, None, tokenizer=TOK, batch_size=2, max_len=64, num_workers=0)
+    dm.setup()
+    assert dm.val_set is None
+    assert dm.val_dataloader() is None

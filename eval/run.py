@@ -66,6 +66,11 @@ def main() -> None:
     results: dict = {"n_generated": len(gens)}
     results["validity"] = validity_stats(gens, args.max_new_tokens)
 
+    # Characterization (features/disorder/novelty) skips empty generations — a length-0 "IDR" is a
+    # degenerate sample (already counted by validity) and crashes metapredict/sparrow/mmseqs.
+    gens = [g for g in gens if g]
+    results["n_characterized"] = len(gens)
+
     ref_seqs = [s for _, s in read_fasta(args.reference)] if args.reference else None
 
     # 2. sparrow features + W1 vs reference

@@ -57,8 +57,12 @@ def run(cfg: DictConfig) -> None:
         project=cfg.get("wandb_project", "idiom"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
+    trainer_kw = OmegaConf.to_container(cfg.trainer, resolve=True)
+    if not cfg.data.get("val_fasta"):  # no held-out set (e.g. SFT) -> turn the val loop off entirely
+        trainer_kw["limit_val_batches"] = 0
+        trainer_kw["num_sanity_val_steps"] = 0
     trainer = L.Trainer(
-        **OmegaConf.to_container(cfg.trainer, resolve=True),
+        **trainer_kw,
         callbacks=[ModelCheckpoint(dirpath=out_dir / "checkpoints", save_last=True)],
         logger=wandb_logger,
         default_root_dir=out_dir,
