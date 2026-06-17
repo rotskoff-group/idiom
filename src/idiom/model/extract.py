@@ -1,4 +1,4 @@
-"""Activation export for downstream use (D14). FASTA in, embeddings out — ESM-`extract.py` style.
+"""Activation extraction for downstream use (D14). FASTA in, embeddings out — ESM-`extract.py` style.
 
 Reuses the SAE's extractor so exported vectors are identical to what the SAE trains on. Each
 record is FIM-formatted (full context), the residual stream is taken at the requested layer(s),

@@ -22,7 +22,7 @@ from idiom.data.fim import fim_prompt
 from idiom.data.io import read_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.config import ModelConfig
-from idiom.model.export import embed_fasta
+from idiom.model.extract import embed_fasta
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
 from idiom.utils.device import resolve_device
@@ -126,7 +126,7 @@ class IDiom:
 
     # --- embeddings ---
     def embed(self, fasta, layers: list[int], *, pool: str = "mean"):
-        """Residual-stream embeddings (D14). See ``idiom.model.export.embed_fasta``."""
+        """Residual-stream embeddings (D14). See ``idiom.model.extract.embed_fasta``."""
         return embed_fasta(self.model, fasta, layers, pool=pool, tokenizer=self.tok, device=self.device)
 
 

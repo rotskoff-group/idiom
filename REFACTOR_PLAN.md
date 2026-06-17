@@ -247,7 +247,7 @@ Legend: ☐ todo · ◐ in progress · ☑ done
 - ☑ `sae/activation_store.py`: streaming shuffling buffer over records (on `model/activations.py`),
   residue-only, regenerated each epoch — **no h5**. `model/io.py::load_pretrained` (ckpt loader).
 - ☑ `idiom_sae` entrypoint + flat `configs/sae.yaml` (frozen model → store → LitSAE → `ae.pt`).
-- ☑ `idiom_extract` + `model/export.py::embed_fasta` (D14): FASTA-first, multi-layer,
+- ☑ `idiom_extract` + `model/extract.py::embed_fasta` (D14): FASTA-first, multi-layer,
   `--pool mean|none`, residue-aligned, written as `.npy` + `index.csv`. Same extractor as the store.
 - ☑ Rewired `sae/fidelity.py` + `sae/steering/` onto `IDiomTransformer` (hooks on `model.blocks`,
   `Tokenizer.residue_mask`, steered generation via the KV-cached `generate`). No legacy `idiom.nn`
@@ -348,7 +348,7 @@ Legend: ☐ todo · ◐ in progress · ☑ done
   **3.3× (12L) / 4.8× (24L)** vs uncached generation. ProtGPS reward + RL runs are operator/GPU.
 - **2026-06-14** — **P5 streaming SAE + export.** `sae/activation_store.py` (shuffling buffer over
   records, residue-only, no h5) + `model/io.py::load_pretrained`; `idiom_sae` entrypoint + `sae.yaml`.
-  `model/export.py::embed_fasta` + `idiom_extract` (D14, FASTA→`.npy`+index, mean/per-residue,
+  `model/extract.py::embed_fasta` + `idiom_extract` (D14, FASTA→`.npy`+index, mean/per-residue,
   residue-aligned). **55/55 CPU green.** Remaining P5: fidelity/steering rewire to the new model.
 - **2026-06-14** — Rewired `sae/fidelity.py` + `sae/steering/` onto `IDiomTransformer` (no legacy
   `idiom.nn` refs left in `idiom.sae`); restored the Streamlit `feature_viewer`. **Corrected GRPO

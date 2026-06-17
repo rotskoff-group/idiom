@@ -1,9 +1,9 @@
-"""P5 export tests (CPU-only): FASTA -> embeddings (mean + per-residue), files written."""
+"""P5 extract tests (CPU-only): FASTA -> embeddings (mean + per-residue), files written."""
 
 import numpy as np
 
 from idiom.model import IDiomTransformer, ModelConfig
-from idiom.model.export import embed_fasta, write_embeddings
+from idiom.model.extract import embed_fasta, write_embeddings
 
 TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=64)
 FASTA = ">A_IDR_3-9\nMEDSKVDNRPQACDEFG\n>B_IDR_2-7\nACDEFGHIKLMN\n"
