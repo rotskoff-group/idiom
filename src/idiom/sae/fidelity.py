@@ -11,11 +11,11 @@ compute next-token NLL three ways at the SAE's layer (via forward hooks on the b
 
 A perfect SAE recovers ~100%; the information-free baseline recovers 0%.
 
-By default (``residue_only=True``) the substitution and ablation baseline are applied only at
-real-residue positions — the ones the SAE was trained on. The extractor drops START / FIM-marker
-/ control activations, so editing them feeds the SAE out-of-distribution inputs that, through
-causal attention, corrupt predictions across the sequence and badly understate fidelity (e.g.
-21% vs 80% recovered for the same checkpoint). See :class:`idiom.data.tokenizer.Tokenizer`.
+The substitution and ablation baseline are applied only at the SAE's training ``region`` (via
+:meth:`~idiom.data.tokenizer.Tokenizer.region_mask`) — the positions the SAE was trained on.
+The extractor drops START / FIM-marker / control activations, so editing them feeds the SAE
+out-of-distribution inputs that, through causal attention, corrupt predictions across the
+sequence and badly understate fidelity (e.g. 21% vs 80% recovered for the same checkpoint).
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def compute_fidelity(
     pad_id: int,
     tokenizer: Tokenizer | None = None,
     baseline: torch.Tensor | None = None,
-    residue_only: bool = True,
+    region: str = "all",
     device: str | torch.device | None = None,
 ) -> FidelityResult:
     """Substitution-loss fidelity over ``(input, target, mask)`` batches (``RecordDataset``).
@@ -67,9 +67,12 @@ def compute_fidelity(
         layer: residual-stream layer the SAE was trained on.
         batches: iterable of ``(input, target, loss_mask)``.
         pad_id: ignore index for the next-token loss (tokenizer PAD = 23).
-        tokenizer: required when ``residue_only`` (builds the residue mask).
+        tokenizer: builds the per-forward region mask (defaults to a fresh :class:`Tokenizer`).
         baseline: ablation vector; defaults to ``sae.b_dec`` (mean-ablation).
-        residue_only: confine the SAE/ablation edit to real-residue positions (default True).
+        region: the SAE's training region (``"all"`` | ``"idr"`` | ``"non_idr"``). The SAE /
+            ablation edit is always confined to it — editing positions the SAE never saw (markers,
+            START, the wrong side of the ``2``) feeds it out-of-distribution inputs that corrupt
+            predictions through causal attention and badly understate fidelity.
     """
     device = device or next(model.parameters()).device
     sae = sae.to(device).eval()
@@ -81,7 +84,6 @@ def compute_fidelity(
     ce = torch.nn.CrossEntropyLoss(ignore_index=pad_id, reduction="sum")
     sums = {"clean": 0.0, "sae": 0.0, "ablate": 0.0}
     n_tokens = 0
-    mask_tok = tok if residue_only else None  # passed to steering -> per-forward residue mask
 
     def nll(x: torch.Tensor, y: torch.Tensor) -> float:
         return ce(model(x).permute(0, 2, 1), y).item()
@@ -91,9 +93,9 @@ def compute_fidelity(
         n_tokens += int((y != pad_id).sum().item())
 
         sums["clean"] += nll(x, y)
-        with steering(model, layer, sae_edit_hook(sae, _identity_edit), tokenizer=mask_tok):
+        with steering(model, layer, sae_edit_hook(sae, _identity_edit), tokenizer=tok, region=region):
             sums["sae"] += nll(x, y)
-        with steering(model, layer, substitute_hook(baseline), tokenizer=mask_tok):
+        with steering(model, layer, substitute_hook(baseline), tokenizer=tok, region=region):
             sums["ablate"] += nll(x, y)
 
     if n_tokens == 0:

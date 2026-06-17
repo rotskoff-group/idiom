@@ -1,20 +1,19 @@
 """Forward-hook injection into IDiom's residual stream.
 
 Each IDiom transformer block returns its residual-stream output ``x`` of shape
-``[B, L, d_model]``. A PyTorch forward hook on ``model.transformer.blocks[layer]`` can
-return a modified tensor, which becomes the input to the next block — a clean way to
-patch / steer the residual stream without touching idiom's source (no nnsight needed,
-unlike InterPLM's ESM path).
+``[B, L, d_model]``. A PyTorch forward hook on ``model.blocks[layer]`` can return a modified
+tensor, which becomes the input to the next block — a clean way to patch / steer the residual
+stream without touching idiom's source (no nnsight needed, unlike InterPLM's ESM path).
 
 Two steering primitives:
 - :func:`add_direction_hook`   add a fixed vector (e.g. a scaled SAE decoder column).
 - :func:`sae_edit_hook`        encode with the SAE, edit latents, decode, and substitute.
 
-SAEs are trained only on real-residue activations (START / FIM-marker / control positions
-are dropped at extraction time), so edits should usually be confined to residue positions.
-Use :func:`restrict_to_mask` for a fixed per-batch mask, or pass a ``tokenizer`` to
-:func:`steering` to recompute the residue mask on every forward (autoregressive generation).
-See :class:`idiom.data.tokenizer.Tokenizer`.
+SAEs are trained only on a region of the residual stream (residues, or just the IDR / flanks;
+START / FIM-marker / control positions are always dropped), so edits are confined to that same
+region. Pass a ``tokenizer`` (and optional ``region``) to :func:`steering` and it recomputes the
+:meth:`~idiom.data.tokenizer.Tokenizer.region_mask` on every forward, which is what
+autoregressive generation needs as the sequence grows.
 """
 
 from __future__ import annotations
@@ -66,17 +65,6 @@ def sae_edit_hook(sae, edit_fn: Callable[[torch.Tensor], torch.Tensor]) -> Calla
     return hook
 
 
-def clamp_feature_edit(feature_idx: int, value: float) -> Callable[[torch.Tensor], torch.Tensor]:
-    """Return an ``edit_fn`` that sets latent ``feature_idx`` to ``value`` everywhere."""
-
-    def edit(f: torch.Tensor) -> torch.Tensor:
-        f = f.clone()
-        f[..., feature_idx] = value
-        return f
-
-    return edit
-
-
 def clamp_features_edit(
     feature_idxs: Sequence[int], values: Sequence[float]
 ) -> Callable[[torch.Tensor], torch.Tensor]:
@@ -98,34 +86,17 @@ def clamp_features_edit(
     return edit
 
 
-def restrict_to_mask(hook: Callable, mask: torch.Tensor) -> Callable:
-    """Wrap ``hook`` so its edit applies only where ``mask`` (``[B, L]`` bool) is ``True``.
-
-    Positions where ``mask`` is ``False`` keep their original (clean) residual. Used to
-    confine an SAE substitution/steering edit to the real-residue positions the SAE was
-    trained on (see :class:`idiom.data.tokenizer.Tokenizer`), since the SAE never saw
-    START / FIM-marker / control activations. ``mask`` is a fixed per-batch tensor; for the
-    dynamic per-forward case (autoregressive generation) pass a ``tokenizer`` to
-    :func:`steering` instead.
-    """
-    m = mask.unsqueeze(-1)  # [B, L, 1]
-
-    def wrapped(module, inputs, output):
-        edited = hook(module, inputs, output)
-        return torch.where(m.to(output.device), edited, output)
-
-    return wrapped
-
-
 @contextmanager
-def steering(model, layer: int, hook: Callable, *, tokenizer=None):
+def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str = "all"):
     """Register ``hook`` on ``model.blocks[layer]`` (an :class:`IDiomTransformer`) for the block.
 
-    When ``tokenizer`` is given, the edit is confined to real-residue positions: each forward
-    the residue mask is recomputed from the model's input tokens (``tokenizer.residue_mask``),
-    so START / FIM-marker / control positions pass through unmodified — keeping the SAE on the
-    distribution it was trained on (fidelity eval and autoregressive generation, where the
-    token sequence grows each step). With ``tokenizer=None`` the hook applies at every position.
+    When ``tokenizer`` is given, the edit is confined to the SAE's training region: each forward
+    the mask is recomputed from the model's input tokens via
+    :meth:`~idiom.data.tokenizer.Tokenizer.region_mask` (``region``), so START / FIM-marker /
+    control positions — and, for ``idr``/``non_idr``, the wrong side of the ``2`` marker — pass
+    through unmodified. This keeps the SAE on the distribution it was trained on and tracks the
+    growing token sequence during autoregressive generation. With ``tokenizer=None`` the hook
+    applies at every position.
 
     Example::
 
@@ -147,7 +118,7 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None):
             tokens = latest.get("tokens")
             if tokens is None or tokens.shape[1] != output.shape[1]:
                 return edited  # can't align tokens to positions; fall back to unmasked edit
-            mask = tokenizer.residue_mask(tokens).unsqueeze(-1).to(output.device)
+            mask = tokenizer.region_mask(tokens, region=region).unsqueeze(-1).to(output.device)
             return torch.where(mask, edited, output)
 
         hook = _masked

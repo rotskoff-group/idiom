@@ -1,7 +1,8 @@
 """SAE training entrypoint (``idiom_sae``): frozen IDiom -> streaming activations -> top-k SAE.
 
-Activations are generated on the fly by the :class:`ActivationStore` (no h5, D3). ``build``
-wires the frozen model + record source + store + ``LitSAE``; ``run`` fits and saves ``ae.pt``.
+Activations are generated on the fly by the :class:`ActivationStore` (no h5). ``build`` wires the
+frozen model + record source + store + ``LitSAE``; ``run`` fits and writes the release dir
+(``sae_config.json`` + ``sae.safetensors``, with ``host_model`` / ``layer`` / ``region`` recorded).
 """
 
 from __future__ import annotations
@@ -18,9 +19,9 @@ from idiom.data.dataset import RecordDataset, make_collate
 from idiom.data.record_store import open_or_build
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.io import load_pretrained
-from idiom.sae.activation_store import ActivationStore
 from idiom.sae.io import save_sae
-from idiom.sae.lit_sae import LitSAE
+from idiom.sae.training.activation_store import ActivationStore
+from idiom.sae.training.lit_sae import LitSAE
 from idiom.utils.device import resolve_device
 
 
@@ -73,11 +74,14 @@ def run(cfg: DictConfig) -> None:
         **OmegaConf.to_container(cfg.trainer, resolve=True), logger=wandb_logger, default_root_dir=out_dir
     )
     trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
-    # canonical SAE release (host_model + layer recorded): loads via idiom.IDiomSAE.from_pretrained
-    save_sae(lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer)
+    # canonical SAE release (host_model + layer + region recorded): loads via IDiomSAE.from_pretrained
+    save_sae(
+        lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer,
+        region=cfg.get("region", "all"),
+    )
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="sae")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="sae")
 def main(cfg: DictConfig) -> None:
     run(cfg)
 

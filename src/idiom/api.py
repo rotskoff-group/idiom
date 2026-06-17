@@ -144,11 +144,13 @@ class IDiomSAE:
         fid   = sae.fidelity(records_fasta)
     """
 
-    def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None):
+    def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None,
+                 region: str = "all"):
         self.sae = sae.eval().to(model.device)
         self.host = model
         self.layer = int(layer)
         self.host_model = host_model
+        self.region = region  # the residual-stream slice this SAE was trained on; applied everywhere
 
     # convenience pass-throughs to the host model
     @property
@@ -181,24 +183,28 @@ class IDiomSAE:
                     f"{d} records no host_model; pass model=IDiom.from_pretrained(...) explicitly."
                 )
             model = IDiom.load(cfg["host_model"], device=device)
-        return cls(sae, model, cfg["layer"], host_model=cfg.get("host_model"))
+        return cls(sae, model, cfg["layer"], host_model=cfg.get("host_model"),
+                   region=cfg.get("region", "all"))
 
     def save_pretrained(self, out_dir, *, host_model: str | None = None) -> Path:
         """Write the release dir (``sae_config.json`` + ``sae.safetensors``); ``host_model`` (repo id
         / path) is recorded so the SAE can later self-load its host."""
         from idiom.sae.io import save_sae  # noqa: PLC0415
 
-        return save_sae(self.sae, out_dir, host_model=host_model or self.host_model, layer=self.layer)
+        return save_sae(self.sae, out_dir, host_model=host_model or self.host_model,
+                        layer=self.layer, region=self.region)
 
     # --- feature activations ---
     @torch.no_grad()
-    def encode(self, fasta, *, pool: str = "mean", idr_only: bool = True):
+    def encode(self, fasta, *, pool: str = "mean", region: str | None = None):
         """SAE feature activations for each record's residues.
 
+        ``region`` (``all`` | ``idr`` | ``non_idr``) defaults to the SAE's training region.
         ``pool="none"`` → ``(acts[N_res, num_latents], index)`` per residue (index rows carry
         ``accession``/``source_pos``/``is_idr``). ``pool="mean"`` → ``(acts[N_seq, num_latents],
-        accessions)`` averaged over each record's IDR residues (or all residues if ``idr_only=False``).
+        accessions)`` averaged over each record's residues within ``region``.
         """
+        region = region or self.region
         emb = embed_fasta(self.model, fasta, [self.layer], pool="none", tokenizer=self.tok, device=self.device)
         values, index = emb[self.layer]
         x = torch.from_numpy(values).to(self.device)
@@ -209,7 +215,8 @@ class IDiomSAE:
 
         rows: dict[str, list[int]] = {}
         for i, row in enumerate(index):
-            if idr_only and not row.get("is_idr", True):
+            is_idr = row.get("is_idr", True)
+            if (region == "idr" and not is_idr) or (region == "non_idr" and is_idr):
                 continue
             rows.setdefault(row["accession"], []).append(i)
         accs = list(rows)
@@ -220,10 +227,10 @@ class IDiomSAE:
     def build_feature_dataset(self, fasta, out_dir, *, batch_size: int = 16) -> Path:
         """Write the offline per-residue feature-activation dataset (for the feature viewer)."""
         from idiom.data.io import read_records  # noqa: PLC0415
-        from idiom.sae.build_feature_dataset import build_feature_dataset as _bfd  # noqa: PLC0415
+        from idiom.sae.features.build_feature_dataset import build_feature_dataset as _bfd  # noqa: PLC0415
 
         return _bfd(self.model, self.sae, read_records(fasta), self.layer, out_dir,
-                    tokenizer=self.tok, device=self.device, batch_size=batch_size)
+                    tokenizer=self.tok, device=self.device, batch_size=batch_size, region=self.region)
 
     # --- steering ---
     @torch.no_grad()
@@ -239,7 +246,7 @@ class IDiomSAE:
         out = steer_generation(
             self.model, self.sae, spec, prompt_tokens=prompt_tokens, n_samples=n,
             max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
-            tokenizer=self.tok, generator=gen,
+            tokenizer=self.tok, region=self.region, generator=gen,
         )
         return [self.host._decode_idr(row) for row in out]
 
@@ -258,7 +265,7 @@ class IDiomSAE:
                            fim_full_prob=fim_full_prob)
         dl = DataLoader(ds, batch_size=batch_size, collate_fn=make_collate(self.tok.pad_id))
         return compute_fidelity(self.model, self.sae, self.layer, dl, pad_id=self.tok.pad_id,
-                                tokenizer=self.tok, device=self.device)
+                                tokenizer=self.tok, region=self.region, device=self.device)
 
 
 def _write_fasta(records: list[tuple[str, str]], path) -> Path:

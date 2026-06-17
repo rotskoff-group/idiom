@@ -51,21 +51,8 @@ def extract_activations(
     tok = tokenizer or Tokenizer()
     _, hidden = model(tokens, return_hidden_states=True)
 
-    # Residues are ids < n_residues; residues+markers are ids < n_residues+n_fim; controls are
-    # the rest (>= 23) and are always excluded.
-    cutoff = tok.n_residues if drop_markers else tok.n_residues + tok.n_fim
-    keep = tokens < cutoff  # [B, L] bool
-    if region != "all":
-        if region not in ("idr", "non_idr"):
-            raise ValueError(f"region must be 'all', 'idr', or 'non_idr', got {region!r}")
-        middle = tokens == tok.fim_middle_id  # [B, L] the '2' that opens the IDR
-        has_mid = middle.any(dim=1)
-        mid_pos = torch.where(  # index of the '2' per row; sentinel L (=no IDR boundary) if absent
-            has_mid, middle.int().argmax(dim=1), torch.full((tokens.size(0),), tokens.size(1),
-                                                             device=tokens.device, dtype=torch.long)
-        )
-        after = torch.arange(tokens.size(1), device=tokens.device)[None, :] > mid_pos[:, None]
-        keep = keep & (after if region == "idr" else (~after & has_mid[:, None]))
+    # Single shared selector (token class + IDR region) — identical to what fidelity/steering use.
+    keep = tok.region_mask(tokens, region=region, drop_markers=drop_markers)  # [B, L] bool
     seq_idx, pos_idx = keep.nonzero(as_tuple=True)  # flat indices of kept tokens
 
     out: dict[int, LayerActivations] = {}

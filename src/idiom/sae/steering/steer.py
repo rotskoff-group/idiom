@@ -97,7 +97,7 @@ def steer_generation(
     temperature: float = 1.0,
     top_k: int | None = None,
     top_p: float | None = None,
-    restrict_to_residues: bool = True,
+    region: str = "all",
     tokenizer=None,
     generator=None,
 ):
@@ -114,9 +114,10 @@ def steer_generation(
             Repeated to ``n_samples``. START is prepended by the sampler.
         n_samples: number of sequences to generate.
         max_new_tokens / temperature / top_k / top_p: sampler settings.
-        restrict_to_residues: if ``True`` (default), only steer real-residue positions — the
-            SAE was trained solely on residue activations, so steering markers/START would
-            apply it off-distribution. Recomputed each step as the sequence grows.
+        region: the SAE's training region (``"all"`` | ``"idr"`` | ``"non_idr"``). The edit is
+            always confined to it — the SAE was trained solely on those residue activations, so
+            steering markers/START (or the wrong side of the ``2``) would apply it
+            off-distribution. Recomputed each step as the sequence grows.
 
     Returns:
         Generated token ids ``[n_samples, T]`` (decode with the tokenizer).
@@ -133,8 +134,7 @@ def steer_generation(
     prompts = prompt.unsqueeze(0).repeat(n_samples, 1).to(device)
 
     hook = build_steering_hook(sae, spec)
-    mask_tok = tok if restrict_to_residues else None
-    with steering(model, spec.layer, hook, tokenizer=mask_tok):
+    with steering(model, spec.layer, hook, tokenizer=tok, region=region):
         return generate(
             model, prompts, max_new_tokens=max_new_tokens, temperature=temperature,
             top_k=top_k, top_p=top_p, tokenizer=tok, generator=generator,

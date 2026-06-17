@@ -31,8 +31,13 @@ def build_feature_dataset(
     tokenizer: Tokenizer | None = None,
     device: str | torch.device = "cpu",
     batch_size: int = 16,
+    region: str = "all",
 ) -> Path:
-    """Encode records through ``sae`` at ``layer`` and write the feature dataset to ``out_dir``."""
+    """Encode records through ``sae`` at ``layer`` and write the feature dataset to ``out_dir``.
+
+    ``region`` (``all`` | ``idr`` | ``non_idr``) is the SAE's training region; the dataset is
+    built over exactly those residues so the features match what the SAE learned.
+    """
     tok = tokenizer or Tokenizer()
     model = model.eval().to(device)
     sae = sae.eval().to(device)
@@ -46,7 +51,9 @@ def build_feature_dataset(
         token_lists = [torch.tensor([tok.start_id, *tok.encode(s)]) for s in seqs]
         tokens = pad_sequence(token_lists, batch_first=True, padding_value=tok.pad_id).to(device)
 
-        acts = extract_activations(model, tokens, [layer], tokenizer=tok, drop_markers=True)[layer]
+        acts = extract_activations(
+            model, tokens, [layer], tokenizer=tok, drop_markers=True, region=region
+        )[layer]
         top_val, top_ix, _ = sae.encode(acts.values.to(device))  # [N_res, k]
 
         top_idx_parts.append(top_ix.cpu().to(torch.int32).numpy())
@@ -63,7 +70,9 @@ def build_feature_dataset(
     np.save(out / "pos_idx.npy", np.concatenate(pos_parts))
     (out / "strings.json").write_text(json.dumps(strings))
     (out / "meta.json").write_text(
-        json.dumps({"k": int(sae.k), "num_latents": int(sae.num_latents), "layer": int(layer)})
+        json.dumps(
+            {"k": int(sae.k), "num_latents": int(sae.num_latents), "layer": int(layer), "region": region}
+        )
     )
     return out
 

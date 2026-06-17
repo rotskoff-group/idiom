@@ -6,7 +6,7 @@ import torch
 from omegaconf import OmegaConf
 
 from idiom.model import IDiomTransformer, ModelConfig
-from idiom.sae.train_sae import build
+from idiom.sae.training.train_sae import build
 
 CFG = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=64)
 

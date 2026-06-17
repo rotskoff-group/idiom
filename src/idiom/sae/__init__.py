@@ -1,17 +1,19 @@
-"""idiom.sae — top-k sparse autoencoders for interpreting IDiom (was ``idiomatics``).
+"""idiom.sae — top-k sparse autoencoders for interpreting IDiom.
 
-v2: the ``SparseCoder`` / ``LitSAE`` port plus a streaming ``ActivationStore`` that runs
-the frozen IDiom model live during SAE training (residue-only positions, no activation
-h5). Fidelity and steering hook the model directly — the old ``idiom_interface`` bridge
-is gone.
+An SAE is defined by the slice of a host model's residual stream it reads: ``(host_model, layer,
+region)``. That triple is recorded in the release (:mod:`idiom.sae.io`) and applied identically at
+every stage, so the autoencoder is always used on the distribution it was trained on.
 
-Status: P5 — ``sparse_coder`` / ``lit_sae`` + streaming ``activation_store`` (no h5), and
-``fidelity`` / ``steering`` rewired onto :class:`IDiomTransformer` (hooks on ``model.blocks``,
-residue masking via ``Tokenizer.residue_mask``, steered generation via the KV-cached sampler).
-See REFACTOR_PLAN.md (P5).
+Layout:
+- :mod:`idiom.sae.sparse_coder` — the top-k ``SparseCoder`` model;
+- :mod:`idiom.sae.io` — the release format (``sae_config.json`` + ``sae.safetensors``);
+- :mod:`idiom.sae.training` — streaming ``ActivationStore`` + ``LitSAE`` + the ``idiom_sae`` entrypoint;
+- :mod:`idiom.sae.features` — the per-residue feature-activation dataset, its reader, and the viewer;
+- :mod:`idiom.sae.steering` — residual-stream hooks and feature-steered generation;
+- :mod:`idiom.sae.fidelity` — substitution-loss "fraction recovered".
 """
 
 from idiom.sae.io import load_sae, save_sae
-from idiom.sae.sparse_coder import SparseCoder, build_sae
+from idiom.sae.sparse_coder import SparseCoder
 
-__all__ = ["SparseCoder", "build_sae", "load_sae", "save_sae"]
+__all__ = ["SparseCoder", "load_sae", "save_sae"]

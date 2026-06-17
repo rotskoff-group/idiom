@@ -1,11 +1,7 @@
 """P5 feature-dataset tests (CPU-only): build -> read -> reduce, with residue alignment."""
 
-from idiom.sae.build_feature_dataset import build_feature_dataset
-from idiom.sae.feature_activations import (
-    FeatureDataset,
-    feature_trace_for_sequence,
-    top_n_sequences,
-)
+from idiom.sae.features.build_feature_dataset import build_feature_dataset
+from idiom.sae.features.feature_activations import FeatureDataset
 from idiom.data.io import Record
 from idiom.data.tokenizer import RESIDUES, Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
@@ -47,7 +43,7 @@ def test_reductions_run(tmp_path):
     out, _ = _build(tmp_path)
     fd = FeatureDataset(out, in_memory=True)
     feat = int(fd.top_indices[0, 0])  # a feature that fired somewhere
-    seqs, scores = top_n_sequences(fd, feat, n=3, sort_by="peak")
+    seqs, scores = fd.top_sequences(feat, n=3, sort_by="peak")
     assert len(seqs) >= 1 and (scores > 0).all()
-    pos, acts = feature_trace_for_sequence(fd, int(seqs[0]), feat)
+    pos, acts = fd.trace(int(seqs[0]), feat)
     assert len(pos) == len(acts)

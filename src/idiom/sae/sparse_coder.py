@@ -176,26 +176,3 @@ class SparseCoder(nn.Module):
         assert self.W_dec.grad is not None
         parallel = einops.einsum(self.W_dec.grad, self.W_dec.data, "f d, f d -> f")
         self.W_dec.grad -= einops.einsum(parallel, self.W_dec.data, "f, f d -> f d")
-
-# Naming aliases for convenience / continuity.
-TopKSAE = SparseCoder
-Sae = SparseCoder
-
-
-def build_sae(
-    d_in: int,
-    *,
-    k: int = 32,
-    expansion_factor: int = 8,
-    activation: Literal["topk", "groupmax"] = "topk",
-    multi_topk: bool = False,
-    normalize_decoder: bool = True,
-) -> SparseCoder:
-    return SparseCoder(
-        d_in,
-        expansion_factor=expansion_factor,
-        k=k,
-        activation=activation,
-        multi_topk=multi_topk,
-        normalize_decoder=normalize_decoder,
-    )

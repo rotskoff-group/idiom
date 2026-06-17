@@ -9,8 +9,8 @@ from idiom.data.tokenizer import Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.model.activations import extract_activations
 from idiom.sae import SparseCoder
-from idiom.sae.activation_store import ActivationStore
-from idiom.sae.lit_sae import LitSAE
+from idiom.sae.training.activation_store import ActivationStore
+from idiom.sae.training.lit_sae import LitSAE
 
 TOK = Tokenizer()
 TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=64)

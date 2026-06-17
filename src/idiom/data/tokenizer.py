@@ -97,6 +97,40 @@ class Tokenizer:
         """Boolean mask, ``True`` at real-residue positions (drops FIM markers + controls).
 
         This is the residue-only selector shared by SAE training and activation export, so
-        what the SAE sees and what users export are the same positions.
+        what the SAE sees and what users export are the same positions. Equivalent to
+        :meth:`region_mask` with ``region="all"``.
         """
-        return ids < self.n_residues
+        return self.region_mask(ids)
+
+    def region_mask(
+        self, ids: torch.Tensor, *, region: str = "all", drop_markers: bool = True
+    ) -> torch.Tensor:
+        """Boolean ``[B, L]`` mask of the positions an SAE acts on, by token class and IDR region.
+
+        This is the single selector shared across the whole SAE lifecycle — training
+        (:func:`~idiom.model.activations.extract_activations`), feature-dataset building,
+        fidelity substitution, and feature steering all confine themselves to the same
+        positions, so an SAE is always applied to the distribution it was trained on.
+
+        ``drop_markers=True`` keeps only real residues; ``False`` also keeps FIM markers.
+        Control tokens (START/STOP/PAD/MASK) are always dropped. ``region`` then restricts by
+        position relative to the FIM MIDDLE (``2``) marker that opens the in-filled IDR
+        (``1{prefix}3{suffix}2{IDR}``): ``"all"`` every kept position; ``"idr"`` only those
+        after the ``2``; ``"non_idr"`` only those before it. A row with no ``2`` marker
+        contributes nothing to ``idr``/``non_idr``.
+        """
+        cutoff = self.n_residues if drop_markers else self.n_residues + self.n_fim
+        keep = ids < cutoff
+        if region == "all":
+            return keep
+        if region not in ("idr", "non_idr"):
+            raise ValueError(f"region must be 'all', 'idr', or 'non_idr', got {region!r}")
+        middle = ids == self.fim_middle_id  # the '2' that opens the IDR
+        has_mid = middle.any(dim=1)
+        mid_pos = torch.where(  # index of the '2' per row; sentinel L (no IDR boundary) if absent
+            has_mid,
+            middle.int().argmax(dim=1),
+            torch.full((ids.size(0),), ids.size(1), device=ids.device, dtype=torch.long),
+        )
+        after = torch.arange(ids.size(1), device=ids.device)[None, :] > mid_pos[:, None]
+        return keep & (after if region == "idr" else (~after & has_mid[:, None]))
