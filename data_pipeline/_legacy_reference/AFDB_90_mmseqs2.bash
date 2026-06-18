@@ -15,17 +15,16 @@
 
 PREFIX=AFDB_IDR_90 # prefix for MMseqs files
 
-FASTA=/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/alldata_seqs.fasta # 110 M full length sequences
-# This clustering will actually remove IDR instances for which there are >1 IDR per protein 
-SCRATCH=/home/scratch_mount/group_scratch/idr_plm/mmseqs2_scratch/mmseqs2_${SLURM_JOB_ID}
+FASTA=/path/to/AFDB/clustering/alldata_seqs.fasta # 110 M full length sequences
+# This clustering will actually remove IDR instances for which there are >1 IDR per protein
+SCRATCH=/path/to/mmseqs2_scratch/mmseqs2_${SLURM_JOB_ID}
 THREADS=$SLURM_CPUS_PER_TASK
-RESULT_DIR=/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/${PREFIX}
+RESULT_DIR=/path/to/AFDB/clustering/${PREFIX}
 mkdir -p "$RESULT_DIR"
 cd "$RESULT_DIR"
 
-source /home/scratch/jxliu2/miniconda3/etc/profile.d/conda.sh
+source /path/to/miniconda3/etc/profile.d/conda.sh
 conda activate mmseqs2
-# source /home/scratch/jxliu2/code_repos/idr-plm-figures/.venv/bin/activate
 
 mkdir -p "$SCRATCH"
 

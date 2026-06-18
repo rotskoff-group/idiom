@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import itertools
+import os
 from collections import Counter
 
 import numpy as np
@@ -32,7 +33,7 @@ KD = {"A": 1.8, "R": -4.5, "N": -3.5, "D": -3.5, "C": 2.5, "Q": -3.5, "E": -3.5,
       "H": -3.2, "I": 4.5, "L": 3.8, "K": -3.9, "M": 1.9, "F": 2.8, "P": -1.6, "S": -0.8,
       "T": -0.7, "W": -0.9, "V": 4.2, "Y": -1.3}
 
-DATA = "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data"
+DATA = os.environ.get("IDIOM_DATA", "/path/to/idiom_data")
 INTER = f"{DATA}/pretraining/AFDB/intermediate"
 DEFAULT_PRE = f"{INTER}/AFDB_IDR_90_len1020_rm_full_low_plddt_dedup_disprot.fasta"
 DEFAULT_POST = f"{INTER}/AFDB_IDR_90_len1020_rm_full_low_plddt_dedup_disprot_signalp.fasta"

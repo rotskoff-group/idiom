@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import itertools
+import os
 
 import numpy as np
 
@@ -22,7 +23,7 @@ from analysis.figures.pretraining_data.composition_vs_disprot import disprot_reg
 from analysis.figures.pretraining_data.corpus_composition import iter_records
 from analysis.figures.pretraining_data.final_corpus import FINAL_FASTA
 
-DATA = "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data"
+DATA = os.environ.get("IDIOM_DATA", "/path/to/idiom_data")
 DEFAULT_DISPROT = f"{DATA}/reference/disprot/DisProt release_2025_06 with_ambiguous_evidences.json"
 
 

@@ -6,8 +6,9 @@ path**, so regenerating overwrites in place. Run with the repo on `PYTHONPATH` a
 set (see `bash/figures.bash`):
 
 ```bash
-export PYTHONPATH=/data2/scratch/jxliu2/idiom
-export IDIOM_FIG_DIR=/data2/scratch/jxliu2/papers/overleaf/IDiom-manuscript-v1/figs
+export PYTHONPATH=/path/to/idiom        # repo root (so `analysis.*` is importable)
+export IDIOM_FIG_DIR=/path/to/manuscript/figs
+export IDIOM_DATA=/path/to/idiom_data   # curated corpus + reference sets
 python analysis/figures/pretraining_data/corpus_plddt.py --n 200000
 ```
 

@@ -9,13 +9,13 @@
 # Figure generation is light (CPU); run locally or `srun -c 4 --mem 8GB -t 00:30:00 bash bash/figures.bash`.
 set -euo pipefail
 
-REPO=/data2/scratch/jxliu2/idiom
+REPO="${IDIOM_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$REPO/.venv/bin/activate"
 cd "$REPO"
 export PYTHONPATH="$REPO"   # so `analysis.*` (repo-only, not in the wheel) is importable
 
 # Output root = the manuscript figs/ dir (override by exporting IDIOM_FIG_DIR yourself).
-export IDIOM_FIG_DIR="${IDIOM_FIG_DIR:-/data2/scratch/jxliu2/papers/overleaf/IDiom-manuscript-v1/figs}"
+export IDIOM_FIG_DIR="${IDIOM_FIG_DIR:-/path/to/manuscript/figs}"
 echo "Writing figures to: $IDIOM_FIG_DIR"
 
 # Scripts live under analysis/figures/<section>/ (see analysis/figures/README.md).

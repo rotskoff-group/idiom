@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import itertools
+import os
 from collections import Counter
 
 import numpy as np
@@ -22,7 +23,7 @@ from analysis.figures.pretraining_data.corpus_composition import iter_records
 from data_pipeline.disprot import disprot_idr_records
 
 RES = "ACDEFGHIKLMNPQRSTVWY"
-DATA = "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data"
+DATA = os.environ.get("IDIOM_DATA", "/path/to/idiom_data")
 DEFAULT_TRAIN = f"{DATA}/pretraining/AFDB/intermediate/AFDB_IDR_90_len1020_rm_full_low_plddt_dedup_disprot_signalp.fasta"
 DEFAULT_DISPROT = f"{DATA}/reference/disprot/DisProt release_2025_06 with_ambiguous_evidences.json"
 DEFAULT_CATH = f"{DATA}/reference/cath/cath-domain-seqs-S60_1000.fa"

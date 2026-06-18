@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import itertools
+import os
 from collections import Counter
 
 import numpy as np
@@ -41,8 +42,9 @@ def iter_records(path):
                 header = None
 
 
+DATA = os.environ.get("IDIOM_DATA", "/path/to/idiom_data")
 DEFAULT_FASTA = (
-    "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data/pretraining/AFDB/"
+    f"{DATA}/pretraining/AFDB/"
     "intermediate/AFDB_IDR_90_len1020_rm_full_low_plddt_dedup_disprot_signalp.fasta"
 )
 

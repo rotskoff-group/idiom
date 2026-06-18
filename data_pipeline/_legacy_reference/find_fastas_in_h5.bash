@@ -12,17 +12,15 @@
 # Find FASTA sequences output from MMseqs2 within alldata h5 set, and write to new h5 file 
 ###
 
-# source /home/groups/ardunn/jxliu2/miniconda3/etc/profile.d/conda.sh
-# conda activate plm
-source /home/scratch/jxliu2/code_repos/idr-plm-figures/.venv/bin/activate
+source /path/to/venv/bin/activate
 
-PYTHON_FILE='/home/scratch/jxliu2/code_repos/idr-plm-figures/src/idr_plm_figures/data_preprocess/clusters_to_h5/find_fastas_in_h5.py'
+PYTHON_FILE='./find_fastas_in_h5.py'
 
-IN_FASTA="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90/AFDB_IDR_90_reps.fasta"
+IN_FASTA="/path/to/AFDB/clustering/AFDB_IDR_90/AFDB_IDR_90_reps.fasta"
 
-IN_H5_DIR="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata"
+IN_H5_DIR="/path/to/AFDB/AFDB_v4_idr_alldata"
 
-OUT_H5="/home/scratch_mount/group_scratch/idr_plm/sherlock_rsync/AFDB/AFDB_v4_idr_alldata/clustering/AFDB_IDR_90_alldata.h5"
+OUT_H5="/path/to/AFDB/clustering/AFDB_IDR_90_alldata.h5"
 
 python3 -u "$PYTHON_FILE" \
         --fasta  "$IN_FASTA" \

@@ -13,13 +13,14 @@ files are protein-sorted, so the join early-exits after the first chunk for a he
 from __future__ import annotations
 
 import itertools
+import os
 
 import h5py
 import numpy as np
 
 from analysis.figures.pretraining_data.corpus_composition import iter_records
 
-DATA = "/data2/scratch/group_scratch/idr_plm/2026-06-14_idiom_data"
+DATA = os.environ.get("IDIOM_DATA", "/path/to/idiom_data")
 INTER = f"{DATA}/pretraining/AFDB/intermediate"
 FINAL_FASTA = f"{INTER}/AFDB_IDR_90_len1020_rm_full_low_plddt_dedup_disprot_signalp.fasta"
 MASTER_H5 = f"{DATA}/pretraining/AFDB/clustering_90/AFDB_IDR_90_alldata.h5"

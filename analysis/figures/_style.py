@@ -52,7 +52,7 @@ def fig_dir() -> Path:
     if not d:
         raise RuntimeError(
             "Set IDIOM_FIG_DIR to the manuscript figs/ dir, e.g. "
-            "/data2/scratch/jxliu2/papers/overleaf/IDiom-manuscript-v1/figs"
+            "/path/to/manuscript/figs"
         )
     return Path(d)
 
