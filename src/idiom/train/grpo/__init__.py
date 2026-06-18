@@ -7,7 +7,7 @@ functions (``train/grpo/core.py``). Online generation uses the KV-cached sampler
 pure and tested.
 """
 
-from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_logprobs
+from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs
 from idiom.train.grpo.lit_grpo import LitGRPO
 from idiom.train.grpo.rewards import REWARD_REGISTRY, get_reward, register_reward
 
@@ -18,5 +18,6 @@ __all__ = [
     "grpo_loss",
     "group_advantages",
     "register_reward",
+    "sequence_kl",
     "sequence_logprobs",
 ]

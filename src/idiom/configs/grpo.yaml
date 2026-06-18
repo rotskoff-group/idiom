@@ -22,6 +22,8 @@ grpo:
   top_k: null
   top_p: null
   normalize_advantage: true
+  log_samples_every: 5         # print N example generations every K steps (0 disables)
+  n_log_samples: 3
 
 reward:                      # base reward + optional shaping/length/entropy (sweep-tuned defaults)
   module: null               # optional: a *.py / module with @register_reward, imported first
@@ -29,7 +31,7 @@ reward:                      # base reward + optional shaping/length/entropy (sw
   name: fraction_proline     # any registered reward, or 'protgps' (operator-registered)
   shaping: {enabled: false, target: 0.9, scale: 1.0}
   length:  {enabled: true, target_length: 100, width: 1.0, weight: 1.0}
-  entropy: {enabled: true, target_entropy: 2.7, width: 0.2, weight: 1.0}
+  entropy: {enabled: true, target_entropy: 2.55, width: 0.2, weight: 1.0}
 
 trainer:
   max_steps: 1500

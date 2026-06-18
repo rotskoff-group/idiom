@@ -41,32 +41,55 @@ def _register_custom_rewards(spec: str | None) -> None:
         importlib.import_module(spec)
 
 
-def build_reward(rcfg: DictConfig) -> Callable[[str], float]:
+def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float]]:
+    """Composed reward that returns a per-term breakdown for logging.
+
+    Always includes ``raw`` (the base reward before any shaping) and ``total`` (the scalar the
+    policy optimizes); ``length``/``entropy`` appear only when those terms are enabled. ``raw`` is
+    what gets logged as ``train/reward_raw`` so the base signal is visible separately from shaping.
+    """
     _register_custom_rewards(rcfg.get("module"))  # user rewards (or operator-registered protgps)
     base = get_reward(rcfg.name)
 
-    def reward(idr: str) -> float:
-        r = base(idr)
+    def components(idr: str) -> dict[str, float]:
+        raw = base(idr)
+        total = raw
         if rcfg.shaping.enabled:
-            r = quadratic_shaping(r, target=rcfg.shaping.target, scale=rcfg.shaping.scale)
+            total = quadratic_shaping(total, target=rcfg.shaping.target, scale=rcfg.shaping.scale)
+        out = {"raw": raw}
         if rcfg.length.enabled:
-            r += rcfg.length.weight * length_reward(
+            lr = rcfg.length.weight * length_reward(
                 idr, target_length=rcfg.length.target_length, width=rcfg.length.width
             )
+            out["length"] = lr
+            total += lr
         if rcfg.entropy.enabled:
-            r += rcfg.entropy.weight * entropy_reward(
+            er = rcfg.entropy.weight * entropy_reward(
                 idr, target_entropy=rcfg.entropy.target_entropy, width=rcfg.entropy.width
             )
-        return r
+            out["entropy"] = er
+            total += er
+        out["total"] = total
+        return out
 
-    return reward
+    return components
+
+
+def build_reward(rcfg: DictConfig) -> Callable[[str], float]:
+    """Scalar reward the policy optimizes (the ``total`` term of :func:`build_reward_components`)."""
+    components = build_reward_components(rcfg)
+    return lambda idr: components(idr)["total"]
 
 
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
-    reward = build_reward(cfg.reward)
+    components = build_reward_components(cfg.reward)
+    reward = lambda idr: components(idr)["total"]  # noqa: E731 - scalar the policy optimizes
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
-    # GRPO always warm-starts from a pretrained policy; architecture is read from that checkpoint
-    lit = LitGRPO.init_from_checkpoint(cfg.init_from, reward, **grpo_kw)
+    # GRPO always warm-starts from a pretrained policy; architecture is read from that checkpoint.
+    # reward_components feeds the per-term logging (train/reward_raw, _length, _entropy).
+    lit = LitGRPO.init_from_checkpoint(
+        cfg.init_from, reward, reward_components=components, **grpo_kw
+    )
 
     if cfg.prompts.mode == "denovo":
         ds = denovo_prompts(cfg.prompts.n)

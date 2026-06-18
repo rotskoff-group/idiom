@@ -20,6 +20,18 @@ def sequence_logprobs(model, tokens: Tensor) -> Tensor:
     return logp.gather(-1, tokens[:, 1:, None]).squeeze(-1)
 
 
+def _kl_per_token(policy_logp: Tensor, ref_logp: Tensor) -> Tensor:
+    """Schulman k3 per-token KL estimate of policy→reference: ``exp(d) − d − 1`` with ``d = ref − policy``."""
+    d = ref_logp - policy_logp
+    return torch.exp(d) - d - 1.0
+
+
+def sequence_kl(policy_logp: Tensor, ref_logp: Tensor, completion_mask: Tensor) -> Tensor:
+    """Masked token-level mean of the Schulman KL — the same penalty :func:`grpo_loss` applies (for logging)."""
+    kl = _kl_per_token(policy_logp, ref_logp)
+    return (kl * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
+
+
 def group_advantages(
     rewards: Tensor, group_size: int, *, normalize: bool = True, eps: float = 1e-8
 ) -> Tensor:
@@ -53,8 +65,7 @@ def grpo_loss(
     pg = torch.min(ratio * adv, clipped * adv)
 
     if beta_kl > 0:
-        kl = torch.exp(ref_logp - policy_logp) - (ref_logp - policy_logp) - 1.0
-        per_token = -(pg - beta_kl * kl)
+        per_token = -(pg - beta_kl * _kl_per_token(policy_logp, ref_logp))
     else:
         per_token = -pg
 

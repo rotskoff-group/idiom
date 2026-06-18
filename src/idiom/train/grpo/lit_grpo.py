@@ -19,7 +19,8 @@ from idiom.data.tokenizer import Tokenizer
 from idiom.model.config import ModelConfig
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
-from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_logprobs
+from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs
+from idiom.train.grpo.rewards import sequence_entropy
 
 
 class LitGRPO(L.LightningModule):
@@ -37,6 +38,9 @@ class LitGRPO(L.LightningModule):
         top_k: int | None = None,
         top_p: float | None = None,
         normalize_advantage: bool = True,
+        log_samples_every: int = 25,
+        n_log_samples: int = 3,
+        reward_components: Callable[[str], dict[str, float]] | None = None,
         tokenizer: Tokenizer | None = None,
     ) -> None:
         super().__init__()
@@ -50,6 +54,9 @@ class LitGRPO(L.LightningModule):
         self.reference.requires_grad_(False)
 
         self.reward_fn = reward_fn
+        # Optional per-term breakdown ({"raw", "length", "entropy", "total"}); when set it is the
+        # source of the scalar reward (so reward_fn is not also called) and drives per-term logging.
+        self.reward_components = reward_components
         self.tok = tokenizer or Tokenizer()
         self.group_size = group_size
         self.max_new_tokens = max_new_tokens
@@ -60,6 +67,8 @@ class LitGRPO(L.LightningModule):
         self.top_k = top_k
         self.top_p = top_p
         self.normalize_advantage = normalize_advantage
+        self.log_samples_every = log_samples_every
+        self.n_log_samples = n_log_samples
 
     @classmethod
     def init_from_checkpoint(cls, ckpt_path, reward_fn, **kwargs) -> "LitGRPO":
@@ -101,11 +110,17 @@ class LitGRPO(L.LightningModule):
         mask = torch.zeros(BG, P + T, device=rep.device)
         mask[:, P:] = (completions != self.tok.pad_id).float()
 
+        idrs = [self._decode_idr(completions[i]) for i in range(BG)]
+        # Per-term breakdown when available (raw/length/entropy/total); else just the scalar reward.
+        breakdown = [self.reward_components(idr) for idr in idrs] if self.reward_components else None
         rewards = torch.tensor(
-            [self.reward_fn(self._decode_idr(completions[i])) for i in range(BG)],
+            [b["total"] for b in breakdown] if breakdown else [self.reward_fn(idr) for idr in idrs],
             device=rep.device, dtype=torch.float,
         )
         advantages = group_advantages(rewards, self.group_size, normalize=self.normalize_advantage)
+
+        if self.log_samples_every and self.global_step % self.log_samples_every == 0:
+            self._print_samples(idrs, rewards)
 
         policy_logp = sequence_logprobs(self.model, full)
         with torch.no_grad():
@@ -114,11 +129,42 @@ class LitGRPO(L.LightningModule):
             policy_logp, ref_logp, advantages, mask, beta_kl=self.beta_kl, eps_clip=self.eps_clip
         )
 
-        self.log_dict(
-            {"train/loss": loss, "train/reward": rewards.mean(), "train/reward_std": rewards.std()},
-            prog_bar=True, on_step=True,
-        )
+        seq_len = torch.tensor([float(len(idr)) for idr in idrs], device=rep.device)
+        seq_ent = torch.tensor([sequence_entropy(idr) for idr in idrs], device=rep.device)
+        metrics = {
+            "train/loss": loss,
+            "train/reward": rewards.mean(),
+            "train/reward_std": rewards.std(),
+            "train/kl": sequence_kl(policy_logp.detach(), ref_logp, mask),
+            "train/seq_len": seq_len.mean(),
+            "train/seq_entropy": seq_ent.mean(),
+        }
+        if breakdown:  # per-term reward means: train/reward_raw, _length, _entropy
+            for key in breakdown[0]:
+                if key == "total":
+                    continue
+                vals = torch.tensor([b[key] for b in breakdown], device=rep.device)
+                metrics[f"train/reward_{key}"] = vals.mean()
+        self.log_dict(metrics, prog_bar=True, on_step=True)
         return loss
+
+    def _print_samples(self, idrs: list[str], rewards: torch.Tensor) -> None:
+        """Print a few random example completions + rewards, so a tail of the log shows progress."""
+        import random
+
+        n = min(self.n_log_samples, len(idrs))
+        if n == 0:
+            return
+        print("=" * 70, flush=True)
+        print(
+            f"Step {self.global_step}: example generations "
+            f"(reward mean={rewards.mean():.3f} std={rewards.std():.3f})",
+            flush=True,
+        )
+        for j, i in enumerate(random.sample(range(len(idrs)), n), 1):
+            seq = idrs[i] or "[empty]"
+            print(f"  [{j}] reward={rewards[i].item():.3f}  len={len(idrs[i])}  {seq}", flush=True)
+        print("=" * 70, flush=True)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.model.parameters(), lr=self.lr)
