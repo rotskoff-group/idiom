@@ -14,24 +14,29 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from idiom.data.fim import fim_full, residue_source_positions
+from idiom.data.fim import fim_132, fim_full, residue_source_positions
 from idiom.data.io import read_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
 
 
 @torch.no_grad()
-def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cpu"):
-    """Return ``{layer: (values[N, d], index)}``; index is a list of per-row metadata dicts."""
+def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode="context"):
+    """Return ``{layer: (values[N, d], index)}``; index is a list of per-row metadata dicts.
+
+    ``fim_mode`` is the prompt format the activations are taken under: ``context``
+    (``1{prefix}3{suffix}2{IDR}``) or ``denovo`` (``132{IDR}``, no flanks).
+    """
     tok = tokenizer or Tokenizer()
+    build, variant = (fim_full, "full") if fim_mode == "context" else (fim_132, "132")
     out = {layer: {"values": [], "index": []} for layer in layers}
 
     for rec in read_records(fasta):
-        fim = fim_full(rec.full_seq, rec.idr_start, rec.idr_end)
+        fim = build(rec.full_seq, rec.idr_start, rec.idr_end)
         tokens = torch.tensor([tok.start_id, *tok.encode(fim)], device=device)[None]  # [1, L]
         acts = extract_activations(model, tokens, layers, tokenizer=tok, drop_markers=True)
-        # extracted residue rows are in FIM order (prefix, suffix, IDR) — same order as src.
-        src = residue_source_positions(len(rec.full_seq), rec.idr_start, rec.idr_end, "full")
+        # extracted residue rows are in FIM order (markers dropped) — same order as src.
+        src = residue_source_positions(len(rec.full_seq), rec.idr_start, rec.idr_end, variant)
         is_idr = np.array([rec.idr_start <= p < rec.idr_end for p in src])
 
         for layer in layers:

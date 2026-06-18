@@ -145,12 +145,15 @@ class IDiomSAE:
     """
 
     def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None,
-                 region: str = "all"):
+                 region: str = "all", fim_mode: str = "context"):
         self.sae = sae.eval().to(model.device)
         self.host = model
         self.layer = int(layer)
         self.host_model = host_model
-        self.region = region  # the residual-stream slice this SAE was trained on; applied everywhere
+        # the distribution this SAE was trained on (residual-stream slice + prompt format); both are
+        # applied automatically everywhere downstream so the SAE stays on-distribution.
+        self.region = region
+        self.fim_mode = fim_mode
 
     # convenience pass-throughs to the host model
     @property
@@ -184,7 +187,7 @@ class IDiomSAE:
                 )
             model = IDiom.load(cfg["host_model"], device=device)
         return cls(sae, model, cfg["layer"], host_model=cfg.get("host_model"),
-                   region=cfg.get("region", "all"))
+                   region=cfg.get("region", "all"), fim_mode=cfg.get("fim_mode", "context"))
 
     def save_pretrained(self, out_dir, *, host_model: str | None = None) -> Path:
         """Write the release dir (``sae_config.json`` + ``sae.safetensors``); ``host_model`` (repo id
@@ -192,7 +195,7 @@ class IDiomSAE:
         from idiom.sae.io import save_sae  # noqa: PLC0415
 
         return save_sae(self.sae, out_dir, host_model=host_model or self.host_model,
-                        layer=self.layer, region=self.region)
+                        layer=self.layer, region=self.region, fim_mode=self.fim_mode)
 
     # --- feature activations ---
     @torch.no_grad()
@@ -205,7 +208,8 @@ class IDiomSAE:
         accessions)`` averaged over each record's residues within ``region``.
         """
         region = region or self.region
-        emb = embed_fasta(self.model, fasta, [self.layer], pool="none", tokenizer=self.tok, device=self.device)
+        emb = embed_fasta(self.model, fasta, [self.layer], pool="none", tokenizer=self.tok,
+                          device=self.device, fim_mode=self.fim_mode)
         values, index = emb[self.layer]
         x = torch.from_numpy(values).to(self.device)
         feats = self.sae.encode_dense(x).cpu().numpy()
@@ -230,7 +234,8 @@ class IDiomSAE:
         from idiom.sae.features.build_feature_dataset import build_feature_dataset as _bfd  # noqa: PLC0415
 
         return _bfd(self.model, self.sae, read_records(fasta), self.layer, out_dir,
-                    tokenizer=self.tok, device=self.device, batch_size=batch_size, region=self.region)
+                    tokenizer=self.tok, device=self.device, batch_size=batch_size,
+                    region=self.region, fim_mode=self.fim_mode)
 
     # --- steering ---
     @torch.no_grad()
@@ -252,14 +257,18 @@ class IDiomSAE:
 
     # --- fidelity ---
     @torch.no_grad()
-    def fidelity(self, fasta, *, batch_size: int = 16, fim_full_prob: float = 0.5):
+    def fidelity(self, fasta, *, batch_size: int = 16, fim_full_prob: float | None = None):
         """Substitution-loss fidelity (``loss_clean``/``loss_sae``/``loss_ablate``,
-        ``pct_loss_recovered``) over a record FASTA."""
+        ``pct_loss_recovered``) over a record FASTA. ``fim_full_prob`` defaults to match the SAE's
+        training prompt format (0.0 de-novo / 1.0 context), so eval stays on-distribution."""
         from torch.utils.data import DataLoader  # noqa: PLC0415
 
         from idiom.data.dataset import RecordDataset, make_collate  # noqa: PLC0415
         from idiom.data.io import read_records  # noqa: PLC0415
         from idiom.sae.fidelity import compute_fidelity  # noqa: PLC0415
+
+        if fim_full_prob is None:
+            fim_full_prob = 0.0 if self.fim_mode == "denovo" else 1.0
 
         ds = RecordDataset(read_records(fasta), self.tok, max_len=self.model.cfg.max_seq_len,
                            fim_full_prob=fim_full_prob)

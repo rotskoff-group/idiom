@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from idiom.data.fim import fim_full
+from idiom.data.fim import fim_132, fim_full
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
 
@@ -32,13 +32,16 @@ def build_feature_dataset(
     device: str | torch.device = "cpu",
     batch_size: int = 16,
     region: str = "all",
+    fim_mode: str = "context",
 ) -> Path:
     """Encode records through ``sae`` at ``layer`` and write the feature dataset to ``out_dir``.
 
-    ``region`` (``all`` | ``idr`` | ``non_idr``) is the SAE's training region; the dataset is
-    built over exactly those residues so the features match what the SAE learned.
+    ``region`` (``all`` | ``idr`` | ``non_idr``) and ``fim_mode`` (``context`` = ``1{prefix}3{suffix}2{IDR}``
+    | ``denovo`` = ``132{IDR}``) are the SAE's training distribution; the dataset is built over exactly
+    those residues, in that prompt format, so the features match what the SAE learned.
     """
     tok = tokenizer or Tokenizer()
+    fim = fim_full if fim_mode == "context" else fim_132
     model = model.eval().to(device)
     sae = sae.eval().to(device)
     records = list(records)
@@ -47,7 +50,7 @@ def build_feature_dataset(
 
     for start in range(0, len(records), batch_size):
         chunk = records[start : start + batch_size]
-        seqs = [fim_full(r.full_seq, r.idr_start, r.idr_end) for r in chunk]
+        seqs = [fim(r.full_seq, r.idr_start, r.idr_end) for r in chunk]
         token_lists = [torch.tensor([tok.start_id, *tok.encode(s)]) for s in seqs]
         tokens = pad_sequence(token_lists, batch_first=True, padding_value=tok.pad_id).to(device)
 
@@ -71,7 +74,8 @@ def build_feature_dataset(
     (out / "strings.json").write_text(json.dumps(strings))
     (out / "meta.json").write_text(
         json.dumps(
-            {"k": int(sae.k), "num_latents": int(sae.num_latents), "layer": int(layer), "region": region}
+            {"k": int(sae.k), "num_latents": int(sae.num_latents), "layer": int(layer),
+             "region": region, "fim_mode": fim_mode}
         )
     )
     return out

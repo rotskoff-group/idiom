@@ -74,10 +74,13 @@ def run(cfg: DictConfig) -> None:
         **OmegaConf.to_container(cfg.trainer, resolve=True), logger=wandb_logger, default_root_dir=out_dir
     )
     trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
-    # canonical SAE release (host_model + layer + region recorded): loads via IDiomSAE.from_pretrained
+    # canonical SAE release (host_model + layer + region + fim_mode recorded): loads via
+    # IDiomSAE.from_pretrained. fim_mode is "denovo" iff training was pure de-novo (fim_full_prob==0),
+    # else "context" — it's the single prompt format downstream tools rebuild activations under.
+    fim_mode = "denovo" if float(cfg.data.fim_full_prob) == 0.0 else "context"
     save_sae(
         lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer,
-        region=cfg.get("region", "all"),
+        region=cfg.get("region", "all"), fim_mode=fim_mode,
     )
 
 

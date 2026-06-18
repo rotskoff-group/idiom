@@ -20,12 +20,13 @@ SAE_WEIGHTS_FILE = "sae.safetensors"
 
 
 def save_sae(
-    sae: SparseCoder, out_dir: str | Path, *, host_model: str | None, layer: int, region: str = "all"
+    sae: SparseCoder, out_dir: str | Path, *, host_model: str | None, layer: int,
+    region: str = "all", fim_mode: str = "context",
 ) -> Path:
     """Write ``sae_config.json`` + ``sae.safetensors``. ``host_model`` is the model checkpoint/repo
-    the SAE was trained against (recorded so it can self-load its host); ``region`` is the slice of
-    the residual stream it was trained on (``all`` | ``idr`` | ``non_idr``), so every downstream
-    tool applies it to the same positions."""
+    the SAE was trained against (recorded so it can self-load its host). ``region`` (``all`` | ``idr``
+    | ``non_idr``) and ``fim_mode`` (``context`` | ``denovo``) are the slice + prompt format of the
+    residual stream it was trained on, so every downstream tool stays on that distribution."""
     from safetensors.torch import save_model  # noqa: PLC0415
 
     d = Path(out_dir)
@@ -34,6 +35,7 @@ def save_sae(
         "host_model": str(host_model) if host_model is not None else None,
         "layer": int(layer),
         "region": str(region),
+        "fim_mode": str(fim_mode),
         "d_in": int(sae.d_in),
         "num_latents": int(sae.num_latents),
         "k": int(sae.k.item()),

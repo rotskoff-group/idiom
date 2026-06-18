@@ -91,12 +91,16 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
     """Register ``hook`` on ``model.blocks[layer]`` (an :class:`IDiomTransformer`) for the block.
 
     When ``tokenizer`` is given, the edit is confined to the SAE's training region: each forward
-    the mask is recomputed from the model's input tokens via
-    :meth:`~idiom.data.tokenizer.Tokenizer.region_mask` (``region``), so START / FIM-marker /
-    control positions — and, for ``idr``/``non_idr``, the wrong side of the ``2`` marker — pass
-    through unmodified. This keeps the SAE on the distribution it was trained on and tracks the
-    growing token sequence during autoregressive generation. With ``tokenizer=None`` the hook
-    applies at every position.
+    the mask is recomputed via :meth:`~idiom.data.tokenizer.Tokenizer.region_mask` (``region``),
+    so START / FIM-marker / control positions — and, for ``idr``/``non_idr``, the wrong side of
+    the ``2`` marker — pass through unmodified. With ``tokenizer=None`` the hook applies at every
+    position.
+
+    Under **KV-cached generation** the model is fed one new token at a time, so the ``2`` marker
+    that defines the IDR boundary lives in the cache, not in the current input. The context
+    therefore accumulates the full running token sequence across forwards and masks the last
+    ``output`` positions against it — otherwise an ``idr``/``non_idr`` mask would see no ``2`` and
+    silently zero out every edit during decoding.
 
     Example::
 
@@ -108,7 +112,14 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
         latest: dict = {}
 
         def _capture(_module, args):
-            latest["tokens"] = args[0]  # model(tokens, ...) -> args[0] is the token ids
+            tok_in = args[0]  # model(tokens, ...) -> args[0] is the token ids
+            prev = latest.get("tokens")
+            # A multi-token call (prefill / full forward) is the full context; a single new token
+            # is an incremental cached decode step, so append it to the running sequence.
+            if prev is None or tok_in.shape[1] > 1:
+                latest["tokens"] = tok_in
+            else:
+                latest["tokens"] = torch.cat([prev, tok_in.to(prev.device)], dim=1)
 
         handles.append(model.register_forward_pre_hook(_capture))
         inner = hook
@@ -116,10 +127,11 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
         def _masked(module, inputs, output):
             edited = inner(module, inputs, output)
             tokens = latest.get("tokens")
-            if tokens is None or tokens.shape[1] != output.shape[1]:
+            n = output.shape[1]
+            if tokens is None or tokens.shape[1] < n:
                 return edited  # can't align tokens to positions; fall back to unmasked edit
-            mask = tokenizer.region_mask(tokens, region=region).unsqueeze(-1).to(output.device)
-            return torch.where(mask, edited, output)
+            mask = tokenizer.region_mask(tokens, region=region)[:, -n:]  # last n positions
+            return torch.where(mask.unsqueeze(-1).to(output.device), edited, output)
 
         hook = _masked
 
