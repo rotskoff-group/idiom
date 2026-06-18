@@ -18,10 +18,10 @@ import os
 
 import numpy as np
 
-from analysis.figures._style import COLORS, row_fig, save_fig, use_style
-from analysis.figures.pretraining_data.composition_vs_disprot import disprot_regions
-from analysis.figures.pretraining_data.corpus_composition import iter_records
-from analysis.figures.pretraining_data.final_corpus import FINAL_FASTA
+from extras.figures._style import COLORS, row_fig, save_fig, use_style
+from extras.figures.pretraining_data.composition_vs_disprot import disprot_regions
+from extras.figures.pretraining_data.corpus_composition import iter_records
+from extras.figures.pretraining_data.final_corpus import FINAL_FASTA
 
 DATA = os.environ.get("IDIOM_DATA", "/path/to/idiom_data")
 DEFAULT_DISPROT = f"{DATA}/reference/disprot/DisProt release_2025_06 with_ambiguous_evidences.json"

@@ -18,9 +18,9 @@ from collections import Counter
 
 import numpy as np
 
-from analysis.figures._style import COLORS, row_fig, save_fig, use_style
-from analysis.figures.pretraining_data.corpus_composition import iter_records
-from data_pipeline.disprot import disprot_idr_records
+from extras.figures._style import COLORS, row_fig, save_fig, use_style
+from extras.figures.pretraining_data.corpus_composition import iter_records
+from extras.data_pipeline.disprot import disprot_idr_records
 
 RES = "ACDEFGHIKLMNPQRSTVWY"
 DATA = os.environ.get("IDIOM_DATA", "/path/to/idiom_data")

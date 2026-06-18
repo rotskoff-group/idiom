@@ -6,7 +6,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pytest  # noqa: E402
 
-from analysis.figures._style import COLORS, fig_dir, save_fig, use_style
+from extras.figures._style import COLORS, fig_dir, save_fig, use_style
 
 
 def test_save_fig_writes_named_pdf(tmp_path, monkeypatch):

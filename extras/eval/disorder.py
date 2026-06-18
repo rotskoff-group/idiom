@@ -12,7 +12,7 @@ import sys
 
 import numpy as np
 
-from eval._tools import tool_path
+from extras.eval._tools import tool_path
 
 
 def iupred3_disorder(

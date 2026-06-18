@@ -19,7 +19,7 @@ from pathlib import Path
 
 from idiom.data.io import parse_idr_header
 
-from data_pipeline.disprot import DEFAULT_DISPROT_JSON, disprot_idr_records
+from extras.data_pipeline.disprot import DEFAULT_DISPROT_JSON, disprot_idr_records
 
 
 def disprot_idr_fasta(

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from eval._tools import tool_path
+from extras.eval._tools import tool_path
 
 
 def _resolve_mmseqs(mmseqs: str | None) -> str:

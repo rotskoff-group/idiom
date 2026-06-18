@@ -60,11 +60,11 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-# "src" -> the idiom library; "." -> top-level data_pipeline/ and analysis/ (repo-only, not shipped)
+# "src" -> the idiom library; "." -> repo-only extras/ (eval, analysis, data_pipeline; not shipped)
 pythonpath = ["src", "."]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/idiom"]  # ship only the library; data_pipeline/ and analysis/ stay repo-only
+packages = ["src/idiom"]  # ship only the library; extras/ (eval, analysis, data_pipeline) stays repo-only
 
 [project.scripts]
 idiom_generate = "idiom.api:main"

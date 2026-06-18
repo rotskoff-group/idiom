@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from data_pipeline.extract import has_folded_segment
-from data_pipeline.filter_length_plddt import is_fully_low_plddt, passes_length
+from extras.data_pipeline.extract import has_folded_segment
+from extras.data_pipeline.filter_length_plddt import is_fully_low_plddt, passes_length
 
 
 def test_length_cap_is_max_len_minus_4():
@@ -50,7 +50,7 @@ def _write_master_h5(path, rows):
 
 
 def test_write_filtered_fasta_applies_both_filters(tmp_path):
-    from data_pipeline.filter_length_plddt import write_filtered_fasta
+    from extras.data_pipeline.filter_length_plddt import write_filtered_fasta
 
     folded = np.concatenate([np.full(20, 90.0), np.full(30, 30.0)])  # 50aa, IDR 20..49
     keep = ("P1-F1_0-49", "M" * 50, 20, 49, folded)            # kept (has folded domain)

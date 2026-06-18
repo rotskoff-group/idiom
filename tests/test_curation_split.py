@@ -1,6 +1,6 @@
 """P1 curation test (CPU-only): random record split. No pipeline run."""
 
-from data_pipeline.split import split_records
+from extras.data_pipeline.split import split_records
 
 
 def _recs(n):

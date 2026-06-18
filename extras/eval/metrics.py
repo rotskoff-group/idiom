@@ -54,3 +54,35 @@ def summarize(table: dict[str, np.ndarray]) -> dict[str, dict[str, float]]:
             "n": int(a.size),
         }
     return out
+
+
+# --- composition extras (naturalness / reward-hacking checks; kept separate from sparrow FEATURES) ---
+# Residues characteristic of condensate / low-complexity IDRs (R/G/Q/N/S/Y).
+LCD_RESIDUES = "RGQNSY"
+COMPOSITION_EXTRAS: tuple[str, ...] = ("aa_entropy", "lcd_fraction")
+
+
+def aa_entropy(seq: str) -> float:
+    """Shannon entropy (bits) of the amino-acid composition — low values flag low-complexity tracts."""
+    if not seq:
+        return float("nan")
+    import math  # noqa: PLC0415
+    from collections import Counter  # noqa: PLC0415
+
+    n = len(seq)
+    return -sum((c / n) * math.log2(c / n) for c in Counter(seq).values())
+
+
+def lcd_fraction(seq: str, residues: str = LCD_RESIDUES) -> float:
+    """Fraction of residues in the low-complexity/condensate set (default R/G/Q/N/S/Y)."""
+    if not seq:
+        return float("nan")
+    return sum(seq.count(r) for r in residues) / len(seq)
+
+
+def composition_extras_table(seqs: list[str]) -> dict[str, np.ndarray]:
+    """``{aa_entropy, lcd_fraction}`` arrays (one row per sequence) — pairs with ``features_table``."""
+    return {
+        "aa_entropy": np.array([aa_entropy(s) for s in seqs], dtype=float),
+        "lcd_fraction": np.array([lcd_fraction(s) for s in seqs], dtype=float),
+    }

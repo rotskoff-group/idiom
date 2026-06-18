@@ -100,7 +100,7 @@ class IDiom:
         out = generate(self.model, prompts, tokenizer=self.tok, generator=gen, **kw)
         return [self._decode_idr(row) for row in out]
 
-    def generate_idp(self, n: int = 100, *, max_new_tokens: int = 256, temperature: float = 1.0,
+    def generate_idp(self, n: int = 100, *, max_new_tokens: int = 1000, temperature: float = 1.0,
                      top_k: int | None = None, top_p: float | None = None, seed: int | None = None) -> list[str]:
         """De-novo IDPs (prompt ``132``). Returns ``n`` IDR residue strings."""
         kw = dict(max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p)

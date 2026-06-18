@@ -18,7 +18,7 @@ import os
 import h5py
 import numpy as np
 
-from analysis.figures.pretraining_data.corpus_composition import iter_records
+from extras.figures.pretraining_data.corpus_composition import iter_records
 
 DATA = os.environ.get("IDIOM_DATA", "/path/to/idiom_data")
 INTER = f"{DATA}/pretraining/AFDB/intermediate"

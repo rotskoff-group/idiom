@@ -24,8 +24,8 @@ from collections import Counter
 
 import numpy as np
 
-from analysis.figures._style import COLORS, row_fig, save_fig, use_style
-from analysis.figures.pretraining_data.corpus_composition import iter_records
+from extras.figures._style import COLORS, row_fig, save_fig, use_style
+from extras.figures.pretraining_data.corpus_composition import iter_records
 
 RES = "ACDEFGHIKLMNPQRSTVWY"
 # Kyte--Doolittle hydropathy (positive = hydrophobic).

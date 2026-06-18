@@ -16,7 +16,7 @@ import argparse
 
 import numpy as np
 
-from analysis.figures._style import COLORS, row_fig, save_fig, use_style
+from extras.figures._style import COLORS, row_fig, save_fig, use_style
 
 # (label, records) — measured provenance, raw extraction first.
 STAGES = [

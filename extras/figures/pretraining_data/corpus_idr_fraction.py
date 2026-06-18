@@ -16,9 +16,9 @@ import itertools
 
 import numpy as np
 
-from analysis.figures._style import COLORS, row_fig, save_fig, use_style
-from analysis.figures.pretraining_data.corpus_composition import iter_records
-from analysis.figures.pretraining_data.final_corpus import FINAL_FASTA
+from extras.figures._style import COLORS, row_fig, save_fig, use_style
+from extras.figures.pretraining_data.corpus_composition import iter_records
+from extras.figures.pretraining_data.final_corpus import FINAL_FASTA
 
 
 def main() -> None:

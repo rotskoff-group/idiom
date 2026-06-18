@@ -18,7 +18,7 @@ from collections import Counter
 
 import numpy as np
 
-from analysis.figures._style import COLORS, row_fig, save_fig, use_style
+from extras.figures._style import COLORS, row_fig, save_fig, use_style
 from idiom.data.io import parse_idr_header
 
 RESIDUES = "ACDEFGHIKLMNPQRSTVWY"

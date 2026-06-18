@@ -15,8 +15,8 @@ import argparse
 
 import numpy as np
 
-from analysis.figures._style import COLORS, row_fig, save_fig, use_style
-from analysis.figures.pretraining_data.final_corpus import FINAL_FASTA, MASTER_H5, plddt_by_protein, sample_records
+from extras.figures._style import COLORS, row_fig, save_fig, use_style
+from extras.figures.pretraining_data.final_corpus import FINAL_FASTA, MASTER_H5, plddt_by_protein, sample_records
 
 
 def main() -> None:

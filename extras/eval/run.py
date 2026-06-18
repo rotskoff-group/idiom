@@ -22,9 +22,9 @@ from pathlib import Path
 def main() -> None:
     from idiom.api import IDiom
     from idiom.data.io import read_fasta
-    from eval.distances import w1_table
-    from eval.metrics import FEATURES, features_table, summarize
-    from eval.validity import validity_stats
+    from extras.eval.distances import w1_table
+    from extras.eval.metrics import FEATURES, features_table, summarize
+    from extras.eval.validity import validity_stats
 
     p = argparse.ArgumentParser(description="Fast-profile evaluation of an IDiom checkpoint.")
     p.add_argument("--ckpt", required=True, help="lightning .ckpt or released model dir (arch read from it)")
@@ -83,7 +83,7 @@ def main() -> None:
 
     # 2b. disorder (metapredict + optional IUPred3) — full profile
     if args.disorder or args.iupred:
-        from eval.disorder import disorder_stats, iupred3_disorder, metapredict_disorder
+        from extras.eval.disorder import disorder_stats, iupred3_disorder, metapredict_disorder
         if args.disorder:
             results["disorder_generated"] = disorder_stats(metapredict_disorder(gens, device=str(idiom.device)))
             if ref_seqs is not None:
@@ -95,12 +95,12 @@ def main() -> None:
 
     # 2c. novelty / memorization (mmseqs vs training corpus) — full profile
     if args.novelty_ref:
-        from eval.novelty import max_identity, novelty_stats
+        from extras.eval.novelty import max_identity, novelty_stats
         results["novelty"] = novelty_stats(max_identity(gens, args.novelty_ref, mmseqs=args.mmseqs))
 
     # 3. held-out perplexity
     if args.test_fasta:
-        from eval.perplexity import perplexity
+        from idiom.utils.perplexity import perplexity
         results["perplexity"] = perplexity(
             idiom.model, args.test_fasta, max_len=idiom.model.cfg.max_seq_len,
             device=idiom.device, max_records=args.ppl_max_records)

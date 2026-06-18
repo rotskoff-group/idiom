@@ -2,7 +2,7 @@
 
 import json
 
-from data_pipeline.dedup import disprot_idr_fasta, remove_headers, write_idr_fasta
+from extras.data_pipeline.dedup import disprot_idr_fasta, remove_headers, write_idr_fasta
 
 
 def _read_fasta(path):
