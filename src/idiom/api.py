@@ -115,13 +115,16 @@ class IDiom:
     # --- FASTA-first wrappers ---
     def generate_idp_fasta(self, out_fasta, n: int = 100, *, prefix: str = "idiom_idp", **kw) -> Path:
         seqs = self.generate_idp(n, **kw)
-        return _write_fasta([(f"{prefix}_{i}", s) for i, s in enumerate(seqs)], out_fasta)
+        # the whole generated sequence is the IDR -> header carries the span `_IDR_1-len` so the
+        # output is a valid record FASTA (read_records-parseable). See _idr_header.
+        return _write_fasta([(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s], out_fasta)
 
     def generate_idr_fasta(self, in_fasta, out_fasta, n: int = 100, **kw) -> Path:
         rows = []
         for r in read_records(in_fasta):
             for i, s in enumerate(self.generate_idr(r.full_seq, r.idr_start, r.idr_end, n, **kw)):
-                rows.append((f"{r.accession}_gen{i}", s))
+                if s:
+                    rows.append((_idr_header(f"{r.accession}_gen{i}", s), s))
         return _write_fasta(rows, out_fasta)
 
     # --- embeddings ---
@@ -275,6 +278,15 @@ class IDiomSAE:
         dl = DataLoader(ds, batch_size=batch_size, collate_fn=make_collate(self.tok.pad_id))
         return compute_fidelity(self.model, self.sae, self.layer, dl, pad_id=self.tok.pad_id,
                                 tokenizer=self.tok, region=self.region, device=self.device)
+
+
+def _idr_header(accession: str, seq: str) -> str:
+    """Header for a generated sequence: append ``_IDR_1-len`` (the whole sequence is the IDR).
+
+    Makes generated FASTAs valid record FASTAs that ``read_records`` can parse. ``read_records``
+    splits on the last ``_IDR_``, so accessions that themselves contain underscores are fine.
+    """
+    return f"{accession}_IDR_1-{len(seq)}"
 
 
 def _write_fasta(records: list[tuple[str, str]], path) -> Path:
