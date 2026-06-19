@@ -18,7 +18,6 @@ dependencies = [
     "ipdb>=0.13.13",
     "ipython>=8.38.0",
     "lightning>=2.6.0",
-    "matplotlib>=3.10.9",
     "pip>=25.0",
     "pre-commit>=4.5.1",
     "scikit-learn>=1.7.2",
@@ -33,18 +32,9 @@ dependencies = [
     "loguru>=0.7",
     "anthropic>=0.18.0",      # SAE feature annotation (P6)
     "umap-learn>=0.5.6",      # feature clustering (P6)
-    "sparrow",               # IDR biophysics metrics (eval)
-    "metapredict>=3",        # disorder prediction (eval)
     # SAE feature viewer (analysis/feature_viewer.py)
     "setuptools<81",
 ]
-
-[tool.uv]
-# pyfamsa (transitive, via metapredict) 0.6+ wheels need glibc>=2.34; pin to last 2.17 build
-constraint-dependencies = ["pyfamsa<0.6"]
-
-[tool.uv.sources]
-sparrow = { git = "https://github.com/idptools/sparrow.git" }
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -60,11 +50,10 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-# "src" -> the idiom library; "." -> repo-only extras/ (eval, analysis, data_pipeline; not shipped)
-pythonpath = ["src", "."]
+pythonpath = ["src"]  # the idiom library
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/idiom"]  # ship only the library; extras/ (eval, analysis, data_pipeline) stays repo-only
+packages = ["src/idiom"]  # ship only the library
 
 [project.scripts]
 idiom_generate = "idiom.api:main"

@@ -64,12 +64,13 @@ Only `src/idiom/` ships in the pip package; the rest is clone-only.
 | Path | Role |
 |------|------|
 | `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + interpretability), `utils` (device, perplexity), public `IDiom` API |
-| `extras/data_pipeline/` | offline pretraining-corpus build (AFDB → IDR extraction → cluster → split → filters) |
-| `extras/eval/` | generation/model evaluation harness (validity, features, distances, disorder, novelty, localization, llps, protgps) |
-| `extras/figures/` | paper analysis + figure scripts |
-| `extras/assets/` | static assets (figures for docs) |
+| `assets/` | static assets (figures for docs) |
 | `rewards/` | GRPO reward definitions + the vendored ProtGPS reward model |
 | `bash/` | example SLURM scripts for every entrypoint |
+
+Reproduction code that doesn't ship with the library — the data-curation pipeline, the
+evaluation harness, SAE feature analysis, and the paper figures — lives in the companion repo
+[**idiom-extras**](https://github.com/rotskoff-group/idiom-extras).
 
 ## Training / interpretability (CLIs)
 
