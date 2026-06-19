@@ -44,11 +44,11 @@ def fraction_alanine(idr: str) -> float:
 
 
 def sequence_entropy(idr: str) -> float:
-    """Shannon entropy (nats) of the IDR's amino-acid composition (max ln20 ≈ 3.0)."""
+    """Shannon entropy (**bits**) of the IDR's amino-acid composition (max log2(20) ≈ 4.32 bits)."""
     if not idr:
         return 0.0
     n = len(idr)
-    return -sum((c / n) * math.log(c / n) for c in Counter(idr).values())
+    return -sum((c / n) * math.log2(c / n) for c in Counter(idr).values())
 
 
 def length_reward(idr: str, *, target_length: int, width: float = 1.0) -> float:
@@ -59,8 +59,14 @@ def length_reward(idr: str, *, target_length: int, width: float = 1.0) -> float:
     return -(d * d)
 
 
-def entropy_reward(idr: str, *, target_entropy: float = 2.75, width: float = 1.0) -> float:
-    """Quadratic penalty (legacy): ``-((H - target)/(target*width))^2``, max 0 at target."""
+def entropy_reward(idr: str, *, target_entropy: float = 3.68, width: float = 1.0) -> float:
+    """Quadratic penalty (legacy): ``-((H - target)/(target*width))^2``, max 0 at target.
+
+    ``H`` and ``target_entropy`` are in **bits** (see :func:`sequence_entropy`). The default 3.68
+    bits = 2.55 nats (the corpus-matched target; AFDB IDR mean ~3.64 bits). Because the penalty is a
+    ratio, the nats->bits switch leaves the reward (and training dynamics) unchanged as long as the
+    configured target is converted too.
+    """
     d = (sequence_entropy(idr) - target_entropy) / (target_entropy * width)  # H=0 for empty IDR
     return -(d * d)
 

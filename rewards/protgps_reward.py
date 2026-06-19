@@ -16,7 +16,7 @@ Paths/devices (override via env):
 
 Caveat (see steering findings): ProtGPS rewards compositional extremity — high scores are
 easy to reach with low-complexity tracts. Pair it with the entropy term in grpo.yaml
-(target_entropy ~2.7 nats) to keep completions natural and avoid reward-hacking.
+(target_entropy ~3.68 bits = 2.55 nats) to keep completions natural and avoid reward-hacking.
 """
 
 from __future__ import annotations
