@@ -119,12 +119,26 @@ class IDiom:
         # output is a valid record FASTA (read_records-parseable). See _idr_header.
         return _write_fasta([(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s], out_fasta)
 
-    def generate_idr_fasta(self, in_fasta, out_fasta, n: int = 100, **kw) -> Path:
+    def generate_idr_fasta(self, in_fasta, out_fasta, n: int = 100, *, return_full: bool = False, **kw) -> Path:
+        """Generate ``n`` IDRs per input record (each conditioned on that record's flanks).
+
+        ``return_full=False`` (default) writes the generated IDR alone with header span ``_IDR_1-len``
+        — the original behaviour, so existing analysis code keeps working. ``return_full=True`` splices
+        each IDR back into its flanks and writes the whole protein, with the header span pointing at
+        the IDR region (``_IDR_{idr_start+1}-{idr_start+len}``, 1-indexed inclusive).
+        """
         rows = []
         for r in read_records(in_fasta):
             for i, s in enumerate(self.generate_idr(r.full_seq, r.idr_start, r.idr_end, n, **kw)):
-                if s:
-                    rows.append((_idr_header(f"{r.accession}_gen{i}", s), s))
+                if not s:
+                    continue
+                acc = f"{r.accession}_gen{i}"
+                if return_full:
+                    seq = r.full_seq[: r.idr_start] + s + r.full_seq[r.idr_end :]
+                    header = f"{acc}_IDR_{r.idr_start + 1}-{r.idr_start + len(s)}"
+                    rows.append((header, seq))
+                else:
+                    rows.append((_idr_header(acc, s), s))
         return _write_fasta(rows, out_fasta)
 
     # --- embeddings ---
@@ -307,6 +321,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--out", required=True, help="output FASTA")
     p.add_argument("--n", type=int, default=1000, help="sequences (idp) or per protein (idr)")
     p.add_argument("--fasta", help="idr mode: input proteins with _IDR_x-y headers")
+    p.add_argument("--return-full", action="store_true",
+                   help="idr mode: splice each IDR back into its flanks and write the whole protein")
     p.add_argument("--max-new-tokens", type=int, default=256)
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--top-k", type=int, default=None)
@@ -325,7 +341,7 @@ def main(argv: list[str] | None = None) -> None:
     else:
         if not args.fasta:
             p.error("idr mode requires --fasta")
-        model.generate_idr_fasta(args.fasta, args.out, n=args.n, **kw)
+        model.generate_idr_fasta(args.fasta, args.out, n=args.n, return_full=args.return_full, **kw)
     print(f"wrote {args.out}")
 
 
