@@ -31,6 +31,7 @@ from idiom.sae.steering.hooks import (
     clamp_features_edit,
     sae_edit_hook,
     steering,
+    subtract_contribution_hook,
 )
 
 
@@ -46,7 +47,7 @@ class SteeringSpec:
     layer: int
     feature_idx: int | Sequence[int]
     strength: float | Sequence[float]
-    mode: str = "add_direction"  # "add_direction" | "clamp"
+    mode: str = "add_direction"  # "add_direction" | "clamp" | "ablate"
     clamp_value: float | Sequence[float] | None = None
 
 
@@ -71,7 +72,9 @@ def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
 
     Supports one or several features at once. ``add_direction`` adds the sum of the (unit-norm)
     decoder rows scaled by their strengths; ``clamp`` rewrites the residual via a single SAE
-    encode/edit/decode round-trip that pins all listed features to their target values.
+    encode/edit/decode round-trip that pins all listed features to their target values; ``ablate``
+    subtracts the features' *actual* contribution (``x - sum act_f * W_dec[f]``) — a clean
+    directional erasure with no SAE reconstruction-error confound (``strength`` is ignored).
     """
     feats = _as_list(spec.feature_idx)
     if spec.mode == "add_direction":
@@ -82,7 +85,9 @@ def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
         raw = spec.clamp_value if spec.clamp_value is not None else spec.strength
         values = _broadcast(_as_list(raw), len(feats), "clamp_value")
         return sae_edit_hook(sae, clamp_features_edit(feats, values))
-    raise ValueError(f"Unknown steering mode {spec.mode!r}; use 'add_direction' or 'clamp'.")
+    if spec.mode == "ablate":
+        return subtract_contribution_hook(sae, feats)
+    raise ValueError(f"Unknown steering mode {spec.mode!r}; use 'add_direction', 'clamp', or 'ablate'.")
 
 
 @torch.no_grad()

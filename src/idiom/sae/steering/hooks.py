@@ -34,6 +34,26 @@ def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callab
     return hook
 
 
+def subtract_contribution_hook(sae, feature_idxs: Sequence[int]) -> Callable:
+    """Hook that removes the chosen features' *actual* contribution: ``x - sum_f act_f(x)*W_dec[f]``.
+
+    Encodes the residual to read the selected latents' real per-position activations and subtracts
+    only their decoder contribution. Unlike :func:`sae_edit_hook` (which substitutes the full SAE
+    reconstruction and so drops the reconstruction residual / FVU), this leaves all other features
+    AND the off-manifold residual intact — a clean directional ablation with no reconstruction-error
+    confound. Position-faithful: nothing is removed where the feature did not fire (``act_f = 0``).
+    """
+    idx = torch.as_tensor(list(feature_idxs), dtype=torch.long)
+
+    def hook(module, inputs, output):
+        f = sae.encode_dense(output)            # [B, L, num_latents]
+        j = idx.to(output.device)
+        contrib = f[..., j] @ sae.W_dec[j]      # [B, L, d_model] = sum_k act_k * W_dec[k]
+        return output - contrib.to(output.dtype)
+
+    return hook
+
+
 def substitute_hook(vector: torch.Tensor) -> Callable:
     """Hook that replaces the entire residual stream with a fixed vector (broadcast).
 
