@@ -66,14 +66,37 @@ class IDiom:
         load_model(model, str(d / WEIGHTS_FILE))  # handles the tied embedding
         return cls(model, device=resolve_device(device))
 
-    def save_pretrained(self, out_dir: str | Path) -> Path:
+    def save_pretrained(self, out_dir: str | Path, *, model_card: str | None = None) -> Path:
         from safetensors.torch import save_model  # noqa: PLC0415
 
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         (d / CONFIG_FILE).write_text(json.dumps(asdict(self.model.cfg), indent=2))
         save_model(self.model, str(d / WEIGHTS_FILE))
+        if model_card is not None:
+            (d / "README.md").write_text(model_card)
         return d
+
+    def push_to_hub(self, repo_id: str, *, private: bool = True, model_card: str | None = None,
+                    commit_message: str | None = None, token: str | None = None) -> str:
+        """Save in released form and upload to the HF Hub as ``repo_id``; returns the repo URL.
+
+        Creates the repo if missing (private by default), then uploads ``config.json`` +
+        ``model.safetensors`` (+ a ``README.md`` model card if ``model_card`` is given) to the repo
+        root, so the result loads directly via :meth:`from_pretrained`. ``token`` falls back to the
+        cached login / ``HF_TOKEN``.
+        """
+        import tempfile  # noqa: PLC0415
+
+        from huggingface_hub import HfApi  # noqa: PLC0415
+
+        api = HfApi(token=token)
+        api.create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.save_pretrained(tmp, model_card=model_card)
+            api.upload_folder(repo_id=repo_id, folder_path=tmp, repo_type="model",
+                              commit_message=commit_message or f"Upload {repo_id}")
+        return f"https://huggingface.co/{repo_id}"
 
     @classmethod
     def from_lightning_checkpoint(cls, ckpt_path, *, device="auto") -> "IDiom":
