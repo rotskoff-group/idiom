@@ -61,35 +61,54 @@ class FeatureDataset:
         s = self.strings[int(local_seq_idx)]
         return s.decode("utf-8") if isinstance(s, bytes) else str(s)
 
+    # Rows processed per pass when streaming a memory-mapped dataset. Bounds peak RAM to
+    # ~CHUNK_ROWS * k * 8 bytes (e.g. ~256 MB at 1M rows, k=32) instead of copying the whole
+    # [N_res, k] arrays into RAM (which ``arr[:]`` does even on a memmap).
+    CHUNK_ROWS = 1_000_000
+
+    def _row_chunks(self):
+        """Yield ``(start, top_idx_chunk, top_val_chunk)``. In-memory => one chunk; mmap => streamed."""
+        n = self.top_indices.shape[0]
+        if self.in_memory:
+            yield 0, np.asarray(self.top_indices), np.asarray(self.top_values)
+            return
+        for s in range(0, n, self.CHUNK_ROWS):
+            e = min(s + self.CHUNK_ROWS, n)
+            yield s, np.asarray(self.top_indices[s:e]), np.asarray(self.top_values[s:e])
+
     # --- reductions ---
     def row_activations(self, feature_id: int) -> np.ndarray:
-        """Per-residue activation of ``feature_id`` over all rows (0 where not in top-k)."""
-        top_idx = np.asarray(self.top_indices[:])
-        top_val = np.asarray(self.top_values[:])
-        return (top_val * (top_idx == int(feature_id))).sum(axis=1)
+        """Per-residue activation of ``feature_id`` over all rows (0 where not in top-k). Streamed."""
+        f = int(feature_id)
+        out = np.zeros(self.top_indices.shape[0], dtype=np.float32)
+        for s, ti, tv in self._row_chunks():
+            out[s:s + ti.shape[0]] = (tv * (ti == f)).sum(axis=1)
+        return out
 
     def feature_ranking(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Per-feature ``(max, total, count)`` over the whole dataset (one cached pass).
+        """Per-feature ``(max, total, count)`` over the whole dataset (one cached, streamed pass).
 
         Padded (zero-value) top-k slots are ignored. Used to order features strongest-first.
         """
         if self._ranking is not None:
             return self._ranking
-        flat_idx = np.asarray(self.top_indices[:]).reshape(-1)
-        flat_val = np.asarray(self.top_values[:]).reshape(-1)
-        keep = flat_val > 0
-        flat_idx = flat_idx[keep].astype(np.int64)
-        flat_val = flat_val[keep]
-
-        fsum = np.bincount(flat_idx, weights=flat_val, minlength=self.num_latents).astype(np.float32)
-        fcount = np.bincount(flat_idx, minlength=self.num_latents).astype(np.int64)
-        # Per-feature max via sort + segmented reduce (faster than np.maximum.at on the flat array).
+        fsum = np.zeros(self.num_latents, dtype=np.float64)
+        fcount = np.zeros(self.num_latents, dtype=np.int64)
         fmax = np.zeros(self.num_latents, dtype=np.float32)
-        if flat_idx.size:
-            srt = np.argsort(flat_idx, kind="stable")
-            uniq, start = np.unique(flat_idx[srt], return_index=True)
-            fmax[uniq] = np.maximum.reduceat(flat_val[srt], start)
-        self._ranking = (fmax, fsum, fcount)
+        for _s, ti, tv in self._row_chunks():
+            fi = np.asarray(ti).reshape(-1)
+            fv = np.asarray(tv).reshape(-1)
+            keep = fv > 0
+            fi = fi[keep].astype(np.int64)
+            fv = fv[keep]
+            if not fi.size:
+                continue
+            fsum += np.bincount(fi, weights=fv, minlength=self.num_latents)
+            fcount += np.bincount(fi, minlength=self.num_latents)
+            srt = np.argsort(fi, kind="stable")
+            uniq, start = np.unique(fi[srt], return_index=True)
+            np.maximum.at(fmax, uniq, np.maximum.reduceat(fv[srt], start).astype(np.float32))
+        self._ranking = (fmax, fsum.astype(np.float32), fcount)
         return self._ranking
 
     def feature_stats(self, feature_id: int) -> tuple[float, np.ndarray, np.ndarray]:

@@ -29,14 +29,18 @@ from idiom.sae.features.feature_activations import FeatureDataset
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--features", required=True, help="Path to a feature-activation dataset dir")
+    p.add_argument("--in-memory", action="store_true",
+                   help="pull the whole dataset into RAM (faster per-feature, needs ~N_res*8*k bytes; "
+                        "default streams the memory-mapped arrays in chunks)")
     args, _ = p.parse_known_args()
     return args
 
 
 @st.cache_resource
-def _load(path: str) -> FeatureDataset:
-    """Open the dataset once and pull everything into RAM (CSR index built in the ctor)."""
-    return FeatureDataset(path, in_memory=True)
+def _load(path: str, in_memory: bool) -> FeatureDataset:
+    """Open the dataset once. Default: memory-mapped + chunked streaming (bounded RAM, reductions read
+    from disk per feature, cached after). ``in_memory=True`` pulls everything into RAM up front."""
+    return FeatureDataset(path, in_memory=in_memory)
 
 
 @st.cache_data
@@ -68,7 +72,7 @@ def _shade(seq: str, acts: np.ndarray, gmax: float) -> str:
 
 def main() -> None:
     args = _parse_args()
-    fd = _load(args.features)
+    fd = _load(args.features, args.in_memory)
     n_seqs = fd.n_seqs
 
     st.set_page_config(layout="wide")
