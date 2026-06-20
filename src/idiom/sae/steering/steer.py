@@ -86,7 +86,8 @@ def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
         values = _broadcast(_as_list(raw), len(feats), "clamp_value")
         return sae_edit_hook(sae, clamp_features_edit(feats, values))
     if spec.mode == "ablate":
-        return subtract_contribution_hook(sae, feats)
+        scale = float(spec.strength) if spec.strength else 1.0  # strength == over-ablation factor (default 1)
+        return subtract_contribution_hook(sae, feats, scale=scale)
     raise ValueError(f"Unknown steering mode {spec.mode!r}; use 'add_direction', 'clamp', or 'ablate'.")
 
 
