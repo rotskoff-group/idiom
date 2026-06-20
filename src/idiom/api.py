@@ -142,8 +142,13 @@ class IDiom:
         # output is a valid record FASTA (read_records-parseable). See _idr_header.
         return _write_fasta([(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s], out_fasta)
 
-    def generate_idr_fasta(self, in_fasta, out_fasta, n: int = 100, *, return_full: bool = False, **kw) -> Path:
+    def generate_idr_fasta(self, in_fasta, out_fasta, n: int = 100, *, return_full: bool = False,
+                           marker: str = "idiom_idr", **kw) -> Path:
         """Generate ``n`` IDRs per input record (each conditioned on that record's flanks).
+
+        Each output record is tagged ``{source_accession}_{marker}_gen{i}`` (``marker`` defaults to
+        ``idiom_idr``, symmetric with the ``idiom_idp`` prefix on de-novo IDP output) so generated
+        records are distinguishable by mode at a glance; the source accession is preserved in front.
 
         ``return_full=False`` (default) writes the generated IDR alone with header span ``_IDR_1-len``
         — the original behaviour, so existing analysis code keeps working. ``return_full=True`` splices
@@ -155,7 +160,7 @@ class IDiom:
             for i, s in enumerate(self.generate_idr(r.full_seq, r.idr_start, r.idr_end, n, **kw)):
                 if not s:
                     continue
-                acc = f"{r.accession}_gen{i}"
+                acc = f"{r.accession}_{marker}_gen{i}"
                 if return_full:
                     seq = r.full_seq[: r.idr_start] + s + r.full_seq[r.idr_end :]
                     header = f"{acc}_IDR_{r.idr_start + 1}-{r.idr_start + len(s)}"

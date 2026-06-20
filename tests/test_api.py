@@ -39,7 +39,7 @@ def test_generate_idr_and_fasta(tmp_path):
     in_fa.write_text(">A_IDR_4-8\nMEDSKVDNRPQ\n")  # 1-based header -> internal half-open
     out = m.generate_idr_fasta(in_fa, tmp_path / "out.fasta", n=2, max_new_tokens=6, temperature=0)
     text = out.read_text()
-    assert text.count(">A_gen") == 2
+    assert text.count(">A_idiom_idr_gen") == 2
 
 
 def test_generate_cli(tmp_path):
