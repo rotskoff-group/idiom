@@ -10,7 +10,7 @@ region: all                  # residues feeding the SAE: all | idr | non_idr (sp
 
 data:
   fasta: ???                 # record FASTA whose activations feed the SAE
-  fim_full_prob: 0.5
+  fim_idr_prob: 0.5          # idr (context) vs idp (de-novo); 0.0 = pure de-novo SAE
   record_batch_size: 16      # sequences per model forward (re-batched into sae_batch_size)
 
 sae_batch_size: 4096         # activation rows per SAE step

@@ -14,21 +14,21 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from idiom.data.fim import fim_132, fim_full, residue_source_positions
+from idiom.data.fim import fim_idp, fim_idr, residue_source_positions
 from idiom.data.io import read_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
 
 
 @torch.no_grad()
-def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode="context"):
+def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode="idr"):
     """Return ``{layer: (values[N, d], index)}``; index is a list of per-row metadata dicts.
 
-    ``fim_mode`` is the prompt format the activations are taken under: ``context``
-    (``1{prefix}3{suffix}2{IDR}``) or ``denovo`` (``132{IDR}``, no flanks).
+    ``fim_mode`` is the prompt format the activations are taken under: ``idr``
+    (``1{prefix}3{suffix}2{IDR}``, context) or ``idp`` (``132{IDR}``, de-novo, no flanks).
     """
     tok = tokenizer or Tokenizer()
-    build, variant = (fim_full, "full") if fim_mode == "context" else (fim_132, "132")
+    build, variant = (fim_idr, "idr") if fim_mode == "idr" else (fim_idp, "idp")
     out = {layer: {"values": [], "index": []} for layer in layers}
 
     for rec in read_records(fasta):

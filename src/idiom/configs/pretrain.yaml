@@ -11,7 +11,7 @@ run_name: null               # optional wandb run name
 data:
   train_fasta: ???           # required: per-split record FASTA from curation
   val_fasta: null
-  fim_full_prob: 0.5         # full-context vs 132 augmentation
+  fim_idr_prob: 0.5          # idr (context) vs idp (de-novo) augmentation
   completion_only: false     # pretraining: loss on every token
   batch_size: 32             # PER-GPU; global = batch_size * devices * accumulate_grad_batches
   num_workers: 8

@@ -1,7 +1,7 @@
 """Prompt source for GRPO (on-the-fly, no RL h5).
 
 Prompts are FIM generation prefixes (``1{prefix}3{suffix}2``): de-novo ``"132"`` for IDP
-optimization, or one protein's flanks for prompted-IDR optimization. A batch is assumed
+optimization (``idp_prompts``), or one protein's flanks for prompted-IDR optimization. A batch is assumed
 equal-length (the typical case — a single prompt repeated, or one compartment's prompt).
 """
 
@@ -27,7 +27,7 @@ class PromptDataset(Dataset):
         return self.encoded[i]
 
 
-def denovo_prompts(n: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
+def idp_prompts(n: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
     """``n`` copies of the de-novo prompt ``"132"`` (IDP optimization)."""
     return PromptDataset([fim_prompt()] * n, tokenizer)
 

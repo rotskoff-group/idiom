@@ -185,7 +185,7 @@ class IDiomSAE:
     """
 
     def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None,
-                 region: str = "all", fim_mode: str = "context"):
+                 region: str = "all", fim_mode: str = "idr"):
         self.sae = sae.eval().to(model.device)
         self.host = model
         self.layer = int(layer)
@@ -227,7 +227,7 @@ class IDiomSAE:
                 )
             model = IDiom.load(cfg["host_model"], device=device)
         return cls(sae, model, cfg["layer"], host_model=cfg.get("host_model"),
-                   region=cfg.get("region", "all"), fim_mode=cfg.get("fim_mode", "context"))
+                   region=cfg.get("region", "all"), fim_mode=cfg.get("fim_mode", "idr"))
 
     def save_pretrained(self, out_dir, *, host_model: str | None = None) -> Path:
         """Write the release dir (``sae_config.json`` + ``sae.safetensors``); ``host_model`` (repo id
@@ -297,21 +297,21 @@ class IDiomSAE:
 
     # --- fidelity ---
     @torch.no_grad()
-    def fidelity(self, fasta, *, batch_size: int = 16, fim_full_prob: float | None = None):
+    def fidelity(self, fasta, *, batch_size: int = 16, fim_idr_prob: float | None = None):
         """Substitution-loss fidelity (``loss_clean``/``loss_sae``/``loss_ablate``,
-        ``pct_loss_recovered``) over a record FASTA. ``fim_full_prob`` defaults to match the SAE's
-        training prompt format (0.0 de-novo / 1.0 context), so eval stays on-distribution."""
+        ``pct_loss_recovered``) over a record FASTA. ``fim_idr_prob`` defaults to match the SAE's
+        training prompt format (0.0 idp / 1.0 idr), so eval stays on-distribution."""
         from torch.utils.data import DataLoader  # noqa: PLC0415
 
         from idiom.data.dataset import RecordDataset, make_collate  # noqa: PLC0415
         from idiom.data.io import read_records  # noqa: PLC0415
         from idiom.sae.fidelity import compute_fidelity  # noqa: PLC0415
 
-        if fim_full_prob is None:
-            fim_full_prob = 0.0 if self.fim_mode == "denovo" else 1.0
+        if fim_idr_prob is None:
+            fim_idr_prob = 0.0 if self.fim_mode == "idp" else 1.0
 
         ds = RecordDataset(read_records(fasta), self.tok, max_len=self.model.cfg.max_seq_len,
-                           fim_full_prob=fim_full_prob)
+                           fim_idr_prob=fim_idr_prob)
         dl = DataLoader(ds, batch_size=batch_size, collate_fn=make_collate(self.tok.pad_id))
         return compute_fidelity(self.model, self.sae, self.layer, dl, pad_id=self.tok.pad_id,
                                 tokenizer=self.tok, region=self.region, device=self.device)

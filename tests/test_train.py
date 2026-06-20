@@ -16,13 +16,13 @@ RECS = [Record("a", "MEDSKVDNRPQ", 2, 6), Record("b", "ACDEFGHIKLWY", 3, 9)]
 
 
 def _loader(completion_only=False):
-    ds = RecordDataset(RECS, TOK, max_len=64, fim_full_prob=1.0, completion_only=completion_only)
+    ds = RecordDataset(RECS, TOK, max_len=64, fim_idr_prob=1.0, completion_only=completion_only)
     return DataLoader(ds, batch_size=2, collate_fn=make_collate(TOK.pad_id))
 
 
 def test_sft_mask_is_completion_only():
     # SFT: only the IDR (idr_len residues) + STOP carry loss.
-    ds = RecordDataset(RECS, TOK, fim_full_prob=1.0, completion_only=True)
+    ds = RecordDataset(RECS, TOK, fim_idr_prob=1.0, completion_only=True)
     _, y, mask = ds[0]
     idr_len = RECS[0].idr_end - RECS[0].idr_start
     assert int(mask.sum()) == idr_len + 1
@@ -76,7 +76,7 @@ def test_build_wires_pretrain_and_sft(tmp_path):
         "model": {"n_layers": 2, "d_model": 32, "n_heads": 4, "max_seq_len": 64, "vocab_size": 27},
         "optim": {"lr": 3e-4, "warmup_steps": 1, "weight_decay": 0.1, "min_lr_ratio": 0.1},
         "trainer": {"max_steps": 5},
-        "data": {"train_fasta": str(fasta), "val_fasta": None, "fim_full_prob": 1.0,
+        "data": {"train_fasta": str(fasta), "val_fasta": None, "fim_idr_prob": 1.0,
                  "completion_only": True, "batch_size": 2, "num_workers": 0},
     }
     lit, dm = build(OmegaConf.create(base))

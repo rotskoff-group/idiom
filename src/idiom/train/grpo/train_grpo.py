@@ -17,7 +17,7 @@ from lightning.pytorch.loggers import WandbLogger
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from idiom.train.grpo.data import collate_prompts, denovo_prompts, record_prompts
+from idiom.train.grpo.data import collate_prompts, idp_prompts, record_prompts
 from idiom.train.grpo.lit_grpo import LitGRPO
 from idiom.train.grpo.rewards import entropy_reward, get_reward, length_reward, quadratic_shaping
 
@@ -91,8 +91,8 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
         cfg.init_from, reward, reward_components=components, **grpo_kw
     )
 
-    if cfg.prompts.mode == "denovo":
-        ds = denovo_prompts(cfg.prompts.n)
+    if cfg.prompts.mode in ("idp", "denovo"):  # "denovo" kept for back-compat with old configs
+        ds = idp_prompts(cfg.prompts.n)
     else:
         ds = record_prompts(cfg.prompts.fasta, cfg.prompts.n_per)
     return lit, ds

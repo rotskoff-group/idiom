@@ -30,7 +30,7 @@ def test_steering_context_only_edits_residues():
 def test_compute_fidelity_runs():
     model = IDiomTransformer(TINY).eval()
     sae = SparseCoder(TINY.d_model, num_latents=32, k=4)
-    ds = RecordDataset(RECS, TOK, max_len=64, fim_full_prob=1.0)
+    ds = RecordDataset(RECS, TOK, max_len=64, fim_idr_prob=1.0)
     batches = list(DataLoader(ds, batch_size=2, collate_fn=make_collate(TOK.pad_id)))
     res = compute_fidelity(model, sae, layer=1, batches=batches, pad_id=TOK.pad_id, tokenizer=TOK)
     for v in (res.loss_clean, res.loss_sae, res.loss_ablate):

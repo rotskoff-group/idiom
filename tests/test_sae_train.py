@@ -30,7 +30,7 @@ def test_sae_build_wires_and_streams(tmp_path):
     cfg = OmegaConf.create({
         "seed": 0, "device": "cpu", "model_ckpt": str(ckpt),  # arch read from the ckpt
         "layer": 1,
-        "data": {"fasta": str(fasta), "fim_full_prob": 1.0, "record_batch_size": 2},
+        "data": {"fasta": str(fasta), "fim_idr_prob": 1.0, "record_batch_size": 2},
         "sae_batch_size": 8, "buffer_size": 8, "init_b_dec_from_mean": True,
         "sae": {"k": 4, "expansion_factor": 2, "activation": "topk", "multi_topk": False,
                 "auxk_alpha": 0.0, "dead_feature_tokens": 1000000, "warmup_steps": 1},

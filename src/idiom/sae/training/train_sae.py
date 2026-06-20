@@ -32,7 +32,8 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     model_cfg = model.cfg
 
     records = RecordDataset(
-        open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len, fim_full_prob=cfg.data.fim_full_prob
+        open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len,
+        fim_idr_prob=cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5)),
     )
     record_loader = DataLoader(
         records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id)
@@ -75,9 +76,10 @@ def run(cfg: DictConfig) -> None:
     )
     trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
     # canonical SAE release (host_model + layer + region + fim_mode recorded): loads via
-    # IDiomSAE.from_pretrained. fim_mode is "denovo" iff training was pure de-novo (fim_full_prob==0),
-    # else "context" — it's the single prompt format downstream tools rebuild activations under.
-    fim_mode = "denovo" if float(cfg.data.fim_full_prob) == 0.0 else "context"
+    # IDiomSAE.from_pretrained. fim_mode is "idp" iff training was pure de-novo (fim_idr_prob==0),
+    # else "idr" — it's the single prompt format downstream tools rebuild activations under.
+    fim_idr_prob = cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5))
+    fim_mode = "idp" if float(fim_idr_prob) == 0.0 else "idr"
     save_sae(
         lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer,
         region=cfg.get("region", "all"), fim_mode=fim_mode,

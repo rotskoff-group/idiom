@@ -1,8 +1,8 @@
 """On-the-fly training dataset (Option A): records -> FIM -> tokenize -> shifted targets.
 
 No precompute / token-h5. Each ``__getitem__`` assembles a FIM string from a :class:`Record`
-(``full`` vs ``132`` chosen at random per sample — the augmentation that replaces the old
-stored ×2 duplication), tokenizes it, and forms the next-token-prediction pair:
+(``idr`` (context) vs ``idp`` (de-novo) chosen at random per sample — the augmentation that
+replaces the old stored ×2 duplication), tokenizes it, and forms the next-token-prediction pair:
 
     input  = [START, t0, t1, ..., t_{n-1}]
     target = [t0,    t1, ..., t_{n-1}, STOP]
@@ -25,7 +25,7 @@ from loguru import logger as log
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 
-from idiom.data.fim import fim_132, fim_full
+from idiom.data.fim import fim_idp, fim_idr
 from idiom.data.io import Record
 from idiom.data.record_store import RecordStore
 from idiom.data.tokenizer import Tokenizer
@@ -36,15 +36,15 @@ FIM_OVERHEAD = 4
 
 
 def max_protein_len(max_len: int) -> int:
-    """Largest ``full_seq`` length whose ``full`` example fits in ``max_len`` positions."""
+    """Largest ``full_seq`` length whose ``idr`` (context) example fits in ``max_len`` positions."""
     return max_len - FIM_OVERHEAD
 
 
 def record_to_example(
-    record: Record, tokenizer: Tokenizer, *, variant: str = "full"
+    record: Record, tokenizer: Tokenizer, *, variant: str = "idr"
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Build the ``(input_ids, target_ids)`` next-token pair for one record + FIM variant."""
-    build = fim_full if variant == "full" else fim_132
+    build = fim_idr if variant == "idr" else fim_idp
     ids = tokenizer.encode(build(record.full_seq, record.idr_start, record.idr_end))
     input_ids = torch.tensor([tokenizer.start_id, *ids], dtype=torch.long)
     target_ids = torch.tensor([*ids, tokenizer.stop_id], dtype=torch.long)
@@ -60,13 +60,16 @@ class RecordDataset(Dataset):
         tokenizer: Tokenizer | None = None,
         *,
         max_len: int = 1024,
-        fim_full_prob: float = 0.5,
+        fim_idr_prob: float = 0.5,
         completion_only: bool = False,
         seed: int = 0,
+        fim_full_prob: float | None = None,  # deprecated alias for fim_idr_prob
     ) -> None:
         self.tok = tokenizer or Tokenizer()
         self.max_len = int(max_len)
-        self.fim_full_prob = float(fim_full_prob)
+        if fim_full_prob is not None:  # back-compat: old callers/configs used fim_full_prob
+            fim_idr_prob = fim_full_prob
+        self.fim_idr_prob = float(fim_idr_prob)
         # completion_only=True -> SFT: compute loss only on the IDR completion (after the `2`
         # marker). False -> pretraining: loss on every token.
         self.completion_only = bool(completion_only)
@@ -95,7 +98,7 @@ class RecordDataset(Dataset):
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         rec = self.store[int(self._keep[i])] if self.store is not None else self.records[i]
-        variant = "full" if self._rng.random() < self.fim_full_prob else "132"  # per-sample augmentation
+        variant = "idr" if self._rng.random() < self.fim_idr_prob else "idp"  # per-sample augmentation
         x, y = record_to_example(rec, self.tok, variant=variant)
         if self.completion_only:
             # The IDR is the trailing part of the FIM string, so target's last (idr_len + 1)

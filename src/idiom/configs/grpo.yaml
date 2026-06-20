@@ -1,13 +1,13 @@
 # GRPO post-training config (flat, D6).
-#   idiom_grpo init_from=/path/pretrained.ckpt reward.name=protgps prompts.mode=denovo
+#   idiom_grpo init_from=/path/pretrained.ckpt reward.name=protgps prompts.mode=idp
 seed: 0
 device: auto
 init_from: ???               # required: pretrained checkpoint to optimize
 resume_from: null            # mid-run resume (optimizer/step/RNG) from a .ckpt
 
 prompts:
-  mode: denovo               # denovo ("132") | record (per-protein flank prompts)
-  n: 1000                    # denovo: number of prompts
+  mode: idp                  # idp ("132", de-novo) | record (per-protein flank prompts)
+  n: 1000                    # idp: number of prompts
   fasta: null                # record mode: FASTA of proteins (_IDR_x-y headers)
   n_per: 1000                # record mode: copies per protein
   batch_size: 8              # distinct prompts per step (each -> group_size completions)

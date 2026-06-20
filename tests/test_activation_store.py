@@ -19,7 +19,7 @@ RECS = [Record(f"r{i}", "MEDSKVDNRPQACDEFG", 3, 12) for i in range(8)]
 
 def _store(sae_batch_size=8, buffer_size=8, layer=1):
     model = IDiomTransformer(TINY)
-    ds = RecordDataset(RECS, TOK, max_len=64, fim_full_prob=1.0)
+    ds = RecordDataset(RECS, TOK, max_len=64, fim_idr_prob=1.0)
     loader = DataLoader(ds, batch_size=4, collate_fn=make_collate(TOK.pad_id))
     return ActivationStore(model, loader, layer, sae_batch_size=sae_batch_size,
                            buffer_size=buffer_size, device="cpu")
@@ -39,7 +39,7 @@ def test_mean_activation_shape():
 def test_region_split_idr_vs_non_idr():
     """idr + non_idr partition all residues; counts match the FIM span (9 IDR + 8 flank / seq)."""
     model = IDiomTransformer(TINY)
-    ds = RecordDataset(RECS, TOK, max_len=64, fim_full_prob=1.0)  # every sample is 'full'
+    ds = RecordDataset(RECS, TOK, max_len=64, fim_idr_prob=1.0)  # every sample is 'idr'
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
     n_all = extract_activations(model, x, [1], tokenizer=TOK, region="all")[1].values.size(0)
     n_idr = extract_activations(model, x, [1], tokenizer=TOK, region="idr")[1].values.size(0)
@@ -52,7 +52,7 @@ def test_region_split_idr_vs_non_idr():
 def test_region_on_denovo_132_format():
     """de-novo '132{IDR}' has no flanks: region=idr keeps all 9 IDR/seq, non_idr keeps none."""
     model = IDiomTransformer(TINY)
-    ds = RecordDataset(RECS, TOK, max_len=64, fim_full_prob=0.0)  # every sample is '132'
+    ds = RecordDataset(RECS, TOK, max_len=64, fim_idr_prob=0.0)  # every sample is 'idp'
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
     n_idr = extract_activations(model, x, [1], tokenizer=TOK, region="idr")[1].values.size(0)
     n_non = extract_activations(model, x, [1], tokenizer=TOK, region="non_idr")[1].values.size(0)

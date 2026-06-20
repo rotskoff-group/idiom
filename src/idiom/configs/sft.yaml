@@ -10,7 +10,7 @@ run_name: null               # optional wandb run name
 data:
   train_fasta: ???           # required: the (usually small, curated) SFT record FASTA
   val_fasta: null
-  fim_full_prob: 1.0         # SFT is typically full-context in-filling
+  fim_idr_prob: 1.0          # SFT is typically idr (context) in-filling
   completion_only: true      # train loss on the IDR completion only
   batch_size: 32
   num_workers: 8

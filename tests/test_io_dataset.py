@@ -46,7 +46,7 @@ def test_read_records(tmp_path):
 
 def test_record_to_example_shift():
     rec = Record("P0", "MEDSKVDNRPQ", 4, 8)  # IDR = seq[4:8] = "KVDN" (half-open)
-    x, y = record_to_example(rec, TOK, variant="full")
+    x, y = record_to_example(rec, TOK, variant="idr")
     assert x.shape == y.shape
     assert x[0].item() == TOK.start_id and y[-1].item() == TOK.stop_id
     # the shift: input[1:] == target[:-1], and it decodes to the FIM string.
@@ -60,7 +60,7 @@ def test_dataset_len_filter_and_getitem():
         Record("ok", "MEDSKVDNRPQ", 2, 5),   # len 11 <= 12 -> kept
         Record("too_long", "A" * 20, 0, 19),  # len 20 > 12 -> dropped
     ]
-    ds = RecordDataset(recs, TOK, max_len=16, fim_full_prob=1.0)
+    ds = RecordDataset(recs, TOK, max_len=16, fim_idr_prob=1.0)
     assert len(ds) == 1 and keep == 12
     x, y, m = ds[0]
     assert x[0].item() == TOK.start_id and x.dtype == torch.long
@@ -69,7 +69,7 @@ def test_dataset_len_filter_and_getitem():
 
 def test_collate_pads():
     recs = [Record("a", "MEDSKVDNRPQ", 2, 5), Record("b", "ACDEFGHIKL", 1, 8)]
-    ds = RecordDataset(recs, TOK, max_len=64, fim_full_prob=1.0)
+    ds = RecordDataset(recs, TOK, max_len=64, fim_idr_prob=1.0)
     collate = make_collate(TOK.pad_id)
     x, y, m = collate([ds[0], ds[1]])
     assert x.shape == y.shape == m.shape and x.size(0) == 2

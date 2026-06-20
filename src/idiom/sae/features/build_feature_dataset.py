@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from idiom.data.fim import fim_132, fim_full
+from idiom.data.fim import fim_idp, fim_idr
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
 
@@ -32,16 +32,16 @@ def build_feature_dataset(
     device: str | torch.device = "cpu",
     batch_size: int = 16,
     region: str = "all",
-    fim_mode: str = "context",
+    fim_mode: str = "idr",
 ) -> Path:
     """Encode records through ``sae`` at ``layer`` and write the feature dataset to ``out_dir``.
 
-    ``region`` (``all`` | ``idr`` | ``non_idr``) and ``fim_mode`` (``context`` = ``1{prefix}3{suffix}2{IDR}``
-    | ``denovo`` = ``132{IDR}``) are the SAE's training distribution; the dataset is built over exactly
+    ``region`` (``all`` | ``idr`` | ``non_idr``) and ``fim_mode`` (``idr`` = ``1{prefix}3{suffix}2{IDR}``
+    | ``idp`` = ``132{IDR}``) are the SAE's training distribution; the dataset is built over exactly
     those residues, in that prompt format, so the features match what the SAE learned.
     """
     tok = tokenizer or Tokenizer()
-    fim = fim_full if fim_mode == "context" else fim_132
+    fim = fim_idr if fim_mode == "idr" else fim_idp
     model = model.eval().to(device)
     sae = sae.eval().to(device)
     records = list(records)

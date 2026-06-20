@@ -38,7 +38,7 @@ def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
         cfg.data.train_fasta,
         cfg.data.get("val_fasta"),
         max_len=lit.cfg.max_seq_len,
-        fim_full_prob=cfg.data.fim_full_prob,
+        fim_idr_prob=cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5)),
         completion_only=cfg.data.completion_only,
         batch_size=cfg.data.batch_size,
         num_workers=cfg.data.num_workers,
