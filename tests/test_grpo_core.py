@@ -19,13 +19,13 @@ def test_rewards():
     assert fraction_proline("PPAP") == 0.75
     assert fraction_proline("") == 0.0
     assert get_reward("fraction_alanine")("AAAA") == 1.0
-    # entropy: single residue -> 0; uniform over k -> ln(k)
+    # entropy is in bits (log2): single residue -> 0; uniform over k -> log2(k)
     assert sequence_entropy("AAAA") == 0.0
-    assert abs(sequence_entropy("ACDE") - math.log(4)) < 1e-9
+    assert abs(sequence_entropy("ACDE") - math.log2(4)) < 1e-9
     # quadratic penalties (legacy): 0 at the target, negative away from it
     assert abs(length_reward("A" * 100, target_length=100)) < 1e-9
     assert length_reward("A" * 50, target_length=100) < 0.0
-    assert entropy_reward("ACDE", target_entropy=math.log(4)) > entropy_reward("AAAA", target_entropy=math.log(4))
+    assert entropy_reward("ACDE", target_entropy=math.log2(4)) > entropy_reward("AAAA", target_entropy=math.log2(4))
 
 
 def test_group_advantages():

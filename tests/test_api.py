@@ -36,10 +36,15 @@ def test_generate_idr_and_fasta(tmp_path):
     assert len(seqs) == 2
 
     in_fa = tmp_path / "in.fasta"
-    in_fa.write_text(">A_IDR_4-8\nMEDSKVDNRPQ\n")  # 1-based header -> internal half-open
-    out = m.generate_idr_fasta(in_fa, tmp_path / "out.fasta", n=2, max_new_tokens=6, temperature=0)
-    text = out.read_text()
-    assert text.count(">A_idiom_idr_gen") == 2
+    in_fa.write_text(">A_IDR_4-8\nMEDSKVDNRPQ\n")  # 1-based header -> internal half-open [3, 8)
+    # Sample (temperature>0) so the random-init model emits non-empty IDRs (greedy decodes STOP
+    # first -> empty). The writer drops empty generations, so the record count equals the same-seed
+    # in-memory non-empty count, generated with the coords (3, 8) the writer uses internally.
+    kw = dict(n=8, max_new_tokens=6, temperature=1.0, seed=0)
+    expected = sum(bool(s) for s in m.generate_idr("MEDSKVDNRPQ", 3, 8, **kw))
+    assert expected > 0
+    out = m.generate_idr_fasta(in_fa, tmp_path / "out.fasta", **kw)
+    assert out.read_text().count(">A_idiom_idr_gen") == expected
 
 
 def test_generate_cli(tmp_path):
@@ -47,9 +52,14 @@ def test_generate_cli(tmp_path):
 
     _idiom().save_pretrained(tmp_path / "rel")
     out = tmp_path / "idps.fasta"
-    main(["idp", "--model", str(tmp_path / "rel"), "--out", str(out), "--n", "2",
-          "--max-new-tokens", "6", "--temperature", "0"])
-    assert out.read_text().count(">idiom_idp_") == 2
+    # Sample with a fixed seed (greedy would emit STOP first -> empty IDPs, all dropped by the
+    # writer); compare against the same-seed in-memory non-empty count from the reloaded model.
+    m = IDiom.from_pretrained(tmp_path / "rel")
+    expected = sum(bool(s) for s in m.generate_idp(n=8, max_new_tokens=6, temperature=1.0, seed=0))
+    assert expected > 0
+    main(["idp", "--model", str(tmp_path / "rel"), "--out", str(out), "--n", "8",
+          "--max-new-tokens", "6", "--temperature", "1.0", "--seed", "0"])
+    assert out.read_text().count(">idiom_idp_") == expected
 
 
 def test_embed(tmp_path):

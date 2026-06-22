@@ -117,22 +117,56 @@ class IDiom:
         return self.tok.decode(ids)
 
     @torch.no_grad()
-    def _generate(self, prompt: str, n: int, **kw) -> list[str]:
-        gen = torch.Generator(device=self.device).manual_seed(kw.pop("seed")) if "seed" in kw else None
-        prompts = torch.tensor(self.tok.encode(prompt), device=self.device).unsqueeze(0).repeat(n, 1)
-        out = generate(self.model, prompts, tokenizer=self.tok, generator=gen, **kw)
-        return [self._decode_idr(row) for row in out]
+    def _generate(self, prompt: str, n: int, *, length_range: tuple[int, int] | None = None,
+                  max_oversample: int = 20, **kw) -> list[str]:
+        seed = kw.pop("seed", None)
+
+        def _batch(k: int, s: int | None) -> list[str]:
+            gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
+            prompts = torch.tensor(self.tok.encode(prompt), device=self.device).unsqueeze(0).repeat(k, 1)
+            out = generate(self.model, prompts, tokenizer=self.tok, generator=gen, **kw)
+            return [self._decode_idr(row) for row in out]
+
+        if length_range is None:
+            return _batch(n, seed)
+
+        # oversample: keep drawing batches of n and length-filtering until n fall in [lo, hi]
+        # (inclusive), capped at n * max_oversample total draws so an unreachable range can't hang.
+        lo, hi = length_range
+        kept: list[str] = []
+        drawn, rounds, cap = 0, 0, n * max(1, max_oversample)
+        while len(kept) < n and drawn < cap:
+            s = None if seed is None else seed + rounds  # vary the seed per batch
+            kept.extend(x for x in _batch(n, s) if x and lo <= len(x) <= hi)
+            drawn += n
+            rounds += 1
+        if len(kept) < n:
+            import warnings  # noqa: PLC0415
+            warnings.warn(f"generate: only {len(kept)}/{n} sequences fell in length {length_range} "
+                          f"after {drawn} draws (max_oversample={max_oversample}); returning those.")
+        return kept[:n]
 
     def generate_idp(self, n: int = 100, *, max_new_tokens: int = 1000, temperature: float = 1.0,
-                     top_k: int | None = None, top_p: float | None = None, seed: int | None = None) -> list[str]:
-        """De-novo IDPs (prompt ``132``). Returns ``n`` IDR residue strings."""
-        kw = dict(max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p)
+                     top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
+                     length_range: tuple[int, int] | None = None, max_oversample: int = 20) -> list[str]:
+        """De-novo IDPs (prompt ``132``). Returns ``n`` IDR residue strings.
+
+        ``length_range=(lo, hi)``: oversample — re-generate and length-filter until ``n`` sequences
+        have length in ``[lo, hi]`` (inclusive), capped at ``n * max_oversample`` total draws (warns
+        and returns fewer if the cap is hit).
+        """
+        kw = dict(max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
+                  length_range=length_range, max_oversample=max_oversample)
         if seed is not None:
             kw["seed"] = seed
         return self._generate(fim_prompt(), n, **kw)
 
     def generate_idr(self, seq: str, idr_start: int, idr_end: int, n: int = 100, **kw) -> list[str]:
-        """IDRs conditioned on flanks. ``idr_start/idr_end`` are 0-based, half-open (``seq[start:end]``)."""
+        """IDRs conditioned on flanks. ``idr_start/idr_end`` are 0-based, half-open (``seq[start:end]``).
+
+        Accepts ``length_range=(lo, hi)`` / ``max_oversample`` (see :meth:`generate_idp`) to oversample
+        until ``n`` generated IDRs fall in the length range.
+        """
         return self._generate(fim_prompt(seq, idr_start, idr_end), n, **kw)
 
     # --- FASTA-first wrappers ---
@@ -285,12 +319,18 @@ class IDiomSAE:
     # --- steering ---
     @torch.no_grad()
     def steer_generate(self, feature, strength, *, n: int = 100, mode: str = "add_direction",
-                       prompt: str | None = None, max_new_tokens: int = 256, temperature: float = 1.0,
+                       normalize: bool = False,
+                       prompt: str | None = None, max_new_tokens: int = 1000, temperature: float = 1.0,
                        top_k: int | None = None, top_p: float | None = None, seed: int | None = None) -> list[str]:
-        """Generate IDRs with ``feature`` steered on the SAE's layer. Returns residue strings."""
+        """Generate IDRs with ``feature`` steered on the SAE's layer. Returns residue strings.
+
+        ``normalize=True`` (add_direction only): the push is ``strength * unit(sum of decoder rows)``,
+        so ``strength`` is the magnitude in residual-norm units and the number of features sets only
+        the direction (not the magnitude)."""
         from idiom.sae.steering import SteeringSpec, steer_generation  # noqa: PLC0415
 
-        spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode)
+        spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode,
+                            normalize=normalize)
         gen = torch.Generator(device=self.device).manual_seed(seed) if seed is not None else None
         prompt_tokens = self.tok.encode(prompt) if prompt else None
         out = steer_generation(
@@ -351,11 +391,15 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--fasta", help="idr mode: input proteins with _IDR_x-y headers")
     p.add_argument("--return-full", action="store_true",
                    help="idr mode: splice each IDR back into its flanks and write the whole protein")
-    p.add_argument("--max-new-tokens", type=int, default=256)
+    p.add_argument("--max-new-tokens", type=int, default=1000)
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--top-k", type=int, default=None)
     p.add_argument("--top-p", type=float, default=None)
     p.add_argument("--seed", type=int, default=None)
+    p.add_argument("--min-len", type=int, default=None, help="oversample until len >= this (inclusive)")
+    p.add_argument("--max-len", type=int, default=None, help="oversample until len <= this (inclusive)")
+    p.add_argument("--max-oversample", type=int, default=20,
+                   help="cap on total draws as a multiple of n when a length range is set")
     args = p.parse_args(argv)
 
     model = IDiom.from_pretrained(args.model)
@@ -363,6 +407,9 @@ def main(argv: list[str] | None = None) -> None:
               top_k=args.top_k, top_p=args.top_p)
     if args.seed is not None:
         kw["seed"] = args.seed
+    if args.min_len is not None or args.max_len is not None:
+        kw["length_range"] = (args.min_len or 1, args.max_len or 10**9)
+        kw["max_oversample"] = args.max_oversample
 
     if args.mode == "idp":
         model.generate_idp_fasta(args.out, n=args.n, **kw)

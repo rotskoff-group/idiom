@@ -49,6 +49,8 @@ class SteeringSpec:
     strength: float | Sequence[float]
     mode: str = "add_direction"  # "add_direction" | "clamp" | "ablate"
     clamp_value: float | Sequence[float] | None = None
+    normalize: bool = False  # add_direction: use strength * unit(sum of decoder rows), so the push
+    #                          magnitude == strength regardless of how many features are summed.
 
 
 def _as_list(x) -> list:
@@ -78,8 +80,15 @@ def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
     """
     feats = _as_list(spec.feature_idx)
     if spec.mode == "add_direction":
-        strengths = _broadcast(_as_list(spec.strength), len(feats), "strength")
-        direction = sum(s * sae.W_dec[i].detach() for i, s in zip(feats, strengths))
+        if spec.normalize:
+            # strength sets the push magnitude directly: strength * unit(sum of unit decoder rows),
+            # so N (how many features) controls only the direction, not the magnitude.
+            raw = sum(sae.W_dec[i].detach() for i in feats)
+            scale = float(_as_list(spec.strength)[0])
+            direction = raw / (raw.norm() + 1e-8) * scale
+        else:
+            strengths = _broadcast(_as_list(spec.strength), len(feats), "strength")
+            direction = sum(s * sae.W_dec[i].detach() for i, s in zip(feats, strengths))
         return add_direction_hook(direction, strength=1.0)
     if spec.mode == "clamp":
         raw = spec.clamp_value if spec.clamp_value is not None else spec.strength
