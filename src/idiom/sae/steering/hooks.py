@@ -34,6 +34,22 @@ def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callab
     return hook
 
 
+def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> Callable:
+    """Hook that adds ``alpha * ||x_pos|| * unit(direction)`` to each position.
+
+    The push is scaled to a fraction ``alpha`` of that position's own residual-stream norm, so the
+    steering magnitude is dimensionless and self-adapting (transfers across positions/layers/models)
+    rather than living in raw activation units. ``alpha ~ 0.5`` => push is half the local residual."""
+    u = direction / (direction.norm() + 1e-8)
+
+    def hook(module, inputs, output):
+        d = u.to(output.device, output.dtype)
+        scale = alpha * output.norm(dim=-1, keepdim=True)   # [B, L, 1] per-position residual norm
+        return output + scale * d
+
+    return hook
+
+
 def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 1.0) -> Callable:
     """Hook that removes the chosen features' *actual* contribution: ``x - scale*sum_f act_f(x)*W_dec[f]``.
 

@@ -319,18 +319,20 @@ class IDiomSAE:
     # --- steering ---
     @torch.no_grad()
     def steer_generate(self, feature, strength, *, n: int = 100, mode: str = "add_direction",
-                       normalize: bool = False,
+                       normalize: bool = False, relative: bool = False,
                        prompt: str | None = None, max_new_tokens: int = 1000, temperature: float = 1.0,
                        top_k: int | None = None, top_p: float | None = None, seed: int | None = None) -> list[str]:
         """Generate IDRs with ``feature`` steered on the SAE's layer. Returns residue strings.
 
         ``normalize=True`` (add_direction only): the push is ``strength * unit(sum of decoder rows)``,
         so ``strength`` is the magnitude in residual-norm units and the number of features sets only
-        the direction (not the magnitude)."""
+        the direction (not the magnitude). ``relative=True``: push is ``strength * ||x_pos|| *
+        unit(sum of decoder rows)`` -- ``strength`` is a dimensionless fraction of the local residual
+        norm (self-adapting; overrides ``normalize``)."""
         from idiom.sae.steering import SteeringSpec, steer_generation  # noqa: PLC0415
 
         spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode,
-                            normalize=normalize)
+                            normalize=normalize, relative=relative)
         gen = torch.Generator(device=self.device).manual_seed(seed) if seed is not None else None
         prompt_tokens = self.tok.encode(prompt) if prompt else None
         out = steer_generation(

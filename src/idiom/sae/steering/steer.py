@@ -28,6 +28,7 @@ import torch
 from idiom.data.tokenizer import Tokenizer
 from idiom.sae.steering.hooks import (
     add_direction_hook,
+    add_relative_direction_hook,
     clamp_features_edit,
     sae_edit_hook,
     steering,
@@ -51,6 +52,8 @@ class SteeringSpec:
     clamp_value: float | Sequence[float] | None = None
     normalize: bool = False  # add_direction: use strength * unit(sum of decoder rows), so the push
     #                          magnitude == strength regardless of how many features are summed.
+    relative: bool = False   # add_direction: push = strength * ||x_pos|| * unit(sum of decoder rows),
+    #                          i.e. strength is a dimensionless FRACTION of the local residual norm.
 
 
 def _as_list(x) -> list:
@@ -80,6 +83,10 @@ def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
     """
     feats = _as_list(spec.feature_idx)
     if spec.mode == "add_direction":
+        if spec.relative:
+            # push = strength(=alpha) * ||x_pos|| * unit(sum of unit decoder rows)
+            raw = sum(sae.W_dec[i].detach() for i in feats)
+            return add_relative_direction_hook(raw, float(_as_list(spec.strength)[0]))
         if spec.normalize:
             # strength sets the push magnitude directly: strength * unit(sum of unit decoder rows),
             # so N (how many features) controls only the direction, not the magnitude.
