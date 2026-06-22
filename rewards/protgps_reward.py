@@ -93,6 +93,45 @@ for _c in COMPARTMENTS:
     register_reward(f"protgps_{_c}")(_compartment_reward(_c))
 
 
+# Selective ("off-target-penalized") reward: 1 - MSE(P, one-hot target) over ALL 12 compartments.
+# Maximized when P(target)->1 AND P(every other compartment)->0, so it directly penalizes off-target
+# spillover (e.g. the p-body<->stress_granule cross-talk) that the plain P(target) reward ignores.
+SELECTIVE_TARGETS = ["nucleolus", "chromosome", "stress_granule", "p-body"]
+
+
+def _selective_reward(compartment: str):
+    t = torch.zeros(len(COMPARTMENTS))
+    t[COMPARTMENTS.index(compartment)] = 1.0
+    return lambda idr: float(1.0 - ((protgps_scores(idr) - t) ** 2).mean()) if idr else 0.0
+
+
+for _c in SELECTIVE_TARGETS:
+    register_reward(f"protgps_sel_{_c}")(_selective_reward(_c))
+
+
+# Base-anchored MSE variant: same 1 - MSE(P, target) as protgps_sel_*, but the off-target targets are
+# the BASE model's natural levels (BASE_P) instead of 0. Penalizing deviation from BASE (rather than
+# from 0) removes the reward for suppressing off-targets BELOW their baseline -- the incentive that
+# drove the acidic reward-hack in protgps_sel_*, since several off-targets (chromosome 0.24, p-body
+# 0.16, nucleolus 0.14) are naturally nonzero and forcing them to 0 required unnatural composition.
+# Anchor = mean ProtGPS over base de-novo generations (05_generation .../protgps/base.csv, 2026-06-18).
+BASE_P = {
+    "nuclear_speckle": 0.0047, "p-body": 0.1644, "pml-bdoy": 0.0044, "post_synaptic_density": 0.0233,
+    "stress_granule": 0.0477, "chromosome": 0.2384, "nucleolus": 0.1399, "nuclear_pore_complex": 0.0784,
+    "cajal_body": 0.0107, "rna_granule": 0.0000, "cell_junction": 0.0921, "transcriptional": 0.0009,
+}
+
+
+def _anchor_reward(compartment: str):
+    t = torch.tensor([BASE_P[c] for c in COMPARTMENTS])
+    t[COMPARTMENTS.index(compartment)] = 1.0   # on-target -> 1; off-targets -> their base level
+    return lambda idr: float(1.0 - ((protgps_scores(idr) - t) ** 2).mean()) if idr else 0.0
+
+
+for _c in SELECTIVE_TARGETS:
+    register_reward(f"protgps_anchor_{_c}")(_anchor_reward(_c))
+
+
 @register_reward("protgps_max")
 def protgps_max(idr: str) -> float:
     """Max probability across all 12 compartments (generic "is it a condensate IDR")."""
