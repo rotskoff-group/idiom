@@ -29,6 +29,7 @@ from idiom.data.tokenizer import Tokenizer
 from idiom.sae.steering.hooks import (
     add_direction_hook,
     add_relative_direction_hook,
+    add_relative_renorm_direction_hook,
     clamp_features_edit,
     sae_edit_hook,
     steering,
@@ -54,6 +55,8 @@ class SteeringSpec:
     #                          magnitude == strength regardless of how many features are summed.
     relative: bool = False   # add_direction: push = strength * ||x_pos|| * unit(sum of decoder rows),
     #                          i.e. strength is a dimensionless FRACTION of the local residual norm.
+    preserve_norm: bool = False  # relative only: renorm each position back to ||x_pos|| after the push,
+    #                              so steering ROTATES x toward the feature at constant norm (no inflation).
 
 
 def _as_list(x) -> list:
@@ -86,7 +89,10 @@ def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
         if spec.relative:
             # push = strength(=alpha) * ||x_pos|| * unit(sum of unit decoder rows)
             raw = sum(sae.W_dec[i].detach() for i in feats)
-            return add_relative_direction_hook(raw, float(_as_list(spec.strength)[0]))
+            alpha = float(_as_list(spec.strength)[0])
+            if spec.preserve_norm:  # rotate toward the feature at constant ||x_pos|| (no norm inflation)
+                return add_relative_renorm_direction_hook(raw, alpha)
+            return add_relative_direction_hook(raw, alpha)
         if spec.normalize:
             # strength sets the push magnitude directly: strength * unit(sum of unit decoder rows),
             # so N (how many features) controls only the direction, not the magnitude.

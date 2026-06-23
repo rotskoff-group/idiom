@@ -338,7 +338,7 @@ class IDiomSAE:
     # --- steering ---
     @torch.no_grad()
     def steer_generate(self, feature, strength, *, n: int = 100, mode: str = "add_direction",
-                       normalize: bool = False, relative: bool = False,
+                       normalize: bool = False, relative: bool = False, preserve_norm: bool = False,
                        prompt: str | None = None, max_new_tokens: int = 1000, temperature: float = 1.0,
                        top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
                        length_range: tuple[int, int] | None = None, max_oversample: int = 20) -> list[str]:
@@ -348,14 +348,16 @@ class IDiomSAE:
         so ``strength`` is the magnitude in residual-norm units and the number of features sets only
         the direction (not the magnitude). ``relative=True``: push is ``strength * ||x_pos|| *
         unit(sum of decoder rows)`` -- ``strength`` is a dimensionless fraction of the local residual
-        norm (self-adapting; overrides ``normalize``).
+        norm (self-adapting; overrides ``normalize``). ``preserve_norm=True`` (relative only): renorm
+        each position back to ``||x_pos||`` after the push, so steering rotates ``x`` toward the feature
+        at constant residual norm instead of inflating it.
 
         ``length_range=(lo, hi)`` / ``max_oversample``: oversample — re-generate and length-filter until
         ``n`` steered IDRs fall in ``[lo, hi]`` (inclusive), as in :meth:`IDiom.generate_idp`."""
         from idiom.sae.steering import SteeringSpec, steer_generation  # noqa: PLC0415
 
         spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode,
-                            normalize=normalize, relative=relative)
+                            normalize=normalize, relative=relative, preserve_norm=preserve_norm)
         prompt_tokens = self.tok.encode(prompt) if prompt else None
 
         def _batch(k: int, s: int | None) -> list[str]:

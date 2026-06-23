@@ -50,6 +50,22 @@ def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> 
     return hook
 
 
+def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> Callable:
+    """Like :func:`add_relative_direction_hook` but rescales each position back to its ORIGINAL
+    residual norm after the push, so steering *rotates* ``x`` toward the feature at constant ``||x||``
+    (direction changes, norm preserved) instead of inflating the residual. ``alpha`` controls how far
+    the rotation goes; the result always has the same per-position norm as the input."""
+    u = direction / (direction.norm() + 1e-8)
+
+    def hook(module, inputs, output):
+        d = u.to(output.device, output.dtype)
+        norm = output.norm(dim=-1, keepdim=True)            # [B, L, 1] original per-position norm
+        steered = output + alpha * norm * d                 # relative push (would grow the norm) ...
+        return steered / (steered.norm(dim=-1, keepdim=True) + 1e-8) * norm  # ... then renorm back
+
+    return hook
+
+
 def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 1.0) -> Callable:
     """Hook that removes the chosen features' *actual* contribution: ``x - scale*sum_f act_f(x)*W_dec[f]``.
 
