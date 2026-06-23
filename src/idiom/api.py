@@ -145,28 +145,37 @@ class IDiom:
 
     @torch.no_grad()
     def _generate(self, prompt: str, n: int, *, length_range: tuple[int, int] | None = None,
-                  max_oversample: int = 20, **kw) -> list[str]:
+                  max_oversample: int = 20, batch_size: int | None = None, **kw) -> list[str]:
         seed = kw.pop("seed", None)
+        prompt_ids = torch.tensor(self.tok.encode(prompt), device=self.device)
 
         def _batch(k: int, s: int | None) -> list[str]:
+            # one Generator per draw, reused across chunks so each chunk samples fresh tokens (and a
+            # draw stays reproducible for a fixed batch_size). batch_size=None -> one batch of k.
             gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
-            prompts = torch.tensor(self.tok.encode(prompt), device=self.device).unsqueeze(0).repeat(k, 1)
-            out = generate(self.model, prompts, tokenizer=self.tok, generator=gen, **kw)
-            return [self._decode_idr(row) for row in out]
+            bs = batch_size or k
+            out: list[str] = []
+            for off in range(0, k, bs):
+                prompts = prompt_ids.unsqueeze(0).repeat(min(bs, k - off), 1)
+                rows = generate(self.model, prompts, tokenizer=self.tok, generator=gen, **kw)
+                out.extend(self._decode_idr(row) for row in rows)
+            return out
 
         return _oversample(_batch, n, length_range=length_range, max_oversample=max_oversample, seed=seed)
 
     def generate_idp(self, n: int = 100, *, max_new_tokens: int = 1000, temperature: float = 1.0,
                      top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
-                     length_range: tuple[int, int] | None = None, max_oversample: int = 20) -> list[str]:
+                     length_range: tuple[int, int] | None = None, max_oversample: int = 20,
+                     batch_size: int | None = None) -> list[str]:
         """De-novo IDPs (prompt ``132``). Returns ``n`` IDR residue strings.
 
         ``length_range=(lo, hi)``: oversample — re-generate and length-filter until ``n`` sequences
         have length in ``[lo, hi]`` (inclusive), capped at ``n * max_oversample`` total draws (warns
-        and returns fewer if the cap is hit).
+        and returns fewer if the cap is hit). ``batch_size`` caps sequences per model forward (chunks
+        each draw to bound memory); ``None`` generates the whole draw in one batch.
         """
         kw = dict(max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
-                  length_range=length_range, max_oversample=max_oversample)
+                  length_range=length_range, max_oversample=max_oversample, batch_size=batch_size)
         if seed is not None:
             kw["seed"] = seed
         return self._generate(fim_prompt(), n, **kw)
@@ -420,11 +429,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--max-len", type=int, default=None, help="oversample until len <= this (inclusive)")
     p.add_argument("--max-oversample", type=int, default=20,
                    help="cap on total draws as a multiple of n when a length range is set")
+    p.add_argument("--batch-size", type=int, default=None,
+                   help="max sequences per model forward (chunks each draw to bound memory)")
     args = p.parse_args(argv)
 
     model = IDiom.from_pretrained(args.model)
     kw = dict(max_new_tokens=args.max_new_tokens, temperature=args.temperature,
-              top_k=args.top_k, top_p=args.top_p)
+              top_k=args.top_k, top_p=args.top_p, batch_size=args.batch_size)
     if args.seed is not None:
         kw["seed"] = args.seed
     if args.min_len is not None or args.max_len is not None:
