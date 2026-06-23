@@ -9,17 +9,17 @@ learned features interpretable and steerable.
 
 Preprint: [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777)
 
+![IDiom](assets/github_fig.png)
+
 ## Install
 
 ```bash
-# directly from GitHub (no PyPI needed):
+# directly from GitHub:
 pip install git+https://github.com/rotskoff-group/idiom.git
 
 # or from source (for training / reproduction):
 git clone https://github.com/rotskoff-group/idiom.git && cd idiom && uv sync && uv pip install -e .
 ```
-
-(A `pip install idiom` from PyPI may be offered later.)
 
 ## Quickstart
 
@@ -38,23 +38,36 @@ idrs = model.generate_idr(protein_seq, idr_start, idr_end, n=100)
 emb = model.embed("proteins.fasta", layers=[8], pool="mean")
 ```
 
+Interpret and steer with a sparse autoencoder (`IDiomSAE` bundles the SAE with its host model and
+layer, so it always runs on the distribution it was trained on):
+
+```python
+from idiom import IDiomSAE
+
+sae   = IDiomSAE.from_pretrained("jxliu2/idiom-medium-sae-L8")   # host model auto-loaded
+feats = sae.encode("proteins.fasta")                  # per-sequence feature activations
+seqs  = sae.steer_generate(feature=1234, strength=0.5, n=100)    # feature-steered generation
+fid   = sae.fidelity("records.fasta")                 # substitution-loss fraction recovered
+```
+
 FASTA-first from the command line:
 
 ```bash
 idiom_generate idp --model jxliu2/idiom-medium --n 1000 --out idps.fasta
-idiom_generate idr --model jxliu2/idiom-medium --fasta proteins.fasta --n 1000 --out idrs.fasta
-#   ^ input headers end with _IDR_x-y (1-based, inclusive), e.g. >P06748_IDR_119-242
-```
 
-CPU works (slow); a GPU is used automatically when present.
+idiom_generate idr --model jxliu2/idiom-medium --fasta proteins.fasta --n 1000 --out idrs.fasta
+# For IDR generation, input headers must specify the IDR region, ending with _IDR_x-y (1-based, inclusive), e.g. >P06748_IDR_119-242
+```
 
 ## Models & data (HuggingFace)
 
 Weights and datasets are hosted on the Hub, not in this repo:
 
+(Models to be uploaded soon)
+
 - `jxliu2/idiom-medium`, `jxliu2/idiom-large` — base models (`from_pretrained`)
 - `jxliu2/idiom-rl` — per-compartment RL-post-trained checkpoints
-- `jxliu2/idiom-sae` — sparse autoencoders by layer
+- `jxliu2/idiom-medium-sae-L8` — sparse autoencoders, one repo per host model + layer
 - `jxliu2/idiom-datasets` — curated IDR corpus, generated sequences, feature datasets, eval sets
 
 ## Repository layout
@@ -66,11 +79,7 @@ Only `src/idiom/` ships in the pip package; the rest is clone-only.
 | `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + interpretability), `utils` (device, perplexity), public `IDiom` API |
 | `assets/` | static assets (figures for docs) |
 | `rewards/` | GRPO reward definitions + the vendored ProtGPS reward model |
-| `bash/` | example SLURM scripts for every entrypoint |
-
-Reproduction code that doesn't ship with the library — the data-curation pipeline, the
-evaluation harness, SAE feature analysis, and the paper figures — lives in the companion repo
-[**idiom-extras**](https://github.com/rotskoff-group/idiom-extras).
+| `tests/` | unit/integration tests for the library |
 
 ## Training / interpretability (CLIs)
 
@@ -81,10 +90,11 @@ evaluation harness, SAE feature analysis, and the paper figures — lives in the
 | `idiom_sae` | train a top-k SAE on a layer (streaming activations) |
 | `idiom_feature_dataset` | build the per-residue SAE feature dataset |
 | `idiom_extract` | export residual-stream embeddings from a FASTA |
+| `idiom_build_store` | build a memory-mapped record store from a record FASTA |
 | `idiom_generate` | FASTA-first generation (inference) |
 
-Configs are flat Hydra YAMLs (`src/idiom/configs/`); the `bash/` scripts show every override
-explicitly. Example:
+Configs are flat Hydra YAMLs (`src/idiom/configs/`), overridden on the CLI; each config's header
+comment shows a representative invocation. Example:
 
 ```bash
 idiom_sae model_ckpt=/path/model.ckpt data.fasta=/path/records.fasta layer=8 sae.k=32
