@@ -1,7 +1,7 @@
 # IDiom
 
-IDiom is an autoregressive transformer for **generating and designing intrinsically disordered
-protein regions (IDRs)**. Trained on ~37M IDRs from the AlphaFold Database with a
+IDiom is an autoregressive transformer for generating and designing intrinsically disordered
+protein regions (IDRs). Trained on ~37M IDRs from the AlphaFold Database with a
 fill-in-the-middle objective, it generates fully disordered proteins (IDPs) de novo, or IDRs
 conditioned on their flanking structured context, and can be post-trained with reinforcement
 learning to optimize custom rewards. Sparse autoencoders (SAEs) on its residual stream make the
@@ -31,11 +31,15 @@ model = IDiom.from_pretrained("jxliu2/idiom-medium")     # downloads weights fro
 # de-novo IDPs
 idrs = model.generate_idp(n=100, temperature=1.0)
 
+# target a length range: oversample until n IDRs fall in [lo, hi] (inclusive)
+idrs = model.generate_idp(n=100, length_range=(80, 120))
+
 # IDRs conditioned on flanking context (0-based, half-open coords)
 idrs = model.generate_idr(protein_seq, idr_start, idr_end, n=100)
 
-# residual-stream embeddings for downstream tasks
-emb = model.embed("proteins.fasta", layers=[8], pool="mean")
+# per-residue residual-stream embeddings for downstream tasks
+# values[N_res, d] + index rows carrying accession / source_pos / residue / is_idr
+values, index = model.embed("proteins.fasta", layers=[8], pool="none")[8]
 ```
 
 Interpret and steer with a sparse autoencoder (`IDiomSAE` bundles the SAE with its host model and
