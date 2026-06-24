@@ -14,11 +14,14 @@ Preprint: [Generative design of intrinsically disordered protein regions with ID
 ## Install
 
 ```bash
-# directly from GitHub:
+# directly from GitHub
 pip install git+https://github.com/rotskoff-group/idiom.git
 
-# or from source (for training / reproduction):
-git clone https://github.com/rotskoff-group/idiom.git && cd idiom && uv sync && uv pip install -e .
+# or from source
+git clone https://github.com/rotskoff-group/idiom.git 
+cd idiom 
+uv sync 
+uv pip install -e .
 ```
 
 ## Quickstart
