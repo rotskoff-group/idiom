@@ -10,11 +10,11 @@ prompts:
   n: 1000                    # idp: number of prompts
   fasta: null                # record mode: FASTA of proteins (_IDR_x-y headers)
   n_per: 1000                # record mode: copies per protein
-  batch_size: 8              # distinct prompts per step (each -> group_size completions)
+  batch_size: 4              # distinct prompts per micro-batch (each -> group_size completions); effective prompts/optimizer-step = batch_size * trainer.accumulate_grad_batches
 
 grpo:
   group_size: 8
-  max_new_tokens: 256
+  max_new_tokens: 1020
   lr: 5.0e-6
   beta_kl: 0.02
   eps_clip: 0.2
@@ -38,6 +38,8 @@ trainer:
   accelerator: auto
   devices: 1
   gradient_clip_val: 1.0
+  accumulate_grad_batches: 2  # accumulate N micro-batches per optimizer step (halves peak memory vs. one big batch)
+  checkpoint_every: 500    # save a periodic checkpoint every N optimizer steps (0 = last only)
 
 out_dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor/runs}/grpo
 

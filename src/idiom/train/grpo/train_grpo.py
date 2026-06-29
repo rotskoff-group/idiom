@@ -110,9 +110,19 @@ def run(cfg: DictConfig) -> None:
         project=cfg.get("wandb_project", "idiom-grpo"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
+    trainer_cfg = OmegaConf.to_container(cfg.trainer, resolve=True)
+    ckpt_every = trainer_cfg.pop("checkpoint_every", 0)
+    callbacks = [ModelCheckpoint(dirpath=out_dir / "checkpoints", save_last=True)]
+    if ckpt_every:
+        callbacks.append(ModelCheckpoint(
+            dirpath=out_dir / "checkpoints",
+            every_n_train_steps=ckpt_every,
+            save_top_k=-1,
+            filename="step_{step}",
+        ))
     trainer = L.Trainer(
-        **OmegaConf.to_container(cfg.trainer, resolve=True),
-        callbacks=[ModelCheckpoint(dirpath=out_dir / "checkpoints", save_last=True)],
+        **trainer_cfg,
+        callbacks=callbacks,
         logger=wandb_logger,
         default_root_dir=out_dir,
     )

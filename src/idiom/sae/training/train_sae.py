@@ -36,7 +36,10 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
         fim_idr_prob=cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5)),
     )
     record_loader = DataLoader(
-        records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id)
+        records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id),
+        shuffle=cfg.data.get("shuffle", True),  # random record order (RecordDataset is map-style);
+        # with a finite max_steps this makes the consumed slice a uniform draw over the whole corpus
+        # rather than the file head. Default on; set data.shuffle=false to restore file-order streaming.
     )
     store = ActivationStore(
         model, record_loader, cfg.layer, sae_batch_size=cfg.sae_batch_size,
