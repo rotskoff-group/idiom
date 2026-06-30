@@ -8,7 +8,7 @@ from idiom.data.io import Record
 from idiom.data.tokenizer import Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.sae import SparseCoder
-from idiom.sae.fidelity import compute_fidelity
+from idiom.sae.eval.fidelity import compute_fidelity
 from idiom.sae.steering import SteeringSpec, add_direction_hook, steer_generation, steering
 
 TOK = Tokenizer()

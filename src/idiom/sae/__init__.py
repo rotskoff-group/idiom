@@ -10,7 +10,8 @@ Layout:
 - :mod:`idiom.sae.training` — streaming ``ActivationStore`` + ``LitSAE`` + the ``idiom_sae`` entrypoint;
 - :mod:`idiom.sae.features` — the per-residue feature-activation dataset, its reader, and the viewer;
 - :mod:`idiom.sae.steering` — residual-stream hooks and feature-steered generation;
-- :mod:`idiom.sae.fidelity` — substitution-loss "fraction recovered".
+- :mod:`idiom.sae.eval` — held-out validation: substitution-loss "fraction recovered",
+  reconstruction (FVU), sparsity/density, and the ``run_sae_eval`` entrypoint.
 """
 
 from idiom.sae.io import load_sae, save_sae

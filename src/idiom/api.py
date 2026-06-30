@@ -381,7 +381,7 @@ class IDiomSAE:
 
         from idiom.data.dataset import RecordDataset, make_collate  # noqa: PLC0415
         from idiom.data.io import read_records  # noqa: PLC0415
-        from idiom.sae.fidelity import compute_fidelity  # noqa: PLC0415
+        from idiom.sae.eval.fidelity import compute_fidelity  # noqa: PLC0415
 
         if fim_idr_prob is None:
             fim_idr_prob = 0.0 if self.fim_mode == "idp" else 1.0
