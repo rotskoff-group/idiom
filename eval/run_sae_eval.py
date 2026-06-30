@@ -35,7 +35,6 @@ from __future__ import annotations
 import argparse
 import csv
 import glob
-import itertools
 import json
 from pathlib import Path
 
@@ -61,7 +60,8 @@ def main() -> None:
     ap.add_argument("--val", required=True, help="held-out record FASTA")
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-records", type=int, default=2000,
-                    help="cap on held-out records (the NLL ratio converges well before the full set)")
+                    help="random held-out subset size (the NLL ratio converges well before full val)")
+    ap.add_argument("--seed", type=int, default=0, help="seed for the random held-out subsample")
     ap.add_argument("--fidelity-batch", type=int, default=16)
     ap.add_argument("--fim-mode", choices=["auto", "idp", "idr"], default="auto",
                     help="eval prompt format: auto = per-SAE recorded fim_mode (on-distribution)")
@@ -80,15 +80,30 @@ def main() -> None:
     if not sae_dirs:
         raise SystemExit(f"no SAE dirs under {args.sae_dir}/{args.glob}")
 
-    # Cap the held-out set once: IDiomSAE.fidelity() reads the WHOLE FASTA, so subset up front.
+    # Subset the held-out set once: IDiomSAE.fidelity() reads the WHOLE FASTA, so cap up front.
+    # Reservoir sampling -> a uniform RANDOM sample over the full val split (file order can carry
+    # structure), deterministic given --seed, single streaming pass (never holds the whole split).
+    import random
+
     from idiom.data.io import read_records
+    rng = random.Random(args.seed)
+    reservoir = []
+    n_seen = 0
+    for r in read_records(args.val):
+        n_seen += 1
+        if len(reservoir) < args.max_records:
+            reservoir.append(r)
+        else:
+            j = rng.randint(0, n_seen - 1)
+            if j < args.max_records:
+                reservoir[j] = r
     val = out / "_val_subset.fasta"
-    nv = 0
     with val.open("w") as fh:
-        for r in itertools.islice(read_records(args.val), args.max_records):
+        for r in reservoir:
             fh.write(f">{r.accession}_IDR_{r.idr_start + 1}-{r.idr_end}\n{r.full_seq}\n")
-            nv += 1
-    print(f"held-out subset: {nv} records -> {val}  (fim-mode={args.fim_mode})", flush=True)
+    nv = len(reservoir)
+    print(f"held-out subset: {nv} random of {n_seen} records (seed={args.seed}) -> {val}  "
+          f"(fim-mode={args.fim_mode})", flush=True)
 
     host = None
     rows = []
