@@ -50,6 +50,10 @@ def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float
     """
     _register_custom_rewards(rcfg.get("module"))  # user rewards (or operator-registered protgps)
     base = get_reward(rcfg.name)
+    # optional monitor reward: computed + logged (train/reward_monitor) but NOT added to total, so
+    # you can watch a metric (e.g. ProtGPS) during a run that does not optimize it.
+    monitor_name = rcfg.get("monitor")
+    monitor = get_reward(monitor_name) if monitor_name else None
 
     def components(idr: str) -> dict[str, float]:
         raw = base(idr)
@@ -69,6 +73,8 @@ def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float
             )
             out["entropy"] = er
             total += er
+        if monitor is not None:
+            out["monitor"] = monitor(idr)   # logged only; deliberately excluded from `total`
         out["total"] = total
         return out
 
@@ -112,14 +118,17 @@ def run(cfg: DictConfig) -> None:
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
     trainer_cfg = OmegaConf.to_container(cfg.trainer, resolve=True)
     ckpt_every = trainer_cfg.pop("checkpoint_every", 0)
-    callbacks = [ModelCheckpoint(dirpath=out_dir / "checkpoints", save_last=True)]
-    if ckpt_every:
-        callbacks.append(ModelCheckpoint(
-            dirpath=out_dir / "checkpoints",
-            every_n_train_steps=ckpt_every,
-            save_top_k=-1,
-            filename="step_{step}",
-        ))
+    max_steps = trainer_cfg.get("max_steps") or None
+    # Step-based checkpointing only -- NO per-epoch saves (setting every_n_train_steps makes Lightning
+    # skip epoch-end saves). checkpoint_every>0 -> keep every N steps + last.ckpt; checkpoint_every=0
+    # -> save ONLY the final-step checkpoint (step_step=<max_steps>.ckpt), nothing else.
+    callbacks = [ModelCheckpoint(
+        dirpath=out_dir / "checkpoints",
+        every_n_train_steps=ckpt_every or max_steps,
+        save_top_k=-1 if ckpt_every else 1,
+        save_last=bool(ckpt_every),
+        filename="step_{step}",
+    )]
     trainer = L.Trainer(
         **trainer_cfg,
         callbacks=callbacks,

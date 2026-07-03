@@ -92,6 +92,10 @@ def _compartment_reward(compartment: str):
 for _c in COMPARTMENTS:
     register_reward(f"protgps_{_c}")(_compartment_reward(_c))
 
+# Clean alias: the ProtGPS class label carries a typo ("pml-bdoy"); dataset + enrichment use
+# "pml_body", so expose protgps_pml_body -> the same classifier index.
+register_reward("protgps_pml_body")(_compartment_reward("pml-bdoy"))
+
 
 # Selective ("off-target-penalized") reward: 1 - MSE(P, one-hot target) over ALL 12 compartments.
 # Maximized when P(target)->1 AND P(every other compartment)->0, so it directly penalizes off-target
