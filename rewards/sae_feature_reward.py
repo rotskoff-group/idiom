@@ -31,7 +31,9 @@ from pathlib import Path
 
 import torch
 
-from idiom.train.grpo.rewards import register_reward
+import numpy as np
+
+from idiom.train.grpo.rewards import register_group_reward, register_reward
 
 # reuse the ProtGPS scorer + its 12-class order (sibling module; add dir to path for path-loaded import)
 sys.path.insert(0, os.path.dirname(__file__))
@@ -120,3 +122,54 @@ def _sae_only_reward(comp: str):
 for _c in _FEAT_COMPS:
     register_reward(f"protgps_feat_{_c}")(_feat_reward(_c))     # ProtGPS + λ·feature-match
     register_reward(f"sae_only_{_c}")(_sae_only_reward(_c))     # feature-match only (no ProtGPS)
+
+
+# --- GROUP coverage reward: reward POPULATION coverage of the code, not per-sequence cramming ---
+@torch.no_grad()
+def _fired_matrix(idrs, ids):
+    """Boolean [n_idrs, n_ids]: which of the target features fire (top-k at any IDR residue) in each
+    completion. One batched forward through the frozen 24L base + L18 SAE for the whole group."""
+    from torch.nn.utils.rnn import pad_sequence
+
+    from idiom.data.fim import fim_idp
+    from idiom.model.activations import extract_activations
+    sae = _sae()
+    seqs = [fim_idp(s, 0, len(s)) for s in idrs]
+    toks = [torch.tensor([sae.tok.start_id, *sae.tok.encode(s)]) for s in seqs]
+    tokens = pad_sequence(toks, batch_first=True, padding_value=sae.tok.pad_id).to(sae.device)
+    acts = extract_activations(sae.model, tokens, [sae.layer], tokenizer=sae.tok,
+                               drop_markers=True, region=sae.region)[sae.layer]
+    feats = sae.sae.encode_dense(acts.values.to(sae.device))       # [N_res, num_latents]
+    fv = (feats[:, ids] > 0).cpu().numpy()                         # [N_res, n_ids]
+    si = acts.seq_idx.cpu().numpy()
+    out = np.zeros((len(idrs), len(ids)), dtype=bool)
+    np.logical_or.at(out, si, fv)                                  # OR residues into their seq row
+    return out
+
+
+def _coverage_scores(idrs, group_size, comp):
+    """Within-group frequency-discounted coverage: reward_j = Σ_{f fired by j} 1/(#group firing f) /
+    n_ids. A feature all G seqs fire is worth 1/G each; a feature only j fires is worth 1 -> the group
+    spreads to cover the whole signature and no single sequence is rewarded for cramming."""
+    ids = _comp_ids(comp)
+    F = _fired_matrix(idrs, ids)                                   # [n, n_ids] bool
+    n_ids = F.shape[1]
+    scores = np.zeros(len(idrs))
+    for g in range(0, len(idrs), group_size):
+        blk = F[g:g + group_size]                                 # [<=G, n_ids]
+        cnt = blk.sum(0).astype(float)                            # times each feature fires in group
+        inv = np.zeros_like(cnt)
+        np.divide(1.0, cnt, out=inv, where=cnt > 0)               # 1/cnt where fired, else 0 (no warn)
+        for j in range(blk.shape[0]):
+            scores[g + j] = float((blk[j] * inv).sum() / n_ids)
+    return scores.tolist()
+
+
+def _coverage_group(comp: str):
+    def fn(idrs, group_size):
+        return _coverage_scores(idrs, group_size, comp) if idrs else []
+    return fn
+
+
+for _c in _FEAT_COMPS:
+    register_group_reward(f"sae_coverage_{_c}")(_coverage_group(_c))

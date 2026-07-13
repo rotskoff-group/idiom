@@ -41,6 +41,7 @@ class LitGRPO(L.LightningModule):
         log_samples_every: int = 25,
         n_log_samples: int = 3,
         reward_components: Callable[[str], dict[str, float]] | None = None,
+        group_reward_components: Callable[[list[str], int], list[dict[str, float]]] | None = None,
         tokenizer: Tokenizer | None = None,
     ) -> None:
         super().__init__()
@@ -57,6 +58,10 @@ class LitGRPO(L.LightningModule):
         # Optional per-term breakdown ({"raw", "length", "entropy", "total"}); when set it is the
         # source of the scalar reward (so reward_fn is not also called) and drives per-term logging.
         self.reward_components = reward_components
+        # Optional GROUP-aware breakdown: f(idrs, group_size) -> list of per-idr breakdown dicts. When
+        # set, it is the source of the scalar reward (so each completion can be scored relative to its
+        # group, e.g. SAE-code population coverage). Takes precedence over reward_components.
+        self.group_reward_components = group_reward_components
         self.tok = tokenizer or Tokenizer()
         self.group_size = group_size
         self.max_new_tokens = max_new_tokens
@@ -112,7 +117,11 @@ class LitGRPO(L.LightningModule):
 
         idrs = [self._decode_idr(completions[i]) for i in range(BG)]
         # Per-term breakdown when available (raw/length/entropy/total); else just the scalar reward.
-        breakdown = [self.reward_components(idr) for idr in idrs] if self.reward_components else None
+        # A group-aware breakdown (scores each completion relative to its group) takes precedence.
+        if self.group_reward_components is not None:
+            breakdown = self.group_reward_components(idrs, self.group_size)
+        else:
+            breakdown = [self.reward_components(idr) for idr in idrs] if self.reward_components else None
         rewards = torch.tensor(
             [b["total"] for b in breakdown] if breakdown else [self.reward_fn(idr) for idr in idrs],
             device=rep.device, dtype=torch.float,
@@ -132,6 +141,7 @@ class LitGRPO(L.LightningModule):
         seq_len = torch.tensor([float(len(idr)) for idr in idrs], device=rep.device)
         seq_ent = torch.tensor([sequence_entropy(idr) for idr in idrs], device=rep.device)
         metrics = {
+            "trainer/global_step": float(self.global_step),  # real step -> W&B x-axis (see run())
             "train/loss": loss,
             "train/reward": rewards.mean(),
             "train/reward_std": rewards.std(),

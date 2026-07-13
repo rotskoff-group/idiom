@@ -29,6 +29,26 @@ def get_reward(name: str) -> Callable[[str], float]:
     return REWARD_REGISTRY[name]
 
 
+# GROUP rewards: f(idrs: list[str], group_size: int) -> list[float]. Unlike per-idr rewards, these see
+# the whole batch of completions and can score a completion RELATIVE to its GRPO group (e.g. reward
+# population coverage / diversity of the SAE code rather than per-sequence cramming).
+GROUP_REWARD_REGISTRY: dict[str, Callable[[list, int], list]] = {}
+
+
+def register_group_reward(name: str):
+    def deco(fn: Callable[[list, int], list]) -> Callable[[list, int], list]:
+        GROUP_REWARD_REGISTRY[name] = fn
+        return fn
+
+    return deco
+
+
+def get_group_reward(name: str) -> Callable[[list, int], list]:
+    if name not in GROUP_REWARD_REGISTRY:
+        raise KeyError(f"unknown group reward {name!r}; registered: {sorted(GROUP_REWARD_REGISTRY)}")
+    return GROUP_REWARD_REGISTRY[name]
+
+
 def _fraction(idr: str, aa: str) -> float:
     return idr.count(aa) / len(idr) if idr else 0.0
 

@@ -19,7 +19,8 @@ from torch.utils.data import DataLoader
 
 from idiom.train.grpo.data import collate_prompts, idp_prompts, record_prompts
 from idiom.train.grpo.lit_grpo import LitGRPO
-from idiom.train.grpo.rewards import entropy_reward, get_reward, length_reward, quadratic_shaping
+from idiom.train.grpo.rewards import (
+    entropy_reward, get_group_reward, get_reward, length_reward, quadratic_shaping)
 
 
 def _register_custom_rewards(spec: str | None) -> None:
@@ -87,15 +88,55 @@ def build_reward(rcfg: DictConfig) -> Callable[[str], float]:
     return lambda idr: components(idr)["total"]
 
 
+def build_group_reward_components(rcfg: DictConfig):
+    """Group-aware breakdown: f(idrs, group_size) -> list of per-idr {raw, length, entropy, monitor,
+    total}. `raw` is a GROUP reward (each completion scored relative to its GRPO group, e.g. SAE-code
+    coverage); length/entropy/monitor stay per-idr, mirroring build_reward_components. `total` excludes
+    `monitor`. Shaping is not applied (group rewards are already relative)."""
+    _register_custom_rewards(rcfg.get("module"))
+    group_base = get_group_reward(rcfg.group)
+    monitor_name = rcfg.get("monitor")
+    monitor = get_reward(monitor_name) if monitor_name else None
+
+    def components(idrs, group_size):
+        base = group_base(idrs, group_size)
+        out = []
+        for idr, b in zip(idrs, base):
+            total = b
+            d = {"raw": b}
+            if rcfg.length.enabled:
+                lr = rcfg.length.weight * length_reward(
+                    idr, target_length=rcfg.length.target_length, width=rcfg.length.width)
+                d["length"] = lr
+                total += lr
+            if rcfg.entropy.enabled:
+                er = rcfg.entropy.weight * entropy_reward(
+                    idr, target_entropy=rcfg.entropy.target_entropy, width=rcfg.entropy.width)
+                d["entropy"] = er
+                total += er
+            if monitor is not None:
+                d["monitor"] = monitor(idr)
+            d["total"] = total
+            out.append(d)
+        return out
+
+    return components
+
+
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
-    components = build_reward_components(cfg.reward)
-    reward = lambda idr: components(idr)["total"]  # noqa: E731 - scalar the policy optimizes
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
     # GRPO always warm-starts from a pretrained policy; architecture is read from that checkpoint.
-    # reward_components feeds the per-term logging (train/reward_raw, _length, _entropy).
-    lit = LitGRPO.init_from_checkpoint(
-        cfg.init_from, reward, reward_components=components, **grpo_kw
-    )
+    if cfg.reward.get("group"):  # group-aware reward (population coverage): scored per GRPO group
+        gcomp = build_group_reward_components(cfg.reward)
+        lit = LitGRPO.init_from_checkpoint(
+            cfg.init_from, lambda idr: 0.0, group_reward_components=gcomp, **grpo_kw
+        )
+    else:  # standard per-idr reward + per-term logging (train/reward_raw, _length, _entropy)
+        components = build_reward_components(cfg.reward)
+        reward = lambda idr: components(idr)["total"]  # noqa: E731 - scalar the policy optimizes
+        lit = LitGRPO.init_from_checkpoint(
+            cfg.init_from, reward, reward_components=components, **grpo_kw
+        )
 
     if cfg.prompts.mode in ("idp", "denovo"):  # "denovo" kept for back-compat with old configs
         ds = idp_prompts(cfg.prompts.n)
@@ -116,6 +157,14 @@ def run(cfg: DictConfig) -> None:
         project=cfg.get("wandb_project", "idiom-grpo"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
+    # Plot every metric against the REAL training step. Lightning logs `trainer/global_step` as a
+    # metric but lets W&B's internal `_step` increment once per log flush (= every log_every_n_steps
+    # steps), which compresses the default x-axis; this makes global_step the x-axis so a step is a step.
+    try:
+        wandb_logger.experiment.define_metric("trainer/global_step")
+        wandb_logger.experiment.define_metric("*", step_metric="trainer/global_step")
+    except Exception:  # noqa: BLE001 - offline/disabled W&B has no experiment to configure
+        pass
     trainer_cfg = OmegaConf.to_container(cfg.trainer, resolve=True)
     ckpt_every = trainer_cfg.pop("checkpoint_every", 0)
     max_steps = trainer_cfg.get("max_steps") or None
