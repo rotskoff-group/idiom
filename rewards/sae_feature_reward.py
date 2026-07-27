@@ -119,9 +119,39 @@ def _sae_only_reward(comp: str):
     return reward
 
 
+def _protgps_min_reward(a: str, b: str):
+    """Chimera monitor: min of the two compartments' ProtGPS heads -- the held-out 'both
+    localizations present' signal. Never in the reward."""
+    ia = COMPARTMENTS.index(_PC_ALIAS.get(a, a))
+    ib = COMPARTMENTS.index(_PC_ALIAS.get(b, b))
+
+    def reward(idr: str) -> float:
+        if not idr:
+            return 0.0
+        s = protgps_scores(idr)
+        return float(min(s[ia], s[ib]))
+
+    return reward
+
+
+# Register sae_only for every key the configured targets file defines -- single compartments AND
+# chimera pair keys "A__B" (a union feature set gets a feature-match reward with no new logic). Pair
+# keys additionally get a protgps_min monitor over the two heads.
+try:
+    _keys: set = set()
+    for _case, _cd in json.loads(Path(_FEATURES).read_text()).items():
+        if not _case.startswith("_") and isinstance(_cd, dict):
+            _keys |= set(_cd)
+except Exception:
+    _keys = set(_FEAT_COMPS)
+for _k in sorted(_keys):
+    register_reward(f"sae_only_{_k}")(_sae_only_reward(_k))     # feature-match only (no ProtGPS)
+    if "__" in _k:
+        _a, _b = _k.split("__", 1)
+        if _a in _FEAT_COMPS and _b in _FEAT_COMPS:
+            register_reward(f"protgps_min_{_k}")(_protgps_min_reward(_a, _b))
 for _c in _FEAT_COMPS:
     register_reward(f"protgps_feat_{_c}")(_feat_reward(_c))     # ProtGPS + λ·feature-match
-    register_reward(f"sae_only_{_c}")(_sae_only_reward(_c))     # feature-match only (no ProtGPS)
 
 
 # --- GROUP coverage reward: reward POPULATION coverage of the code, not per-sequence cramming ---
