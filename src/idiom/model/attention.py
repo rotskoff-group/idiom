@@ -1,10 +1,10 @@
-"""Multi-head self-attention with RoPE, QK-norm, and a KV cache (D17).
+"""Multi-head self-attention with RoPE, QK-norm, and a KV cache.
 
-Causal masking: training/prefill process a square ``[L, L]`` block, so we let SDPA apply the
-causal mask (``is_causal=True``). With right-padding + causal, real tokens never attend to
-pad positions (pad is always to their right), so no explicit pad mask is needed. A KV-cached
-decode step has one query against ``N`` cached keys (``is_causal=False`` — it should see all
-past). The rule below is just ``q_len == kv_len`` → causal, else attend-all.
+Causal masking: training and prefill process a square [L, L] block, so SDPA applies the causal
+mask (is_causal=True). With right-padding plus causal masking, real tokens never attend to pad
+positions (pad is always to their right), so no explicit pad mask is needed. A KV-cached decode
+step has one query against N cached keys (is_causal=False, since it should see all past). The
+rule below is just q_len == kv_len -> causal, else attend-all.
 """
 
 from __future__ import annotations
@@ -37,6 +37,8 @@ class KVCache:
 
 
 class Attention(nn.Module):
+    """Multi-head self-attention with RoPE, QK-norm, and an optional KV cache."""
+
     def __init__(self, cfg: ModelConfig) -> None:
         super().__init__()
         self.n_heads = cfg.n_heads

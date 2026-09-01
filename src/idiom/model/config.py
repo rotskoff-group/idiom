@@ -1,9 +1,8 @@
-"""Model hyperparameters for the IDiom transformer (v2).
+"""Model hyperparameters for the IDiom transformer.
 
-Flat dataclass (D6). Named sizes (12L test/de-risk → 24L primary → 36L) are just factory
-helpers; everything is overridable. The architecture is the proven ESM-style block —
-**RMSNorm + SwiGLU + QK-norm, no bias, tied embeddings** — with **RoPE** positions and no
-structural tokens (D7, D8, D17).
+A flat dataclass whose named sizes (12-layer, 24-layer, 36-layer) are just factory helpers;
+every field is overridable. The architecture is the ESM-style block (RMSNorm, SwiGLU, QK-norm,
+no bias, tied embeddings) with RoPE positions and no structural tokens.
 """
 
 from __future__ import annotations
@@ -13,6 +12,8 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelConfig:
+    """Hyperparameters defining an IDiom transformer's architecture."""
+
     vocab_size: int = 27  # idiom.data.tokenizer: 20 residues + 3 FIM markers + 4 controls
     n_layers: int = 12  # defaults = GPT-2 small (d768/12h, head_dim 64)
     d_model: int = 768

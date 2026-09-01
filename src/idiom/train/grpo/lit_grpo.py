@@ -1,9 +1,9 @@
 """GRPO post-training LightningModule.
 
-Each step: expand every prompt into ``group_size`` completions (generated with the KV-cached
-sampler), reward each decoded IDR, compute group-normalized advantages, then the DAPO GRPO
-loss against a frozen reference. Prompts in a batch are assumed equal length (the typical GRPO
-setup — a prompt repeated, or one compartment's flank prompt); length-bucket if mixing.
+Each step expands every prompt into group_size completions (generated with the KV-cached
+sampler), rewards each decoded IDR, computes group-normalized advantages, then applies the DAPO
+GRPO loss against a frozen reference. Prompts in a batch are assumed equal length (the typical
+GRPO setup: a prompt repeated, or one compartment's flank prompt); length-bucket if mixing.
 """
 
 from __future__ import annotations
@@ -24,6 +24,34 @@ from idiom.train.grpo.rewards import sequence_entropy
 
 
 class LitGRPO(L.LightningModule):
+    """GRPO post-training module: rollout, reward, group advantages, DAPO loss.
+
+    Each training step expands every prompt into group_size completions (generated with the
+    KV-cached sampler), rewards each decoded IDR, computes group-normalized advantages, and
+    applies the DAPO GRPO loss against a frozen reference policy.
+
+    Args:
+        cfg (ModelConfig): Transformer architecture configuration.
+        reward_fn (Callable[[str], float]): Scalar reward over a decoded IDR residue string.
+        group_size (int): Number of completions generated per prompt.
+        max_new_tokens (int): Maximum completion length to generate.
+        lr (float): AdamW learning rate.
+        beta_kl (float): Weight of the KL penalty to the reference policy.
+        eps_clip (float): PPO clipping range around a ratio of 1.
+        temperature (float): Sampling temperature for generation.
+        top_k (int | None): Top-k sampling cutoff, or None to disable.
+        top_p (float | None): Nucleus sampling cutoff, or None to disable.
+        normalize_advantage (bool): If True, divide advantages by the group std.
+        log_samples_every (int): Print example completions every this many steps (0 disables).
+        n_log_samples (int): Number of example completions to print when logging.
+        reward_components (Callable[[str], dict[str, float]] | None): Optional per-term reward
+            breakdown; when set it is the source of the scalar reward and drives per-term logging.
+        group_reward_components (Callable[[list[str], int], list[dict[str, float]]] | None):
+            Optional group-aware breakdown scoring each completion relative to its group; takes
+            precedence over reward_components.
+        tokenizer (Tokenizer | None): Character tokenizer (a default is used if None).
+    """
+
     def __init__(
         self,
         cfg: ModelConfig,
@@ -77,7 +105,18 @@ class LitGRPO(L.LightningModule):
 
     @classmethod
     def init_from_checkpoint(cls, ckpt_path, reward_fn, **kwargs) -> "LitGRPO":
-        """Warm-start GRPO from a pretrained ckpt; arch read from it (self-describing)."""
+        """Warm-start GRPO from a pretrained checkpoint (architecture read from it).
+
+        Both the policy and the frozen reference are loaded with the checkpoint's weights.
+
+        Args:
+            ckpt_path: Path to the pretrained Lightning checkpoint.
+            reward_fn: Scalar reward over a decoded IDR residue string.
+            **kwargs: GRPO hyperparameters forwarded to the constructor.
+
+        Returns:
+            LitGRPO: A module warm-started from the checkpoint.
+        """
         from idiom.model.io import config_from_checkpoint  # noqa: PLC0415
 
         lit = cls(config_from_checkpoint(ckpt_path), reward_fn, **kwargs)
@@ -97,6 +136,7 @@ class LitGRPO(L.LightningModule):
         return self.tok.decode(ids)  # clean residue string for the reward fn (e.g. ProtGPS/ESM)
 
     def training_step(self, batch: torch.Tensor, batch_idx: int):
+        """Roll out completions, score them, and return the GRPO loss for one batch."""
         prompts = batch  # [B, P], equal-length prompts
         rep = prompts.repeat_interleave(self.group_size, dim=0)  # [B*G, P]
         BG, P = rep.shape
@@ -177,4 +217,5 @@ class LitGRPO(L.LightningModule):
         print("=" * 70, flush=True)
 
     def configure_optimizers(self):
+        """Build the AdamW optimizer over the policy parameters."""
         return torch.optim.AdamW(self.model.parameters(), lr=self.lr)

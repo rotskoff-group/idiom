@@ -1,8 +1,8 @@
-"""The IDiom transformer: sequence-only, pre-norm, RoPE, KV-cache-ready (D8, D17).
+"""The IDiom transformer: sequence-only, pre-norm, RoPE, KV-cache-ready.
 
-``forward`` serves both training (full sequence, no cache) and autoregressive decoding (pass a
-:class:`KVCache`; positions continue from ``cache.length``). With ``return_hidden_states`` it
-also returns each block's residual-stream output — the activations the SAE / extractor consume.
+forward serves both training (full sequence, no cache) and autoregressive decoding (pass a
+KVCache; positions continue from cache.length). With return_hidden_states it also returns each
+block's residual-stream output, the activations the SAE and extractor consume.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from idiom.model.rope import Rope
 
 
 class SwiGLU(nn.Module):
-    """SwiGLU feed-forward: ``down(silu(gate) * up)``, gate+up fused in one projection."""
+    """SwiGLU feed-forward: down(silu(gate) * up), with gate and up fused in one projection."""
 
     def __init__(self, d_model: int, expansion_ratio: float) -> None:
         super().__init__()
@@ -48,6 +48,8 @@ class Block(nn.Module):
 
 
 class IDiomTransformer(nn.Module):
+    """Sequence-only pre-norm transformer with RoPE, tied embeddings, and KV-cache support."""
+
     def __init__(self, cfg: ModelConfig) -> None:
         super().__init__()
         self.cfg = cfg
@@ -61,7 +63,7 @@ class IDiomTransformer(nn.Module):
 
         # GPT-style init: small std keeps init logits ~0, so initial CE ~ ln(vocab) instead of the
         # ~sqrt(d_model) blow-up from PyTorch's default Embedding std=1.0 (tied -> lm_head too).
-        # Residual-stream writers (attn `wo`, ffn `w_down`) are scaled by 1/sqrt(2*n_layers) so the
+        # Residual-stream writers (attn wo, ffn w_down) are scaled by 1/sqrt(2*n_layers) so the
         # residual variance doesn't grow with depth.
         for module in self.modules():  # not self.apply(): Rope defines its own .apply(q,k,positions)
             self._init_weights(module)

@@ -1,10 +1,10 @@
-"""Residual-stream activation extraction — the one core behind SAE training and user export (D14).
+"""Residual-stream activation extraction, shared by SAE training and user export.
 
-Runs the model with ``return_hidden_states`` and selects the residue positions (dropping FIM
-markers + control tokens via the tokenizer), returning the kept activation rows together with
-the alignment metadata (which sequence, which position, which residue) needed to map every
-vector back to its residue. The SAE stream (P5) and the ``extract`` export tool (P5) both call
-this, so what the SAE trains on and what users save are identical.
+Runs the model with return_hidden_states and selects the residue positions (dropping FIM markers
+and control tokens via the tokenizer), returning the kept activation rows together with the
+alignment metadata (which sequence, which position, which residue) needed to map every vector
+back to its residue. The SAE stream and the extract export tool both call this, so what the SAE
+trains on and what users save are identical.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ from idiom.data.tokenizer import Tokenizer
 
 @dataclass
 class LayerActivations:
+    """Kept activation rows at one layer, with per-row alignment metadata."""
+
     layer: int
     values: Tensor  # [N_kept, d_model] residual-stream vectors
     seq_idx: Tensor  # [N_kept] row in the input batch each vector came from
@@ -36,17 +38,25 @@ def extract_activations(
     drop_markers: bool = True,
     region: str = "all",
 ) -> dict[int, LayerActivations]:
-    """Extract residual-stream activations at ``layers`` for the kept positions.
+    """Extract residual-stream activations at the given layers for the kept positions.
 
-    ``tokens`` is ``[B, L]`` token ids (as fed to the model, i.e. START-prefixed, right-padded).
-    ``drop_markers=True`` keeps only real residues (the SAE default); ``False`` keeps residues +
-    FIM markers. Control tokens (START/STOP/PAD/MASK) are always dropped.
+    region further restricts which residues are kept, by position relative to the FIM MIDDLE
+    ("2") marker that opens the IDR (1{prefix}3{suffix}2{IDR}): "all" keeps every residue, "idr"
+    keeps only residues after the "2" (the in-filled IDR), and "non_idr" keeps only residues
+    before it (the prefix/suffix flanks). A row with no "2" marker contributes nothing to "idr"
+    or "non_idr".
 
-    ``region`` further restricts which residues are kept, by position relative to the FIM MIDDLE
-    (``2``) marker that opens the IDR (``1{prefix}3{suffix}2{IDR}``):
-    ``"all"`` (default) every residue; ``"idr"`` only residues after the ``2`` (the in-filled
-    IDR); ``"non_idr"`` only residues before it (the prefix/suffix flanks). A row with no ``2``
-    marker contributes nothing to ``idr``/``non_idr``.
+    Args:
+        model: The IDiom transformer to run.
+        tokens (Tensor): [B, L] token ids as fed to the model (START-prefixed, right-padded).
+        layers (list[int]): Layer indices whose residual stream to extract.
+        tokenizer (Tokenizer | None): Tokenizer for position selection (a default is used if None).
+        drop_markers (bool): If True (the SAE default), keep only real residues; if False, keep
+            residues plus FIM markers. Control tokens (START/STOP/PAD/MASK) are always dropped.
+        region (str): Residue region to keep: "all", "idr", or "non_idr".
+
+    Returns:
+        dict[int, LayerActivations]: One LayerActivations per requested layer.
     """
     tok = tokenizer or Tokenizer()
     _, hidden = model(tokens, return_hidden_states=True)

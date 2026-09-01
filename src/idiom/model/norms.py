@@ -1,4 +1,4 @@
-"""RMSNorm (D17). Standard root-mean-square layer norm, no bias, no mean-subtraction."""
+"""RMSNorm: standard root-mean-square layer norm, no bias, no mean-subtraction."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from torch import Tensor, nn
 
 
 class RMSNorm(nn.Module):
+    """Root-mean-square layer normalization with a learned scale and no bias."""
+
     def __init__(self, dim: int, eps: float = 1e-5) -> None:
         super().__init__()
         self.eps = eps

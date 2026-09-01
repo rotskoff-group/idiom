@@ -1,8 +1,8 @@
-"""Training entrypoint (pretrain + SFT). ``idiom_train`` / ``idiom_train --config-name sft``.
+"""Training entrypoint for pretraining and SFT, run via idiom_train (--config-name sft for SFT).
 
-``build(cfg)`` wires model + data + module (and is unit-testable); ``run(cfg)`` fits. Pretrain
-vs SFT is entirely in the config: SFT sets ``init_from`` (warm start) and
-``data.completion_only=true`` (loss on the IDR only).
+build(cfg) wires the model, data, and module together (and is unit-testable); run(cfg) fits.
+Pretraining vs SFT is entirely a matter of config: SFT sets init_from (warm start) and
+data.completion_only=true (loss on the IDR only).
 """
 
 from __future__ import annotations
@@ -23,6 +23,14 @@ from idiom.train.lit_autoregressive import LitAutoregressive
 
 
 def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
+    """Wire the module and datamodule from a resolved config (warm-starting for SFT).
+
+    Args:
+        cfg (DictConfig): Resolved training config (optim, trainer, model, data, seed).
+
+    Returns:
+        tuple[LitAutoregressive, RecordDataModule]: The training module and its datamodule.
+    """
     optim = OmegaConf.to_container(cfg.optim, resolve=True)
     optim["max_steps"] = cfg.trainer.max_steps  # scheduler shares the trainer's horizon
 
@@ -50,6 +58,11 @@ def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
 
 
 def run(cfg: DictConfig) -> None:
+    """Build the module and data, configure the trainer and logger, and fit.
+
+    Args:
+        cfg (DictConfig): Resolved training config.
+    """
     L.seed_everything(cfg.seed, workers=True)
     out_dir = Path(cfg.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -82,9 +95,9 @@ def run(cfg: DictConfig) -> None:
             dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3,
             filename="epoch_{epoch}_step_{step}", auto_insert_metric_name=False,
         ))
-    # Force Lightning's own subprocess launcher even under SLURM: `trainer.devices=N` then spawns N
-    # local ranks itself (one per GPU on this node), matching the project's direct `idiom_train`
-    # invocation. Otherwise Lightning auto-detects SLURM_* and expects `srun --ntasks=N` to launch the
+    # Force Lightning's own subprocess launcher even under SLURM: trainer.devices=N then spawns N
+    # local ranks itself (one per GPU on this node), matching the project's direct idiom_train
+    # invocation. Otherwise Lightning auto-detects SLURM_* and expects srun --ntasks=N to launch the
     # ranks -> with --ntasks=1 it runs a single rank on 1 GPU. (Also disables SLURM auto-requeue.)
     trainer = L.Trainer(
         **trainer_kw,
@@ -101,6 +114,7 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="pretrain")
 def main(cfg: DictConfig) -> None:
+    """Hydra entrypoint that runs training with the composed config."""
     run(cfg)
 
 

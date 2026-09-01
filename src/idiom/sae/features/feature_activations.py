@@ -1,20 +1,20 @@
-"""Reader + reductions over the feature-activation dataset produced by ``build_feature_dataset``.
+"""Reader and reductions over the feature-activation dataset produced by build_feature_dataset.
 
-A directory (no h5) of top-k sparse SAE activations per residue, with ``(seq_idx, pos_idx)``
-joins back to the raw FIM sequence strings::
+A directory of top-k sparse SAE activations per residue, with (seq_idx, pos_idx) joining back to
+the raw FIM sequence strings:
 
     top_indices.npy  int32[N_res, k]   which latents fired at each residue
     top_values.npy   float32[N_res, k] their activations
     seq_idx.npy      int32[N_res]      index into strings
     pos_idx.npy      int32[N_res]      position within strings[s] (the FIM string)
-    strings.json     list[str]         raw FIM `1{prefix}3{suffix}2{IDR}` per sequence
+    strings.json     list[str]         raw FIM 1{prefix}3{suffix}2{IDR} per sequence
     meta.json        {k, num_latents, layer, region}
 
-:class:`FeatureDataset` is the single home for the per-feature reductions the viewer / annotator /
-concept correlator use to slice that artifact — no streaming, no GPU. It builds a CSR-style index
-(``_order`` / ``_offsets``) grouping residue rows by sequence once, so a per-sequence trace is an
-O(rows-in-sequence) gather instead of a full scan; the global per-feature ranking is one cached
-pass. All reductions live here so the viewer and the tests exercise the same code.
+FeatureDataset is the single home for the per-feature reductions the viewer, annotator, and concept
+correlator use to slice that artifact — no streaming, no GPU. It builds a CSR-style index (_order /
+_offsets) grouping residue rows by sequence once, so a per-sequence trace is an O(rows-in-sequence)
+gather instead of a full scan; the global per-feature ranking is one cached pass. All reductions
+live here so the viewer and the tests exercise the same code.
 """
 
 from __future__ import annotations
@@ -26,10 +26,10 @@ import numpy as np
 
 
 class FeatureDataset:
-    """Reader over a feature-activation dataset directory (``.npy`` + ``.json``).
+    """Reader over a feature-activation dataset directory (.npy + .json).
 
-    By default the arrays stay memory-mapped (slicing hits disk); pass ``in_memory=True`` to pull
-    them fully into RAM, which is what the Streamlit viewer wants since it reslices on every widget
+    By default the arrays stay memory-mapped (slicing hits disk); pass in_memory=True to pull them
+    fully into RAM, which is what the Streamlit viewer wants since it reslices on every widget
     change. Either way the reductions below are the single implementation.
     """
 
@@ -48,8 +48,8 @@ class FeatureDataset:
         self.layer = int(meta["layer"])
         self.region = str(meta.get("region", "all"))
 
-        # CSR-style grouping of residue rows by their sequence: the rows for local sequence ``s``
-        # are ``_order[_offsets[s]:_offsets[s + 1]]``. Stable sort keeps row order deterministic.
+        # CSR-style grouping of residue rows by their sequence: the rows for local sequence s
+        # are _order[_offsets[s]:_offsets[s + 1]]. Stable sort keeps row order deterministic.
         seq = np.asarray(self.seq_idx[:], dtype=np.int64)
         self.n_seqs = len(self.strings)
         self._order = np.argsort(seq, kind="stable").astype(np.int64)
@@ -58,16 +58,17 @@ class FeatureDataset:
         self._ranking: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
 
     def sequence(self, local_seq_idx: int) -> str:
+        """Return the raw FIM string for a local sequence index, decoded to str."""
         s = self.strings[int(local_seq_idx)]
         return s.decode("utf-8") if isinstance(s, bytes) else str(s)
 
     # Rows processed per pass when streaming a memory-mapped dataset. Bounds peak RAM to
     # ~CHUNK_ROWS * k * 8 bytes (e.g. ~256 MB at 1M rows, k=32) instead of copying the whole
-    # [N_res, k] arrays into RAM (which ``arr[:]`` does even on a memmap).
+    # [N_res, k] arrays into RAM (which arr[:] does even on a memmap).
     CHUNK_ROWS = 1_000_000
 
     def _row_chunks(self):
-        """Yield ``(start, top_idx_chunk, top_val_chunk)``. In-memory => one chunk; mmap => streamed."""
+        """Yield (start, top_idx_chunk, top_val_chunk). In-memory yields one chunk; mmap streams."""
         n = self.top_indices.shape[0]
         if self.in_memory:
             yield 0, np.asarray(self.top_indices), np.asarray(self.top_values)
@@ -78,7 +79,15 @@ class FeatureDataset:
 
     # --- reductions ---
     def row_activations(self, feature_id: int) -> np.ndarray:
-        """Per-residue activation of ``feature_id`` over all rows (0 where not in top-k). Streamed."""
+        """Return the per-residue activation of feature_id over all rows, streamed.
+
+        Args:
+            feature_id (int): The latent to read.
+
+        Returns:
+            np.ndarray: Per-residue activations of shape [N_res], zero where the feature was not in
+                the top-k.
+        """
         f = int(feature_id)
         out = np.zeros(self.top_indices.shape[0], dtype=np.float32)
         for s, ti, tv in self._row_chunks():
@@ -86,9 +95,13 @@ class FeatureDataset:
         return out
 
     def feature_ranking(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Per-feature ``(max, total, count)`` over the whole dataset (one cached, streamed pass).
+        """Return per-feature (max, total, count) over the whole dataset in one cached, streamed pass.
 
         Padded (zero-value) top-k slots are ignored. Used to order features strongest-first.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray, np.ndarray]: The per-latent max activation, total
+                activation, and firing count, each of shape [num_latents].
         """
         if self._ranking is not None:
             return self._ranking
@@ -112,7 +125,16 @@ class FeatureDataset:
         return self._ranking
 
     def feature_stats(self, feature_id: int) -> tuple[float, np.ndarray, np.ndarray]:
-        """``(global_max, peak[n_seqs], fraction_firing[n_seqs])`` for ``feature_id``."""
+        """Return per-sequence peak and firing statistics for one feature.
+
+        Args:
+            feature_id (int): The latent to summarize.
+
+        Returns:
+            tuple[float, np.ndarray, np.ndarray]: The global max activation, the per-sequence peak
+                activation of shape [n_seqs], and the per-sequence fraction of residues firing of
+                shape [n_seqs].
+        """
         seq = np.asarray(self.seq_idx[:], dtype=np.int64)
         row_acts = self.row_activations(feature_id)
         gmax = float(row_acts.max()) if row_acts.size else 0.0
@@ -128,10 +150,18 @@ class FeatureDataset:
         return gmax, peak, frac
 
     def trace(self, local_seq_idx: int, feature_id: int) -> tuple[np.ndarray, np.ndarray]:
-        """``(positions, activations)`` of ``feature_id`` across one sequence, sorted by position.
+        """Return the (positions, activations) of feature_id across one sequence, sorted by position.
 
         Uses the CSR index to gather just this sequence's rows. Residues where the feature was not
         in the top-k contribute zero.
+
+        Args:
+            local_seq_idx (int): The local sequence index.
+            feature_id (int): The latent to trace.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: The residue positions and their activations, sorted by
+                position.
         """
         s = int(local_seq_idx)
         rows = self._order[self._offsets[s] : self._offsets[s + 1]]
@@ -145,10 +175,20 @@ class FeatureDataset:
     def top_sequences(
         self, feature_id: int, n: int = 20, sort_by: str = "peak"
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Top-N sequences for ``feature_id`` ranked by ``sort_by`` ('peak' or 'fraction').
+        """Return the top-N sequences for a feature ranked by peak or firing fraction.
 
-        Returns ``(local_seq_idx[N], score[N])`` descending. Zero-score sequences are dropped, so
-        the arrays may be shorter than ``n`` for sparse features.
+        Zero-score sequences are dropped, so the arrays may be shorter than n for sparse features.
+
+        Args:
+            feature_id (int): The latent to rank sequences for.
+            n (int): Maximum number of sequences to return.
+            sort_by (str): Ranking key, "peak" or "fraction".
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: The local sequence indices and their scores, descending.
+
+        Raises:
+            ValueError: If sort_by is not "peak" or "fraction".
         """
         _, peak, frac = self.feature_stats(feature_id)
         if sort_by == "peak":

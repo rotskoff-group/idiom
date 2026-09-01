@@ -1,9 +1,10 @@
-"""Autoregressive training LightningModule — shared by pretraining and SFT.
+"""Autoregressive training LightningModule shared by pretraining and SFT.
 
-The only difference between the two is the **loss mask** the data provides: pretraining
-trains on every token (all-True mask); SFT trains only on the IDR completion
-(``RecordDataset(completion_only=True)``). The module is otherwise identical, so SFT is just
-"load a pretrained checkpoint + completion-only data + a gentler LR" (see ``configs/sft.yaml``).
+The only difference between the two is the loss mask the data provides: pretraining trains on
+every token (all-True mask); SFT trains only on the IDR completion
+(RecordDataset(completion_only=True)). The module is otherwise identical, so SFT is just loading
+a pretrained checkpoint with completion-only data and a gentler learning rate (see
+configs/sft.yaml).
 """
 
 from __future__ import annotations
@@ -21,6 +22,22 @@ from idiom.train.schedulers import warmup_cosine
 
 
 class LitAutoregressive(L.LightningModule):
+    """Autoregressive next-token trainer for pretraining and SFT.
+
+    Wraps an IDiomTransformer with a masked cross-entropy loss, AdamW, and a warmup-cosine
+    learning-rate schedule. The data-provided loss mask selects which target positions
+    contribute to the loss (all positions for pretraining, the IDR completion for SFT).
+
+    Args:
+        cfg (ModelConfig): Transformer architecture configuration.
+        lr (float): Base learning rate.
+        warmup_steps (int): Linear warmup length before cosine decay.
+        max_steps (int): Total scheduler horizon (shared with the trainer).
+        weight_decay (float): AdamW weight decay.
+        betas (tuple[float, float]): AdamW beta coefficients.
+        min_lr_ratio (float): Floor of the cosine decay as a fraction of the base LR.
+    """
+
     def __init__(
         self,
         cfg: ModelConfig,
@@ -47,9 +64,16 @@ class LitAutoregressive(L.LightningModule):
 
     @classmethod
     def init_from_checkpoint(cls, ckpt_path: str, **kwargs) -> "LitAutoregressive":
-        """Build a module and load model weights from a prior Lightning ckpt (for SFT).
+        """Build a module and load model weights from a prior Lightning checkpoint (for SFT).
 
-        Architecture is read from the checkpoint (self-describing); never re-declared.
+        Architecture is read from the checkpoint (self-describing), never re-declared.
+
+        Args:
+            ckpt_path (str): Path to the Lightning checkpoint to warm-start from.
+            **kwargs: Optimizer and schedule hyperparameters forwarded to the constructor.
+
+        Returns:
+            LitAutoregressive: A module with the checkpoint's model weights loaded.
         """
         from idiom.model.io import config_from_checkpoint  # noqa: PLC0415
 
@@ -68,23 +92,26 @@ class LitAutoregressive(L.LightningModule):
         return (per_token * mask).sum() / mask.sum().clamp(min=1)
 
     def training_step(self, batch, batch_idx):
+        """Compute and log the masked next-token loss for one training batch."""
         x, y, mask = batch
         loss = self._masked_loss(self.model(x), y, mask)
         self.log("train/loss", loss, prog_bar=True, on_step=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
+        """Compute and log the masked next-token loss for one validation batch."""
         x, y, mask = batch
         loss = self._masked_loss(self.model(x), y, mask)
         self.log("val/loss", loss, prog_bar=True, on_epoch=True, sync_dist=True)
         return loss
 
     def on_before_optimizer_step(self, optimizer):
-        # Log per-parameter + total L2 gradient norms (grad_2.0_norm/*), matching the previous
-        # IDiom version's pretrain logging.
+        """Log per-parameter and total L2 gradient norms before each optimizer step."""
+        # grad_2.0_norm/* keys, matching the earlier IDiom pretrain logging.
         self.log_dict(grad_norm(self, norm_type=2))
 
     def configure_optimizers(self):
+        """Build the AdamW optimizer and its per-step warmup-cosine schedule."""
         opt = torch.optim.AdamW(
             self.model.parameters(), lr=self.lr, betas=self.betas, weight_decay=self.weight_decay
         )

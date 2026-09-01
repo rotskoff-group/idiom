@@ -1,8 +1,8 @@
-"""GRPO entrypoint (``idiom_grpo``). Pretrained ckpt + prompts + a composite reward -> RL.
+"""GRPO entrypoint run via idiom_grpo: a pretrained checkpoint plus prompts plus a composite reward.
 
-``build_reward`` composes a base reward with optional quadratic shaping + length + entropy
-terms (the sweep-tuned defaults live in ``configs/grpo.yaml``). ProtGPS is operator-wired (it
-loads a vendored model) — register it under the name ``protgps`` before launching.
+build_reward composes a base reward with optional quadratic shaping, length, and entropy terms
+(the tuned defaults live in configs/grpo.yaml). ProtGPS is operator-wired (it loads a vendored
+model); register it under the name protgps before launching.
 """
 
 from __future__ import annotations
@@ -24,10 +24,13 @@ from idiom.train.grpo.rewards import (
 
 
 def _register_custom_rewards(spec: str | None) -> None:
-    """Import a user module so its ``@register_reward`` decorators run before reward lookup.
+    """Import a user module so its register_reward decorators run before reward lookup.
 
-    ``spec`` is a dotted module path (e.g. ``analysis.my_rewards``) or a ``*.py`` file path. The
-    module just needs ``@register_reward("name") def f(idr: str) -> float: ...`` at import time.
+    spec is a dotted module path (for example analysis.my_rewards) or a path to a .py file. The
+    module just needs a register_reward("name")-decorated f(idr: str) -> float at import time.
+
+    Args:
+        spec (str | None): Dotted module path or .py file path; a no-op when None or empty.
     """
     if not spec:
         return
@@ -43,11 +46,18 @@ def _register_custom_rewards(spec: str | None) -> None:
 
 
 def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float]]:
-    """Composed reward that returns a per-term breakdown for logging.
+    """Build a composed reward that returns a per-term breakdown for logging.
 
-    Always includes ``raw`` (the base reward before any shaping) and ``total`` (the scalar the
-    policy optimizes); ``length``/``entropy`` appear only when those terms are enabled. ``raw`` is
-    what gets logged as ``train/reward_raw`` so the base signal is visible separately from shaping.
+    The breakdown always includes raw (the base reward before any shaping) and total (the scalar
+    the policy optimizes); length and entropy appear only when those terms are enabled. raw is
+    logged as train/reward_raw so the base signal is visible separately from shaping.
+
+    Args:
+        rcfg (DictConfig): Reward config (name, optional module and monitor, and the shaping,
+            length, and entropy term settings).
+
+    Returns:
+        Callable[[str], dict[str, float]]: Maps an IDR to its per-term reward breakdown.
     """
     _register_custom_rewards(rcfg.get("module"))  # user rewards (or operator-registered protgps)
     base = get_reward(rcfg.name)
@@ -75,7 +85,7 @@ def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float
             out["entropy"] = er
             total += er
         if monitor is not None:
-            out["monitor"] = monitor(idr)   # logged only; deliberately excluded from `total`
+            out["monitor"] = monitor(idr)   # logged only; deliberately excluded from total
         out["total"] = total
         return out
 
@@ -83,16 +93,33 @@ def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float
 
 
 def build_reward(rcfg: DictConfig) -> Callable[[str], float]:
-    """Scalar reward the policy optimizes (the ``total`` term of :func:`build_reward_components`)."""
+    """Build the scalar reward the policy optimizes (the total term of build_reward_components).
+
+    Args:
+        rcfg (DictConfig): Reward config passed through to build_reward_components.
+
+    Returns:
+        Callable[[str], float]: Maps an IDR to its scalar total reward.
+    """
     components = build_reward_components(rcfg)
     return lambda idr: components(idr)["total"]
 
 
 def build_group_reward_components(rcfg: DictConfig):
-    """Group-aware breakdown: f(idrs, group_size) -> list of per-idr {raw, length, entropy, monitor,
-    total}. `raw` is a GROUP reward (each completion scored relative to its GRPO group, e.g. SAE-code
-    coverage); length/entropy/monitor stay per-idr, mirroring build_reward_components. `total` excludes
-    `monitor`. Shaping is not applied (group rewards are already relative)."""
+    """Build a group-aware reward breakdown of f(idrs, group_size) -> list of per-idr dicts.
+
+    Each dict holds raw, optional length, entropy, and monitor, and total. raw is a group reward
+    (each completion scored relative to its GRPO group, for example SAE-code coverage); length,
+    entropy, and monitor stay per-idr, mirroring build_reward_components. total excludes monitor.
+    Shaping is not applied because group rewards are already relative.
+
+    Args:
+        rcfg (DictConfig): Reward config (group, optional module and monitor, and the length and
+            entropy term settings).
+
+    Returns:
+        Callable: Maps (idrs, group_size) to a list of per-idr reward breakdowns.
+    """
     _register_custom_rewards(rcfg.get("module"))
     group_base = get_group_reward(rcfg.group)
     monitor_name = rcfg.get("monitor")
@@ -124,6 +151,19 @@ def build_group_reward_components(rcfg: DictConfig):
 
 
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
+    """Wire the GRPO module and prompt dataset from a resolved config.
+
+    Always warm-starts the policy from a pretrained checkpoint (cfg.init_from); the architecture
+    is read from that checkpoint. Selects a group-aware or per-idr reward based on cfg.reward, and
+    an unprompted or prompted-IDR prompt set based on cfg.prompts.mode (the legacy modes idp and
+    denovo are accepted for unprompted).
+
+    Args:
+        cfg (DictConfig): Resolved GRPO config (grpo, reward, prompts, init_from).
+
+    Returns:
+        tuple[LitGRPO, object]: The GRPO module and its prompt dataset.
+    """
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
     # GRPO always warm-starts from a pretrained policy; architecture is read from that checkpoint.
     if cfg.reward.get("group"):  # group-aware reward (population coverage): scored per GRPO group
@@ -147,6 +187,11 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
 
 
 def run(cfg: DictConfig) -> None:
+    """Build the module and prompts, configure the trainer and logger, and fit.
+
+    Args:
+        cfg (DictConfig): Resolved GRPO config.
+    """
     L.seed_everything(cfg.seed, workers=True)
     out_dir = Path(cfg.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -158,8 +203,8 @@ def run(cfg: DictConfig) -> None:
         project=cfg.get("wandb_project", "idiom-grpo"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
-    # Plot every metric against the REAL training step. Lightning logs `trainer/global_step` as a
-    # metric but lets W&B's internal `_step` increment once per log flush (= every log_every_n_steps
+    # Plot every metric against the REAL training step. Lightning logs trainer/global_step as a
+    # metric but lets W&B's internal _step increment once per log flush (= every log_every_n_steps
     # steps), which compresses the default x-axis; this makes global_step the x-axis so a step is a step.
     try:
         wandb_logger.experiment.define_metric("trainer/global_step")
@@ -190,6 +235,7 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="grpo")
 def main(cfg: DictConfig) -> None:
+    """Hydra entrypoint that runs GRPO post-training with the composed config."""
     run(cfg)
 
 

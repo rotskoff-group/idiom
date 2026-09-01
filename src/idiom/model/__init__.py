@@ -1,10 +1,7 @@
 """idiom.model — the IDiom transformer, RoPE, KV-cache attention, and sampling.
 
-v2: sequence-only ``IDiomTransformer`` (structural tokens removed), RoPE-only
-positional encoding, and KV-cached autoregressive decoding (prefill + single-token
-steps) shared by inference and GRPO online generation.
-
-Sequence-only RMSNorm/SwiGLU/RoPE transformer with a KV cache, plus sampling and the shared
+A sequence-only RMSNorm/SwiGLU/RoPE transformer with a KV cache (prefill plus single-token
+decoding, shared by inference and GRPO online generation), plus sampling and the shared
 residual-stream activation extractor.
 """
 

@@ -1,23 +1,25 @@
-"""SAE-feature-guided ProtGPS reward for GRPO — ``f(idr) -> ProtGPS(target) + λ·feature-match``.
+"""SAE-feature-guided ProtGPS reward for GRPO, f(idr) -> ProtGPS(target) + lambda * feature-match.
 
-Motivation: ProtGPS(target) alone has a *composition shortcut* — RL can max the classifier with a
-composition unlike the real proteins, so the generated sequences do NOT encode the compartment's
-natural SAE feature code (see fig_rl: pml/PSD/p-body converge at ~0 despite P≈0.99). This reward adds
-an auxiliary term that pays the model for *encoding the target's specific (degree-1) features*:
+Motivation: ProtGPS(target) alone has a composition shortcut — RL can max the classifier with a
+composition unlike the real proteins, so the generated sequences do not encode the compartment's
+natural SAE feature code (pml, PSD, and p-body converge near 0 despite P about 0.99). This reward
+adds an auxiliary term that pays the model for encoding the target's specific features:
 
-    R(idr) = ProtGPS(target)  +  λ · (fraction of the target's specific features that fire)
+    R(idr) = ProtGPS(target)  +  lambda * (fraction of the target's specific features that fire)
 
-"f fires" = f is in the SAE top-k at any IDR residue (the enrichment prevalence definition). The
-feature score is computed by encoding the completion through the FROZEN 24L base + L18 SAE (the same
-fixed lens used for enrichment), so a reward gain requires reproducing the real code, not just the
-classifier label. Keep the grpo.yaml entropy term on — it is the naturalness guardrail.
+A feature fires when it is in the SAE top-k at any IDR residue (the enrichment prevalence
+definition). The feature score is computed by encoding the completion through the frozen 24-layer
+base plus L18 SAE (the same fixed lens used for enrichment), so a reward gain requires reproducing
+the real code, not just the classifier label. Keep the grpo.yaml entropy term on — it is the
+naturalness guardrail.
 
-Config (Hydra selects reward.name; hyperparameters via env, since the reward contract is f(idr)->float):
-    reward.module=rewards/sae_feature_reward.py  reward.name=protgps_feat_<compartment>
-    IDIOM_SAEREWARD_LAMBDA    feature-term weight λ (default 0.5)
-    IDIOM_SAEREWARD_SAE       L18 SAE dir (default the 24L-recompute enrichment SAE)
-    IDIOM_SAEREWARD_FEATURES  feature_sets_enrichment.json (per-comp specific/top200 feature ids)
-    IDIOM_SAEREWARD_CASE      which feature set to reward: specific (default) | top200
+Hydra selects reward.name; hyperparameters come from environment variables, since the reward
+contract is f(idr) -> float. reward.module=rewards/sae_feature_reward.py with
+reward.name=protgps_feat_<compartment>. The environment variables are:
+    IDIOM_SAEREWARD_LAMBDA    feature-term weight lambda (default 0.5)
+    IDIOM_SAEREWARD_SAE       L18 SAE dir (default the 24-layer recompute enrichment SAE)
+    IDIOM_SAEREWARD_FEATURES  feature_sets_enrichment.json (per-compartment specific/top200 feature ids)
+    IDIOM_SAEREWARD_CASE      which feature set to reward: specific (default) or top200
     IDIOM_SAEREWARD_DEVICE    torch device for the base+SAE lens (default cuda if available)
 """
 
@@ -62,7 +64,7 @@ def _saedev() -> str:
 
 @lru_cache(maxsize=1)
 def _sae():
-    """Frozen 24L base + L18 SAE lens (loaded once, shares the policy's GPU like ProtGPS)."""
+    """Load the frozen 24-layer base plus L18 SAE lens (once, sharing the policy's GPU like ProtGPS)."""
     from idiom import IDiomSAE
     return IDiomSAE.from_pretrained(_SAE_DIR, device=_saedev())
 
@@ -74,13 +76,13 @@ def _featuresets():
 
 @lru_cache(maxsize=16)
 def _comp_ids(comp: str):
-    """Feature-id LongTensor for a compartment's specific set, on the SAE device."""
+    """Return the feature-id LongTensor for a compartment's specific set, on the SAE device."""
     return torch.tensor(_featuresets()[comp], device=_sae().device, dtype=torch.long)
 
 
 @torch.no_grad()
 def _feature_match(idr: str, comp: str) -> float:
-    """Fraction of the compartment's specific features that FIRE (top-k at any IDR residue)."""
+    """Return the fraction of the compartment's specific features that fire (top-k at any IDR residue)."""
     from idiom.data.fim import fim_unprompted
     from idiom.model.activations import extract_activations
     sae = _sae()
@@ -107,9 +109,12 @@ def _feat_reward(comp: str):
 
 
 def _sae_only_reward(comp: str):
-    """ProtGPS-FREE reward: just the feature-match (fraction of the target's specific features that
-    fire). The classifier is never in the loop -- tests whether optimizing the interpretable code
-    alone yields on-code (and, we then check, actually localizing) sequences."""
+    """Build a ProtGPS-free reward: just the feature-match (fraction of the target's specific features
+    that fire).
+
+    The classifier is never in the loop, which tests whether optimizing the interpretable code alone
+    yields on-code (and, we then check, actually localizing) sequences.
+    """
 
     def reward(idr: str) -> float:
         if not idr:
@@ -120,8 +125,10 @@ def _sae_only_reward(comp: str):
 
 
 def _protgps_min_reward(a: str, b: str):
-    """Chimera monitor: min of the two compartments' ProtGPS heads -- the held-out 'both
-    localizations present' signal. Never in the reward."""
+    """Build a chimera monitor: min of the two compartments' ProtGPS heads.
+
+    This is the held-out "both localizations present" signal. It is never in the reward.
+    """
     ia = COMPARTMENTS.index(_PC_ALIAS.get(a, a))
     ib = COMPARTMENTS.index(_PC_ALIAS.get(b, b))
 
@@ -157,8 +164,11 @@ for _c in _FEAT_COMPS:
 # --- GROUP coverage reward: reward POPULATION coverage of the code, not per-sequence cramming ---
 @torch.no_grad()
 def _fired_matrix(idrs, ids):
-    """Boolean [n_idrs, n_ids]: which of the target features fire (top-k at any IDR residue) in each
-    completion. One batched forward through the frozen 24L base + L18 SAE for the whole group."""
+    """Return a boolean [n_idrs, n_ids] matrix of which target features fire in each completion.
+
+    A feature fires when it is top-k at any IDR residue. One batched forward through the frozen
+    24-layer base plus L18 SAE covers the whole group.
+    """
     from torch.nn.utils.rnn import pad_sequence
 
     from idiom.data.fim import fim_unprompted
@@ -178,9 +188,12 @@ def _fired_matrix(idrs, ids):
 
 
 def _coverage_scores(idrs, group_size, comp):
-    """Within-group frequency-discounted coverage: reward_j = Σ_{f fired by j} 1/(#group firing f) /
-    n_ids. A feature all G seqs fire is worth 1/G each; a feature only j fires is worth 1 -> the group
-    spreads to cover the whole signature and no single sequence is rewarded for cramming."""
+    """Compute within-group frequency-discounted coverage scores.
+
+    Each score is reward_j = (sum over features f fired by j of 1/(number in the group firing f)) /
+    n_ids. A feature that all G sequences fire is worth 1/G each; a feature only j fires is worth 1,
+    so the group spreads to cover the whole signature and no single sequence is rewarded for cramming.
+    """
     ids = _comp_ids(comp)
     F = _fired_matrix(idrs, ids)                                   # [n, n_ids] bool
     n_ids = F.shape[1]

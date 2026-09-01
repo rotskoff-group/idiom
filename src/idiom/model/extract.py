@@ -1,9 +1,9 @@
-"""Activation extraction for downstream use (D14). FASTA in, embeddings out — ESM-`extract.py` style.
+"""Activation extraction for downstream use. FASTA in, embeddings out, ESM extract.py style.
 
 Reuses the SAE's extractor so exported vectors are identical to what the SAE trains on. Each
-record is FIM-formatted (full context), the residual stream is taken at the requested layer(s),
-and residues align 1:1 to their source positions (markers dropped). ``pool="mean"`` returns one
-vector per sequence (mean over the IDR residues); ``pool="none"`` returns per-residue rows.
+record is FIM-formatted (full context), the residual stream is taken at the requested layers,
+and residues align 1:1 to their source positions (markers dropped). pool="mean" returns one
+vector per sequence (mean over the IDR residues); pool="none" returns per-residue rows.
 """
 
 from __future__ import annotations
@@ -28,11 +28,24 @@ from idiom.model.activations import extract_activations
 
 @torch.no_grad()
 def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode=PROMPTED):
-    """Return ``{layer: (values[N, d], index)}``; index is a list of per-row metadata dicts.
+    """Embed FASTA records into residual-stream vectors at the requested layers.
 
-    ``fim_mode`` is the prompt format the activations are taken under: ``prompted``
-    (``1{prefix}3{suffix}2{IDR}``, context) or ``unprompted`` (``132{IDR}``, de novo, no flanks).
-    Legacy ``idr``/``idp`` accepted.
+    fim_mode is the prompt format the activations are taken under: "prompted"
+    (1{prefix}3{suffix}2{IDR}, context) or "unprompted" (132{IDR}, de novo, no flanks). Legacy
+    "idr"/"idp" accepted.
+
+    Args:
+        model: The IDiom transformer to run.
+        fasta (str | Path): Path to the FASTA file of IDR records.
+        layers (list[int]): Layer indices whose residual stream to extract.
+        pool (str): "mean" for one IDR-mean vector per sequence, "none" for per-residue rows.
+        tokenizer (Tokenizer | None): Tokenizer (a default is used if None).
+        device (str | torch.device): Device to run the model on.
+        fim_mode (str): Prompt format, "prompted" or "unprompted" (legacy "idr"/"idp" accepted).
+
+    Returns:
+        dict: Mapping of layer to (values, index), where values is an [N, d] array and index is
+            a list of per-row metadata dicts.
     """
     tok = tokenizer or Tokenizer()
     variant = normalize_mode(fim_mode)
@@ -67,7 +80,12 @@ def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cp
 
 
 def write_embeddings(embeddings: dict, out_dir: str | Path) -> None:
-    """Write each layer's ``values`` as ``layer_<l>.npy`` plus a ``layer_<l>_index.csv``."""
+    """Write each layer's values as layer_<l>.npy plus a layer_<l>_index.csv.
+
+    Args:
+        embeddings (dict): Mapping of layer to (values, index), as returned by embed_fasta.
+        out_dir (str | Path): Directory to create and write the .npy and .csv files into.
+    """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     for layer, (values, index) in embeddings.items():
@@ -79,6 +97,7 @@ def write_embeddings(embeddings: dict, out_dir: str | Path) -> None:
 
 
 def main() -> None:
+    """Command-line entry point: export residual-stream embeddings from a FASTA."""
     import argparse
 
     from idiom.model.io import load_pretrained

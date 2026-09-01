@@ -1,18 +1,18 @@
-"""Reconstruction + sparsity of an SAE over held-out activations.
+"""Reconstruction and sparsity of an SAE over held-out activations.
 
 These metrics describe the SAE in isolation (no downstream model loss): how well it reconstructs
 the residual stream and how it spends its latents. They contextualise the downstream "loss
-recovered" of :mod:`idiom.sae.eval.fidelity` and feed the SAE figures.
+recovered" of idiom.sae.eval.fidelity and feed the SAE figures.
 
-  - **reconstruction** — FVU (fraction of variance unexplained) and explained variance over the
-    held-out activations, ``1 - SSE/SST``.
-  - **sparsity** — mean L0 (active latents per token; ~k for a top-k SAE) and the dead-feature
-    fraction (latents that never fire on the held-out set).
-  - **feature density** — per-latent activation frequency, for the feature-density histogram.
+  - reconstruction — FVU (fraction of variance unexplained) and explained variance over the
+    held-out activations, 1 - SSE/SST.
+  - sparsity — mean L0 (active latents per token; ~k for a top-k SAE) and the dead-feature fraction
+    (latents that never fire on the held-out set).
+  - feature density — per-latent activation frequency, for the feature-density histogram.
 
-Activations are pulled with the SAE's training ``region`` (residue-masking is applied by the
-:class:`~idiom.sae.training.activation_store.ActivationStore`, dropping START / FIM-marker /
-control positions) and prompt format (``prompted_prob``), so the SAE is measured on-distribution.
+Activations are pulled with the SAE's training region (residue-masking is applied by the
+ActivationStore, dropping START / FIM-marker / control positions) and prompt format
+(prompted_prob), so the SAE is measured on-distribution.
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ import torch
 
 @dataclass
 class ReconstructionStats:
+    """Reconstruction and sparsity summary of an SAE over held-out activations."""
+
     fvu: float
     explained_var: float
     l0_mean: float
@@ -50,15 +52,26 @@ def reconstruction_stats(
     record_batch_size: int = 16,
     sae_batch_size: int = 4096,
 ) -> ReconstructionStats:
-    """FVU / explained variance / mean-L0 / dead fraction / per-feature firing freq over ``fasta``.
+    """Compute FVU, explained variance, mean L0, dead fraction, and per-feature firing frequency.
 
     Args:
-        host: an :class:`~idiom.IDiom` (provides ``.model`` and ``.tok``).
-        sae: an :class:`~idiom.IDiomSAE`; its ``.sae`` is the :class:`SparseCoder`.
-        layer: residual-stream layer the SAE was trained on.
-        region: the SAE's training region (``"all"`` | ``"idr"`` | ``"non_idr"``).
-        prompted_prob: prompt format to match the SAE's ``fim_mode`` (0.0 unprompted / 1.0 prompted).
-        fasta: held-out record FASTA.
+        host: An idiom.IDiom (provides .model and .tok).
+        sae: An idiom.IDiomSAE; its .sae is the SparseCoder.
+        layer (int): The residual-stream layer the SAE was trained on.
+        region (str): The SAE's training region: "all", "idr", or "non_idr".
+        prompted_prob (float): Prompt format to match the SAE's fim_mode (0.0 unprompted / 1.0
+            prompted).
+        fasta (str): Held-out record FASTA.
+        device: Device to run extraction and encoding on.
+        max_records (int | None): Cap on records read from fasta, if any.
+        record_batch_size (int): Records per forward batch.
+        sae_batch_size (int): Activation rows per SAE batch.
+
+    Returns:
+        ReconstructionStats: The reconstruction and sparsity summary.
+
+    Raises:
+        ValueError: If no activations are extracted.
     """
     from torch.utils.data import DataLoader
 

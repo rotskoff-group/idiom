@@ -1,9 +1,9 @@
-"""Streaming activation store for SAE training (D3) — no activation h5.
+"""Streaming activation store for SAE training — no activation cache on disk.
 
 Runs the frozen model over record token-sequences, pulls residue-only residual-stream
-activations at one layer (via :func:`idiom.model.activations.extract_activations`), and serves
-them as shuffled ``[sae_batch_size, d_model]`` batches. A shuffling buffer decorrelates rows
-within and across sequences. Activations are regenerated each epoch (D3): no caching to disk.
+activations at one layer (via idiom.model.activations.extract_activations), and serves them as
+shuffled [sae_batch_size, d_model] batches. A shuffling buffer decorrelates rows within and across
+sequences. Activations are regenerated each epoch rather than cached to disk.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from idiom.model.activations import extract_activations
 
 
 class ActivationStore(IterableDataset):
+    """Iterable dataset yielding shuffled residual-stream activation batches for SAE training."""
+
     def __init__(
         self,
         model,
@@ -29,6 +31,20 @@ class ActivationStore(IterableDataset):
         drop_markers: bool = True,
         region: str = "all",
     ) -> None:
+        """Build the activation store.
+
+        Args:
+            model: The frozen host transformer to extract activations from.
+            record_loader: A loader yielding (input, target, mask) triples or input token tensors
+                of shape [B, L].
+            layer (int): The residual-stream layer to extract.
+            sae_batch_size (int): Number of activation rows per yielded batch.
+            buffer_size (int): Number of rows to accumulate before shuffling and draining.
+            device (str | torch.device): Device to run extraction and shuffling on.
+            tokenizer (Tokenizer | None): Tokenizer for region masking (a default is used if None).
+            drop_markers (bool): If True, drop START / FIM-marker / control positions.
+            region (str): Residues to keep: "all", "idr", or "non_idr" (relative to the "2" marker).
+        """
         self.model = model.eval().to(device)
         self.record_loader = record_loader  # yields (input, target, mask) or input tokens [B, L]
         self.layer = layer
@@ -77,7 +93,14 @@ class ActivationStore(IterableDataset):
 
     @torch.no_grad()
     def mean_activation(self, max_batches: int = 4) -> torch.Tensor:
-        """Mean activation over a few record batches — seeds the SAE decoder bias (sparsify)."""
+        """Return the mean activation over a few record batches, used to seed the decoder bias.
+
+        Args:
+            max_batches (int): Number of record batches to average over.
+
+        Returns:
+            torch.Tensor: The mean activation vector of shape [d_model], on CPU.
+        """
         total, count = None, 0
         for i, batch in enumerate(self.record_loader):
             acts = self._acts(self._input_tokens(batch))

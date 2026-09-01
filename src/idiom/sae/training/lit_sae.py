@@ -1,12 +1,12 @@
-"""LightningModule wrapping a :class:`~idiom.sae.sparse_coder.SparseCoder`.
+"""LightningModule wrapping a SparseCoder.
 
-Training recipe is faithful to EleutherAI ``sparsify`` (and OpenAI ``sparse_autoencoder``):
+The training recipe is faithful to EleutherAI sparsify (and OpenAI sparse_autoencoder):
 
-- loss = ``fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8`` (all computed in the SAE);
+- loss = fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8 (all computed in the SAE);
 - decoder rows renormalized to unit norm before every forward;
 - decoder gradient component parallel to its rows projected out before the optimizer step;
-- dead latents = not fired in the last ``dead_feature_tokens`` tokens; AuxK only when any;
-- Adam with LR auto-scaled ``2e-4 / (num_latents / 2**14)**0.5`` (sparsify) and linear warmup;
+- dead latents = not fired in the last dead_feature_tokens tokens; AuxK only when any;
+- Adam with LR auto-scaled 2e-4 / (num_latents / 2**14)**0.5 (sparsify) and linear warmup;
 - no gradient clipping by default (matches sparsify's fvu path).
 """
 
@@ -30,6 +30,8 @@ def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None):
 
 
 class LitSAE(L.LightningModule):
+    """LightningModule that trains a SparseCoder with the sparsify FVU / AuxK recipe."""
+
     def __init__(
         self,
         d_in: int,
@@ -47,6 +49,23 @@ class LitSAE(L.LightningModule):
         dead_feature_tokens: int = 10_000_000,
         grad_clip_norm: float | None = None,
     ):
+        """Build the LightningModule and its SparseCoder.
+
+        Args:
+            d_in (int): Input (residual-stream) dimension.
+            k (int): Number of latents kept active per token.
+            expansion_factor (int): Latents-per-input multiplier.
+            activation (str): Selection rule, "topk" or "groupmax".
+            multi_topk (bool): If True, add the Multi-TopK auxiliary loss.
+            normalize_decoder (bool): If True, keep decoder rows at unit norm.
+            lr (float | None): Learning rate; if None, auto-scaled from num_latents (sparsify).
+            total_steps (int): Total optimizer steps, used by the LR schedule.
+            warmup_steps (int): Linear warmup steps at the start of training.
+            decay_start (int | None): Step at which linear LR decay begins (no decay if None).
+            auxk_alpha (float): Weight on the AuxK dead-latent revival loss.
+            dead_feature_tokens (int): A latent is dead if it has not fired in this many tokens.
+            grad_clip_norm (float | None): Gradient-norm clip value; no clipping if None.
+        """
         super().__init__()
         self.save_hyperparameters()
 
@@ -76,7 +95,11 @@ class LitSAE(L.LightningModule):
 
     @t.no_grad()
     def init_b_dec_from_mean(self, mean_activation: t.Tensor):
-        """Initialize the decoder bias to the data mean (sparsify init)."""
+        """Initialize the decoder bias to the data mean (sparsify init).
+
+        Args:
+            mean_activation (t.Tensor): The mean activation vector of shape [d_in].
+        """
         self.sae.b_dec.data = mean_activation.to(self.sae.b_dec.device, self.sae.b_dec.dtype)
 
     def on_train_batch_start(self, *args, **kwargs):

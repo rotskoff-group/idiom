@@ -1,18 +1,17 @@
 """Memory-mapped columnar record store — fast, low-RAM, shared-across-ranks dataset backing.
 
-``read_records`` parses a multi-GB record FASTA into tens of millions of frozen :class:`Record`
-objects; under DDP **every rank repeats that parse**, so startup is minutes and RAM is
-``n_ranks × tens of GB`` (the v2 53.6M-record train split is ~58 GB *per process*). This module
-converts a record FASTA **once** into a columnar on-disk store — contiguous sequence/accession byte
-buffers + CSR offset arrays + IDR-coord arrays — read back via :func:`numpy.memmap`: lazy,
-near-instant to open, and shared across processes through the OS page cache (one copy regardless of
-rank count).
+read_records parses a multi-GB record FASTA into tens of millions of frozen Record objects; under
+DDP every rank repeats that parse, so startup is minutes and RAM is n_ranks x tens of GB (the
+53.6M-record train split is ~58 GB per process). This module converts a record FASTA once into a
+columnar on-disk store — contiguous sequence/accession byte buffers, CSR offset arrays, and
+IDR-coord arrays — read back via numpy.memmap: lazy, near-instant to open, and shared across
+processes through the OS page cache (one copy regardless of rank count).
 
-Behavior is **identical to** :func:`idiom.data.io.read_records`: the builder consumes
-``read_records``, so the non-canonical / malformed-header / out-of-range drops are exactly the same.
+Behavior is identical to idiom.data.io.read_records: the builder consumes read_records, so the
+non-canonical, malformed-header, and out-of-range drops are exactly the same.
 
 Build once, then training/SFT just point at the same FASTA (the store is a sidecar, auto-built and
-DDP-safe). Pre-build big splits with the ``idiom_build_store`` CLI so launches start in seconds:
+DDP-safe). Pre-build big splits with the idiom_build_store CLI so launches start in seconds:
 
     idiom_build_store --fasta /path/train.fasta            # -> /path/train.fasta.idiomstore
 """
@@ -40,7 +39,7 @@ _BYTE_DTYPE = np.uint8
 
 
 def store_path_for(fasta: str | Path) -> Path:
-    """Default sidecar store directory for a record FASTA (``<fasta>.idiomstore``)."""
+    """Return the default sidecar store directory for a record FASTA (<fasta>.idiomstore)."""
     return Path(str(fasta) + STORE_SUFFIX)
 
 
@@ -52,10 +51,18 @@ def _source_sig(fasta: str | Path) -> dict:
 def build_record_store(
     fasta: str | Path, store_dir: str | Path | None = None, *, drop_noncanonical: bool = True
 ) -> Path:
-    """Parse ``fasta`` once (via :func:`read_records`) into a columnar store; return its directory.
+    """Parse fasta once (via read_records) into a columnar store and return its directory.
 
     Writes the byte buffers by streaming; only the small offset/coord index arrays are held in RAM
     (~24 B/record). Builds into a temp dir and atomically renames, so a store dir is always complete.
+
+    Args:
+        fasta (str | Path): Path to the record FASTA to convert.
+        store_dir (str | Path | None): Output store directory (default: <fasta>.idiomstore).
+        drop_noncanonical (bool): If True, drop non-canonical sequences (matching read_records).
+
+    Returns:
+        Path: The store directory.
     """
     fasta = Path(fasta)
     store_dir = Path(store_dir) if store_dir else store_path_for(fasta)
@@ -101,7 +108,7 @@ def build_record_store(
 
 
 class RecordStore:
-    """Read-only, memory-mapped view over a built store. Indexes to :class:`Record` lazily."""
+    """Read-only, memory-mapped view over a built store; indexes to a Record lazily."""
 
     def __init__(self, store_dir: str | Path) -> None:
         self.dir = Path(store_dir)
@@ -123,7 +130,7 @@ class RecordStore:
         return self.meta["n"]
 
     def seq_lengths(self) -> np.ndarray:
-        """Per-record ``full_seq`` length, vectorized (for fast length filtering)."""
+        """Return the per-record full_seq length, vectorized (for fast length filtering)."""
         return (self._seq_off[1:] - self._seq_off[:-1]).astype(np.int64)
 
     def __getitem__(self, i: int) -> Record:
@@ -148,10 +155,23 @@ def _valid(store_dir: Path, fasta: Path) -> bool:
 def open_or_build(
     fasta: str | Path, *, drop_noncanonical: bool = True, lock_timeout: float = 3600.0, poll: float = 2.0
 ) -> RecordStore:
-    """Return a :class:`RecordStore` for ``fasta``, building the sidecar store if missing/stale.
+    """Return a RecordStore for fasta, building the sidecar store if missing or stale.
 
-    DDP-safe: an ``O_EXCL`` lock file ensures exactly one rank builds while the others wait and then
-    mmap the result. A lock older than ``lock_timeout`` (a crashed builder) is broken.
+    DDP-safe: an O_EXCL lock file ensures exactly one rank builds while the others wait and then
+    mmap the result. A lock older than lock_timeout (a crashed builder) is broken.
+
+    Args:
+        fasta (str | Path): Path to the record FASTA.
+        drop_noncanonical (bool): If True, drop non-canonical sequences when building.
+        lock_timeout (float): Seconds before a stale build lock is broken and before waiting ranks
+            give up.
+        poll (float): Seconds between checks while waiting for another rank to finish building.
+
+    Returns:
+        RecordStore: A memory-mapped store for fasta.
+
+    Raises:
+        TimeoutError: If the build lock is not released within lock_timeout.
     """
     fasta = Path(fasta)
     store_dir = store_path_for(fasta)
@@ -183,6 +203,7 @@ def open_or_build(
 
 
 def main() -> None:
+    """Build a memory-mapped record store from a FASTA path given on the command line."""
     import argparse
 
     ap = argparse.ArgumentParser(description="Build a memory-mapped record store from a record FASTA.")

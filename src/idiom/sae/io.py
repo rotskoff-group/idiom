@@ -1,9 +1,9 @@
 """Read/write a trained SAE in its release form.
 
-An SAE only means something attached to a host model at a layer, so the release records both:
-a ``sae_config.json`` (``host_model`` + ``layer`` + ``SparseCoder`` shape) and ``sae.safetensors``.
-This is the single SAE artifact — training writes it, :class:`idiom.IDiomSAE` and the analysis
-tools read it. Mirrors ``idiom.model.io`` for the transformer.
+An SAE only means something attached to a host model at a layer, so the release records both a
+sae_config.json (host_model + layer + SparseCoder shape) and sae.safetensors. This is the single
+SAE artifact — training writes it, idiom.IDiomSAE and the analysis tools read it. Mirrors
+idiom.model.io for the transformer.
 """
 
 from __future__ import annotations
@@ -24,10 +24,21 @@ def save_sae(
     sae: SparseCoder, out_dir: str | Path, *, host_model: str | None, layer: int,
     region: str = "all", fim_mode: str = "prompted",
 ) -> Path:
-    """Write ``sae_config.json`` + ``sae.safetensors``. ``host_model`` is the model checkpoint/repo
-    the SAE was trained against (recorded so it can self-load its host). ``region`` (``all`` | ``idr``
-    | ``non_idr``) and ``fim_mode`` (``prompted`` | ``unprompted``) are the slice + prompt format of
-    the residual stream it was trained on, so every downstream tool stays on that distribution."""
+    """Write sae_config.json and sae.safetensors for a trained SAE.
+
+    Args:
+        sae (SparseCoder): The trained sparse coder to serialize.
+        out_dir (str | Path): Directory to write the release into (created if needed).
+        host_model (str | None): The model checkpoint/repo the SAE was trained against, recorded so
+            the release can self-load its host.
+        layer (int): The residual-stream layer the SAE was trained on.
+        region (str): The residue slice the SAE was trained on: "all", "idr", or "non_idr".
+        fim_mode (str): The prompt format the residual stream was taken under: "prompted" or
+            "unprompted" (legacy aliases normalized).
+
+    Returns:
+        Path: The output directory the release was written to.
+    """
     from safetensors.torch import save_model  # noqa: PLC0415
 
     d = Path(out_dir)
@@ -52,7 +63,16 @@ def save_sae(
 def load_sae(
     path: str | Path, *, device: str | torch.device = "cpu"
 ) -> tuple[SparseCoder, dict]:
-    """Load a released SAE dir → ``(SparseCoder, config dict)`` (config carries host_model/layer)."""
+    """Load a released SAE directory into a SparseCoder and its config.
+
+    Args:
+        path (str | Path): The release directory holding sae_config.json and sae.safetensors.
+        device (str | torch.device): Device to move the loaded model onto.
+
+    Returns:
+        tuple[SparseCoder, dict]: The evaluation-mode SparseCoder and the config dict (which carries
+            host_model and layer).
+    """
     from safetensors.torch import load_model  # noqa: PLC0415
 
     d = Path(path)

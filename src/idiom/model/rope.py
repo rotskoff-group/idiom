@@ -1,9 +1,9 @@
-"""Rotary position embeddings (RoPE, D7).
+"""Rotary position embeddings (RoPE).
 
-Llama-style "rotate-half" formulation. The cos/sin tables are precomputed up to
-``max_seq_len`` and indexed by absolute ``positions`` — so a KV-cached decode step at
-position ``p`` rotates with the same angles it would have during a full forward, which is
-what makes cached and uncached generation agree.
+Llama-style "rotate-half" formulation. The cos/sin tables are precomputed up to max_seq_len and
+indexed by absolute positions, so a KV-cached decode step at position p rotates with the same
+angles it would have during a full forward, which is what makes cached and uncached generation
+agree.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ def _rotate_half(x: Tensor) -> Tensor:
 
 
 class Rope(nn.Module):
+    """Rotary position embeddings with precomputed cos/sin tables."""
+
     def __init__(self, head_dim: int, max_seq_len: int, base: float = 10_000.0) -> None:
         super().__init__()
         # inverse frequencies for each rotation plane (head_dim/2 of them)
@@ -29,7 +31,16 @@ class Rope(nn.Module):
         self.register_buffer("sin", emb.sin(), persistent=False)
 
     def apply(self, q: Tensor, k: Tensor, positions: Tensor) -> tuple[Tensor, Tensor]:
-        """Rotate ``q``/``k`` (shape ``[B, H, L, head_dim]``) at the given absolute positions."""
+        """Rotate q and k (shape [B, H, L, head_dim]) at the given absolute positions.
+
+        Args:
+            q (Tensor): Query tensor of shape [B, H, L, head_dim].
+            k (Tensor): Key tensor of shape [B, H, L, head_dim].
+            positions (Tensor): Absolute position indices for the L axis.
+
+        Returns:
+            tuple[Tensor, Tensor]: The rotated (q, k).
+        """
         cos = self.cos[positions].to(q.dtype)[None, None]  # [1, 1, L, head_dim] -> broadcasts over B, H
         sin = self.sin[positions].to(q.dtype)[None, None]
         q_rot = q * cos + _rotate_half(q) * sin

@@ -1,8 +1,8 @@
-"""SAE training entrypoint (``idiom_sae``): frozen IDiom -> streaming activations -> top-k SAE.
+"""SAE training entrypoint (idiom_sae): frozen IDiom -> streaming activations -> top-k SAE.
 
-Activations are generated on the fly by the :class:`ActivationStore` (no h5). ``build`` wires the
-frozen model + record source + store + ``LitSAE``; ``run`` fits and writes the release dir
-(``sae_config.json`` + ``sae.safetensors``, with ``host_model`` / ``layer`` / ``region`` recorded).
+Activations are generated on the fly by the ActivationStore (no activation cache on disk). build
+wires the frozen model + record source + store + LitSAE; run fits and writes the release directory
+(sae_config.json + sae.safetensors, with host_model / layer / region recorded).
 """
 
 from __future__ import annotations
@@ -27,13 +27,30 @@ from idiom.utils.device import resolve_device
 
 
 def _prompted_prob(cfg: DictConfig) -> float:
-    """P(prompted variant) from config; accepts the deprecated fim_idr_prob / fim_full_prob keys."""
+    """Return the probability of the prompted variant from config.
+
+    Accepts the deprecated fim_idr_prob / fim_full_prob keys as fallbacks.
+
+    Args:
+        cfg (DictConfig): The training config.
+
+    Returns:
+        float: The prompted-variant probability.
+    """
     return cfg.data.get(
         "prompted_prob", cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5))
     )
 
 
 def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
+    """Wire the frozen model, record source, activation store, and LitSAE from config.
+
+    Args:
+        cfg (DictConfig): The training config.
+
+    Returns:
+        tuple[LitSAE, ActivationStore]: The LightningModule and its streaming activation store.
+    """
     device = resolve_device(cfg.device)
     tok = Tokenizer()
     model = load_pretrained(cfg.model_ckpt, device=device)  # arch read from the checkpoint
@@ -69,6 +86,11 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
 
 
 def run(cfg: DictConfig) -> None:
+    """Fit the SAE and write the release directory recording host_model / layer / region / fim_mode.
+
+    Args:
+        cfg (DictConfig): The training config.
+    """
     L.seed_everything(cfg.seed, workers=True)
     out_dir = Path(cfg.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

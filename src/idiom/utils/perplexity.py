@@ -1,7 +1,7 @@
 """Held-out perplexity under the FIM objective — pure model quality, independent of generation.
 
-Reuses the exact training data pipeline (`RecordDataset` + FIM) and masked next-token loss, so the
-reported NLL matches what training optimizes, on a held-out record FASTA (e.g. the test split).
+Reuses the exact training data pipeline (RecordDataset plus FIM) and masked next-token loss, so
+the reported NLL matches what training optimizes, on a held-out record FASTA (e.g. the test split).
 """
 
 from __future__ import annotations
@@ -25,7 +25,28 @@ def perplexity(
     device: str = "cuda", max_records: int | None = None, seed: int = 0,
     fim_idr_prob: float | None = None,  # deprecated alias for prompted_prob
 ) -> dict[str, float]:
-    """Mean per-token NLL (nats) and perplexity over `fasta` under the FIM loss (pad/mask ignored)."""
+    """Compute mean per-token NLL (nats) and perplexity over fasta under the FIM loss.
+
+    Padding and masked-out positions are ignored, so the NLL matches the masked next-token loss
+    training optimizes.
+
+    Args:
+        model: The language model to evaluate; called as model(input_ids) -> logits.
+        fasta (str): Path to the held-out record FASTA.
+        tokenizer (Tokenizer | None): Character tokenizer (a default Tokenizer is used if None).
+        max_len (int): Maximum model positions; longer records are dropped.
+        prompted_prob (float): Probability a sample uses the prompted (context) variant.
+        batch_size (int): Batch size for the evaluation dataloader.
+        num_workers (int): DataLoader worker processes.
+        device (str): Device to run the model on.
+        max_records (int | None): If set, evaluate only the first this-many records.
+        seed (int): Seed for the per-sample prompted/unprompted choice.
+        fim_idr_prob (float | None): Deprecated alias for prompted_prob.
+
+    Returns:
+        dict[str, float]: Keys "nll" (mean per-token NLL in nats), "perplexity" (exp of the NLL),
+            and "n_tokens" (number of scored tokens).
+    """
     if fim_idr_prob is not None:  # deprecated alias
         prompted_prob = fim_idr_prob
     tok = tokenizer or Tokenizer()

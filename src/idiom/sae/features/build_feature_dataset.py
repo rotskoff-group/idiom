@@ -1,9 +1,9 @@
-"""Build the feature-activation dataset consumed by the viewer / annotation (P5 capstone).
+"""Build the feature-activation dataset consumed by the viewer and annotation tools.
 
-Streams records through the frozen model, takes residue-only residual-stream activations at
-one layer, encodes them through a trained SAE, and writes the per-residue top-k features +
-the FIM strings as a directory of ``.npy`` + ``.json`` (no h5). ``pos_idx`` indexes the FIM
-string (markers present), so the viewer can shade each residue by its activation.
+Streams records through the frozen model, takes residue-only residual-stream activations at one
+layer, encodes them through a trained SAE, and writes the per-residue top-k features plus the FIM
+strings as a directory of .npy + .json files. pos_idx indexes the FIM string (markers present), so
+the viewer can shade each residue by its activation.
 """
 
 from __future__ import annotations
@@ -34,12 +34,26 @@ def build_feature_dataset(
     region: str = "all",
     fim_mode: str = "prompted",
 ) -> Path:
-    """Encode records through ``sae`` at ``layer`` and write the feature dataset to ``out_dir``.
+    """Encode records through sae at layer and write the feature dataset to out_dir.
 
-    ``region`` (``all`` | ``idr`` | ``non_idr``) and ``fim_mode`` (``prompted`` =
-    ``1{prefix}3{suffix}2{IDR}`` | ``unprompted`` = ``132{IDR}``) are the SAE's training distribution;
-    the dataset is built over exactly those residues, in that prompt format, so the features match
-    what the SAE learned. Legacy ``idr``/``idp`` fim_mode accepted.
+    region ("all", "idr", or "non_idr") and fim_mode ("prompted" = 1{prefix}3{suffix}2{IDR}, or
+    "unprompted" = 132{IDR}) are the SAE's training distribution; the dataset is built over exactly
+    those residues, in that prompt format, so the features match what the SAE learned.
+
+    Args:
+        model: The frozen host transformer.
+        sae: The trained SparseCoder to encode activations with.
+        records: Iterable of records to encode.
+        layer (int): The residual-stream layer to extract.
+        out_dir (str | Path): Directory to write the dataset into (created if needed).
+        tokenizer (Tokenizer | None): Tokenizer for encoding and region masking (default if None).
+        device (str | torch.device): Device to run extraction and encoding on.
+        batch_size (int): Number of records per forward batch.
+        region (str): Residues to keep: "all", "idr", or "non_idr".
+        fim_mode (str): Prompt format: "prompted" or "unprompted" (legacy idr/idp accepted).
+
+    Returns:
+        Path: The output directory the dataset was written to.
     """
     tok = tokenizer or Tokenizer()
     fim = fim_prompted if normalize_mode(fim_mode) == PROMPTED else fim_unprompted
@@ -83,6 +97,7 @@ def build_feature_dataset(
 
 
 def main() -> None:
+    """Build a feature-activation dataset from a FASTA using a trained SAE release (CLI)."""
     import argparse
 
     from idiom import IDiomSAE

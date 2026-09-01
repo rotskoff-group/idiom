@@ -1,4 +1,4 @@
-"""Learning-rate schedule (replaces the deprecated pl_bolts warmup-cosine)."""
+"""Learning-rate schedule providing a self-contained warmup-cosine schedule."""
 
 from __future__ import annotations
 
@@ -14,7 +14,17 @@ def warmup_cosine(
     max_steps: int,
     min_lr_ratio: float = 0.1,
 ) -> torch.optim.lr_scheduler.LambdaLR:
-    """Linear warmup to the base LR, then cosine decay to ``min_lr_ratio * base_lr``."""
+    """Linear warmup to the base LR, then cosine decay to min_lr_ratio times the base LR.
+
+    Args:
+        optimizer (torch.optim.Optimizer): Optimizer whose learning rate is scheduled.
+        warmup_steps (int): Number of linear warmup steps before cosine decay begins.
+        max_steps (int): Total number of steps over which the cosine decay completes.
+        min_lr_ratio (float): Final learning rate as a fraction of the base LR.
+
+    Returns:
+        torch.optim.lr_scheduler.LambdaLR: The configured warmup-cosine scheduler.
+    """
 
     def lr_factor(step: int) -> float:
         if step < warmup_steps:

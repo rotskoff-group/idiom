@@ -11,11 +11,11 @@ compute next-token NLL three ways at the SAE's layer (via forward hooks on the b
 
 A perfect SAE recovers ~100%; the information-free baseline recovers 0%.
 
-The substitution and ablation baseline are applied only at the SAE's training ``region`` (via
-:meth:`~idiom.data.tokenizer.Tokenizer.region_mask`) — the positions the SAE was trained on.
-The extractor drops START / FIM-marker / control activations, so editing them feeds the SAE
-out-of-distribution inputs that, through causal attention, corrupt predictions across the
-sequence and badly understate fidelity (e.g. 21% vs 80% recovered for the same checkpoint).
+The substitution and ablation baseline are applied only at the SAE's training region (via the
+tokenizer's region_mask) — the positions the SAE was trained on. The extractor drops START /
+FIM-marker / control activations, so editing them feeds the SAE out-of-distribution inputs that,
+through causal attention, corrupt predictions across the sequence and badly understate fidelity
+(e.g. 21% vs 80% recovered for the same checkpoint).
 """
 
 from __future__ import annotations
@@ -30,12 +30,15 @@ from idiom.sae.steering.hooks import sae_edit_hook, steering, substitute_hook
 
 @dataclass
 class FidelityResult:
+    """The three mean next-token losses of a fidelity run and the percent-recovered they imply."""
+
     loss_clean: float
     loss_sae: float
     loss_ablate: float
 
     @property
     def pct_loss_recovered(self) -> float:
+        """Return the percent of loss recovered: (ablate - sae) / (ablate - clean) * 100."""
         denom = self.loss_ablate - self.loss_clean
         if abs(denom) < 1e-8:
             return float("nan")
@@ -59,20 +62,27 @@ def compute_fidelity(
     region: str = "all",
     device: str | torch.device | None = None,
 ) -> FidelityResult:
-    """Substitution-loss fidelity over ``(input, target, mask)`` batches (``RecordDataset``).
+    """Compute substitution-loss fidelity over (input, target, mask) batches from a RecordDataset.
 
     Args:
-        model: an :class:`IDiomTransformer` (``model(tokens) -> logits``, ``.blocks`` hook points).
-        sae: trained SAE for ``layer`` (uses ``encode_dense`` / ``decode_dense`` / ``b_dec``).
-        layer: residual-stream layer the SAE was trained on.
-        batches: iterable of ``(input, target, loss_mask)``.
-        pad_id: ignore index for the next-token loss (tokenizer PAD = 23).
-        tokenizer: builds the per-forward region mask (defaults to a fresh :class:`Tokenizer`).
-        baseline: ablation vector; defaults to ``sae.b_dec`` (mean-ablation).
-        region: the SAE's training region (``"all"`` | ``"idr"`` | ``"non_idr"``). The SAE /
-            ablation edit is always confined to it — editing positions the SAE never saw (markers,
-            START, the wrong side of the ``2``) feeds it out-of-distribution inputs that corrupt
-            predictions through causal attention and badly understate fidelity.
+        model: An IDiomTransformer (model(tokens) -> logits, with .blocks hook points).
+        sae: The trained SAE for layer (uses encode_dense / decode_dense / b_dec).
+        layer (int): The residual-stream layer the SAE was trained on.
+        batches: Iterable of (input, target, loss_mask) triples.
+        pad_id (int): Ignore index for the next-token loss (tokenizer PAD = 23).
+        tokenizer (Tokenizer | None): Builds the per-forward region mask (fresh Tokenizer if None).
+        baseline (torch.Tensor | None): Ablation vector; defaults to sae.b_dec (mean-ablation).
+        region (str): The SAE's training region ("all", "idr", or "non_idr"). The SAE / ablation
+            edit is always confined to it — editing positions the SAE never saw (markers, START, the
+            wrong side of the "2") feeds it out-of-distribution inputs that corrupt predictions
+            through causal attention and badly understate fidelity.
+        device (str | torch.device | None): Device to run on (model's device if None).
+
+    Returns:
+        FidelityResult: The mean clean, SAE-substituted, and ablated next-token losses.
+
+    Raises:
+        ValueError: If no non-pad target tokens are found in the provided batches.
     """
     device = device or next(model.parameters()).device
     sae = sae.to(device).eval()

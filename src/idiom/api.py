@@ -1,11 +1,11 @@
-"""Public API: the ``IDiom`` model wrapper (FASTA-first, HF-friendly).
+"""Public API: the IDiom model wrapper (FASTA-first, HF-friendly).
 
-A thin layer over :class:`idiom.model.IDiomTransformer` + :class:`idiom.data.Tokenizer` that
-hides training/Hydra/Lightning. Load a released model with :meth:`from_pretrained` (HF repo id
-or local dir), generate IDRs (unprompted / prompted) to strings or FASTA, or pull embeddings.
+A thin layer over IDiomTransformer + Tokenizer that hides training/Hydra/Lightning. Load a released
+model with from_pretrained (an HF repo id or a local dir), generate IDRs (unprompted or prompted) to
+strings or FASTA, or pull residual-stream embeddings.
 
-An **unprompted** IDR is generated de novo (no flanks); a **prompted** IDR is in-filled
-conditioned on its flanking context. (Older releases called these IDP / context-IDR.)
+An unprompted IDR is generated de novo (no flanks); a prompted IDR is in-filled conditioned on its
+flanking context. (Older releases called these IDP / context-IDR.)
 
     from idiom import IDiom
     model = IDiom.from_pretrained("jxliu2/idiom-medium")
@@ -35,7 +35,14 @@ WEIGHTS_FILE = "model.safetensors"
 
 
 def _resolve(name_or_path: str | Path) -> Path:
-    """Local dir → itself; otherwise treat as an HF repo id and download a snapshot."""
+    """Return a local dir as-is, or download the HF repo snapshot and return its path.
+
+    Args:
+        name_or_path (str | Path): A local directory, or an HF repo id to download.
+
+    Returns:
+        Path: The local path to the (possibly downloaded) directory.
+    """
     p = Path(name_or_path)
     if p.exists():
         return p
@@ -46,13 +53,23 @@ def _resolve(name_or_path: str | Path) -> Path:
 
 def _oversample(batch_fn, n: int, *, length_range: tuple[int, int] | None = None,
                 max_oversample: int = 20, seed: int | None = None) -> list[str]:
-    """Draw sequences via ``batch_fn(k, seed)`` until ``n`` fall in ``length_range`` (inclusive).
+    """Draw sequences via batch_fn(k, seed) until n fall within length_range (inclusive).
 
-    With ``length_range=None`` this is a single ``batch_fn(n, seed)`` draw. Otherwise it re-draws
-    batches of ``n`` (varying the seed per batch) and length-filters, capped at ``n * max_oversample``
-    total draws so an unreachable range can't hang; warns and returns fewer if the cap is hit.
-    Shared by :meth:`IDiom._generate` and :meth:`IDiomSAE.steer_generate` so unsteered and steered
-    generation length-filter identically.
+    With length_range=None this is a single batch_fn(n, seed) draw. Otherwise it re-draws batches of
+    n (varying the seed per batch) and length-filters, capped at n * max_oversample total draws so an
+    unreachable range cannot hang; it warns and returns fewer if the cap is hit. Shared by
+    IDiom._generate and IDiomSAE.steer_generate so unsteered and steered generation length-filter
+    identically.
+
+    Args:
+        batch_fn (Callable): Draws a batch of sequences given (k, seed).
+        n (int): Number of sequences to return.
+        length_range (tuple[int, int] | None): Inclusive (lo, hi) length filter, or None for none.
+        max_oversample (int): Cap on total draws as a multiple of n.
+        seed (int | None): Base seed, incremented per re-draw.
+
+    Returns:
+        list[str]: Up to n sequences within the length range.
     """
     if length_range is None:
         return batch_fn(n, seed)
@@ -72,7 +89,20 @@ def _oversample(batch_fn, n: int, *, length_range: tuple[int, int] | None = None
 
 
 class IDiom:
+    """FASTA-first wrapper around a trained IDiom transformer and its tokenizer.
+
+    Loads released or checkpoint weights, generates unprompted/prompted IDRs (as strings or FASTA),
+    and extracts residual-stream embeddings. See from_pretrained to load a released model.
+    """
+
     def __init__(self, model: IDiomTransformer, tokenizer: Tokenizer | None = None, device="cpu"):
+        """Wrap a transformer and tokenizer, moving the model to device in eval mode.
+
+        Args:
+            model (IDiomTransformer): The transformer to wrap (set to eval mode).
+            tokenizer (Tokenizer | None): Tokenizer to use (a default Tokenizer if None).
+            device (str | torch.device): Device to place the model on.
+        """
         self.model = model.eval()
         self.tok = tokenizer or Tokenizer()
         self.device = torch.device(device)
@@ -81,13 +111,30 @@ class IDiom:
     # --- load / save (HF-style) ---
     @classmethod
     def load(cls, name_or_path: str | Path, *, device="auto") -> "IDiom":
-        """Format-agnostic load: a local training ``.ckpt`` file, a released dir, or an HF repo id."""
+        """Load from a local training .ckpt file, a released dir, or an HF repo id.
+
+        Args:
+            name_or_path (str | Path): A Lightning .ckpt file, a released dir, or an HF repo id.
+            device (str): Target device, or "auto" to pick automatically.
+
+        Returns:
+            IDiom: The loaded model wrapper.
+        """
         if Path(name_or_path).is_file():  # a Lightning .ckpt
             return cls.from_lightning_checkpoint(name_or_path, device=device)
         return cls.from_pretrained(name_or_path, device=device)
 
     @classmethod
     def from_pretrained(cls, name_or_path: str | Path, *, device="auto") -> "IDiom":
+        """Load a released model dir (config.json + model.safetensors) or an HF repo id.
+
+        Args:
+            name_or_path (str | Path): A released model directory or an HF repo id.
+            device (str): Target device, or "auto" to pick automatically.
+
+        Returns:
+            IDiom: The loaded model wrapper.
+        """
         from safetensors.torch import load_model  # noqa: PLC0415
 
         d = _resolve(name_or_path)
@@ -97,6 +144,15 @@ class IDiom:
         return cls(model, device=resolve_device(device))
 
     def save_pretrained(self, out_dir: str | Path, *, model_card: str | None = None) -> Path:
+        """Write the released form (config.json + model.safetensors) to out_dir.
+
+        Args:
+            out_dir (str | Path): Directory to write the release into (created if needed).
+            model_card (str | None): Optional README.md model-card text to include.
+
+        Returns:
+            Path: The output directory.
+        """
         from safetensors.torch import save_model  # noqa: PLC0415
 
         d = Path(out_dir)
@@ -109,12 +165,21 @@ class IDiom:
 
     def push_to_hub(self, repo_id: str, *, private: bool = True, model_card: str | None = None,
                     commit_message: str | None = None, token: str | None = None) -> str:
-        """Save in released form and upload to the HF Hub as ``repo_id``; returns the repo URL.
+        """Save in released form and upload to the HF Hub, returning the repo URL.
 
-        Creates the repo if missing (private by default), then uploads ``config.json`` +
-        ``model.safetensors`` (+ a ``README.md`` model card if ``model_card`` is given) to the repo
-        root, so the result loads directly via :meth:`from_pretrained`. ``token`` falls back to the
-        cached login / ``HF_TOKEN``.
+        Creates the repo if missing (private by default), then uploads config.json and
+        model.safetensors (plus a README.md model card if model_card is given) to the repo root, so
+        the result loads directly via from_pretrained.
+
+        Args:
+            repo_id (str): Target Hub repo id.
+            private (bool): Whether to create the repo as private.
+            model_card (str | None): Optional model-card text (written as README.md).
+            commit_message (str | None): Commit message for the upload.
+            token (str | None): Hub token; falls back to the cached login or HF_TOKEN.
+
+        Returns:
+            str: The URL of the uploaded repo.
         """
         import tempfile  # noqa: PLC0415
 
@@ -130,7 +195,15 @@ class IDiom:
 
     @classmethod
     def from_lightning_checkpoint(cls, ckpt_path, *, device="auto") -> "IDiom":
-        """Wrap a training ``.ckpt`` (e.g. to then ``save_pretrained`` a release); arch read from it."""
+        """Wrap a training .ckpt (e.g. to then save_pretrained a release); arch is read from it.
+
+        Args:
+            ckpt_path (str | Path): Path to a Lightning checkpoint.
+            device (str): Target device, or "auto" to pick automatically.
+
+        Returns:
+            IDiom: The loaded model wrapper.
+        """
         from idiom.model.io import load_pretrained  # noqa: PLC0415
 
         dev = resolve_device(device)
@@ -170,12 +243,24 @@ class IDiom:
                             top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
                             length_range: tuple[int, int] | None = None, max_oversample: int = 20,
                             batch_size: int | None = None) -> list[str]:
-        """Unprompted (de-novo) IDRs (prompt ``132``). Returns ``n`` IDR residue strings.
+        """Generate n unprompted (de-novo) IDRs (prompt "132") as residue strings.
 
-        ``length_range=(lo, hi)``: oversample — re-generate and length-filter until ``n`` sequences
-        have length in ``[lo, hi]`` (inclusive), capped at ``n * max_oversample`` total draws (warns
-        and returns fewer if the cap is hit). ``batch_size`` caps sequences per model forward (chunks
-        each draw to bound memory); ``None`` generates the whole draw in one batch.
+        Args:
+            n (int): Number of IDRs to return.
+            max_new_tokens (int): Maximum tokens to generate per sequence.
+            temperature (float): Sampling temperature (0 = greedy).
+            top_k (int | None): Top-k sampling cutoff, or None.
+            top_p (float | None): Nucleus sampling cutoff, or None.
+            seed (int | None): Random seed for reproducible sampling.
+            length_range (tuple[int, int] | None): Inclusive (lo, hi); oversample and length-filter
+                until n sequences fall in range, capped at n * max_oversample draws (warns and returns
+                fewer if the cap is hit).
+            max_oversample (int): Cap on total draws as a multiple of n when length_range is set.
+            batch_size (int | None): Max sequences per model forward (chunks each draw to bound
+                memory); None generates the whole draw in one batch.
+
+        Returns:
+            list[str]: The generated IDR residue strings.
         """
         kw = dict(max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
                   length_range=length_range, max_oversample=max_oversample, batch_size=batch_size)
@@ -184,11 +269,20 @@ class IDiom:
         return self._generate(fim_prompt(), n, **kw)
 
     def generate_prompted(self, seq: str, idr_start: int, idr_end: int, n: int = 100, **kw) -> list[str]:
-        """Prompted IDRs, conditioned on flanks. ``idr_start/idr_end`` are 0-based, half-open
-        (``seq[start:end]``).
+        """Generate n prompted IDRs conditioned on flanking context, as residue strings.
 
-        Accepts ``length_range=(lo, hi)`` / ``max_oversample`` (see :meth:`generate_unprompted`) to
-        oversample until ``n`` generated IDRs fall in the length range.
+        idr_start and idr_end are 0-based, half-open (seq[start:end]).
+
+        Args:
+            seq (str): The full protein sequence providing the flanks.
+            idr_start (int): IDR start index (0-based, inclusive).
+            idr_end (int): IDR end index (0-based, exclusive).
+            n (int): Number of IDRs to return.
+            **kw: Sampling and length options; see generate_unprompted (temperature, top_k, top_p,
+                seed, length_range, max_oversample, batch_size).
+
+        Returns:
+            list[str]: The generated IDR residue strings.
         """
         return self._generate(fim_prompt(seq, idr_start, idr_end), n, **kw)
 
@@ -199,23 +293,47 @@ class IDiom:
     # --- FASTA-first wrappers ---
     def generate_unprompted_fasta(self, out_fasta, n: int = 100, *, prefix: str = "idiom_unprompted",
                                   **kw) -> Path:
+        """Generate n unprompted IDRs and write them to a FASTA.
+
+        Each generated sequence is the whole IDR, so its header carries the span _IDR_1-len, making
+        the output a valid record FASTA.
+
+        Args:
+            out_fasta (str | Path): Output FASTA path.
+            n (int): Number of IDRs to generate.
+            prefix (str): Header prefix tag for each generated record.
+            **kw: Sampling and length options; see generate_unprompted.
+
+        Returns:
+            Path: The output FASTA path.
+        """
         seqs = self.generate_unprompted(n, **kw)
-        # the whole generated sequence is the IDR -> header carries the span `_IDR_1-len` so the
+        # the whole generated sequence is the IDR -> header carries the span _IDR_1-len so the
         # output is a valid record FASTA (read_records-parseable). See _idr_header.
         return _write_fasta([(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s], out_fasta)
 
     def generate_prompted_fasta(self, in_fasta, out_fasta, n: int = 100, *, return_full: bool = False,
                                 marker: str = "idiom_prompted", **kw) -> Path:
-        """Generate ``n`` prompted IDRs per input record (each conditioned on that record's flanks).
+        """Generate n prompted IDRs per input record (each conditioned on that record's flanks).
 
-        Each output record is tagged ``{source_accession}_{marker}_gen{i}`` (``marker`` defaults to
-        ``idiom_prompted``, symmetric with the ``idiom_unprompted`` prefix on de-novo output) so
-        generated records are distinguishable by mode at a glance; the source accession is kept in front.
+        Each output record is tagged {source_accession}_{marker}_gen{i} (marker defaults to
+        "idiom_prompted", symmetric with the "idiom_unprompted" prefix on de-novo output), so
+        generated records are distinguishable by mode at a glance and keep the source accession in
+        front. With return_full=False (default) the generated IDR is written alone with header span
+        _IDR_1-len. With return_full=True each IDR is spliced back into its flanks and the whole
+        protein is written, with the header span pointing at the IDR region
+        (_IDR_{idr_start+1}-{idr_start+len}, 1-indexed inclusive).
 
-        ``return_full=False`` (default) writes the generated IDR alone with header span ``_IDR_1-len``
-        — the original behaviour, so existing analysis code keeps working. ``return_full=True`` splices
-        each IDR back into its flanks and writes the whole protein, with the header span pointing at
-        the IDR region (``_IDR_{idr_start+1}-{idr_start+len}``, 1-indexed inclusive).
+        Args:
+            in_fasta (str | Path): Input proteins with _IDR_x-y headers.
+            out_fasta (str | Path): Output FASTA path.
+            n (int): Number of IDRs to generate per input record.
+            return_full (bool): If True, splice each IDR into its flanks and write the whole protein.
+            marker (str): Header marker tag for each generated record.
+            **kw: Sampling and length options; see generate_unprompted.
+
+        Returns:
+            Path: The output FASTA path.
         """
         rows = []
         for r in read_records(in_fasta):
@@ -237,16 +355,25 @@ class IDiom:
 
     # --- embeddings ---
     def embed(self, fasta, layers: list[int], *, pool: str = "mean"):
-        """Residual-stream embeddings (D14). See ``idiom.model.extract.embed_fasta``."""
+        """Extract residual-stream embeddings for the given records. See embed_fasta for details.
+
+        Args:
+            fasta (str | Path): A record FASTA with _IDR_x-y headers.
+            layers (list[int]): Residual-stream layers to extract.
+            pool (str): "mean" for one vector per sequence, or "none" for per-residue rows.
+
+        Returns:
+            dict[int, tuple]: Per layer, a (values, index) pair (see embed_fasta).
+        """
         return embed_fasta(self.model, fasta, layers, pool=pool, tokenizer=self.tok, device=self.device)
 
 
 class IDiomSAE:
-    """Public API for a sparse autoencoder trained on an :class:`IDiom` residual stream.
+    """Public API for a sparse autoencoder trained on an IDiom residual stream.
 
-    An SAE is only meaningful together with its **host model** and the **layer** it reads, so this
-    wrapper bundles ``(IDiom, layer, SparseCoder)``. The release dir records the host model + layer,
-    so an SAE is self-describing about where it mounts — ``idiom_sae`` writes exactly this format.
+    An SAE is only meaningful together with its host model and the layer it reads, so this wrapper
+    bundles (IDiom, layer, SparseCoder). The release dir records the host model and layer, so an SAE
+    is self-describing about where it mounts; idiom_sae writes exactly this format.
 
         from idiom import IDiom, IDiomSAE
         sae   = IDiomSAE.from_pretrained("jxliu2/idiom-medium-sae-L8")   # host auto-loaded
@@ -257,13 +384,24 @@ class IDiomSAE:
 
     def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None,
                  region: str = "all", fim_mode: str = "prompted"):
+        """Bundle an SAE with its host model, layer, and training distribution.
+
+        Args:
+            sae (SparseCoder): The trained sparse autoencoder (set to eval mode).
+            model (IDiom): The host model whose residual stream the SAE reads.
+            layer (int): The residual-stream layer the SAE was trained on.
+            host_model (str | None): Repo id or path of the host model, recorded for self-loading.
+            region (str): Residue slice the SAE reads: "all", "idr", or "non_idr".
+            fim_mode (str): Prompt format the SAE was trained under: "prompted" or "unprompted"
+                (legacy "idr"/"idp" accepted).
+        """
         self.sae = sae.eval().to(model.device)
         self.host = model
         self.layer = int(layer)
         self.host_model = host_model
         # the distribution this SAE was trained on (residual-stream slice + prompt format); both are
         # applied automatically everywhere downstream so the SAE stays on-distribution. fim_mode is
-        # normalized to prompted/unprompted (accepts legacy idr/idp). NB: `region` (all/idr/non_idr)
+        # normalized to prompted/unprompted (accepts legacy idr/idp). NB: region (all/idr/non_idr)
         # is a different axis — which residues the SAE reads — and is left as-is.
         self.region = region
         self.fim_mode = normalize_mode(fim_mode)
@@ -284,10 +422,19 @@ class IDiomSAE:
     # --- load / save (HF-style, mirrors IDiom) ---
     @classmethod
     def from_pretrained(cls, name_or_path, *, model: IDiom | None = None, device="auto") -> "IDiomSAE":
-        """Load a released SAE dir (``sae_config.json`` + ``sae.safetensors``).
+        """Load a released SAE dir (sae_config.json + sae.safetensors).
 
-        ``model`` is the host :class:`IDiom`; if omitted, it is loaded from the ``host_model`` recorded
-        in the SAE config (HF repo id or local dir).
+        Args:
+            name_or_path (str | Path): The released SAE directory or an HF repo id.
+            model (IDiom | None): The host IDiom; if None, it is loaded from the host_model recorded
+                in the SAE config.
+            device (str): Target device, or "auto" to pick automatically.
+
+        Returns:
+            IDiomSAE: The loaded SAE wrapper.
+
+        Raises:
+            ValueError: If model is None and the config records no host_model.
         """
         from idiom.sae.io import load_sae  # noqa: PLC0415
 
@@ -303,8 +450,16 @@ class IDiomSAE:
                    region=cfg.get("region", "all"), fim_mode=cfg.get("fim_mode", "prompted"))
 
     def save_pretrained(self, out_dir, *, host_model: str | None = None) -> Path:
-        """Write the release dir (``sae_config.json`` + ``sae.safetensors``); ``host_model`` (repo id
-        / path) is recorded so the SAE can later self-load its host."""
+        """Write the release dir (sae_config.json + sae.safetensors).
+
+        Args:
+            out_dir (str | Path): Directory to write the release into.
+            host_model (str | None): Repo id or path of the host model to record; defaults to the
+                host_model this SAE already carries.
+
+        Returns:
+            Path: The output directory.
+        """
         from idiom.sae.io import save_sae  # noqa: PLC0415
 
         return save_sae(self.sae, out_dir, host_model=host_model or self.host_model,
@@ -313,12 +468,17 @@ class IDiomSAE:
     # --- feature activations ---
     @torch.no_grad()
     def encode(self, fasta, *, pool: str = "mean", region: str | None = None):
-        """SAE feature activations for each record's residues.
+        """Compute SAE feature activations for each record's residues.
 
-        ``region`` (``all`` | ``idr`` | ``non_idr``) defaults to the SAE's training region.
-        ``pool="none"`` → ``(acts[N_res, num_latents], index)`` per residue (index rows carry
-        ``accession``/``source_pos``/``is_idr``). ``pool="mean"`` → ``(acts[N_seq, num_latents],
-        accessions)`` averaged over each record's residues within ``region``.
+        Args:
+            fasta (str | Path): A record FASTA with _IDR_x-y headers.
+            pool (str): "none" for per-residue rows, or "mean" to average over each record's residues.
+            region (str | None): "all", "idr", or "non_idr"; defaults to the SAE's training region.
+
+        Returns:
+            tuple: With pool="none", (acts[N_res, num_latents], index) where index rows carry
+                accession/source_pos/is_idr. With pool="mean", (acts[N_seq, num_latents], accessions)
+                averaged over each record's residues within region.
         """
         region = region or self.region
         emb = embed_fasta(self.model, fasta, [self.layer], pool="none", tokenizer=self.tok,
@@ -342,7 +502,16 @@ class IDiomSAE:
 
     @torch.no_grad()
     def build_feature_dataset(self, fasta, out_dir, *, batch_size: int = 16) -> Path:
-        """Write the offline per-residue feature-activation dataset (for the feature viewer)."""
+        """Write the offline per-residue feature-activation dataset (for the feature viewer).
+
+        Args:
+            fasta (str | Path): A record FASTA with _IDR_x-y headers.
+            out_dir (str | Path): Directory to write the feature dataset into.
+            batch_size (int): Records per forward pass.
+
+        Returns:
+            Path: The output directory.
+        """
         from idiom.data.io import read_records  # noqa: PLC0415
         from idiom.sae.features.build_feature_dataset import build_feature_dataset as _bfd  # noqa: PLC0415
 
@@ -357,18 +526,37 @@ class IDiomSAE:
                        prompt: str | None = None, max_new_tokens: int = 1000, temperature: float = 1.0,
                        top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
                        length_range: tuple[int, int] | None = None, max_oversample: int = 20) -> list[str]:
-        """Generate IDRs with ``feature`` steered on the SAE's layer. Returns residue strings.
+        """Generate IDRs with feature steered on the SAE's layer, returning residue strings.
 
-        ``normalize=True`` (add_direction only): the push is ``strength * unit(sum of decoder rows)``,
-        so ``strength`` is the magnitude in residual-norm units and the number of features sets only
-        the direction (not the magnitude). ``relative=True``: push is ``strength * ||x_pos|| *
-        unit(sum of decoder rows)`` -- ``strength`` is a dimensionless fraction of the local residual
-        norm (self-adapting; overrides ``normalize``). ``preserve_norm=True`` (relative only): renorm
-        each position back to ``||x_pos||`` after the push, so steering rotates ``x`` toward the feature
-        at constant residual norm instead of inflating it.
+        With normalize=True (add_direction only) the push is strength * unit(sum of decoder rows), so
+        strength is the magnitude in residual-norm units and the number of features sets only the
+        direction. With relative=True the push is strength * ||x_pos|| * unit(sum of decoder rows), so
+        strength is a dimensionless fraction of the local residual norm (self-adapting; overrides
+        normalize). With preserve_norm=True (relative only) each position is renormed back to
+        ||x_pos|| after the push, so steering rotates x toward the feature at constant residual norm
+        instead of inflating it.
 
-        ``length_range=(lo, hi)`` / ``max_oversample``: oversample — re-generate and length-filter until
-        ``n`` steered IDRs fall in ``[lo, hi]`` (inclusive), as in :meth:`IDiom.generate_unprompted`."""
+        Args:
+            feature (int | list[int]): Feature index or indices to steer.
+            strength (float | list[float]): Steering strength(s); interpretation depends on the flags.
+            n (int): Number of IDRs to return.
+            mode (str): Steering mode, e.g. "add_direction".
+            normalize (bool): Push by a unit direction scaled by strength (add_direction only).
+            relative (bool): Push by a fraction of the local residual norm (overrides normalize).
+            preserve_norm (bool): Renorm back to the original residual norm after the push (relative only).
+            prompt (str | None): Optional generation prompt; defaults to unprompted.
+            max_new_tokens (int): Maximum tokens to generate per sequence.
+            temperature (float): Sampling temperature (0 = greedy).
+            top_k (int | None): Top-k sampling cutoff, or None.
+            top_p (float | None): Nucleus sampling cutoff, or None.
+            seed (int | None): Random seed for reproducible sampling.
+            length_range (tuple[int, int] | None): Inclusive (lo, hi); oversample and length-filter
+                until n steered IDRs fall in range, as in generate_unprompted.
+            max_oversample (int): Cap on total draws as a multiple of n when length_range is set.
+
+        Returns:
+            list[str]: The steered IDR residue strings.
+        """
         from idiom.sae.steering import SteeringSpec, steer_generation  # noqa: PLC0415
 
         spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode,
@@ -390,10 +578,21 @@ class IDiomSAE:
     @torch.no_grad()
     def fidelity(self, fasta, *, batch_size: int = 16, prompted_prob: float | None = None,
                  fim_idr_prob: float | None = None):
-        """Substitution-loss fidelity (``loss_clean``/``loss_sae``/``loss_ablate``,
-        ``pct_loss_recovered``) over a record FASTA. ``prompted_prob`` defaults to match the SAE's
-        training prompt format (0.0 unprompted / 1.0 prompted), so eval stays on-distribution.
-        ``fim_idr_prob`` is a deprecated alias for ``prompted_prob``."""
+        """Compute substitution-loss fidelity over a record FASTA.
+
+        Returns loss_clean, loss_sae, loss_ablate, and pct_loss_recovered. prompted_prob defaults to
+        match the SAE's training prompt format (0.0 unprompted / 1.0 prompted), so eval stays
+        on-distribution.
+
+        Args:
+            fasta (str | Path): A record FASTA with _IDR_x-y headers.
+            batch_size (int): Records per batch.
+            prompted_prob (float | None): Probability of the prompted variant; defaults from fim_mode.
+            fim_idr_prob (float | None): Deprecated alias for prompted_prob.
+
+        Returns:
+            FidelityResult: The fidelity metrics.
+        """
         from torch.utils.data import DataLoader  # noqa: PLC0415
 
         from idiom.data.dataset import RecordDataset, make_collate  # noqa: PLC0415
@@ -413,10 +612,17 @@ class IDiomSAE:
 
 
 def _idr_header(accession: str, seq: str) -> str:
-    """Header for a generated sequence: append ``_IDR_1-len`` (the whole sequence is the IDR).
+    """Build a header for a generated sequence by appending _IDR_1-len (the whole seq is the IDR).
 
-    Makes generated FASTAs valid record FASTAs that ``read_records`` can parse. ``read_records``
-    splits on the last ``_IDR_``, so accessions that themselves contain underscores are fine.
+    This makes generated FASTAs valid record FASTAs that read_records can parse; read_records splits
+    on the last _IDR_, so accessions that themselves contain underscores are fine.
+
+    Args:
+        accession (str): The record accession to prefix.
+        seq (str): The generated sequence (its length sets the span).
+
+    Returns:
+        str: The FASTA header.
     """
     return f"{accession}_IDR_1-{len(seq)}"
 
@@ -430,7 +636,7 @@ def _write_fasta(records: list[tuple[str, str]], path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """``idiom_generate`` — FASTA-first inference CLI."""
+    """Run the idiom_generate CLI: generate IDRs and write them to a FASTA."""
     import argparse
 
     p = argparse.ArgumentParser(description="Generate IDRs with IDiom (writes a FASTA).")

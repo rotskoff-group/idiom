@@ -1,11 +1,9 @@
-"""idiom.train — pretraining and post-training (GRPO) on PyTorch Lightning.
+"""Pretraining and post-training (GRPO) on PyTorch Lightning.
 
-v2: autoregressive pretraining LightningModule with a custom warmup-cosine schedule
-(no pl_bolts), and a GRPO/ProtGPS post-training path whose online generation uses the
-KV-cached sampler from ``idiom.model``.
-
-`LitAutoregressive` (shared by pretrain + SFT) + warmup-cosine schedule, and the GRPO
-post-training path (`train/grpo/`).
+Provides an autoregressive pretraining LightningModule with a custom warmup-cosine schedule and
+a GRPO/ProtGPS post-training path whose online generation uses the KV-cached sampler from
+idiom.model. LitAutoregressive is shared by pretraining and SFT; the GRPO post-training path
+lives in train/grpo/.
 """
 
 from idiom.train.lit_autoregressive import LitAutoregressive

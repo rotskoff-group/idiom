@@ -1,13 +1,13 @@
-"""FASTA / record I/O for IDiom (v2).
+"""FASTA and record I/O for IDiom.
 
-The training record store and the user-facing inference inputs share **one** FASTA
-convention: each entry is a full protein whose header ends ``_IDR_{x}-{y}`` (1-indexed,
-inclusive) marking the IDR span — the same format as the public ``generate idr`` input. A
-:class:`Record` is the parsed, 0-indexed form (Option A: ``full_seq`` + coords).
+The training record store and the user-facing inference inputs share one FASTA convention: each
+entry is a full protein whose header ends _IDR_{x}-{y} (1-indexed, inclusive) marking the IDR
+span — the same format as the public generate idr input. A Record is the parsed, 0-indexed form:
+full_seq plus coords.
 
-This module is also the **single place** the non-canonical drop policy (D15) is enforced:
-any sequence with a residue outside the 20 canonical AAs is dropped here, with a logged count,
-so curation, training, and inference all behave identically.
+This module is the single place the non-canonical drop policy is enforced: any sequence with a
+residue outside the 20 canonical amino acids is dropped here, with a logged count, so curation,
+training, and inference all behave identically.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ _TOK = Tokenizer()
 class Record:
     """One IDR instance with its parent sequence.
 
-    Coords are 0-indexed, **half-open**: ``idr = full_seq[idr_start:idr_end]`` (the header's
-    1-based inclusive ``_IDR_x-y`` is converted to this Python-native form on read).
+    Coords are 0-indexed, half-open: idr = full_seq[idr_start:idr_end] (the header's 1-based
+    inclusive _IDR_x-y is converted to this form on read).
     """
 
     accession: str
@@ -56,7 +56,16 @@ def _iter_fasta_raw(path: str | Path) -> Iterator[tuple[str, str]]:
 
 
 def read_fasta(path: str | Path, *, drop_noncanonical: bool = True) -> list[tuple[str, str]]:
-    """Read ``(header, sequence)`` pairs, dropping non-canonical sequences (D15)."""
+    """Read (header, sequence) pairs from a FASTA, dropping non-canonical sequences.
+
+    Args:
+        path (str | Path): Path to the FASTA file.
+        drop_noncanonical (bool): If True, drop any sequence with a residue outside the 20
+            canonical amino acids (with a logged count).
+
+    Returns:
+        list[tuple[str, str]]: The kept (header, sequence) pairs.
+    """
     out: list[tuple[str, str]] = []
     dropped = 0
     for header, seq in _iter_fasta_raw(path):
@@ -70,9 +79,19 @@ def read_fasta(path: str | Path, *, drop_noncanonical: bool = True) -> list[tupl
 
 
 def parse_idr_header(header: str) -> tuple[str, int, int]:
-    """``{accession}_IDR_{x}-{y}`` (1-indexed inclusive) -> ``(accession, start, end)``.
+    """Parse an _IDR_x-y header into an accession and 0-indexed half-open IDR coords.
 
-    Returns 0-indexed **half-open** coords: ``idr = full_seq[start:end]``.
+    The header's {accession}_IDR_{x}-{y} span is 1-indexed inclusive; it is converted to
+    0-indexed half-open coords, so idr = full_seq[start:end].
+
+    Args:
+        header (str): The FASTA header, ending in _IDR_x-y.
+
+    Returns:
+        tuple[str, int, int]: The accession and the 0-based half-open start and end.
+
+    Raises:
+        ValueError: If the header has no _IDR_x-y span or the span cannot be parsed.
     """
     token = header.split()[0]  # ignore any free-text description after whitespace
     if "_IDR_" not in token:
@@ -87,10 +106,18 @@ def parse_idr_header(header: str) -> tuple[str, int, int]:
 
 
 def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterator[Record]:
-    """Parse a record-store / inference FASTA into :class:`Record`s.
+    """Parse a record-store or inference FASTA into Records.
 
-    Drops non-canonical sequences (D15) and skips entries with a missing/malformed or
-    out-of-range ``_IDR_x-y`` span (logged).
+    Drops non-canonical sequences and skips entries with a missing, malformed, or out-of-range
+    _IDR_x-y span (both logged).
+
+    Args:
+        path (str | Path): Path to the FASTA file.
+        drop_noncanonical (bool): If True, drop any sequence with a residue outside the 20
+            canonical amino acids.
+
+    Yields:
+        Record: One parsed record per valid entry.
     """
     skipped = 0
     for header, seq in read_fasta(path, drop_noncanonical=drop_noncanonical):

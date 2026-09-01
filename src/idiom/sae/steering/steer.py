@@ -1,21 +1,20 @@
 """Feature-steered IDiom generation.
 
-Goal: bias IDiom's IDR generation toward (or away from) the biology a chosen SAE feature
-encodes — e.g. push a base-model generation toward a protGPS condensate by amplifying the
-feature that the corresponding RL model upregulates.
+Goal: bias IDiom's IDR generation toward (or away from) the biology a chosen SAE feature encodes —
+e.g. push a base-model generation toward a protGPS condensate by amplifying the feature that the
+corresponding RL model upregulates.
 
-This wires :mod:`idiom.sae.steering.hooks` into idiom's autoregressive sampler. The
-sampling loop is the KV-cached :func:`idiom.model.sampling.generate`; we run it inside a
-:func:`idiom.sae.steering.hooks.steering` context so the chosen layer's residual stream is
-steered on every forward pass of generation.
+This wires idiom.sae.steering.hooks into idiom's autoregressive sampler. The sampling loop is the
+KV-cached idiom.model.sampling.generate; we run it inside a steering context so the chosen layer's
+residual stream is steered on every forward pass of generation.
 
-Two steering modes (see :class:`SteeringSpec`):
-- ``"add_direction"``  add ``strength * sae.W_dec[feature_idx]`` to every position. Cheap,
-  surgical, leaves all other features untouched. The decoder rows are unit-norm, so
-  ``strength`` is in residual-norm units.
-- ``"clamp"``          encode with the SAE, set latent ``feature_idx`` to ``clamp_value``
-  everywhere, decode, and substitute. Heavier-handed (also incurs SAE reconstruction error)
-  but pins the feature to an exact activation.
+Two steering modes (see SteeringSpec):
+- "add_direction"  adds strength * sae.W_dec[feature_idx] to every position. Cheap, surgical,
+  leaves all other features untouched. The decoder rows are unit-norm, so strength is in
+  residual-norm units.
+- "clamp"          encodes with the SAE, sets latent feature_idx to clamp_value everywhere,
+  decodes, and substitutes. Heavier-handed (also incurs SAE reconstruction error) but pins the
+  feature to an exact activation.
 """
 
 from __future__ import annotations
@@ -41,9 +40,9 @@ from idiom.sae.steering.hooks import (
 class SteeringSpec:
     """Which feature(s) to steer, how hard, and in which mode.
 
-    ``feature_idx`` may be a single index or a list of indices to steer simultaneously.
-    ``strength`` / ``clamp_value`` are either a scalar (applied to every feature) or a list
-    aligned with ``feature_idx`` (one value per feature).
+    feature_idx may be a single index or a list of indices to steer simultaneously. strength /
+    clamp_value are either a scalar (applied to every feature) or a list aligned with feature_idx
+    (one value per feature).
     """
 
     layer: int
@@ -67,7 +66,7 @@ def _as_list(x) -> list:
 
 
 def _broadcast(values: list, n: int, name: str) -> list:
-    """Broadcast a length-1 list to ``n``, or pass through if already length ``n``."""
+    """Broadcast a length-1 list to n, or pass through if already length n."""
     if len(values) == 1:
         return values * n
     if len(values) != n:
@@ -76,13 +75,23 @@ def _broadcast(values: list, n: int, name: str) -> list:
 
 
 def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
-    """Build the forward hook for ``spec`` from the trained ``sae``.
+    """Build the forward hook for spec from the trained sae.
 
-    Supports one or several features at once. ``add_direction`` adds the sum of the (unit-norm)
-    decoder rows scaled by their strengths; ``clamp`` rewrites the residual via a single SAE
-    encode/edit/decode round-trip that pins all listed features to their target values; ``ablate``
-    subtracts the features' *actual* contribution (``x - sum act_f * W_dec[f]``) — a clean
-    directional erasure with no SAE reconstruction-error confound (``strength`` is ignored).
+    Supports one or several features at once. "add_direction" adds the sum of the (unit-norm)
+    decoder rows scaled by their strengths; "clamp" rewrites the residual via a single SAE
+    encode/edit/decode round-trip that pins all listed features to their target values; "ablate"
+    subtracts the features' actual contribution (x - sum act_f * W_dec[f]) — a clean directional
+    erasure with no SAE reconstruction-error confound (strength is ignored).
+
+    Args:
+        sae: The trained SAE providing W_dec / encode_dense / decode_dense.
+        spec (SteeringSpec): Which feature(s) to steer, how hard, and in which mode.
+
+    Returns:
+        Callable: The forward hook implementing the requested steering.
+
+    Raises:
+        ValueError: If spec.mode is not "add_direction", "clamp", or "ablate".
     """
     feats = _as_list(spec.feature_idx)
     if spec.mode == "add_direction":
@@ -129,26 +138,31 @@ def steer_generation(
     tokenizer=None,
     generator=None,
 ):
-    """Generate IDRs from an :class:`IDiomTransformer` with SAE feature(s) steered.
+    """Generate IDRs from an IDiomTransformer with SAE feature(s) steered.
 
-    Runs the KV-cached sampler inside a steering context on ``spec.layer`` so the chosen
-    feature is steered at every generation step.
+    Runs the KV-cached sampler inside a steering context on spec.layer so the chosen feature is
+    steered at every generation step.
 
     Args:
-        model: an :class:`IDiomTransformer`.
-        sae: trained SAE for ``spec.layer`` (provides ``W_dec`` / ``encode_dense`` / ``decode_dense``).
-        spec: which feature(s) to steer, how hard, and in which mode.
-        prompt_tokens: FIM prompt ids (1-D); defaults to ``encode("132")`` (de-novo IDP).
-            Repeated to ``n_samples``. START is prepended by the sampler.
-        n_samples: number of sequences to generate.
-        max_new_tokens / temperature / top_k / top_p: sampler settings.
-        region: the SAE's training region (``"all"`` | ``"idr"`` | ``"non_idr"``). The edit is
-            always confined to it — the SAE was trained solely on those residue activations, so
-            steering markers/START (or the wrong side of the ``2``) would apply it
-            off-distribution. Recomputed each step as the sequence grows.
+        model: An IDiomTransformer.
+        sae: The trained SAE for spec.layer (provides W_dec / encode_dense / decode_dense).
+        spec (SteeringSpec): Which feature(s) to steer, how hard, and in which mode.
+        prompt_tokens: FIM prompt ids (1-D); defaults to encode("132") (unprompted / de novo).
+            Repeated to n_samples. START is prepended by the sampler.
+        n_samples (int): Number of sequences to generate.
+        max_new_tokens (int): Maximum new tokens to sample per sequence.
+        temperature (float): Sampling temperature.
+        top_k (int | None): Top-k sampling cutoff, if any.
+        top_p (float | None): Nucleus (top-p) sampling cutoff, if any.
+        region (str): The SAE's training region ("all", "idr", or "non_idr"). The edit is always
+            confined to it — the SAE was trained solely on those residue activations, so steering
+            markers/START (or the wrong side of the "2") would apply it off-distribution.
+            Recomputed each step as the sequence grows.
+        tokenizer: Tokenizer for encoding the prompt and building the region mask (default if None).
+        generator: Optional torch.Generator for reproducible sampling.
 
     Returns:
-        Generated token ids ``[n_samples, T]`` (decode with the tokenizer).
+        Generated token ids of shape [n_samples, T] (decode with the tokenizer).
     """
     from idiom.model.sampling import generate  # noqa: PLC0415
 
@@ -157,7 +171,7 @@ def steer_generation(
     sae = sae.to(device).eval()
 
     if prompt_tokens is None:
-        prompt_tokens = tok.encode("132")  # de-novo IDP
+        prompt_tokens = tok.encode("132")  # unprompted / de novo
     prompt = torch.as_tensor(list(prompt_tokens), dtype=torch.long)
     prompts = prompt.unsqueeze(0).repeat(n_samples, 1).to(device)
 

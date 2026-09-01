@@ -1,14 +1,14 @@
 """Streamlit viewer for SAE features.
 
-Reads a feature-activation dataset produced by ``build_feature_dataset`` and shows, for a chosen
+Reads a feature-activation dataset produced by build_feature_dataset and shows, for a chosen
 feature, its top-N activating sequences with per-residue background shading proportional to
 activation strength.
 
-The dataset is loaded into RAM once (``FeatureDataset(in_memory=True)``); the per-feature
-reductions live on :class:`~idiom.sae.features.feature_activations.FeatureDataset` (a single cached scan for
-the ranking, an O(rows-in-sequence) gather per trace via its CSR index), so nothing touches disk on
-a rerun. This keeps latency flat as the dataset grows — the cost moves to the one-time load and RAM
-footprint (~``N_res * (8*k + 16)`` bytes; e.g. ~3 GB at 11M residues, k=32).
+The dataset is loaded into RAM once (FeatureDataset(in_memory=True)); the per-feature reductions
+live on FeatureDataset (a single cached scan for the ranking, an O(rows-in-sequence) gather per
+trace via its CSR index), so nothing touches disk on a rerun. This keeps latency flat as the
+dataset grows — the cost moves to the one-time load and RAM footprint (~N_res * (8*k + 16) bytes;
+e.g. ~3 GB at 11M residues, k=32).
 
 Run:
     streamlit run src/idiom/sae/features/feature_viewer.py -- \\
@@ -39,7 +39,7 @@ def _parse_args() -> argparse.Namespace:
 @st.cache_resource
 def _load(path: str, in_memory: bool) -> FeatureDataset:
     """Open the dataset once. Default: memory-mapped + chunked streaming (bounded RAM, reductions read
-    from disk per feature, cached after). ``in_memory=True`` pulls everything into RAM up front."""
+    from disk per feature, cached after). in_memory=True pulls everything into RAM up front."""
     return FeatureDataset(path, in_memory=in_memory)
 
 
@@ -71,6 +71,7 @@ def _shade(seq: str, acts: np.ndarray, gmax: float) -> str:
 
 
 def main() -> None:
+    """Run the Streamlit feature viewer."""
     args = _parse_args()
     fd = _load(args.features, args.in_memory)
     n_seqs = fd.n_seqs

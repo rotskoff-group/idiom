@@ -1,3 +1,5 @@
+"""idiom.sae.steering — residual-stream hooks and feature-steered IDiom generation."""
+
 from idiom.sae.steering.hooks import (
     add_direction_hook,
     sae_edit_hook,

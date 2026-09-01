@@ -1,31 +1,30 @@
-"""``python -m eval.run_sae_eval`` — held-out eval of a layer-swept SAE set.
+"""Held-out eval of a layer-swept SAE set (python -m eval.run_sae_eval).
 
-Repo-only operator/repro code (run from the repo root): it imports the shipped library's metric
-primitives (:func:`idiom.sae.eval.compute_fidelity` via ``IDiomSAE.fidelity`` and
-:func:`idiom.sae.eval.reconstruction.reconstruction_stats`), sweeps a directory of SAE releases, and
-writes the per-layer CSV the SAE figures consume. It is not part of the installed ``idiom`` wheel.
+Repo-only operator and repro code (run from the repo root): it imports the shipped library's metric
+primitives (idiom.sae.eval.compute_fidelity via IDiomSAE.fidelity and
+idiom.sae.eval.reconstruction.reconstruction_stats), sweeps a directory of SAE releases, and writes
+the per-layer CSV the SAE figures consume. It is not part of the installed idiom wheel.
 
-For each released SAE dir (``sae_config.json`` + ``sae.safetensors``) under ``--sae-dir`` matching
-``--glob``, computes the metrics the SAE figures consume, on a held-out record FASTA, on the
-distribution the SAE was trained on (its recorded ``region`` + ``fim_mode``):
+For each released SAE dir (sae_config.json + sae.safetensors) under --sae-dir matching --glob, it
+computes the metrics the SAE figures consume, on a held-out record FASTA, on the distribution the SAE
+was trained on (its recorded region and fim_mode):
 
-  - **downstream fidelity** (Gao "loss recovered"): clean / SAE / ablate NLL + ``pct_loss_recovered``
-    via :func:`idiom.sae.eval.fidelity.compute_fidelity` (``IDiomSAE.fidelity``).
-  - **reconstruction**: FVU + explained variance over the held-out activations.
-  - **sparsity**: mean L0 (active latents/token; ~k for top-k) and dead-feature fraction.
-  - **feature density**: per-latent activation frequency (saved per layer for the density histogram).
+  - downstream fidelity (Gao "loss recovered"): clean / SAE / ablate NLL plus pct_loss_recovered via
+    idiom.sae.eval.fidelity.compute_fidelity (IDiomSAE.fidelity).
+  - reconstruction: FVU plus explained variance over the held-out activations.
+  - sparsity: mean L0 (active latents per token; about k for top-k) and dead-feature fraction.
+  - feature density: per-latent activation frequency (saved per layer for the density histogram).
 
-The host model is loaded once and shared across the SAEs (all SAEs under one ``--sae-dir`` share a
-host model). Point ``--sae-dir`` at a *single variant* (e.g. ``.../03_sae/x16_k32_idp``); the
-per-layer outputs are keyed by layer, so evaluate variants into separate ``--out`` dirs.
+The host model is loaded once and shared across the SAEs (all SAEs under one --sae-dir share a host
+model). Point --sae-dir at a single variant (e.g. .../03_sae/x16_k32_idp); the per-layer outputs are
+keyed by layer, so evaluate variants into separate --out dirs.
 
-``--fim-mode``:
-  - ``auto`` (default) — each SAE is evaluated in its own recorded ``fim_mode`` (unprompted ->
-    de-novo, ``prompted_prob=0``; prompted -> flank-conditioned, ``prompted_prob=1``). This keeps
-    every SAE on-distribution and is the right choice for a mixed set.
-  - ``unprompted`` / ``prompted`` — force the eval prompt format for all SAEs regardless of how they
-    were trained (off-distribution if it disagrees with the SAE's ``fim_mode``; for special studies).
-    Legacy ``idp`` / ``idr`` are accepted as aliases.
+The --fim-mode flag selects the eval prompt format. "auto" (the default) evaluates each SAE in its own
+recorded fim_mode (unprompted -> de novo, prompted_prob=0; prompted -> flank-conditioned,
+prompted_prob=1), which keeps every SAE on-distribution and is the right choice for a mixed set.
+"unprompted" and "prompted" force the eval prompt format for all SAEs regardless of how they were
+trained (off-distribution if it disagrees with the SAE's fim_mode; for special studies); legacy idp
+and idr are accepted as aliases.
 
     python -m eval.run_sae_eval --sae-dir DIR/x16_k32_idp --glob 'L*' \
         --val FASTA --out DIR/eval/x16_k32_idp --max-records 2000 --fim-mode auto --device auto
@@ -58,6 +57,7 @@ def _eval_prompted_prob(sae_fim_mode: str, override: str) -> tuple[str, float]:
 
 
 def main() -> None:
+    """Run the SAE eval sweep from command-line arguments."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sae-dir", required=True, help="parent dir of the per-layer SAE release dirs")

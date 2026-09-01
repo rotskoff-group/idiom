@@ -1,9 +1,8 @@
 """Lightning DataModule over per-split record FASTAs.
 
-The curation step writes ``train.fasta`` / ``val.fasta`` / ``test.fasta`` in the shared
-``_IDR_x-y`` record format (D16); the split is decided there, so this module just reads each
-file into a :class:`~idiom.data.dataset.RecordDataset` and serves batches. Tokenization and
-FIM assembly happen on the fly inside the dataset (no precompute).
+The curation step writes train.fasta, val.fasta, and test.fasta in the shared _IDR_x-y record
+format; the split is decided there, so this module just reads each file into a RecordDataset and
+serves batches. Tokenization and FIM assembly happen on the fly inside the dataset (no precompute).
 """
 
 from __future__ import annotations
@@ -19,6 +18,8 @@ from idiom.data.tokenizer import Tokenizer
 
 
 class RecordDataModule(L.LightningDataModule):
+    """Lightning DataModule that serves RecordDatasets built from per-split record FASTAs."""
+
     def __init__(
         self,
         train_fasta: str | Path,
@@ -35,6 +36,22 @@ class RecordDataModule(L.LightningDataModule):
         fim_idr_prob: float | None = None,   # deprecated alias for prompted_prob
         fim_full_prob: float | None = None,  # deprecated alias for prompted_prob
     ) -> None:
+        """Configure the datamodule; the splits are built lazily in setup().
+
+        Args:
+            train_fasta (str | Path): Record FASTA for the train split.
+            val_fasta (str | Path | None): Record FASTA for validation, or None to skip validation.
+            test_fasta (str | Path | None): Record FASTA for test, or None to skip testing.
+            tokenizer (Tokenizer | None): Character tokenizer (a default Tokenizer is used if None).
+            max_len (int): Maximum model positions; longer records are dropped.
+            prompted_prob (float): Probability a sample uses the prompted (context) variant.
+            completion_only (bool): If True (SFT), compute loss only on the IDR completion.
+            batch_size (int): Batch size for all dataloaders.
+            num_workers (int): DataLoader worker processes.
+            seed (int): Seed for the per-sample prompted/unprompted choice.
+            fim_idr_prob (float | None): Deprecated alias for prompted_prob.
+            fim_full_prob (float | None): Deprecated alias for prompted_prob.
+        """
         super().__init__()
         self.train_fasta = train_fasta
         self.val_fasta = val_fasta

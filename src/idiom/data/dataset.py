@@ -1,18 +1,13 @@
-"""On-the-fly training dataset (Option A): records -> FIM -> tokenize -> shifted targets.
+"""On-the-fly training dataset: records -> FIM -> tokenize -> shifted targets.
 
-No precompute / token-h5. Each ``__getitem__`` assembles a FIM string from a :class:`Record`
-(``prompted`` (context) vs ``unprompted`` (de novo) chosen at random per sample — the augmentation
-that replaces the old stored ×2 duplication), tokenizes it, and forms the next-token-prediction pair:
+Each __getitem__ assembles a FIM string from a Record (prompted vs unprompted chosen at random
+per sample), tokenizes it, and forms the next-token-prediction pair:
 
     input  = [START, t0, t1, ..., t_{n-1}]
     target = [t0,    t1, ..., t_{n-1}, STOP]
 
-(same length, shifted by one). Padding is added in :func:`make_collate`, and the loss
-ignores ``pad_id``.
-
-This is map-style over an in-memory record list — simple and fully CPU-testable, sufficient
-for the de-risk-gate small-model run. Scaling to the full ~37M corpus uses a sharded/streaming
-variant that reuses :func:`record_to_example` (tracked in P1/P3).
+(same length, shifted by one). Padding is added in make_collate, and the loss ignores pad_id.
+This is a map-style dataset over an in-memory record list, or over a memory-mapped RecordStore.
 """
 
 from __future__ import annotations
@@ -30,22 +25,29 @@ from idiom.data.io import Record
 from idiom.data.record_store import RecordStore
 from idiom.data.tokenizer import Tokenizer
 
-# A full example is START + ``1{prefix}3{suffix}2{IDR}``: the 3 FIM markers + START over the
+# A full example is START + 1{prefix}3{suffix}2{IDR}: the 3 FIM markers + START over the
 # residues. So model positions = len(full_seq) + 4. Records longer than that are dropped.
 FIM_OVERHEAD = 4
 
 
 def max_protein_len(max_len: int) -> int:
-    """Largest ``full_seq`` length whose ``prompted`` (context) example fits in ``max_len`` positions."""
+    """Return the largest full_seq length whose prompted example fits in max_len positions."""
     return max_len - FIM_OVERHEAD
 
 
 def record_to_example(
     record: Record, tokenizer: Tokenizer, *, variant: str = PROMPTED
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Build the ``(input_ids, target_ids)`` next-token pair for one record + FIM variant.
+    """Build the (input_ids, target_ids) next-token pair for one record.
 
-    ``variant`` is ``prompted`` (context) or ``unprompted`` (de novo); legacy ``idr``/``idp`` accepted.
+    Args:
+        record (Record): The IDR record to encode.
+        tokenizer (Tokenizer): Character tokenizer for the FIM string.
+        variant (str): "prompted" (context) or "unprompted" (de novo); legacy "idr"/"idp" accepted.
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor]: An (input_ids, target_ids) pair of equal-length
+            LongTensors, shifted by one.
     """
     build = fim_prompted if normalize_mode(variant) == PROMPTED else fim_unprompted
     ids = tokenizer.encode(build(record.full_seq, record.idr_start, record.idr_end))
@@ -55,7 +57,7 @@ def record_to_example(
 
 
 class RecordDataset(Dataset):
-    """Map-style dataset over :class:`Record`s with on-the-fly FIM + tokenization."""
+    """Map-style dataset over Records with on-the-fly FIM assembly and tokenization."""
 
     def __init__(
         self,
@@ -69,6 +71,18 @@ class RecordDataset(Dataset):
         fim_idr_prob: float | None = None,   # deprecated alias for prompted_prob
         fim_full_prob: float | None = None,  # deprecated alias for prompted_prob
     ) -> None:
+        """Build the dataset, dropping records too long to fit max_len.
+
+        Args:
+            records (Iterable[Record] | RecordStore): Records to serve, or a memory-mapped store.
+            tokenizer (Tokenizer | None): Character tokenizer (a default Tokenizer is used if None).
+            max_len (int): Maximum model positions; longer records are dropped (logged).
+            prompted_prob (float): Probability a sample uses the prompted (context) variant.
+            completion_only (bool): If True (SFT), compute loss only on the IDR completion.
+            seed (int): Seed for the per-sample prompted/unprompted choice.
+            fim_idr_prob (float | None): Deprecated alias for prompted_prob.
+            fim_full_prob (float | None): Deprecated alias for prompted_prob.
+        """
         self.tok = tokenizer or Tokenizer()
         self.max_len = int(max_len)
         # back-compat: old callers/configs used fim_full_prob, then fim_idr_prob
@@ -77,7 +91,7 @@ class RecordDataset(Dataset):
         if fim_idr_prob is not None:
             prompted_prob = fim_idr_prob
         self.prompted_prob = float(prompted_prob)
-        # completion_only=True -> SFT: compute loss only on the IDR completion (after the `2`
+        # completion_only=True -> SFT: compute loss only on the IDR completion (after the 2
         # marker). False -> pretraining: loss on every token.
         self.completion_only = bool(completion_only)
         self._rng = random.Random(seed)
@@ -101,7 +115,8 @@ class RecordDataset(Dataset):
             log.info(f"RecordDataset: dropped {n_total - n_kept} record(s) longer than max_len={self.max_len}")
 
     @property
-    def fim_idr_prob(self) -> float:  # deprecated read-only alias
+    def fim_idr_prob(self) -> float:
+        """Deprecated read-only alias for prompted_prob."""
         return self.prompted_prob
 
     def __len__(self) -> int:
@@ -124,7 +139,14 @@ class RecordDataset(Dataset):
 
 
 def make_collate(pad_id: int):
-    """Collate ``(input, target, loss_mask)`` triples into right-padded ``[B, L]`` batches."""
+    """Build a collate function that right-pads (input, target, loss_mask) triples into batches.
+
+    Args:
+        pad_id (int): Token id used to pad input/target (the loss mask is padded with False).
+
+    Returns:
+        Callable: A collate(batch) function producing right-padded [B, L] tensors (x, y, m).
+    """
 
     def collate(batch):
         inputs, targets, masks = zip(*batch)
