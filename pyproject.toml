@@ -5,9 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "idiom"
 version = "0.1.0"
-description = "Repository for IDiom"
+description = "Generative design of intrinsically disordered protein regions"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Jason Liu", email = "jxliu2@stanford.edu" }]
+
 dependencies = [
     # core: model, tokenizer, generation, Hub loading
     "torch>=2.4",
@@ -25,6 +29,9 @@ dependencies = [
     # SAE feature viewer (idiom.sae.features.feature_viewer)
     "streamlit>=1.30",
 ]
+
+[project.urls]
+Homepage = "https://github.com/rotskoff-group/idiom"
 
 [tool.hatch.build.targets.sdist]
 include = [
