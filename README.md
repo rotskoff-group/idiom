@@ -192,10 +192,9 @@ accept either.
 
 | Repo | Params | Architecture |
 |------|--------|--------------|
-| [`jxliu2/idiom-300M`](https://huggingface.co/jxliu2/idiom-300M) | 302M | 24 layers, d_model 1024 — the primary model |
-| `jxliu2/idiom-85M` | 85M | 12 layers, d_model 768 *(coming soon)* |
-| `jxliu2/idiom-20M` | 18.9M | 6 layers, d_model 512 *(coming soon)* |
-| `jxliu2/idiom-300M-rl-<target>` | 302M | RL post-trained checkpoints *(coming soon)* |
+| [`jxliu2/idiom-300M`](https://huggingface.co/jxliu2/idiom-300M) | 302M | 24 layers, d_model 1024 |
+| [`jxliu2/idiom-85M`](https://huggingface.co/jxliu2/idiom-85M) | 85M | 12 layers, d_model 768 |
+| [`jxliu2/idiom-20M`](https://huggingface.co/jxliu2/idiom-20M) | 18.9M | 6 layers, d_model 512 |
 
 ### Sparse autoencoders
 
