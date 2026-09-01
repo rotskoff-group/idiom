@@ -172,3 +172,67 @@ def protgps_mean(idr: str) -> float:
 
 # Default alias so the stock grpo.yaml (reward.name: protgps) resolves.
 register_reward("protgps")(protgps_max)
+
+
+# --- ProtGPS combined with the SAE feature code (RL-SAE + classifier) -------------------------
+# These need BOTH ProtGPS and the SAE lens, so they live here rather than in rl_sae_reward.py:
+# the dependency flows one way (protgps_reward -> rl_sae_reward), which keeps the pure-SAE
+# rewards runnable without ProtGPS, its weights, or pytorch_lightning.
+_LAMBDA = float(os.environ.get("IDIOM_SAEREWARD_LAMBDA", "0.5"))
+_PC_ALIAS = {"pml_body": "pml-bdoy"}   # dataset spelling -> the ProtGPS class-label typo
+
+
+def _sae_feature_match(idr: str, name: str) -> float:
+    """Call feature_match from the sibling SAE reward module (loaded by path, like this one)."""
+    import sys  # noqa: PLC0415
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from rl_sae_reward import feature_match  # noqa: PLC0415
+    return feature_match(idr, name)
+
+
+def _feat_reward(name: str):
+    """Build ProtGPS(target) + lambda * feature-match: classifier plus interpretable code."""
+    idx = COMPARTMENTS.index(_PC_ALIAS.get(name, name))
+
+    def reward(idr: str) -> float:
+        if not idr:
+            return 0.0
+        return float(protgps_scores(idr)[idx]) + _LAMBDA * _sae_feature_match(idr, name)
+
+    return reward
+
+
+def _protgps_min_reward(a: str, b: str):
+    """Build a chimera monitor: min of two compartments' ProtGPS heads (never in the reward)."""
+    ia = COMPARTMENTS.index(_PC_ALIAS.get(a, a))
+    ib = COMPARTMENTS.index(_PC_ALIAS.get(b, b))
+
+    def reward(idr: str) -> float:
+        if not idr:
+            return 0.0
+        s = protgps_scores(idr)
+        return float(min(s[ia], s[ib]))
+
+    return reward
+
+
+def _sae_signature_names() -> list[str]:
+    """Signature names available in the SAE targets file (empty if it cannot be read)."""
+    import sys  # noqa: PLC0415
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        from rl_sae_reward import _signature_names  # noqa: PLC0415
+        return _signature_names()
+    except Exception:  # noqa: BLE001 - missing/misconfigured targets must not break import
+        return []
+
+
+for _name in _sae_signature_names():
+    if _PC_ALIAS.get(_name, _name) in COMPARTMENTS:
+        register_reward(f"protgps_feat_{_name}")(_feat_reward(_name))
+    if "__" in _name:                                   # chimera pair key "A__B"
+        _a, _b = _name.split("__", 1)
+        if all(_PC_ALIAS.get(x, x) in COMPARTMENTS for x in (_a, _b)):
+            register_reward(f"protgps_min_{_name}")(_protgps_min_reward(_a, _b))

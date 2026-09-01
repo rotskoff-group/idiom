@@ -40,7 +40,7 @@ def main() -> None:
     print("    reward.module=examples/04_custom_reward.py reward.name=aromatic_fraction\n")
     print("Reward toward an SAE feature signature (RL-SAE) instead:\n")
     print("  idiom_grpo init_from=/path/to/base.ckpt \\")
-    print("    reward.module=rewards/sae_feature_reward.py reward.group=sae_coverage_nucleolus")
+    print("    reward.module=rewards/rl_sae_reward.py reward.name=sae_only_nucleolus")
 
 
 if __name__ == "__main__":

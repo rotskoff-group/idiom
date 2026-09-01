@@ -151,25 +151,27 @@ is logged but not optimized. See `src/idiom/configs/grpo.yaml`.
 register with `@register_group_reward` (`f(idrs, group_size) -> list[float]`) and select via
 `reward.group=`.
 
-**RL toward SAE features (RL-SAE).** `rewards/sae_feature_reward.py` rewards a model for reproducing
-a target's interpretable SAE feature code, using a frozen base + SAE as a fixed lens — so a reward
-gain requires encoding the real code, not just satisfying a classifier:
+**RL toward SAE features (RL-SAE).** `rewards/rl_sae_reward.py` rewards a model for reproducing a
+target's interpretable SAE feature code, scored through a frozen IDiom base + SAE as a fixed lens —
+so a reward gain requires encoding the real code, not merely satisfying a classifier. The "reward
+model" is IDiom itself, so this needs no third-party dependency and runs straight after `uv sync`:
 
 ```bash
-# ProtGPS classifier + lambda * (fraction of the target's features that fire)
-idiom_grpo init_from=... reward.module=rewards/sae_feature_reward.py \
-  reward.name=protgps_feat_nucleolus
-
-# population coverage of the feature signature across each GRPO group
-idiom_grpo init_from=... reward.module=rewards/sae_feature_reward.py \
-  reward.group=sae_coverage_nucleolus
+# fraction of the target signature's features that fire in the completion
+idiom_grpo init_from=... reward.module=rewards/rl_sae_reward.py \
+  reward.name=sae_only_nucleolus
 ```
 
-`sae_only_<target>` optimizes the feature code alone (no classifier in the loop). Compartment
-localization rewards (`protgps_<compartment>`, and the selectivity variants `protgps_sel_*` /
-`protgps_anchor_*`) live in `rewards/protgps_reward.py`. Reward hyperparameters are read from
-environment variables (`IDIOM_SAEREWARD_LAMBDA`, `IDIOM_SAEREWARD_SAE`, ...) since the reward
-contract is `f(idr) -> float`.
+Signatures ship in `rewards/rl_sae_feature_sets/` for the released SAE, in two cases: `top30` (the
+30 most enriched features per set) and `private30` (only features enriched in exactly one set, so the
+target is specific rather than shared). Select with `IDIOM_SAEREWARD_CASE`, and **build a signature
+from your own sequences** with `examples/05_feature_enrichment.py`, pointing
+`IDIOM_SAEREWARD_FEATURES` at the result — rewards are registered for whatever names it contains.
+
+Rewards that combine the feature code with a localization classifier (`protgps_feat_<c>` =
+ProtGPS + λ·feature-match) and the classifier rewards themselves (`protgps_<compartment>`, plus the
+selectivity variants `protgps_sel_*` / `protgps_anchor_*`) live in `rewards/protgps_reward.py`, which
+needs the vendored model and `uv sync --extra protgps`.
 
 ## Command-line reference
 

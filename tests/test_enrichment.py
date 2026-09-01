@@ -1,0 +1,123 @@
+"""Tests for SAE feature enrichment (CPU-only, synthetic feature datasets -- no model needed)."""
+
+import json
+import math
+
+import numpy as np
+
+from idiom.sae.features.enrichment import (
+    bh_fdr,
+    boundary_features,
+    enrich,
+    enriched_mask,
+    feature_counts,
+    top_features,
+    write_signature,
+)
+
+
+def _make_dataset(tmp_path, per_seq_features, num_latents=10, n_res=5, values=None):
+    """Write a synthetic feature dataset: per_seq_features[s] = [k features] for every residue."""
+    d = tmp_path / "fd"
+    d.mkdir(exist_ok=True)
+    k = len(per_seq_features[0])
+    ti, si, pi, tv, strings = [], [], [], [], []
+    for s, feats in enumerate(per_seq_features):
+        strings.append("132" + "A" * n_res)          # FIM markers then residues
+        for r in range(n_res):
+            ti.append(list(feats))
+            tv.append(values[s][r] if values else [1.0] * k)
+            si.append(s)
+            pi.append(3 + r)                          # absolute index into the string
+    np.save(d / "top_indices.npy", np.array(ti, dtype=np.int32))
+    np.save(d / "top_values.npy", np.array(tv, dtype=np.float32))
+    np.save(d / "seq_idx.npy", np.array(si, dtype=np.int32))
+    np.save(d / "pos_idx.npy", np.array(pi, dtype=np.int32))
+    (d / "strings.json").write_text(json.dumps(strings))
+    (d / "meta.json").write_text(json.dumps({"num_latents": num_latents, "k": k}))
+    return d
+
+
+
+
+def test_feature_counts(tmp_path):
+    d = _make_dataset(tmp_path, [[1, 2], [1, 3]])
+    counts, n_seq = feature_counts(d)
+    assert n_seq == 2
+    assert counts[1] == 2      # fires in both sequences (max-pooled, not counted per residue)
+    assert counts[2] == 1
+    assert counts[3] == 1
+    assert counts[0] == 0
+    # restricting to a subset of sequences
+    counts, n_seq = feature_counts(d, keep=[0])
+    assert n_seq == 1 and counts[1] == 1 and counts[3] == 0
+
+
+def test_bh_fdr_monotone_and_bounded():
+    q = bh_fdr(np.array([0.001, 0.01, 0.5, 0.9]))
+    assert np.all((q >= 0) & (q <= 1))
+    assert np.all(np.diff(q) >= -1e-12)          # non-decreasing with p
+    assert q[0] < q[-1]
+
+
+def test_two_sided_p_matches_normal():
+    from idiom.sae.features.enrichment import _two_sided_p
+
+    # erfc(|z|/sqrt2) == 2 * normal survival function
+    assert math.isclose(float(_two_sided_p(np.array([0.0]))[0]), 1.0, abs_tol=1e-12)
+    assert math.isclose(float(_two_sided_p(np.array([1.959964]))[0]), 0.05, abs_tol=1e-5)
+
+
+def test_enrich_separates_signal_from_noise():
+    n_latents = 4
+    n_pos, n_neg = 100, 1000
+    #   feature 0: fires in every positive, never in background -> strongly enriched
+    #   feature 1: fires at the same rate in both               -> not enriched
+    #   feature 2: fires in one positive only                   -> below MIN_TOTAL_FIRE, untested
+    a = np.array([100.0, 50.0, 1.0, 0.0])
+    b = np.array([0.0, 500.0, 0.0, 0.0])
+    r = enrich(a, n_pos, b, n_neg, n_latents)
+
+    assert r["log2or"][0] > 5 and r["z"][0] > 5 and r["fdr"][0] < 1e-3
+    assert abs(r["log2or"][1]) < 0.5 and r["fdr"][1] > 1e-3
+    assert not r["active"][2]                      # pooled firing count below MIN_TOTAL_FIRE
+    m = enriched_mask(r)
+    assert m[0] and not m[1] and not m[2]
+    assert r["prev_pos"][0] == 1.0 and r["prev_neg"][0] == 0.0
+
+
+def test_top_features_ranks_by_log2or(tmp_path):
+    n_latents = 5
+    a = np.array([90.0, 100.0, 60.0, 0.0, 0.0])
+    b = np.array([10.0, 300.0, 5.0, 0.0, 0.0])
+    r = enrich(a, 100, b, 1000, n_latents)
+    ids = top_features(r, n=2, drop_boundary=False)
+    assert len(ids) == 2
+    # ranked by log2 odds ratio, descending
+    assert r["log2or"][ids[0]] >= r["log2or"][ids[1]]
+
+
+def test_boundary_features_flags_terminal_firing(tmp_path):
+    # Sequences must be longer than 2*edge for a "middle" to exist at all: with 15 residues at
+    # string indices 3..17 and edge=2, boundary means index <= 5 or >= 15.
+    n_res = 15
+    per_seq = [[7, 5]] * 4
+    vals = []
+    for _ in range(4):
+        # feature 7 strongest at r=0 (the excision boundary), feature 5 strongest at r=7 (middle)
+        vals.append([[10.0 if r == 0 else 0.1, 10.0 if r == 7 else 0.1] for r in range(n_res)])
+    d = _make_dataset(tmp_path, per_seq, num_latents=10, n_res=n_res, values=vals)
+
+    flagged = boundary_features(d, [7, 5], top_windows=4)
+    assert 7 in flagged, "a feature peaking at the IDR edge must be flagged"
+    assert 5 not in flagged, "a feature peaking mid-sequence must not be flagged"
+
+
+def test_write_signature_roundtrip(tmp_path):
+    p = tmp_path / "sig.json"
+    write_signature(p, {"my_set": [3, 1, 2]}, case="top30", provenance={"sae": "test"})
+    write_signature(p, {"my_set": [3]}, case="private30")
+    blob = json.loads(p.read_text())
+    assert blob["top30"]["my_set"] == [3, 1, 2]      # order preserved (rank order matters)
+    assert blob["private30"]["my_set"] == [3]
+    assert blob["_provenance"]["sae"] == "test"
