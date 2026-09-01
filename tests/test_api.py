@@ -132,3 +132,16 @@ def test_idiomsae_encode_plain_strings():
     sae = _idiom_sae(_idiom())
     feats, accs = sae.encode(["MEDSKVDN", "ACDEFGHIKL"], pool="mean")
     assert feats.shape == (2, sae.sae.num_latents) and accs == ["seq_0", "seq_1"]
+
+
+def test_idiomsae_save_records_published_host_model(tmp_path):
+    # at publish time the SAE's recorded host_model must become the Hub repo id, so a released
+    # SAE can self-load its host; save_pretrained(host_model=...) is what rewrites it.
+    import json
+
+    host = _idiom()
+    sae = _idiom_sae(host)
+    sdir = sae.save_pretrained(tmp_path / "sae_rel", host_model="jxliu2/idiom-24l")
+    cfg = json.loads((sdir / "sae_config.json").read_text())
+    assert cfg["host_model"] == "jxliu2/idiom-24l"
+    assert hasattr(sae, "push_to_hub")

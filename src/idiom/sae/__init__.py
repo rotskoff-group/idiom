@@ -11,7 +11,7 @@ Layout:
 - idiom.sae.features — the per-residue feature-activation dataset, its reader, and the viewer;
 - idiom.sae.steering — residual-stream hooks and feature-steered generation;
 - idiom.sae.eval — held-out validation: substitution-loss "fraction recovered", reconstruction
-  (FVU), sparsity/density, and the run_sae_eval entrypoint.
+  (FVU), and sparsity/density.
 """
 
 from idiom.sae.io import load_sae, save_sae

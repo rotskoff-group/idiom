@@ -467,6 +467,42 @@ class IDiomSAE:
         return save_sae(self.sae, out_dir, host_model=host_model or self.host_model,
                         layer=self.layer, region=self.region, fim_mode=self.fim_mode)
 
+    def push_to_hub(self, repo_id: str, *, host_model: str | None = None, private: bool = True,
+                    model_card: str | None = None, commit_message: str | None = None,
+                    token: str | None = None) -> str:
+        """Save in released form and upload the SAE to the HF Hub; returns the repo URL.
+
+        Creates the repo if missing (private by default), then uploads sae_config.json and
+        sae.safetensors (plus a README.md model card if given), so the result loads directly via
+        IDiomSAE.from_pretrained.
+
+        Args:
+            repo_id (str): Target Hub repo id for the SAE.
+            host_model (str | None): Repo id of the host model to record (e.g. "jxliu2/idiom-24l").
+                Set this when publishing: it is what lets the released SAE self-load its host from
+                the Hub. Defaults to whatever this SAE carries, which may be a local training path.
+            private (bool): Whether a newly created repo is private.
+            model_card (str | None): Optional model-card text (written as README.md).
+            commit_message (str | None): Commit message for the upload.
+            token (str | None): Hub token; falls back to the cached login or HF_TOKEN.
+
+        Returns:
+            str: The URL of the uploaded repo.
+        """
+        import tempfile  # noqa: PLC0415
+
+        from huggingface_hub import HfApi  # noqa: PLC0415
+
+        api = HfApi(token=token)
+        api.create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.save_pretrained(tmp, host_model=host_model)
+            if model_card is not None:
+                (Path(tmp) / "README.md").write_text(model_card)
+            api.upload_folder(repo_id=repo_id, folder_path=tmp, repo_type="model",
+                              commit_message=commit_message or f"Upload {repo_id}")
+        return f"https://huggingface.co/{repo_id}"
+
     # --- feature activations ---
     @torch.no_grad()
     def encode(self, inputs, *, pool: str = "mean", region: str | None = None):

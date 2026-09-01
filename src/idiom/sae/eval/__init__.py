@@ -12,7 +12,7 @@ distribution it was trained on (the SAE's recorded region + fim_mode):
 
 These are reusable metric primitives (IDiomSAE.fidelity builds on compute_fidelity). The operator
 CLI that sweeps a directory of SAE releases and writes the per-layer figure CSV lives in the
-repo-only top-level eval/ package (python -m eval.run_sae_eval), not in the shipped library.
+library primitives; callers assemble them into their own evaluation runs.
 """
 
 from idiom.sae.eval.fidelity import FidelityResult, compute_fidelity
