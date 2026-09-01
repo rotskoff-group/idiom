@@ -354,18 +354,20 @@ class IDiom:
     generate_idr_fasta = generate_prompted_fasta
 
     # --- embeddings ---
-    def embed(self, fasta, layers: list[int], *, pool: str = "mean"):
-        """Extract residual-stream embeddings for the given records. See embed_fasta for details.
+    def embed(self, inputs, layers: list[int], *, pool: str = "mean"):
+        """Extract residual-stream embeddings for sequences or FASTA records.
 
         Args:
-            fasta (str | Path): A record FASTA with _IDR_x-y headers.
+            inputs (str | Path | list[str]): A record FASTA path, a bare sequence string, or a list
+                of sequences / Records. Bare sequences are treated as unprompted IDRs (the whole
+                sequence is the IDR). See embed_fasta and idiom.data.io.to_records.
             layers (list[int]): Residual-stream layers to extract.
             pool (str): "mean" for one vector per sequence, or "none" for per-residue rows.
 
         Returns:
             dict[int, tuple]: Per layer, a (values, index) pair (see embed_fasta).
         """
-        return embed_fasta(self.model, fasta, layers, pool=pool, tokenizer=self.tok, device=self.device)
+        return embed_fasta(self.model, inputs, layers, pool=pool, tokenizer=self.tok, device=self.device)
 
 
 class IDiomSAE:
@@ -467,11 +469,12 @@ class IDiomSAE:
 
     # --- feature activations ---
     @torch.no_grad()
-    def encode(self, fasta, *, pool: str = "mean", region: str | None = None):
+    def encode(self, inputs, *, pool: str = "mean", region: str | None = None):
         """Compute SAE feature activations for each record's residues.
 
         Args:
-            fasta (str | Path): A record FASTA with _IDR_x-y headers.
+            inputs (str | Path | list[str]): A record FASTA path, a bare sequence string, or a list
+                of sequences / Records (bare sequences are treated as unprompted IDRs).
             pool (str): "none" for per-residue rows, or "mean" to average over each record's residues.
             region (str | None): "all", "idr", or "non_idr"; defaults to the SAE's training region.
 
@@ -481,7 +484,7 @@ class IDiomSAE:
                 averaged over each record's residues within region.
         """
         region = region or self.region
-        emb = embed_fasta(self.model, fasta, [self.layer], pool="none", tokenizer=self.tok,
+        emb = embed_fasta(self.model, inputs, [self.layer], pool="none", tokenizer=self.tok,
                           device=self.device, fim_mode=self.fim_mode)
         values, index = emb[self.layer]
         x = torch.from_numpy(values).to(self.device)
@@ -501,21 +504,22 @@ class IDiomSAE:
         return pooled, accs
 
     @torch.no_grad()
-    def build_feature_dataset(self, fasta, out_dir, *, batch_size: int = 16) -> Path:
+    def build_feature_dataset(self, inputs, out_dir, *, batch_size: int = 16) -> Path:
         """Write the offline per-residue feature-activation dataset (for the feature viewer).
 
         Args:
-            fasta (str | Path): A record FASTA with _IDR_x-y headers.
+            inputs (str | Path | list[str]): A record FASTA path, a bare sequence string, or a list
+                of sequences / Records (bare sequences are treated as unprompted IDRs).
             out_dir (str | Path): Directory to write the feature dataset into.
             batch_size (int): Records per forward pass.
 
         Returns:
             Path: The output directory.
         """
-        from idiom.data.io import read_records  # noqa: PLC0415
+        from idiom.data.io import to_records  # noqa: PLC0415
         from idiom.sae.features.build_feature_dataset import build_feature_dataset as _bfd  # noqa: PLC0415
 
-        return _bfd(self.model, self.sae, read_records(fasta), self.layer, out_dir,
+        return _bfd(self.model, self.sae, to_records(inputs), self.layer, out_dir,
                     tokenizer=self.tok, device=self.device, batch_size=batch_size,
                     region=self.region, fim_mode=self.fim_mode)
 
@@ -576,16 +580,17 @@ class IDiomSAE:
 
     # --- fidelity ---
     @torch.no_grad()
-    def fidelity(self, fasta, *, batch_size: int = 16, prompted_prob: float | None = None,
+    def fidelity(self, inputs, *, batch_size: int = 16, prompted_prob: float | None = None,
                  fim_idr_prob: float | None = None):
-        """Compute substitution-loss fidelity over a record FASTA.
+        """Compute substitution-loss fidelity over sequences or a record FASTA.
 
         Returns loss_clean, loss_sae, loss_ablate, and pct_loss_recovered. prompted_prob defaults to
         match the SAE's training prompt format (0.0 unprompted / 1.0 prompted), so eval stays
         on-distribution.
 
         Args:
-            fasta (str | Path): A record FASTA with _IDR_x-y headers.
+            inputs (str | Path | list[str]): A record FASTA path, a bare sequence string, or a list
+                of sequences / Records (bare sequences are treated as unprompted IDRs).
             batch_size (int): Records per batch.
             prompted_prob (float | None): Probability of the prompted variant; defaults from fim_mode.
             fim_idr_prob (float | None): Deprecated alias for prompted_prob.
@@ -596,7 +601,7 @@ class IDiomSAE:
         from torch.utils.data import DataLoader  # noqa: PLC0415
 
         from idiom.data.dataset import RecordDataset, make_collate  # noqa: PLC0415
-        from idiom.data.io import read_records  # noqa: PLC0415
+        from idiom.data.io import to_records  # noqa: PLC0415
         from idiom.sae.eval.fidelity import compute_fidelity  # noqa: PLC0415
 
         if fim_idr_prob is not None:  # deprecated alias
@@ -604,7 +609,7 @@ class IDiomSAE:
         if prompted_prob is None:
             prompted_prob = 0.0 if self.fim_mode == UNPROMPTED else 1.0
 
-        ds = RecordDataset(read_records(fasta), self.tok, max_len=self.model.cfg.max_seq_len,
+        ds = RecordDataset(to_records(inputs), self.tok, max_len=self.model.cfg.max_seq_len,
                            prompted_prob=prompted_prob)
         dl = DataLoader(ds, batch_size=batch_size, collate_fn=make_collate(self.tok.pad_id))
         return compute_fidelity(self.model, self.sae, self.layer, dl, pad_id=self.tok.pad_id,

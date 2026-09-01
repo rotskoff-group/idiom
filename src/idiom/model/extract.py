@@ -1,4 +1,4 @@
-"""Activation extraction for downstream use. FASTA in, embeddings out, ESM extract.py style.
+"""Activation extraction for downstream use. Sequences or FASTA in, embeddings out, ESM extract.py style.
 
 Reuses the SAE's extractor so exported vectors are identical to what the SAE trains on. Each
 record is FIM-formatted (full context), the residual stream is taken at the requested layers,
@@ -21,22 +21,24 @@ from idiom.data.fim import (
     normalize_mode,
     residue_source_positions,
 )
-from idiom.data.io import read_records
+from idiom.data.io import to_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
 
 
 @torch.no_grad()
-def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode=PROMPTED):
-    """Embed FASTA records into residual-stream vectors at the requested layers.
+def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode=PROMPTED):
+    """Embed sequences or FASTA records into residual-stream vectors at the requested layers.
 
-    fim_mode is the prompt format the activations are taken under: "prompted"
-    (1{prefix}3{suffix}2{IDR}, context) or "unprompted" (132{IDR}, de novo, no flanks). Legacy
-    "idr"/"idp" accepted.
+    inputs may be a record FASTA path, a bare sequence string, or a list of sequence strings /
+    Records (see idiom.data.io.to_records). A bare sequence is treated as an unprompted IDR (the
+    whole sequence is the IDR). fim_mode is the prompt format the activations are taken under:
+    "prompted" (1{prefix}3{suffix}2{IDR}, context) or "unprompted" (132{IDR}, de novo, no flanks).
+    Legacy "idr"/"idp" accepted.
 
     Args:
         model: The IDiom transformer to run.
-        fasta (str | Path): Path to the FASTA file of IDR records.
+        inputs (str | Path | Record | Iterable[str | Record]): A FASTA path, sequence, or list.
         layers (list[int]): Layer indices whose residual stream to extract.
         pool (str): "mean" for one IDR-mean vector per sequence, "none" for per-residue rows.
         tokenizer (Tokenizer | None): Tokenizer (a default is used if None).
@@ -52,7 +54,7 @@ def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cp
     build = fim_prompted if variant == PROMPTED else fim_unprompted
     out = {layer: {"values": [], "index": []} for layer in layers}
 
-    for rec in read_records(fasta):
+    for rec in to_records(inputs):
         fim = build(rec.full_seq, rec.idr_start, rec.idr_end)
         tokens = torch.tensor([tok.start_id, *tok.encode(fim)], device=device)[None]  # [1, L]
         acts = extract_activations(model, tokens, layers, tokenizer=tok, drop_markers=True)

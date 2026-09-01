@@ -3,7 +3,7 @@
 import torch
 
 from idiom.data.dataset import RecordDataset, make_collate, max_protein_len, record_to_example
-from idiom.data.io import Record, parse_idr_header, read_fasta, read_records
+from idiom.data.io import Record, parse_idr_header, read_fasta, read_records, to_records
 from idiom.data.tokenizer import Tokenizer
 
 TOK = Tokenizer()
@@ -84,3 +84,28 @@ def test_collate_pads():
     assert x.shape == y.shape == m.shape and x.size(0) == 2
     # shorter row is padded out to the batch max length.
     assert (x == TOK.pad_id).any()
+
+
+def test_to_records_normalizes_inputs(tmp_path):
+    # a bare sequence -> one unprompted Record spanning the whole sequence
+    recs = list(to_records("MEDSKVDN"))
+    assert len(recs) == 1
+    assert (recs[0].accession, recs[0].idr_start, recs[0].idr_end) == ("seq_0", 0, 8)
+    # a list of bare sequences -> synthetic accessions seq_0, seq_1, ...
+    recs = list(to_records(["MEDS", "ACDE"]))
+    assert [r.accession for r in recs] == ["seq_0", "seq_1"]
+    # Records pass through unchanged (single or iterable)
+    r = Record("X", "MEDS", 1, 3)
+    assert list(to_records(r)) == [r] and list(to_records([r])) == [r]
+    # a FASTA path is parsed with read_records
+    fa = tmp_path / "p.fasta"
+    fa.write_text(">A_IDR_2-4\nMEDSKV\n")
+    recs = list(to_records(fa))
+    assert len(recs) == 1 and recs[0].accession == "A"
+
+
+def test_to_records_noncanonical_sequence_raises():
+    import pytest
+
+    with pytest.raises(ValueError, match="canonical"):
+        list(to_records("MEDSX"))  # explicit bad sequence errors (not silently dropped)

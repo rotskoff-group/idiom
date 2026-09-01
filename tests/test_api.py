@@ -79,6 +79,23 @@ def test_embed(tmp_path):
     assert values.shape == (1, TINY.d_model) and index[0]["accession"] == "A"
 
 
+def test_embed_plain_string_and_list():
+    m = _idiom()
+    # a bare sequence is treated as an unprompted IDR (the whole sequence is the IDR)
+    values, index = m.embed("MEDSKVDNRPQACDEFG", layers=[1], pool="mean")[1]
+    assert values.shape == (1, TINY.d_model) and index[0]["accession"] == "seq_0"
+    # a list of bare sequences -> one row each, with synthetic accessions
+    v2, idx2 = m.embed(["MEDSKVDN", "ACDEFGHIKL"], layers=[1], pool="mean")[1]
+    assert v2.shape == (2, TINY.d_model) and [r["accession"] for r in idx2] == ["seq_0", "seq_1"]
+
+
+def test_embed_noncanonical_raises():
+    import pytest
+
+    with pytest.raises(ValueError, match="canonical"):
+        _idiom().embed("MEDSX", layers=[1])
+
+
 def _idiom_sae(host):
     from idiom.sae import SparseCoder
 
@@ -109,3 +126,9 @@ def test_idiomsae_encode_and_steer(tmp_path):
     assert feats.shape == (1, sae.sae.num_latents) and accs == ["A"]
     seqs = sae.steer_generate(feature=0, strength=1.0, n=2, max_new_tokens=6, temperature=0)
     assert len(seqs) == 2 and all(isinstance(s, str) for s in seqs)
+
+
+def test_idiomsae_encode_plain_strings():
+    sae = _idiom_sae(_idiom())
+    feats, accs = sae.encode(["MEDSKVDN", "ACDEFGHIKL"], pool="mean")
+    assert feats.shape == (2, sae.sae.num_latents) and accs == ["seq_0", "seq_1"]

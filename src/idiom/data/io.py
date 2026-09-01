@@ -132,3 +132,71 @@ def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterato
         yield Record(accession, seq, start, end)
     if skipped:
         log.warning(f"{Path(path).name}: skipped {skipped} malformed/out-of-range record(s)")
+
+
+def _sequence_record(seq: str, index: int) -> Record:
+    """Wrap a bare sequence as an unprompted Record (the whole sequence is the IDR).
+
+    Args:
+        seq (str): A protein/IDR sequence of canonical amino acids.
+        index (int): Position in the input, used to synthesize the accession seq_{index}.
+
+    Returns:
+        Record: A record with accession seq_{index} whose IDR span covers the whole sequence.
+
+    Raises:
+        ValueError: If seq is empty or contains a non-canonical residue.
+    """
+    if not _TOK.is_canonical(seq):
+        raise ValueError(
+            f"sequence at index {index} is not canonical (only the 20 amino acids are allowed): "
+            f"{seq[:30]!r}"
+        )
+    return Record(f"seq_{index}", seq, 0, len(seq))
+
+
+def to_records(inputs, *, drop_noncanonical: bool = True) -> Iterator[Record]:
+    """Normalize flexible generation/embedding inputs into Records.
+
+    Accepts, in order of precedence:
+
+    - a path to a record FASTA (a str or Path pointing at an existing file), parsed with
+      read_records;
+    - a single bare sequence string, yielding one unprompted Record (the whole sequence is the IDR);
+    - a single Record, or an iterable of Records, passed through unchanged;
+    - an iterable of bare sequence strings, yielding one unprompted Record each.
+
+    Bare sequences get synthetic accessions seq_0, seq_1, ... A non-canonical bare sequence raises
+    (unlike a FASTA file, where non-canonical entries are dropped), so an explicit input is never
+    silently discarded.
+
+    Args:
+        inputs (str | Path | Record | Iterable[str | Record]): The inputs to normalize.
+        drop_noncanonical (bool): Passed through to read_records for the FASTA-path case.
+
+    Yields:
+        Record: One record per input sequence or FASTA entry.
+
+    Raises:
+        ValueError: If a Path does not exist, or a bare sequence is non-canonical.
+        TypeError: If an iterable contains something other than a str or Record.
+    """
+    if isinstance(inputs, Record):
+        yield inputs
+        return
+    if isinstance(inputs, (str, Path)):
+        p = Path(inputs)
+        if p.exists():
+            yield from read_records(p, drop_noncanonical=drop_noncanonical)
+        elif isinstance(inputs, Path):
+            raise ValueError(f"path does not exist: {inputs}")
+        else:
+            yield _sequence_record(inputs, 0)  # a bare sequence string, not a file path
+        return
+    for i, item in enumerate(inputs):
+        if isinstance(item, Record):
+            yield item
+        elif isinstance(item, str):
+            yield _sequence_record(item, i)
+        else:
+            raise TypeError(f"to_records: expected str or Record, got {type(item).__name__}")
