@@ -7,7 +7,7 @@ conditioned on their flanking structured context, and can be post-trained with r
 learning to optimize custom rewards. Sparse autoencoders (SAEs) on its residual stream make the
 learned features interpretable and steerable. -->
 
-IDiom is an autoregressive transformer for generating, designing, and studying intrinsically disordered protein regions (IDRs). Trained on 54M IDRs curated from the AlphaFold Database with a fill-in-the-middle objective, IDiom can generate intrinsically disordered proteins (IDPs) as well as intrinsically disordered regions (IDRs) conditioned on their flanking context. The model can also be post-trained with reinforcement learning to optimize for custom reward functions.
+IDiom is an autoregressive transformer for generating, designing, and studying intrinsically disordered protein regions (IDRs). Trained on 54M IDRs curated from the AlphaFold Database with a fill-in-the-middle objective, IDiom can generate IDRs **unprompted** (de novo, with no flanking context) as well as **prompted** (conditioned on their flanking context). The model can also be post-trained with reinforcement learning to optimize for custom reward functions.
 
 This work additionally presents IDiomSAE, sparse TopK autoencoders which are trained on the residual stream of IDiom. IDiomSAE enables us to mechanistically interpret the features learned by IDiom, as well as to causally steer the model during generation. 
 
@@ -35,14 +35,14 @@ from idiom import IDiom
 
 model = IDiom.from_pretrained("jxliu2/idiom-6L") # download weights from HF
 
-# Generate unconditioned IDPs
-idps = model.generate_idp(n=100, temperature=1.0)
+# Generate unprompted IDRs (de novo, no flanking context)
+idrs = model.generate_unprompted(n=100, temperature=1.0)
 
-# Generate IDPs within a target length range
-idps = model.generate_idp(n=100, length_range=(80, 120))
+# Generate unprompted IDRs within a target length range
+idrs = model.generate_unprompted(n=100, length_range=(80, 120))
 
-# Generate IDRs conditioned on flanking context, provided from a FASTA file 
-idrs = model.generate_idr(protein_seq, idr_start, idr_end, n=100)
+# Generate prompted IDRs, conditioned on flanking context
+idrs = model.generate_prompted(protein_seq, idr_start, idr_end, n=100)
 
 # Extract per-residue residual-stream vectors from IDiom for downstream tasks
 values, index = model.embed("proteins.fasta", layers=[8], pool="none")[8]
@@ -60,12 +60,12 @@ seqs  = sae.steer_generate(feature=1234, strength=0.5, n=100) # Feature-steered 
 fid   = sae.fidelity("records.fasta") # Substitution-loss fraction recovered
 ```
 
-All interfacing with IDiom and IDiomSAE is via FASTA files (input/output). For any input (generation, latent extraction, etc.), input headers must specify the IDR region of the sequence from `x` to `y` by ending with `_IDR_x-y` (1-based, inclusive), e.g. >P06748_IDR_119-242. For fully disordered proteins (IDPs), indices span from 1 to the length of the sequence.
+All interfacing with IDiom and IDiomSAE is via FASTA files (input/output). For any input (generation, latent extraction, etc.), input headers must specify the IDR region of the sequence from `x` to `y` by ending with `_IDR_x-y` (1-based, inclusive), e.g. >P06748_IDR_119-242. For a fully disordered sequence (the whole sequence is the IDR), indices span from 1 to the length of the sequence.
 
 ```bash
-idiom_generate idp --model jxliu2/idiom-6L --n 1000 --out idps.fasta
+idiom_generate unprompted --model jxliu2/idiom-6L --n 1000 --out idrs.fasta
 
-idiom_generate idr --model jxliu2/idiom-6L --fasta proteins.fasta --n 1000 --out idrs.fasta
+idiom_generate prompted --model jxliu2/idiom-6L --fasta proteins.fasta --n 1000 --out idrs.fasta
 ```
 
 ## Models & data (HuggingFace)

@@ -14,21 +14,29 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from idiom.data.fim import fim_idp, fim_idr, residue_source_positions
+from idiom.data.fim import (
+    PROMPTED,
+    fim_prompted,
+    fim_unprompted,
+    normalize_mode,
+    residue_source_positions,
+)
 from idiom.data.io import read_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
 
 
 @torch.no_grad()
-def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode="idr"):
+def embed_fasta(model, fasta, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode=PROMPTED):
     """Return ``{layer: (values[N, d], index)}``; index is a list of per-row metadata dicts.
 
-    ``fim_mode`` is the prompt format the activations are taken under: ``idr``
-    (``1{prefix}3{suffix}2{IDR}``, context) or ``idp`` (``132{IDR}``, de-novo, no flanks).
+    ``fim_mode`` is the prompt format the activations are taken under: ``prompted``
+    (``1{prefix}3{suffix}2{IDR}``, context) or ``unprompted`` (``132{IDR}``, de novo, no flanks).
+    Legacy ``idr``/``idp`` accepted.
     """
     tok = tokenizer or Tokenizer()
-    build, variant = (fim_idr, "idr") if fim_mode == "idr" else (fim_idp, "idp")
+    variant = normalize_mode(fim_mode)
+    build = fim_prompted if variant == PROMPTED else fim_unprompted
     out = {layer: {"values": [], "index": []} for layer in layers}
 
     for rec in read_records(fasta):

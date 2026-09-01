@@ -20,11 +20,12 @@ host model). Point ``--sae-dir`` at a *single variant* (e.g. ``.../03_sae/x16_k3
 per-layer outputs are keyed by layer, so evaluate variants into separate ``--out`` dirs.
 
 ``--fim-mode``:
-  - ``auto`` (default) — each SAE is evaluated in its own recorded ``fim_mode`` (idp -> de-novo,
-    ``fim_idr_prob=0``; idr -> flank-conditioned, ``fim_idr_prob=1``). This keeps every SAE
-    on-distribution and is the right choice for a mixed set.
-  - ``idp`` / ``idr`` — force the eval prompt format for all SAEs regardless of how they were
-    trained (off-distribution if it disagrees with the SAE's ``fim_mode``; for special studies).
+  - ``auto`` (default) — each SAE is evaluated in its own recorded ``fim_mode`` (unprompted ->
+    de-novo, ``prompted_prob=0``; prompted -> flank-conditioned, ``prompted_prob=1``). This keeps
+    every SAE on-distribution and is the right choice for a mixed set.
+  - ``unprompted`` / ``prompted`` — force the eval prompt format for all SAEs regardless of how they
+    were trained (off-distribution if it disagrees with the SAE's ``fim_mode``; for special studies).
+    Legacy ``idp`` / ``idr`` are accepted as aliases.
 
     python -m eval.run_sae_eval --sae-dir DIR/x16_k32_idp --glob 'L*' \
         --val FASTA --out DIR/eval/x16_k32_idp --max-records 2000 --fim-mode auto --device auto
@@ -40,16 +41,20 @@ from pathlib import Path
 
 import numpy as np
 
-# fim_mode -> fim_idr_prob used at eval time (the SAE's training prompt format).
-_FIM_IDR_PROB = {"idp": 0.0, "idr": 1.0}
+from idiom.data.fim import PROMPTED, UNPROMPTED, normalize_mode
+
+# fim_mode -> prompted_prob used at eval time (the SAE's training prompt format).
+_PROMPTED_PROB = {UNPROMPTED: 0.0, PROMPTED: 1.0}
 
 
-def _eval_fim_idr_prob(sae_fim_mode: str, override: str) -> tuple[str, float]:
-    """Resolve (effective fim_mode, fim_idr_prob) for one SAE given the --fim-mode flag."""
-    mode = sae_fim_mode if override == "auto" else override
-    if mode not in _FIM_IDR_PROB:
-        raise SystemExit(f"unknown fim_mode {mode!r} (expected idp|idr)")
-    return mode, _FIM_IDR_PROB[mode]
+def _eval_prompted_prob(sae_fim_mode: str, override: str) -> tuple[str, float]:
+    """Resolve (effective fim_mode, prompted_prob) for one SAE given the --fim-mode flag."""
+    raw = sae_fim_mode if override == "auto" else override
+    try:
+        mode = normalize_mode(raw)  # accepts unprompted/prompted and legacy idp/idr
+    except ValueError:
+        raise SystemExit(f"unknown fim_mode {raw!r} (expected unprompted|prompted)") from None
+    return mode, _PROMPTED_PROB[mode]
 
 
 def main() -> None:
@@ -63,7 +68,8 @@ def main() -> None:
                     help="random held-out subset size (the NLL ratio converges well before full val)")
     ap.add_argument("--seed", type=int, default=0, help="seed for the random held-out subsample")
     ap.add_argument("--fidelity-batch", type=int, default=16)
-    ap.add_argument("--fim-mode", choices=["auto", "idp", "idr"], default="auto",
+    ap.add_argument("--fim-mode", choices=["auto", "unprompted", "prompted", "idp", "idr"],
+                    default="auto",
                     help="eval prompt format: auto = per-SAE recorded fim_mode (on-distribution)")
     ap.add_argument("--device", default="auto")
     args = ap.parse_args()
@@ -113,12 +119,12 @@ def main() -> None:
             host = IDiom.load(cfg["host_model"], device=dev)
         sae = IDiomSAE.from_pretrained(d, model=host, device=dev)
         layer, region = sae.layer, sae.region
-        eff_mode, ffp = _eval_fim_idr_prob(sae.fim_mode, args.fim_mode)
+        eff_mode, ppp = _eval_prompted_prob(sae.fim_mode, args.fim_mode)
         print(f"[sae L{layer}] region={region} sae_fim_mode={sae.fim_mode} "
-              f"eval_fim_mode={eff_mode} fim_idr_prob={ffp}", flush=True)
+              f"eval_fim_mode={eff_mode} prompted_prob={ppp}", flush=True)
 
-        fid = sae.fidelity(str(val), batch_size=args.fidelity_batch, fim_idr_prob=ffp)
-        rec = reconstruction_stats(host, sae, layer, region, ffp, str(val), device=dev,
+        fid = sae.fidelity(str(val), batch_size=args.fidelity_batch, prompted_prob=ppp)
+        rec = reconstruction_stats(host, sae, layer, region, ppp, str(val), device=dev,
                                    max_records=args.max_records)
         np.save(out / "scores" / "feature_freq" / f"L{layer}.npy", rec.feature_freq)
         rows.append({

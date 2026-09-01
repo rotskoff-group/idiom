@@ -13,24 +13,21 @@ from pathlib import Path
 
 import torch
 
+from idiom.data.fim import normalize_mode
 from idiom.sae.sparse_coder import SparseCoder
 
 SAE_CONFIG_FILE = "sae_config.json"
 SAE_WEIGHTS_FILE = "sae.safetensors"
 
-# Back-compat: older releases recorded the FIM prompt format as "denovo"/"context"; the current
-# vocabulary is "idp"/"idr". Normalize on read so existing SAE dirs keep loading.
-_FIM_MODE_ALIAS = {"denovo": "idp", "context": "idr"}
-
 
 def save_sae(
     sae: SparseCoder, out_dir: str | Path, *, host_model: str | None, layer: int,
-    region: str = "all", fim_mode: str = "idr",
+    region: str = "all", fim_mode: str = "prompted",
 ) -> Path:
     """Write ``sae_config.json`` + ``sae.safetensors``. ``host_model`` is the model checkpoint/repo
     the SAE was trained against (recorded so it can self-load its host). ``region`` (``all`` | ``idr``
-    | ``non_idr``) and ``fim_mode`` (``idr`` | ``idp``) are the slice + prompt format of the
-    residual stream it was trained on, so every downstream tool stays on that distribution."""
+    | ``non_idr``) and ``fim_mode`` (``prompted`` | ``unprompted``) are the slice + prompt format of
+    the residual stream it was trained on, so every downstream tool stays on that distribution."""
     from safetensors.torch import save_model  # noqa: PLC0415
 
     d = Path(out_dir)
@@ -39,7 +36,7 @@ def save_sae(
         "host_model": str(host_model) if host_model is not None else None,
         "layer": int(layer),
         "region": str(region),
-        "fim_mode": str(fim_mode),
+        "fim_mode": normalize_mode(fim_mode),
         "d_in": int(sae.d_in),
         "num_latents": int(sae.num_latents),
         "k": int(sae.k.item()),
@@ -60,8 +57,8 @@ def load_sae(
 
     d = Path(path)
     cfg = json.loads((d / SAE_CONFIG_FILE).read_text())
-    if "fim_mode" in cfg:  # normalize legacy denovo/context -> idp/idr
-        cfg["fim_mode"] = _FIM_MODE_ALIAS.get(cfg["fim_mode"], cfg["fim_mode"])
+    if "fim_mode" in cfg:  # normalize legacy denovo/context/idp/idr -> unprompted/prompted
+        cfg["fim_mode"] = normalize_mode(cfg["fim_mode"])
     sae = SparseCoder(
         cfg["d_in"], num_latents=cfg["num_latents"], k=cfg["k"],
         activation=cfg.get("activation", "topk"), multi_topk=cfg.get("multi_topk", False),

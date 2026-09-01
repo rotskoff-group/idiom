@@ -27,12 +27,13 @@ class RecordDataModule(L.LightningDataModule):
         *,
         tokenizer: Tokenizer | None = None,
         max_len: int = 1024,
-        fim_idr_prob: float = 0.5,
+        prompted_prob: float = 0.5,
         completion_only: bool = False,  # True for SFT (loss on the IDR completion only)
         batch_size: int = 64,
         num_workers: int = 0,
         seed: int = 0,
-        fim_full_prob: float | None = None,  # deprecated alias for fim_idr_prob
+        fim_idr_prob: float | None = None,   # deprecated alias for prompted_prob
+        fim_full_prob: float | None = None,  # deprecated alias for prompted_prob
     ) -> None:
         super().__init__()
         self.train_fasta = train_fasta
@@ -40,9 +41,12 @@ class RecordDataModule(L.LightningDataModule):
         self.test_fasta = test_fasta
         self.tok = tokenizer or Tokenizer()
         self.max_len = max_len
-        if fim_full_prob is not None:  # back-compat: old callers/configs used fim_full_prob
-            fim_idr_prob = fim_full_prob
-        self.fim_idr_prob = fim_idr_prob
+        # back-compat: old callers/configs used fim_full_prob, then fim_idr_prob
+        if fim_full_prob is not None:
+            prompted_prob = fim_full_prob
+        if fim_idr_prob is not None:
+            prompted_prob = fim_idr_prob
+        self.prompted_prob = prompted_prob
         self.completion_only = completion_only
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -59,7 +63,7 @@ class RecordDataModule(L.LightningDataModule):
             open_or_build(path),
             self.tok,
             max_len=self.max_len,
-            fim_idr_prob=self.fim_idr_prob,
+            prompted_prob=self.prompted_prob,
             completion_only=self.completion_only,
             seed=self.seed,
         )

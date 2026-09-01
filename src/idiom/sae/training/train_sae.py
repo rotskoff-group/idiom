@@ -16,6 +16,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from idiom.data.dataset import RecordDataset, make_collate
+from idiom.data.fim import PROMPTED, UNPROMPTED
 from idiom.data.record_store import open_or_build
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.io import load_pretrained
@@ -23,6 +24,13 @@ from idiom.sae.io import save_sae
 from idiom.sae.training.activation_store import ActivationStore
 from idiom.sae.training.lit_sae import LitSAE
 from idiom.utils.device import resolve_device
+
+
+def _prompted_prob(cfg: DictConfig) -> float:
+    """P(prompted variant) from config; accepts the deprecated fim_idr_prob / fim_full_prob keys."""
+    return cfg.data.get(
+        "prompted_prob", cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5))
+    )
 
 
 def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
@@ -33,7 +41,7 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
 
     records = RecordDataset(
         open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len,
-        fim_idr_prob=cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5)),
+        prompted_prob=_prompted_prob(cfg),
     )
     record_loader = DataLoader(
         records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id),
@@ -79,10 +87,9 @@ def run(cfg: DictConfig) -> None:
     )
     trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
     # canonical SAE release (host_model + layer + region + fim_mode recorded): loads via
-    # IDiomSAE.from_pretrained. fim_mode is "idp" iff training was pure de-novo (fim_idr_prob==0),
-    # else "idr" — it's the single prompt format downstream tools rebuild activations under.
-    fim_idr_prob = cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5))
-    fim_mode = "idp" if float(fim_idr_prob) == 0.0 else "idr"
+    # IDiomSAE.from_pretrained. fim_mode is "unprompted" iff training was pure de-novo
+    # (prompted_prob==0), else "prompted" — the prompt format downstream tools rebuild activations under.
+    fim_mode = UNPROMPTED if float(_prompted_prob(cfg)) == 0.0 else PROMPTED
     save_sae(
         lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer,
         region=cfg.get("region", "all"), fim_mode=fim_mode,

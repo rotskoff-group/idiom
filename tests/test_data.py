@@ -2,7 +2,7 @@
 
 import torch
 
-from idiom.data.fim import fim_idp, fim_idr, residue_source_positions
+from idiom.data.fim import fim_prompted, fim_unprompted, residue_source_positions
 from idiom.data.tokenizer import FIM, RESIDUES, Tokenizer
 
 TOK = Tokenizer()
@@ -45,23 +45,31 @@ def test_canonical_and_drop_policy():
 def test_fim_transforms():
     seq, start, end = "MEDSKVDNRPQ", 4, 8  # IDR = seq[4:8] = "KVDN" (half-open)
     assert seq[start:end] == "KVDN"
-    assert fim_idr(seq, start, end) == "1MEDS3RPQ2KVDN"   # 1 prefix 3 suffix 2 idr
-    assert fim_idp(seq, start, end) == "132KVDN"
+    assert fim_prompted(seq, start, end) == "1MEDS3RPQ2KVDN"   # 1 prefix 3 suffix 2 idr
+    assert fim_unprompted(seq, start, end) == "132KVDN"
 
 
-def test_marker_drop_alignment_full():
+def test_fim_legacy_aliases():
+    # old vocabulary kept as aliases: fim_idr == fim_prompted, fim_idp == fim_unprompted
+    from idiom.data.fim import fim_idp, fim_idr, normalize_mode
+
+    assert fim_idr is fim_prompted and fim_idp is fim_unprompted
+    assert normalize_mode("idr") == "prompted" and normalize_mode("denovo") == "unprompted"
+
+
+def test_marker_drop_alignment_prompted():
     seq, start, end = "MEDSKVDNRPQ", 4, 8
-    fim = fim_idr(seq, start, end)
+    fim = fim_prompted(seq, start, end)
     # residues = FIM string with the 1/3/2 markers removed
     residues = "".join(c for c in fim if c not in "123")
-    pos = residue_source_positions(len(seq), start, end, "idr")
+    pos = residue_source_positions(len(seq), start, end, "prompted")
     # each residue aligns to its source index in full_seq
     assert "".join(seq[p] for p in pos) == residues
     # IDR residues are exactly those with start <= pos < end
     assert [p for p in pos if start <= p < end] == list(range(start, end))
 
 
-def test_marker_drop_alignment_idp():
+def test_marker_drop_alignment_unprompted():
     seq, start, end = "MEDSKVDNRPQ", 4, 8
-    pos = residue_source_positions(len(seq), start, end, "idp")
+    pos = residue_source_positions(len(seq), start, end, "unprompted")
     assert "".join(seq[p] for p in pos) == "KVDN"

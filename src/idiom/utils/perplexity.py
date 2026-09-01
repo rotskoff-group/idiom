@@ -21,15 +21,18 @@ from idiom.data.tokenizer import Tokenizer
 @torch.no_grad()
 def perplexity(
     model, fasta: str, *, tokenizer: Tokenizer | None = None, max_len: int = 1024,
-    fim_idr_prob: float = 0.5, batch_size: int = 32, num_workers: int = 4,
+    prompted_prob: float = 0.5, batch_size: int = 32, num_workers: int = 4,
     device: str = "cuda", max_records: int | None = None, seed: int = 0,
+    fim_idr_prob: float | None = None,  # deprecated alias for prompted_prob
 ) -> dict[str, float]:
     """Mean per-token NLL (nats) and perplexity over `fasta` under the FIM loss (pad/mask ignored)."""
+    if fim_idr_prob is not None:  # deprecated alias
+        prompted_prob = fim_idr_prob
     tok = tokenizer or Tokenizer()
     records = read_records(fasta)
     if max_records is not None:
         records = itertools.islice(records, max_records)
-    ds = RecordDataset(records, tok, max_len=max_len, fim_idr_prob=fim_idr_prob,
+    ds = RecordDataset(records, tok, max_len=max_len, prompted_prob=prompted_prob,
                        completion_only=False, seed=seed)
     dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers,
                     collate_fn=make_collate(tok.pad_id))

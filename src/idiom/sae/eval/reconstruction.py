@@ -12,7 +12,7 @@ recovered" of :mod:`idiom.sae.eval.fidelity` and feed the SAE figures.
 
 Activations are pulled with the SAE's training ``region`` (residue-masking is applied by the
 :class:`~idiom.sae.training.activation_store.ActivationStore`, dropping START / FIM-marker /
-control positions) and prompt format (``fim_idr_prob``), so the SAE is measured on-distribution.
+control positions) and prompt format (``prompted_prob``), so the SAE is measured on-distribution.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def reconstruction_stats(
     sae,
     layer: int,
     region: str,
-    fim_idr_prob: float,
+    prompted_prob: float,
     fasta: str,
     *,
     device,
@@ -57,7 +57,7 @@ def reconstruction_stats(
         sae: an :class:`~idiom.IDiomSAE`; its ``.sae`` is the :class:`SparseCoder`.
         layer: residual-stream layer the SAE was trained on.
         region: the SAE's training region (``"all"`` | ``"idr"`` | ``"non_idr"``).
-        fim_idr_prob: prompt format to match the SAE's ``fim_mode`` (0.0 idp / 1.0 idr).
+        prompted_prob: prompt format to match the SAE's ``fim_mode`` (0.0 unprompted / 1.0 prompted).
         fasta: held-out record FASTA.
     """
     from torch.utils.data import DataLoader
@@ -70,7 +70,7 @@ def reconstruction_stats(
     if max_records:
         recs = itertools.islice(recs, max_records)
     ds = RecordDataset(list(recs), host.tok, max_len=host.model.cfg.max_seq_len,
-                       fim_idr_prob=fim_idr_prob, completion_only=False)
+                       prompted_prob=prompted_prob, completion_only=False)
     dl = DataLoader(ds, batch_size=record_batch_size, collate_fn=make_collate(host.tok.pad_id))
     store = ActivationStore(host.model, dl, layer, sae_batch_size=sae_batch_size,
                             buffer_size=sae_batch_size * 8, device=device, tokenizer=host.tok,

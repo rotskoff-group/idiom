@@ -2,12 +2,15 @@
 
 A thin layer over :class:`idiom.model.IDiomTransformer` + :class:`idiom.data.Tokenizer` that
 hides training/Hydra/Lightning. Load a released model with :meth:`from_pretrained` (HF repo id
-or local dir), generate IDPs/IDRs to strings or FASTA, or pull embeddings.
+or local dir), generate IDRs (unprompted / prompted) to strings or FASTA, or pull embeddings.
+
+An **unprompted** IDR is generated de novo (no flanks); a **prompted** IDR is in-filled
+conditioned on its flanking context. (Older releases called these IDP / context-IDR.)
 
     from idiom import IDiom
     model = IDiom.from_pretrained("jxliu2/idiom-medium")
-    idrs  = model.generate_idp(n=100)                       # de-novo IDPs
-    idrs  = model.generate_idr(protein_seq, start, end, n=100)   # context-prompted (0-based, half-open)
+    idrs  = model.generate_unprompted(n=100)                          # de-novo IDRs
+    idrs  = model.generate_prompted(protein_seq, start, end, n=100)   # IDR in flanks (0-based, half-open)
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from pathlib import Path
 
 import torch
 
-from idiom.data.fim import fim_prompt
+from idiom.data.fim import UNPROMPTED, fim_prompt, normalize_mode
 from idiom.data.io import read_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.config import ModelConfig
@@ -163,11 +166,11 @@ class IDiom:
 
         return _oversample(_batch, n, length_range=length_range, max_oversample=max_oversample, seed=seed)
 
-    def generate_idp(self, n: int = 100, *, max_new_tokens: int = 1000, temperature: float = 1.0,
-                     top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
-                     length_range: tuple[int, int] | None = None, max_oversample: int = 20,
-                     batch_size: int | None = None) -> list[str]:
-        """De-novo IDPs (prompt ``132``). Returns ``n`` IDR residue strings.
+    def generate_unprompted(self, n: int = 100, *, max_new_tokens: int = 1000, temperature: float = 1.0,
+                            top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
+                            length_range: tuple[int, int] | None = None, max_oversample: int = 20,
+                            batch_size: int | None = None) -> list[str]:
+        """Unprompted (de-novo) IDRs (prompt ``132``). Returns ``n`` IDR residue strings.
 
         ``length_range=(lo, hi)``: oversample — re-generate and length-filter until ``n`` sequences
         have length in ``[lo, hi]`` (inclusive), capped at ``n * max_oversample`` total draws (warns
@@ -180,28 +183,34 @@ class IDiom:
             kw["seed"] = seed
         return self._generate(fim_prompt(), n, **kw)
 
-    def generate_idr(self, seq: str, idr_start: int, idr_end: int, n: int = 100, **kw) -> list[str]:
-        """IDRs conditioned on flanks. ``idr_start/idr_end`` are 0-based, half-open (``seq[start:end]``).
+    def generate_prompted(self, seq: str, idr_start: int, idr_end: int, n: int = 100, **kw) -> list[str]:
+        """Prompted IDRs, conditioned on flanks. ``idr_start/idr_end`` are 0-based, half-open
+        (``seq[start:end]``).
 
-        Accepts ``length_range=(lo, hi)`` / ``max_oversample`` (see :meth:`generate_idp`) to oversample
-        until ``n`` generated IDRs fall in the length range.
+        Accepts ``length_range=(lo, hi)`` / ``max_oversample`` (see :meth:`generate_unprompted`) to
+        oversample until ``n`` generated IDRs fall in the length range.
         """
         return self._generate(fim_prompt(seq, idr_start, idr_end), n, **kw)
 
+    # Deprecated aliases (old vocabulary): IDP = unprompted, context-IDR = prompted.
+    generate_idp = generate_unprompted
+    generate_idr = generate_prompted
+
     # --- FASTA-first wrappers ---
-    def generate_idp_fasta(self, out_fasta, n: int = 100, *, prefix: str = "idiom_idp", **kw) -> Path:
-        seqs = self.generate_idp(n, **kw)
+    def generate_unprompted_fasta(self, out_fasta, n: int = 100, *, prefix: str = "idiom_unprompted",
+                                  **kw) -> Path:
+        seqs = self.generate_unprompted(n, **kw)
         # the whole generated sequence is the IDR -> header carries the span `_IDR_1-len` so the
         # output is a valid record FASTA (read_records-parseable). See _idr_header.
         return _write_fasta([(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s], out_fasta)
 
-    def generate_idr_fasta(self, in_fasta, out_fasta, n: int = 100, *, return_full: bool = False,
-                           marker: str = "idiom_idr", **kw) -> Path:
-        """Generate ``n`` IDRs per input record (each conditioned on that record's flanks).
+    def generate_prompted_fasta(self, in_fasta, out_fasta, n: int = 100, *, return_full: bool = False,
+                                marker: str = "idiom_prompted", **kw) -> Path:
+        """Generate ``n`` prompted IDRs per input record (each conditioned on that record's flanks).
 
         Each output record is tagged ``{source_accession}_{marker}_gen{i}`` (``marker`` defaults to
-        ``idiom_idr``, symmetric with the ``idiom_idp`` prefix on de-novo IDP output) so generated
-        records are distinguishable by mode at a glance; the source accession is preserved in front.
+        ``idiom_prompted``, symmetric with the ``idiom_unprompted`` prefix on de-novo output) so
+        generated records are distinguishable by mode at a glance; the source accession is kept in front.
 
         ``return_full=False`` (default) writes the generated IDR alone with header span ``_IDR_1-len``
         — the original behaviour, so existing analysis code keeps working. ``return_full=True`` splices
@@ -210,7 +219,7 @@ class IDiom:
         """
         rows = []
         for r in read_records(in_fasta):
-            for i, s in enumerate(self.generate_idr(r.full_seq, r.idr_start, r.idr_end, n, **kw)):
+            for i, s in enumerate(self.generate_prompted(r.full_seq, r.idr_start, r.idr_end, n, **kw)):
                 if not s:
                     continue
                 acc = f"{r.accession}_{marker}_gen{i}"
@@ -221,6 +230,10 @@ class IDiom:
                 else:
                     rows.append((_idr_header(acc, s), s))
         return _write_fasta(rows, out_fasta)
+
+    # Deprecated aliases (old vocabulary).
+    generate_idp_fasta = generate_unprompted_fasta
+    generate_idr_fasta = generate_prompted_fasta
 
     # --- embeddings ---
     def embed(self, fasta, layers: list[int], *, pool: str = "mean"):
@@ -243,15 +256,17 @@ class IDiomSAE:
     """
 
     def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None,
-                 region: str = "all", fim_mode: str = "idr"):
+                 region: str = "all", fim_mode: str = "prompted"):
         self.sae = sae.eval().to(model.device)
         self.host = model
         self.layer = int(layer)
         self.host_model = host_model
         # the distribution this SAE was trained on (residual-stream slice + prompt format); both are
-        # applied automatically everywhere downstream so the SAE stays on-distribution.
+        # applied automatically everywhere downstream so the SAE stays on-distribution. fim_mode is
+        # normalized to prompted/unprompted (accepts legacy idr/idp). NB: `region` (all/idr/non_idr)
+        # is a different axis — which residues the SAE reads — and is left as-is.
         self.region = region
-        self.fim_mode = fim_mode
+        self.fim_mode = normalize_mode(fim_mode)
 
     # convenience pass-throughs to the host model
     @property
@@ -285,7 +300,7 @@ class IDiomSAE:
                 )
             model = IDiom.load(cfg["host_model"], device=device)
         return cls(sae, model, cfg["layer"], host_model=cfg.get("host_model"),
-                   region=cfg.get("region", "all"), fim_mode=cfg.get("fim_mode", "idr"))
+                   region=cfg.get("region", "all"), fim_mode=cfg.get("fim_mode", "prompted"))
 
     def save_pretrained(self, out_dir, *, host_model: str | None = None) -> Path:
         """Write the release dir (``sae_config.json`` + ``sae.safetensors``); ``host_model`` (repo id
@@ -353,7 +368,7 @@ class IDiomSAE:
         at constant residual norm instead of inflating it.
 
         ``length_range=(lo, hi)`` / ``max_oversample``: oversample — re-generate and length-filter until
-        ``n`` steered IDRs fall in ``[lo, hi]`` (inclusive), as in :meth:`IDiom.generate_idp`."""
+        ``n`` steered IDRs fall in ``[lo, hi]`` (inclusive), as in :meth:`IDiom.generate_unprompted`."""
         from idiom.sae.steering import SteeringSpec, steer_generation  # noqa: PLC0415
 
         spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode,
@@ -373,21 +388,25 @@ class IDiomSAE:
 
     # --- fidelity ---
     @torch.no_grad()
-    def fidelity(self, fasta, *, batch_size: int = 16, fim_idr_prob: float | None = None):
+    def fidelity(self, fasta, *, batch_size: int = 16, prompted_prob: float | None = None,
+                 fim_idr_prob: float | None = None):
         """Substitution-loss fidelity (``loss_clean``/``loss_sae``/``loss_ablate``,
-        ``pct_loss_recovered``) over a record FASTA. ``fim_idr_prob`` defaults to match the SAE's
-        training prompt format (0.0 idp / 1.0 idr), so eval stays on-distribution."""
+        ``pct_loss_recovered``) over a record FASTA. ``prompted_prob`` defaults to match the SAE's
+        training prompt format (0.0 unprompted / 1.0 prompted), so eval stays on-distribution.
+        ``fim_idr_prob`` is a deprecated alias for ``prompted_prob``."""
         from torch.utils.data import DataLoader  # noqa: PLC0415
 
         from idiom.data.dataset import RecordDataset, make_collate  # noqa: PLC0415
         from idiom.data.io import read_records  # noqa: PLC0415
         from idiom.sae.eval.fidelity import compute_fidelity  # noqa: PLC0415
 
-        if fim_idr_prob is None:
-            fim_idr_prob = 0.0 if self.fim_mode == "idp" else 1.0
+        if fim_idr_prob is not None:  # deprecated alias
+            prompted_prob = fim_idr_prob
+        if prompted_prob is None:
+            prompted_prob = 0.0 if self.fim_mode == UNPROMPTED else 1.0
 
         ds = RecordDataset(read_records(fasta), self.tok, max_len=self.model.cfg.max_seq_len,
-                           fim_idr_prob=fim_idr_prob)
+                           prompted_prob=prompted_prob)
         dl = DataLoader(ds, batch_size=batch_size, collate_fn=make_collate(self.tok.pad_id))
         return compute_fidelity(self.model, self.sae, self.layer, dl, pad_id=self.tok.pad_id,
                                 tokenizer=self.tok, region=self.region, device=self.device)
@@ -414,14 +433,15 @@ def main(argv: list[str] | None = None) -> None:
     """``idiom_generate`` — FASTA-first inference CLI."""
     import argparse
 
-    p = argparse.ArgumentParser(description="Generate IDPs/IDRs with IDiom (writes a FASTA).")
-    p.add_argument("mode", choices=["idp", "idr"], help="idp = de-novo; idr = context-prompted")
+    p = argparse.ArgumentParser(description="Generate IDRs with IDiom (writes a FASTA).")
+    p.add_argument("mode", choices=["unprompted", "prompted", "idp", "idr"],
+                   help="unprompted = de-novo; prompted = in flanking context (legacy aliases: idp/idr)")
     p.add_argument("--model", required=True, help="HF repo id (e.g. jxliu2/idiom-medium) or local dir")
     p.add_argument("--out", required=True, help="output FASTA")
-    p.add_argument("--n", type=int, default=1000, help="sequences (idp) or per protein (idr)")
-    p.add_argument("--fasta", help="idr mode: input proteins with _IDR_x-y headers")
+    p.add_argument("--n", type=int, default=1000, help="sequences (unprompted) or per protein (prompted)")
+    p.add_argument("--fasta", help="prompted mode: input proteins with _IDR_x-y headers")
     p.add_argument("--return-full", action="store_true",
-                   help="idr mode: splice each IDR back into its flanks and write the whole protein")
+                   help="prompted mode: splice each IDR back into its flanks and write the whole protein")
     p.add_argument("--max-new-tokens", type=int, default=1000)
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--top-k", type=int, default=None)
@@ -444,12 +464,12 @@ def main(argv: list[str] | None = None) -> None:
         kw["length_range"] = (args.min_len or 1, args.max_len or 10**9)
         kw["max_oversample"] = args.max_oversample
 
-    if args.mode == "idp":
-        model.generate_idp_fasta(args.out, n=args.n, **kw)
+    if normalize_mode(args.mode) == UNPROMPTED:
+        model.generate_unprompted_fasta(args.out, n=args.n, **kw)
     else:
         if not args.fasta:
-            p.error("idr mode requires --fasta")
-        model.generate_idr_fasta(args.fasta, args.out, n=args.n, return_full=args.return_full, **kw)
+            p.error("prompted mode requires --fasta")
+        model.generate_prompted_fasta(args.fasta, args.out, n=args.n, return_full=args.return_full, **kw)
     print(f"wrote {args.out}")
 
 

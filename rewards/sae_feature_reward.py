@@ -81,10 +81,10 @@ def _comp_ids(comp: str):
 @torch.no_grad()
 def _feature_match(idr: str, comp: str) -> float:
     """Fraction of the compartment's specific features that FIRE (top-k at any IDR residue)."""
-    from idiom.data.fim import fim_idp
+    from idiom.data.fim import fim_unprompted
     from idiom.model.activations import extract_activations
     sae = _sae()
-    s = fim_idp(idr, 0, len(idr))                                   # "132" + idr (de-novo IDP)
+    s = fim_unprompted(idr, 0, len(idr))                            # "132" + idr (unprompted / de-novo)
     tokens = torch.tensor([[sae.tok.start_id, *sae.tok.encode(s)]], device=sae.device)
     acts = extract_activations(sae.model, tokens, [sae.layer], tokenizer=sae.tok,
                                drop_markers=True, region=sae.region)[sae.layer]
@@ -161,10 +161,10 @@ def _fired_matrix(idrs, ids):
     completion. One batched forward through the frozen 24L base + L18 SAE for the whole group."""
     from torch.nn.utils.rnn import pad_sequence
 
-    from idiom.data.fim import fim_idp
+    from idiom.data.fim import fim_unprompted
     from idiom.model.activations import extract_activations
     sae = _sae()
-    seqs = [fim_idp(s, 0, len(s)) for s in idrs]
+    seqs = [fim_unprompted(s, 0, len(s)) for s in idrs]
     toks = [torch.tensor([sae.tok.start_id, *sae.tok.encode(s)]) for s in seqs]
     tokens = pad_sequence(toks, batch_first=True, padding_value=sae.tok.pad_id).to(sae.device)
     acts = extract_activations(sae.model, tokens, [sae.layer], tokenizer=sae.tok,

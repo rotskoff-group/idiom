@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from idiom.data.fim import fim_idp, fim_idr
+from idiom.data.fim import PROMPTED, fim_prompted, fim_unprompted, normalize_mode
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
 
@@ -32,16 +32,17 @@ def build_feature_dataset(
     device: str | torch.device = "cpu",
     batch_size: int = 16,
     region: str = "all",
-    fim_mode: str = "idr",
+    fim_mode: str = "prompted",
 ) -> Path:
     """Encode records through ``sae`` at ``layer`` and write the feature dataset to ``out_dir``.
 
-    ``region`` (``all`` | ``idr`` | ``non_idr``) and ``fim_mode`` (``idr`` = ``1{prefix}3{suffix}2{IDR}``
-    | ``idp`` = ``132{IDR}``) are the SAE's training distribution; the dataset is built over exactly
-    those residues, in that prompt format, so the features match what the SAE learned.
+    ``region`` (``all`` | ``idr`` | ``non_idr``) and ``fim_mode`` (``prompted`` =
+    ``1{prefix}3{suffix}2{IDR}`` | ``unprompted`` = ``132{IDR}``) are the SAE's training distribution;
+    the dataset is built over exactly those residues, in that prompt format, so the features match
+    what the SAE learned. Legacy ``idr``/``idp`` fim_mode accepted.
     """
     tok = tokenizer or Tokenizer()
-    fim = fim_idr if fim_mode == "idr" else fim_idp
+    fim = fim_prompted if normalize_mode(fim_mode) == PROMPTED else fim_unprompted
     model = model.eval().to(device)
     sae = sae.eval().to(device)
     records = list(records)
@@ -75,7 +76,7 @@ def build_feature_dataset(
     (out / "meta.json").write_text(
         json.dumps(
             {"k": int(sae.k), "num_latents": int(sae.num_latents), "layer": int(layer),
-             "region": region, "fim_mode": fim_mode}
+             "region": region, "fim_mode": normalize_mode(fim_mode)}
         )
     )
     return out

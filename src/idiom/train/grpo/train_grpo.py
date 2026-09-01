@@ -138,7 +138,8 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
             cfg.init_from, reward, reward_components=components, **grpo_kw
         )
 
-    if cfg.prompts.mode in ("idp", "denovo"):  # "denovo" kept for back-compat with old configs
+    # "idp"/"denovo" kept for back-compat with old configs; "unprompted" is the current vocabulary
+    if cfg.prompts.mode in ("unprompted", "idp", "denovo"):
         ds = idp_prompts(cfg.prompts.n)
     else:
         ds = record_prompts(cfg.prompts.fasta, cfg.prompts.n_per)

@@ -4,8 +4,8 @@ Public API:
 
     from idiom import IDiom, IDiomSAE
     model = IDiom.from_pretrained("jxliu2/idiom-medium")
-    model.generate_idp(n=100)
-    model.generate_idr(protein_seq, idr_start, idr_end, n=100)
+    model.generate_unprompted(n=100)                          # de-novo IDRs
+    model.generate_prompted(protein_seq, idr_start, idr_end, n=100)  # IDR in flanking context
     model.embed("proteins.fasta", layers=[8])
     sae = IDiomSAE.from_pretrained("jxliu2/idiom-medium-sae-L8", model=model)
     sae.encode("proteins.fasta")

@@ -24,15 +24,24 @@ def test_save_and_from_pretrained_roundtrip(tmp_path):
     assert torch.allclose(m.model(tokens), loaded.model(tokens), atol=1e-5)
 
 
-def test_generate_idp_returns_residue_strings():
-    seqs = _idiom().generate_idp(n=3, max_new_tokens=8, temperature=0, seed=0)
+def test_generate_unprompted_returns_residue_strings():
+    seqs = _idiom().generate_unprompted(n=3, max_new_tokens=8, temperature=0, seed=0)
     assert len(seqs) == 3
     assert all(set(s) <= set(RESIDUES) for s in seqs)  # only residue chars (markers/controls stripped)
 
 
-def test_generate_idr_and_fasta(tmp_path):
+def test_generate_legacy_aliases():
+    # old vocabulary kept as method aliases: generate_idp == generate_unprompted, idr == prompted
     m = _idiom()
-    seqs = m.generate_idr("MEDSKVDNRPQ", 4, 8, n=2, max_new_tokens=6, temperature=0)
+    assert m.generate_idp.__func__ is m.generate_unprompted.__func__
+    assert m.generate_idr.__func__ is m.generate_prompted.__func__
+    # the alias actually runs
+    assert len(m.generate_idp(n=2, max_new_tokens=6, temperature=0, seed=0)) == 2
+
+
+def test_generate_prompted_and_fasta(tmp_path):
+    m = _idiom()
+    seqs = m.generate_prompted("MEDSKVDNRPQ", 4, 8, n=2, max_new_tokens=6, temperature=0)
     assert len(seqs) == 2
 
     in_fa = tmp_path / "in.fasta"
@@ -41,10 +50,10 @@ def test_generate_idr_and_fasta(tmp_path):
     # first -> empty). The writer drops empty generations, so the record count equals the same-seed
     # in-memory non-empty count, generated with the coords (3, 8) the writer uses internally.
     kw = dict(n=8, max_new_tokens=6, temperature=1.0, seed=0)
-    expected = sum(bool(s) for s in m.generate_idr("MEDSKVDNRPQ", 3, 8, **kw))
+    expected = sum(bool(s) for s in m.generate_prompted("MEDSKVDNRPQ", 3, 8, **kw))
     assert expected > 0
-    out = m.generate_idr_fasta(in_fa, tmp_path / "out.fasta", **kw)
-    assert out.read_text().count(">A_idiom_idr_gen") == expected
+    out = m.generate_prompted_fasta(in_fa, tmp_path / "out.fasta", **kw)
+    assert out.read_text().count(">A_idiom_prompted_gen") == expected
 
 
 def test_generate_cli(tmp_path):
@@ -52,14 +61,14 @@ def test_generate_cli(tmp_path):
 
     _idiom().save_pretrained(tmp_path / "rel")
     out = tmp_path / "idps.fasta"
-    # Sample with a fixed seed (greedy would emit STOP first -> empty IDPs, all dropped by the
+    # Sample with a fixed seed (greedy would emit STOP first -> empty IDRs, all dropped by the
     # writer); compare against the same-seed in-memory non-empty count from the reloaded model.
     m = IDiom.from_pretrained(tmp_path / "rel")
-    expected = sum(bool(s) for s in m.generate_idp(n=8, max_new_tokens=6, temperature=1.0, seed=0))
+    expected = sum(bool(s) for s in m.generate_unprompted(n=8, max_new_tokens=6, temperature=1.0, seed=0))
     assert expected > 0
-    main(["idp", "--model", str(tmp_path / "rel"), "--out", str(out), "--n", "8",
+    main(["unprompted", "--model", str(tmp_path / "rel"), "--out", str(out), "--n", "8",
           "--max-new-tokens", "6", "--temperature", "1.0", "--seed", "0"])
-    assert out.read_text().count(">idiom_idp_") == expected
+    assert out.read_text().count(">idiom_unprompted_") == expected
 
 
 def test_embed(tmp_path):
