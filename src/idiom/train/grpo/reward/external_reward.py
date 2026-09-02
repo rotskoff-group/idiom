@@ -8,11 +8,11 @@ subprocess "scorer" spoken to over newline-delimited JSON, one exchange per GRPO
 
 A scorer imports nothing from IDiom, so it can live in any venv, conda env, or container. Each
 external term in configs/grpo.yaml carries its own cmd, so several coexist in one run; the scorer
-returns a raw value and the term's target/width band it to a reward (see rewards/scorers/README.md).
+returns a raw value and the term's target/width band it to a reward (see rewards/README.md).
 
 Check a command before spending a GPU allocation:
 
-    python -m idiom.train.grpo.external --cmd "<scorer command>" --target 25 --width 3
+    python -m idiom.train.grpo.reward.external_reward --cmd "<scorer command>" --target 25 --width 3
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ class Scorer:
             raise RuntimeError(
                 f"scorer handshake failed: {' '.join(self.argv)}\n  {e}\n"
                 f"  the scorer must read one JSON line from stdin and write "
-                f"{{\"scores\": [...]}} to stdout; see rewards/scorers/README.md") from e
+                f"{{\"scores\": [...]}} to stdout; see rewards/README.md") from e
 
     def _pump_stdout(self, proc: subprocess.Popen, q: queue.Queue) -> None:
         """Forward the child's stdout lines to a queue, ending with None at EOF."""

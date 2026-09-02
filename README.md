@@ -151,14 +151,14 @@ IDiom itself, so it needs no third-party dependency and runs straight after `uv 
 idiom_grpo init_from=/path/base.ckpt reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
 ```
 
-Signatures ship in `rewards/signatures/` for the released SAE (cases `top30` and `private30`, select
+Signatures ship in `rewards/rl_sae_targets/` for the released SAE (cases `top30` and `private30`, select
 with `IDIOM_SAEREWARD_CASE`). **Build a signature from your own sequences** with
 `examples/05_feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
 
 **Bring your own reward model.** Each `external` term is either a simple in-process Python function,
 or a command that runs a reward model in its own environment (for one whose dependencies conflict
 with IDiom's — a different python, torch, or CUDA). For the in-process case, copy
-`rewards/builtin_rewards.py`. For the subprocess case there is no install step — let uv build and
+`rewards/example_rewards.py`. For the subprocess case there is no install step — let uv build and
 cache the environment on demand, so the config is all you write:
 
 ```yaml
@@ -171,7 +171,7 @@ reward.external:
 ```bash
 # point uv's cache at scratch (it is several GB), then verify before spending a GPU allocation
 export UV_CACHE_DIR=/scratch/you/uv-cache
-python -m idiom.train.grpo.external \
+python -m idiom.train.grpo.reward.external_reward \
   --cmd "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/scorers/sparrow.py --property radius_of_gyration" \
   --target 25 --width 3
 ```
@@ -242,7 +242,7 @@ under CC BY 4.0, inherited from AlphaFold DB / UniProt; the code in this reposit
 | Path | Role |
 |------|------|
 | `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + steering + features + eval), `utils`, public `IDiom`/`IDiomSAE` API |
-| `rewards/` | GRPO reward definitions: RL-SAE, custom in-process rewards, and `scorers/` (external models) |
+| `rewards/` | user-editable GRPO reward content: `rl_sae_targets/` (SAE signatures), a copy-me in-process reward, and `scorers/` (external models) |
 | `examples/` | short runnable scripts: generation, embeddings, SAE features, custom rewards, feature enrichment |
 | `assets/` | static assets (figures for docs) |
 | `tests/` | unit/integration tests for the library |

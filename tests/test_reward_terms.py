@@ -10,7 +10,7 @@ import math
 
 from omegaconf import OmegaConf
 
-from idiom.train.grpo.rewards import (
+from idiom.train.grpo.reward import (
     entropy_reward, get_reward, length_reward, quadratic_shaping, register_group_reward,
     register_reward)
 from idiom.train.grpo.train_grpo import build_reward, build_reward_terms
@@ -142,7 +142,7 @@ def test_rl_sae_term_resolves_signature(tmp_path):
     # the rl_sae block imports its module (default rewards/rl_sae.py) and resolves sae_only_<sig>
     mod = tmp_path / "fake_rl_sae.py"
     mod.write_text(
-        "from idiom.train.grpo.rewards import register_reward\n"
+        "from idiom.train.grpo.reward import register_reward\n"
         "register_reward('sae_only_myco')(lambda idr: 0.7 if idr else 0.0)\n"
     )
     cfg = _new_cfg(

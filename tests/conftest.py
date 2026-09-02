@@ -8,6 +8,8 @@ os.environ.setdefault("IDIOM_DEVICE", "cpu")
 import pytest  # noqa: E402
 import torch  # noqa: E402
 
+import reward_fixtures  # noqa: E402,F401  registers fraction_proline/fraction_alanine for tests
+
 
 @pytest.fixture(autouse=True)
 def _seed():

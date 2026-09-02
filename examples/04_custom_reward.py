@@ -6,7 +6,7 @@ rewards (no training, no GPU, no weights); the printed command runs the actual R
     python examples/04_custom_reward.py
 """
 
-from idiom.train.grpo.rewards import get_reward, register_group_reward, register_reward
+from idiom.train.grpo.reward import get_reward, register_group_reward, register_reward
 
 
 @register_reward("aromatic_fraction")

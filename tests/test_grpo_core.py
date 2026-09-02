@@ -6,13 +6,13 @@ import torch
 
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.train.grpo import grpo_loss, group_advantages, sequence_logprobs
-from idiom.train.grpo.rewards import (
+from idiom.train.grpo.reward import (
     entropy_reward,
-    fraction_proline,
     get_reward,
     length_reward,
     sequence_entropy,
 )
+from reward_fixtures import fraction_proline
 
 
 def test_rewards():

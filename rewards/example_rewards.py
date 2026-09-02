@@ -7,13 +7,13 @@ top by the config, so you usually only write the base signal.
 Use it by adding an external term that names the reward and points at the file that registers it:
 
     reward.external:
-      - {enabled: true, weight: 1.0, name: aromatic_fraction, module: rewards/builtin_rewards.py}
+      - {enabled: true, weight: 1.0, name: aromatic_fraction, module: rewards/example_rewards.py}
 
 module accepts a *.py path (like here) or a dotted module path; it is imported before the reward is
 looked up, so the decorators below run and register the rewards.
 """
 
-from idiom.train.grpo.rewards import register_reward
+from idiom.train.grpo.reward import register_reward
 
 
 @register_reward("aromatic_fraction")

@@ -11,7 +11,7 @@ import textwrap
 
 import pytest
 
-from idiom.train.grpo.external import Scorer, band, make_external_reward, parse_response
+from idiom.train.grpo.reward.external_reward import Scorer, band, make_external_reward, parse_response
 
 
 def _scorer(tmp_path, body, name="fake_scorer.py", **kw):

@@ -25,12 +25,13 @@ from pathlib import Path
 
 import torch
 
-from idiom.train.grpo.rewards import register_reward
+from idiom.train.grpo.reward.base import register_reward
 
+# Targets ship as user-editable data in the repo's top-level rewards/rl_sae_targets/ (run from the
+# repo root); point IDIOM_SAEREWARD_FEATURES at your own JSON of the same shape to override.
 _SAE_DIR = os.environ.get("IDIOM_SAEREWARD_SAE", "jxliu2/idiomsae-300M-L18-k32")
 _FEATURES = os.environ.get(
-    "IDIOM_SAEREWARD_FEATURES",
-    str(Path(__file__).resolve().parent / "signatures" / "idiomsae-300M-L18-k32.json"))
+    "IDIOM_SAEREWARD_FEATURES", "rewards/rl_sae_targets/idiomsae-300M-L18-k32.json")
 _CASE = os.environ.get("IDIOM_SAEREWARD_CASE", "top30")
 
 

@@ -47,7 +47,7 @@ def test_custom_reward_module(tmp_path):
     # A user drops a *.py with @register_reward; reward.module imports it before lookup.
     mod = tmp_path / "myrew.py"
     mod.write_text(
-        "from idiom.train.grpo.rewards import register_reward\n"
+        "from idiom.train.grpo.reward import register_reward\n"
         "@register_reward('always_one')\n"
         "def always_one(idr):\n    return 1.0\n"
     )
@@ -60,14 +60,14 @@ def test_custom_reward_module(tmp_path):
     assert reward("ACDE") == 1.0
 
 
-def test_shipped_builtin_rewards_register():
+def test_shipped_example_rewards_register():
     # the example file in rewards/ registers via the reward.module mechanism
     from pathlib import Path
 
-    from idiom.train.grpo.rewards import get_reward
-    from idiom.train.grpo.train_grpo import _register_custom_rewards
+    from idiom.train.grpo.reward import get_reward
+    from idiom.train.grpo.reward.compose_reward import _register_custom_rewards
 
-    path = Path(__file__).resolve().parents[1] / "rewards" / "builtin_rewards.py"
+    path = Path(__file__).resolve().parents[1] / "rewards" / "example_rewards.py"
     _register_custom_rewards(str(path))
     assert get_reward("aromatic_fraction")("FWYA") == 0.75  # 3 of 4 are aromatic
 

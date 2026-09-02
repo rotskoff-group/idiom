@@ -1,8 +1,8 @@
 """GRPO reward functions of the form f(idr: str) -> float over the decoded IDR residue string.
 
 A registry maps names to reward functions; the composite reward (a weighted sum of terms) is
-assembled in train_grpo from these building blocks. Rewards that need their own environment run as
-external subprocess scorers instead (train/grpo/external.py).
+assembled in reward/compose_reward.py from these building blocks. Rewards that need their own environment
+run as external subprocess scorers instead (reward/external_reward.py).
 """
 
 from __future__ import annotations
@@ -72,23 +72,6 @@ def register_group_reward(name: str):
     return deco
 
 
-def get_group_reward(name: str) -> Callable[[list, int], list]:
-    """Look up a registered group reward function by name.
-
-    Args:
-        name (str): Registry key of the group reward function.
-
-    Returns:
-        Callable[[list, int], list]: The registered group reward function.
-
-    Raises:
-        KeyError: If no group reward is registered under name.
-    """
-    if name not in GROUP_REWARD_REGISTRY:
-        raise KeyError(f"unknown group reward {name!r}; registered: {sorted(GROUP_REWARD_REGISTRY)}")
-    return GROUP_REWARD_REGISTRY[name]
-
-
 def resolve_reward(name: str) -> Callable[[list[str], int], list[float]]:
     """Return a batch scorer f(idrs, group_size) -> list[float] for any registered reward name.
 
@@ -113,22 +96,6 @@ def resolve_reward(name: str) -> Callable[[list[str], int], list[float]]:
         return lambda idrs, group_size: [fn(idr) for idr in idrs]
     raise KeyError(f"unknown reward {name!r}; registered: "
                    f"{sorted(set(REWARD_REGISTRY) | set(GROUP_REWARD_REGISTRY))}")
-
-
-def _fraction(idr: str, aa: str) -> float:
-    return idr.count(aa) / len(idr) if idr else 0.0
-
-
-@register_reward("fraction_proline")
-def fraction_proline(idr: str) -> float:
-    """Fraction of residues in the IDR that are proline."""
-    return _fraction(idr, "P")
-
-
-@register_reward("fraction_alanine")
-def fraction_alanine(idr: str) -> float:
-    """Fraction of residues in the IDR that are alanine."""
-    return _fraction(idr, "A")
 
 
 def sequence_entropy(idr: str) -> float:
