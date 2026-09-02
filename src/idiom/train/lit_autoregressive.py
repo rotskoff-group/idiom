@@ -63,24 +63,25 @@ class LitAutoregressive(L.LightningModule):
         self.min_lr_ratio = min_lr_ratio
 
     @classmethod
-    def init_from_checkpoint(cls, ckpt_path: str, **kwargs) -> "LitAutoregressive":
-        """Build a module and load model weights from a prior Lightning checkpoint (for SFT).
+    def init_from_checkpoint(cls, init_from: str, **kwargs) -> "LitAutoregressive":
+        """Build a module and warm-start its weights from a pretrained model (for SFT).
 
-        Architecture is read from the checkpoint (self-describing), never re-declared.
+        init_from accepts any form model/io.load_model understands: a Lightning .ckpt, a released
+        model directory, or a HuggingFace repo id (e.g. "jxliu2/idiom-20M"). The architecture is
+        read from that artifact (self-describing), never re-declared.
 
         Args:
-            ckpt_path (str): Path to the Lightning checkpoint to warm-start from.
+            init_from (str): A Lightning .ckpt, a released model directory, or a HF repo id.
             **kwargs: Optimizer and schedule hyperparameters forwarded to the constructor.
 
         Returns:
-            LitAutoregressive: A module with the checkpoint's model weights loaded.
+            LitAutoregressive: A module warm-started with the pretrained model's weights.
         """
-        from idiom.model.io import config_from_checkpoint  # noqa: PLC0415
+        from idiom.model.io import load_model  # noqa: PLC0415
 
-        lit = cls(config_from_checkpoint(ckpt_path), **kwargs)
-        state = torch.load(ckpt_path, map_location="cpu", weights_only=False)["state_dict"]
-        model_state = {k[len("model.") :]: v for k, v in state.items() if k.startswith("model.")}
-        lit.model.load_state_dict(model_state)
+        model, cfg = load_model(init_from, eval_mode=False)
+        lit = cls(cfg, **kwargs)
+        lit.model.load_state_dict(model.state_dict())
         return lit
 
     def _masked_loss(self, logits, targets, mask):

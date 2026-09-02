@@ -114,11 +114,13 @@ def load_model(
 ) -> tuple[IDiomTransformer, ModelConfig]:
     """Load a model from either on-disk form, returning (model, cfg).
 
-    A directory with a config.json is a released model; anything else is a Lightning .ckpt. This
-    is the single load entry point for every downstream stage.
+    Accepts any of three forms: a local Lightning .ckpt, a local released directory (config.json +
+    model.safetensors), or a HuggingFace repo id (downloaded to a local snapshot first). A directory
+    with a config.json is a released model; any other local path is a Lightning .ckpt. This is the
+    single load entry point for every downstream stage.
 
     Args:
-        path (str | Path): Path to a released model directory or a Lightning checkpoint.
+        path (str | Path): A Lightning checkpoint, a released model directory, or a HF repo id.
         device (str | torch.device): Device to move the model to.
         eval_mode (bool): If True, put the model in eval mode before returning.
 
@@ -126,6 +128,10 @@ def load_model(
         tuple[IDiomTransformer, ModelConfig]: The loaded model and its config.
     """
     p = Path(path)
+    if not p.exists():  # not a local path: treat it as a HF repo id and fetch the released snapshot
+        from huggingface_hub import snapshot_download  # noqa: PLC0415
+
+        p = Path(snapshot_download(str(path)))
     if p.is_dir() and (p / CONFIG_FILE).exists():
         return load_released(p, device=device, eval_mode=eval_mode)
     return load_pretrained(p, device=device, eval_mode=eval_mode)

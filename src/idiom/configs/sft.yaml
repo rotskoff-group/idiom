@@ -1,8 +1,8 @@
 # SFT config (flat, D6). Same module as pretraining; differs by completion-only loss + warm start.
-#   idiom_train --config-name sft init_from=/path/pretrained.ckpt data.train_fasta=/path/sft.fasta
+#   idiom_train --config-name sft init_from=jxliu2/idiom-20M data.train_fasta=/path/sft.fasta
 seed: 0
 device: auto
-init_from: ???               # required: the pretrained checkpoint to fine-tune (weights-only warm start)
+init_from: ???               # required: base to fine-tune (a .ckpt, a released dir, or a HF repo id e.g. jxliu2/idiom-20M); weights-only warm start
 resume_from: null            # true mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
 wandb_project: idiom         # wandb project (needs `wandb login` / WANDB_API_KEY; WANDB_MODE=offline to disable)
 run_name: null               # optional wandb run name

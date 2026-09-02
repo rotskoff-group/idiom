@@ -26,9 +26,10 @@ dependencies = [
     "omegaconf>=2.3.0",
     "wandb>=0.18",     # pulled in by Lightning's WandbLogger, which all three trainers use
     "setuptools<81",   # lightning_fabric still imports pkg_resources, removed in setuptools 81
-    # SAE feature viewer + enrichment plots
+    # SAE feature viewer + enrichment plots + sequence logos
     "streamlit>=1.30",
     "matplotlib>=3.7",
+    "logomaker>=0.8",
 ]
 
 [project.urls]

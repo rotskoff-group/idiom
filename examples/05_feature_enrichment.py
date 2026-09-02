@@ -136,9 +136,10 @@ def volcano(result, mask, out_path, name):
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--positive", required=True, help="FASTA of the sequences you care about")
-    p.add_argument("--name", default="my_target", help="signature name (becomes sae_only_<name>)")
-    p.add_argument("--out", required=True, help="output directory")
+    p.add_argument("--positive", default="examples/example_data/protgps/nucleolus.fasta",
+                   help="FASTA of the sequences you care about")
+    p.add_argument("--name", default="nucleolus", help="signature name (becomes sae_only_<name>)")
+    p.add_argument("--out", default="enr", help="output directory")
     p.add_argument("--sae", default="jxliu2/idiomsae-300M-L18-k32", help="HF repo id or local dir")
     p.add_argument("--background", default=None,
                    help="background FASTA (default: the held-out validation split from the Hub)")

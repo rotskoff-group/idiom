@@ -6,7 +6,7 @@ the top-level README for cache and pinning guidance. In configs/grpo.yaml:
 
     reward.external:
       - {enabled: true, weight: 0.5, target: 25, width: 3,
-         cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/scorers/sparrow.py --property radius_of_gyration"}
+         cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
 
 It returns the raw property value (the term's target/width band it into a reward). --property is any
 ALBATROSS predictor (radius_of_gyration, end_to_end_distance, asphericity, scaling_exponent,

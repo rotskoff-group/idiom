@@ -2,7 +2,7 @@
 
 Three pieces: base (the registry and the entropy/length terms), external_reward (subprocess scorers
 that run a reward model in its own environment), and compose_reward (the weighted-sum composition).
-The top-level rewards/ directory holds user content instead: example_rewards.py to copy, scorers/ run
+The top-level rewards/ directory holds user content instead: example_rewards.py to copy, external_scorers/ run
 in foreign environments, and rl_sae_targets/ signature files. The RL-SAE reward itself lives here
 (reward/rl_sae_reward.py) because it imports the idiom SAE; it is imported on demand when enabled.
 """

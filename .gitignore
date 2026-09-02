@@ -31,3 +31,7 @@ lightning_logs/
 output/
 runs/
 
+
+# Record-store sidecars (auto-built next to a FASTA on first train/SFT/enrichment)
+*.idiomstore/
+*.idiomstore.lock

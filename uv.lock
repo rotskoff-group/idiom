@@ -978,6 +978,7 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "hydra-core" },
     { name = "lightning" },
+    { name = "logomaker" },
     { name = "loguru" },
     { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "matplotlib", version = "3.11.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1003,6 +1004,7 @@ requires-dist = [
     { name = "huggingface-hub", specifier = ">=1.10.1" },
     { name = "hydra-core", specifier = ">=1.3.2" },
     { name = "lightning", specifier = ">=2.6.0" },
+    { name = "logomaker", specifier = ">=0.8" },
     { name = "loguru", specifier = ">=0.7" },
     { name = "matplotlib", specifier = ">=3.7" },
     { name = "numpy", specifier = ">=1.24" },
@@ -1268,6 +1270,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b8/39/6fc58ca81492db047149b4b8fd385aa1bfb8c28cd7cacb0c7eb0c44d842f/lightning_utilities-0.15.2.tar.gz", hash = "sha256:cdf12f530214a63dacefd713f180d1ecf5d165338101617b4742e8f22c032e24", size = 31090, upload-time = "2025-08-06T13:57:39.242Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/de/73/3d757cb3fc16f0f9794dd289bcd0c4a031d9cf54d8137d6b984b2d02edf3/lightning_utilities-0.15.2-py3-none-any.whl", hash = "sha256:ad3ab1703775044bbf880dbf7ddaaac899396c96315f3aa1779cec9d618a9841", size = 29431, upload-time = "2025-08-06T13:57:38.046Z" },
+]
+
+[[package]]
+name = "logomaker"
+version = "0.8.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "matplotlib", version = "3.11.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy" },
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/22/07/21b30aa773a38df7fa15e9bf8afa85594633c0ba014f9acd7c01dacc2cd6/logomaker-0.8.7.tar.gz", hash = "sha256:63783ce6e24449d6f1f01ce29c4ae1b91f6e54bc198e5da40ad18fcd0efc3302", size = 13176745, upload-time = "2025-03-25T19:08:25.727Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d5/1f/9be29e34615a4325a0ff6da18c55994cb546dcff4423c91f80f101a9858c/logomaker-0.8.7-py3-none-any.whl", hash = "sha256:8a65a5e5136a08823d199fbb5a9443674062a1c223236301accde19b0e401762", size = 13186440, upload-time = "2025-03-25T19:08:23.12Z" },
 ]
 
 [[package]]

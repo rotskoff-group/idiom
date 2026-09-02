@@ -124,7 +124,7 @@ on the command line.
 ```bash
 idiom_build_store --fasta corpus.fasta            # memory-mapped record store (recommended at scale)
 idiom_train data.train_fasta=corpus.fasta model.n_layers=24 model.d_model=1024
-idiom_train --config-name sft init_from=/path/base.ckpt data.train_fasta=sft.fasta
+idiom_train --config-name sft init_from=jxliu2/idiom-300M data.train_fasta=sft.fasta   # init_from: HF repo id, released dir, or .ckpt
 ```
 
 **GRPO post-training** optimizes a reward over generated IDRs. The reward is a **weighted sum of
@@ -148,7 +148,7 @@ reward gain requires encoding the real code, not merely satisfying a classifier.
 IDiom itself, so it needs no third-party dependency and runs straight after `uv sync`:
 
 ```bash
-idiom_grpo init_from=/path/base.ckpt reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
+idiom_grpo init_from=jxliu2/idiom-300M reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
 ```
 
 Signatures ship in `rewards/rl_sae_targets/` for the released SAE (cases `top30` and `private30`, select
@@ -158,7 +158,7 @@ with `IDIOM_SAEREWARD_CASE`). **Build a signature from your own sequences** with
 **Bring your own reward model.** Each `external` term is either a simple in-process Python function
 or a command that runs a reward model in its own environment (for one whose dependencies conflict
 with IDiom's — a different python, torch, or CUDA). The editable reward content lives in `rewards/`:
-`example_rewards.py` (copy-me in-process rewards), `scorers/` (external programs), and
+`example_rewards.py` (copy-me in-process rewards), `external_scorers/` (external programs), and
 `rl_sae_targets/` (SAE signatures).
 
 *In-process* — register an `f(idr) -> float` in a module and name it (copy `rewards/example_rewards.py`):
@@ -175,7 +175,7 @@ demand, so the config is all you write:
 # design IDRs with a radius of gyration near 25 A, scored by sparrow in its own environment
 reward.external:
   - {enabled: true, weight: 0.5, target: 25, width: 3,
-     cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/scorers/sparrow.py --property radius_of_gyration"}
+     cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
 ```
 
 The scorer returns a **raw value**; the term's `target`/`width` band it into `(0, 1]` — kept on the
@@ -187,14 +187,14 @@ verify a command before spending a GPU allocation:
 ```bash
 export UV_CACHE_DIR=/scratch/you/uv-cache   # several GB; keep it off your home directory
 uv run python -m idiom.train.grpo.reward.external_reward \
-  --cmd "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/scorers/sparrow.py --property radius_of_gyration" \
+  --cmd "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration" \
   --target 25 --width 3
 ```
 
 uv builds the environment once at the startup handshake (~30s for sparrow, which needs a C compiler;
 every run after is a cache hit); pin `@<commit>` for a reproducible build.
 
-**Writing a scorer.** A scorer is a standalone program — copy `rewards/scorers/example.py` — that
+**Writing a scorer.** A scorer is a standalone program — copy `rewards/external_scorers/example.py` — that
 speaks newline-delimited JSON on stdin/stdout, one exchange per GRPO step, importing nothing from
 IDiom:
 
@@ -209,7 +209,7 @@ logs to stderr; and load the model once at import (the process is reused for the
 imports nothing from IDiom, the same `cmd` form covers an on-demand uv env, a pre-built venv
 (`/path/venv/bin/python …`), a conda env (`conda run -n env python …`), or a container
 (`docker run -i …`). The worked example is [sparrow](https://github.com/idptools/sparrow) (biophysics:
-radius of gyration, asphericity, scaling exponent, charge patterning); `rewards/scorers/example.py` is
+radius of gyration, asphericity, scaling exponent, charge patterning); `rewards/external_scorers/example.py` is
 the bare template.
 
 ## Command-line reference
@@ -269,8 +269,8 @@ under CC BY 4.0, inherited from AlphaFold DB / UniProt; the code in this reposit
 | Path | Role |
 |------|------|
 | `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + steering + features + eval), `utils`, public `IDiom`/`IDiomSAE` API |
-| `rewards/` | user-editable GRPO reward content: `rl_sae_targets/` (SAE signatures), a copy-me in-process reward, and `scorers/` (external models) |
-| `examples/` | short runnable scripts: generation, embeddings, SAE features, custom rewards, feature enrichment |
+| `rewards/` | user-editable GRPO reward content: `rl_sae_targets/` (SAE signatures), a copy-me in-process reward, and `external_scorers/` (external models) |
+| `examples/` | short runnable scripts (generation, embeddings, SAE features + steering, enrichment + logos, SFT, RL) with small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
 | `assets/` | static assets (figures for docs) |
 | `tests/` | unit/integration tests for the library |
 

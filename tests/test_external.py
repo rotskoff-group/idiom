@@ -214,7 +214,7 @@ def _scorer_path(tmp_path):
 
 def test_example_scorer_speaks_the_protocol():
     """The copyable template must actually work, since users start from it."""
-    s = Scorer(f"{sys.executable} rewards/scorers/example.py", timeout=30)
+    s = Scorer(f"{sys.executable} rewards/external_scorers/example.py", timeout=30)
     try:
         scores = s.score(["FWY", "AAAAA"])
     finally:

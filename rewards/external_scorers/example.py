@@ -6,7 +6,7 @@ IDiom:
     ->  {"sequences": ["ACDEF...", "GHIKL..."]}
     <-  {"scores": [0.12, 0.98]}
 
-    uv run python -m idiom.train.grpo.reward.external_reward --cmd "python rewards/scorers/example.py"
+    uv run python -m idiom.train.grpo.reward.external_reward --cmd "python rewards/external_scorers/example.py"
 
 Flush after every response, return one score per sequence in order, and send logging to stderr
 (stdout is the protocol). Load the model once at import -- the process is reused for the whole run.

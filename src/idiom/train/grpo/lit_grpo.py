@@ -99,26 +99,28 @@ class LitGRPO(L.LightningModule):
         self.n_log_samples = n_log_samples
 
     @classmethod
-    def init_from_checkpoint(cls, ckpt_path, reward_fn=None, **kwargs) -> "LitGRPO":
-        """Warm-start GRPO from a pretrained checkpoint (architecture read from it).
+    def init_from_checkpoint(cls, init_from, reward_fn=None, **kwargs) -> "LitGRPO":
+        """Warm-start GRPO from a pretrained model (architecture read from it).
 
-        Both the policy and the frozen reference are loaded with the checkpoint's weights.
+        init_from accepts any form model/io.load_model understands: a Lightning .ckpt, a released
+        model directory, or a HuggingFace repo id (e.g. "jxliu2/idiom-20M"). Both the policy and the
+        frozen reference are loaded with its weights.
 
         Args:
-            ckpt_path: Path to the pretrained Lightning checkpoint.
+            init_from: A Lightning .ckpt, a released model directory, or a HF repo id.
             reward_fn: Scalar reward over a decoded IDR residue string.
             **kwargs: GRPO hyperparameters forwarded to the constructor.
 
         Returns:
-            LitGRPO: A module warm-started from the checkpoint.
+            LitGRPO: A module warm-started from the pretrained model.
         """
-        from idiom.model.io import config_from_checkpoint  # noqa: PLC0415
+        from idiom.model.io import load_model  # noqa: PLC0415
 
-        lit = cls(config_from_checkpoint(ckpt_path), reward_fn, **kwargs)
-        state = torch.load(ckpt_path, map_location="cpu", weights_only=False)["state_dict"]
-        model_state = {k[len("model.") :]: v for k, v in state.items() if k.startswith("model.")}
-        lit.model.load_state_dict(model_state)
-        lit.reference.load_state_dict(model_state)
+        model, cfg = load_model(init_from, eval_mode=False)
+        lit = cls(cfg, reward_fn, **kwargs)
+        sd = model.state_dict()
+        lit.model.load_state_dict(sd)
+        lit.reference.load_state_dict(sd)
         return lit
 
     def _decode_idr(self, completion: torch.Tensor) -> str:
