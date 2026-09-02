@@ -1,14 +1,12 @@
-"""Fill-in-the-middle (FIM) formatting for IDiom, applied on the fly.
+"""Fill-in-the-middle (FIM) string formatting.
 
 A record is (full_seq, idr_start, idr_end) with 0-indexed, half-open IDR coordinates
-(idr = full_seq[idr_start:idr_end]). The dataset assembles one of two FIM strings per sample;
-the prompted/unprompted choice is a per-sample augmentation:
+(idr = full_seq[idr_start:idr_end]). This module builds the FIM forms of a record:
 
-- fim_prompted   -> 1{prefix}3{suffix}2{IDR}: an IDR conditioned on its flanking context.
-- fim_unprompted -> 132{IDR}: an IDR generated de novo, with no flanks.
-
-residue_source_positions gives, for each residue of a FIM string (markers dropped, in FIM order),
-its index back into full_seq, so extracted activations align 1:1 with the residues they came from.
+- fim_prompted(seq, start, end): "1{prefix}3{suffix}2{IDR}", the IDR with its flanking context.
+- fim_unprompted(seq, start, end): "132{IDR}", the IDR with empty flanks.
+- fim_prompt(seq, start, end): "1{prefix}3{suffix}2", the generation prompt.
+- residue_source_positions(...): the index in full_seq of each residue of a FIM string.
 """
 
 from __future__ import annotations
@@ -26,16 +24,11 @@ PROMPTED, UNPROMPTED = "prompted", "unprompted"
 def normalize_mode(mode: str) -> str:
     """Validate a prompting-mode string and return it unchanged.
 
-    Every prompting-mode value passes through here — the dataset's per-sample variant, the
-    extractor's fim_mode, and the fim_mode persisted in an SAE release — so a typo or an
-    unrecognized mode fails loudly at the call site instead of silently selecting the wrong FIM
-    format (which does not raise anywhere downstream; it just produces off-distribution output).
-
     Args:
         mode (str): A prompting-mode string.
 
     Returns:
-        str: Either "prompted" or "unprompted".
+        str: The mode, either "prompted" or "unprompted".
 
     Raises:
         ValueError: If mode is neither "prompted" nor "unprompted".
@@ -46,9 +39,7 @@ def normalize_mode(mode: str) -> str:
 
 
 def fim_prompted(seq: str, start: int, end: int) -> str:
-    """Build the prompted FIM string 1{prefix}3{suffix}2{IDR}.
-
-    The IDR is moved to the end, conditioned on both flanks.
+    """Build the prompted FIM string "1{prefix}3{suffix}2{IDR}".
 
     Args:
         seq (str): The full protein sequence.
@@ -56,16 +47,14 @@ def fim_prompted(seq: str, start: int, end: int) -> str:
         end (int): IDR end index (0-based, exclusive).
 
     Returns:
-        str: The FIM-formatted string.
+        str: The FIM-formatted string, with the IDR moved to the end after both flanks.
     """
     prefix, idr, suffix = seq[:start], seq[start:end], seq[end:]
     return f"{PREFIX}{prefix}{SUFFIX}{suffix}{MIDDLE}{idr}"
 
 
 def fim_unprompted(seq: str, start: int, end: int) -> str:
-    """Build the unprompted FIM string 132{IDR}.
-
-    Prefix and suffix are empty, i.e. de novo generation with no flanking context.
+    """Build the unprompted FIM string "132{IDR}".
 
     Args:
         seq (str): The full protein sequence.
@@ -73,35 +62,33 @@ def fim_unprompted(seq: str, start: int, end: int) -> str:
         end (int): IDR end index (0-based, exclusive).
 
     Returns:
-        str: The FIM-formatted string.
+        str: The FIM-formatted string, with empty prefix and suffix.
     """
     return f"{PREFIX}{SUFFIX}{MIDDLE}{seq[start:end]}"
 
 
 def fim_prompt(seq: str = "", start: int = 0, end: int = 0) -> str:
-    """Build the generation prompt 1{prefix}3{suffix}2 (the model generates the IDR after 2).
+    """Build the generation prompt "1{prefix}3{suffix}2".
 
-    With the default empty sequence this is "132" (unprompted / de novo). Given a protein and an
-    IDR span it becomes the flanking context, so the model in-fills an IDR conditioned on the flanks.
+    With the default empty sequence the prompt is "132".
 
     Args:
-        seq (str): The full protein sequence (empty for unprompted generation).
+        seq (str): The full protein sequence (empty for an unprompted prompt).
         start (int): IDR start index (0-based, inclusive).
         end (int): IDR end index (0-based, exclusive).
 
     Returns:
-        str: The prompt string to feed the model.
+        str: The prompt string; the model generates the IDR after the "2" marker.
     """
     return f"{PREFIX}{seq[:start]}{SUFFIX}{seq[end:]}{MIDDLE}"
 
 
 def residue_source_positions(seq_len: int, start: int, end: int, variant: str = PROMPTED) -> list[int]:
-    """Return the source index in full_seq for each residue of the FIM string, in FIM order.
+    """Return the index in full_seq of each residue of the FIM string, in FIM order.
 
-    "FIM order" is the order residues appear once the 1/3/2 markers are dropped: for prompted that
-    is prefix, suffix, IDR; for unprompted it is just the IDR. Pairing these indices with the
-    residue-only activation rows aligns every vector with its residue (the IDR residues are exactly
-    those with start <= pos < end).
+    FIM order is the order residues appear once the 1/3/2 markers are dropped: prefix, suffix, IDR
+    for "prompted", and the IDR alone for "unprompted". IDR residues are those with
+    start <= position < end.
 
     Args:
         seq_len (int): Length of the full sequence.
@@ -111,6 +98,9 @@ def residue_source_positions(seq_len: int, start: int, end: int, variant: str = 
 
     Returns:
         list[int]: The source position of each residue, in FIM order.
+
+    Raises:
+        ValueError: If variant is neither "prompted" nor "unprompted".
     """
     variant = normalize_mode(variant)
     if variant == PROMPTED:

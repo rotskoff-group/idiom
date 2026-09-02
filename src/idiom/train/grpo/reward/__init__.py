@@ -1,15 +1,13 @@
 """GRPO reward subsystem.
 
-Four pieces: base (the registry and the entropy/length guardrail terms), external_reward
-(subprocess scorers that run a reward model in its own environment), rl_sae_reward (reward for
-reproducing a target's SAE feature code), and compose_reward (the weighted-sum composition that
-LitGRPO actually calls).
+Modules:
+    base: the reward registry and the entropy and length terms.
+    external_reward: subprocess scorers that run a reward model in its own environment.
+    rl_sae_reward: rewards for reproducing a target's SAE feature code, imported on demand.
+    compose_reward: the weighted-sum composition that LitGRPO calls.
 
-The split by directory is deliberate: this package holds reward *machinery*, while the repo's
-top-level rewards/ directory holds user-editable reward *content* — example_rewards.py to copy,
-external_scorers/ to run in foreign environments, and rl_sae_targets/ signature files. rl_sae_reward
-lives here rather than there only because it imports the idiom SAE; it is imported on demand, when
-the rl_sae term is enabled, so nothing pays for loading a model it is not using.
+User-editable reward content — copyable in-process rewards, external scorer programs, and SAE
+signature files — lives in the repository's top-level rewards/ directory.
 """
 
 from idiom.train.grpo.reward.base import (

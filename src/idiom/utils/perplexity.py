@@ -1,7 +1,7 @@
-"""Held-out perplexity under the FIM objective — pure model quality, independent of generation.
+"""Held-out perplexity under the FIM next-token objective.
 
-Reuses the exact training data pipeline (RecordDataset plus FIM) and masked next-token loss, so
-the reported NLL matches what training optimizes, on a held-out record FASTA (e.g. the test split).
+Scores a record FASTA through the same RecordDataset pipeline training uses, so the reported NLL
+is the masked next-token loss evaluated on held-out data.
 """
 
 from __future__ import annotations
@@ -24,26 +24,25 @@ def perplexity(
     prompted_prob: float = 0.5, batch_size: int = 32, num_workers: int = 4,
     device: str = "cuda", max_records: int | None = None, seed: int = 0,
 ) -> dict[str, float]:
-    """Compute mean per-token NLL (nats) and perplexity over fasta under the FIM loss.
+    """Compute mean per-token NLL and perplexity over a record FASTA.
 
-    Padding and masked-out positions are ignored, so the NLL matches the masked next-token loss
-    training optimizes.
+    Padded and masked-out positions are excluded from both the loss and the token count.
 
     Args:
-        model: The language model to evaluate; called as model(input_ids) -> logits.
+        model: The model to evaluate, called as model(input_ids) -> logits.
         fasta (str): Path to the held-out record FASTA.
-        tokenizer (Tokenizer | None): Character tokenizer (a default Tokenizer is used if None).
+        tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
         max_len (int): Maximum model positions; longer records are dropped.
-        prompted_prob (float): Probability a sample uses the prompted (context) variant.
+        prompted_prob (float): Probability that a sample uses the prompted variant.
         batch_size (int): Batch size for the evaluation dataloader.
         num_workers (int): DataLoader worker processes.
         device (str): Device to run the model on.
-        max_records (int | None): If set, evaluate only the first this-many records.
+        max_records (int | None): If set, evaluate only the first this many records.
         seed (int): Seed for the per-sample prompted/unprompted choice.
 
     Returns:
-        dict[str, float]: Keys "nll" (mean per-token NLL in nats), "perplexity" (exp of the NLL),
-            and "n_tokens" (number of scored tokens).
+        dict[str, float]: "nll", the mean per-token NLL in nats; "perplexity", its exponential;
+            and "n_tokens", the number of scored tokens.
     """
     tok = tokenizer or Tokenizer()
     records = read_records(fasta)

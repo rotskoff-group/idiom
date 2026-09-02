@@ -1,18 +1,14 @@
 """Reconstruction and sparsity of an SAE over held-out activations.
 
-These metrics describe the SAE in isolation (no downstream model loss): how well it reconstructs
-the residual stream and how it spends its latents. They contextualise the downstream "loss
-recovered" of idiom.sae.eval.fidelity and feed the SAE figures.
+Measures the autoencoder in isolation, without the host model's loss:
 
-  - reconstruction — FVU (fraction of variance unexplained) and explained variance over the
-    held-out activations, 1 - SSE/SST.
-  - sparsity — mean L0 (active latents per token; ~k for a top-k SAE) and the dead-feature fraction
-    (latents that never fire on the held-out set).
-  - feature density — per-latent activation frequency, for the feature-density histogram.
+- reconstruction: the fraction of variance unexplained and the explained variance, 1 - SSE/SST;
+- sparsity: mean L0, the number of active latents per token, and the fraction of latents that
+  never fire;
+- feature density: the per-latent firing frequency.
 
-Activations are pulled with the SAE's training region (residue-masking is applied by the
-ActivationStore, dropping START / FIM-marker / control positions) and prompt format
-(prompted_prob), so the SAE is measured on-distribution.
+Activations are drawn through an ActivationStore, using the region and prompt format the SAE was
+trained on.
 """
 
 from __future__ import annotations
@@ -26,7 +22,18 @@ import torch
 
 @dataclass
 class ReconstructionStats:
-    """Reconstruction and sparsity summary of an SAE over held-out activations."""
+    """Reconstruction and sparsity summary of an SAE over held-out activations.
+
+    Attributes:
+        fvu (float): Fraction of variance unexplained.
+        explained_var (float): 1 - fvu.
+        l0_mean (float): Mean number of active latents per activation row.
+        n_active_rows (int): Number of activation rows measured.
+        n_dead (int): Number of latents that never fired.
+        num_latents (int): Total number of latents.
+        frac_dead (float): n_dead divided by num_latents.
+        feature_freq (np.ndarray): Per-latent firing frequency, shape [num_latents].
+    """
 
     fvu: float
     explained_var: float
@@ -35,7 +42,7 @@ class ReconstructionStats:
     n_dead: int
     num_latents: int
     frac_dead: float
-    feature_freq: np.ndarray  # per-latent firing frequency, shape (num_latents,)
+    feature_freq: np.ndarray
 
 
 @torch.no_grad()
@@ -52,18 +59,18 @@ def reconstruction_stats(
     record_batch_size: int = 16,
     sae_batch_size: int = 4096,
 ) -> ReconstructionStats:
-    """Compute FVU, explained variance, mean L0, dead fraction, and per-feature firing frequency.
+    """Compute reconstruction and sparsity statistics over a held-out record FASTA.
 
     Args:
-        host: An idiom.IDiom (provides .model and .tok).
-        sae: An idiom.IDiomSAE; its .sae is the SparseCoder.
+        host: An idiom.IDiom, providing .model and .tok.
+        sae: An idiom.IDiomSAE, whose .sae is the SparseCoder to measure.
         layer (int): The residual-stream layer the SAE was trained on.
-        region (str): The SAE's training region: "all", "idr", or "non_idr".
-        prompted_prob (float): Prompt format to match the SAE's fim_mode (0.0 unprompted / 1.0
-            prompted).
+        region (str): Residues to measure: "all", "idr", or "non_idr".
+        prompted_prob (float): Probability of the prompted variant; 0.0 or 1.0 to match the SAE's
+            recorded fim_mode.
         fasta (str): Held-out record FASTA.
         device: Device to run extraction and encoding on.
-        max_records (int | None): Cap on records read from fasta, if any.
+        max_records (int | None): Cap on records read from fasta, or None for all of them.
         record_batch_size (int): Records per forward batch.
         sae_batch_size (int): Activation rows per SAE batch.
 

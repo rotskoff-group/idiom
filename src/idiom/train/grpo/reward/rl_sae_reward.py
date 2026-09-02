@@ -1,19 +1,20 @@
-"""RL-SAE rewards: reward a policy for reproducing a target's interpretable SAE feature code.
+"""Rewards for reproducing a target's SAE feature code.
 
-Registers sae_only_<name> for every signature in the targets file -- the fraction of that target's
-features that fire (are in the SAE top-k at any IDR residue) in the completion. Enable via the
-rl_sae config block (this file is imported automatically):
+Importing this module registers one reward per signature in the targets file, named
+"sae_only_<signature>". Each scores an IDR by the fraction of that signature's features that fire,
+meaning they appear in the SAE top-k at any of the IDR's residues. The reward is enabled through
+the rl_sae config block, which imports this module on demand:
 
     idiom_grpo init_from=... reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
 
-Keep the grpo.yaml entropy term on as the naturalness guardrail. Bring your own signature by pointing
-IDIOM_SAEREWARD_FEATURES at a JSON of the same shape (build one with examples/python/05_feature_enrichment.py).
+The targets file maps a case name to a mapping of signature name to feature ids, and can be built
+with examples/python/05_feature_enrichment.py.
 
 Environment variables:
-    IDIOM_SAEREWARD_SAE       SAE to use as the lens (HF repo id or local dir)
-    IDIOM_SAEREWARD_FEATURES  targets JSON, {case: {name: [feature ids]}}
-    IDIOM_SAEREWARD_CASE      which case to use: "top30" (default) or "private30"
-    IDIOM_SAEREWARD_DEVICE    torch device for the lens (default cuda if available)
+    IDIOM_SAEREWARD_SAE: SAE to use as the lens, as a Hub repo id or local directory.
+    IDIOM_SAEREWARD_FEATURES: path to the targets JSON, {case: {name: [feature ids]}}.
+    IDIOM_SAEREWARD_CASE: which case of the targets file to read; "top30" by default.
+    IDIOM_SAEREWARD_DEVICE: torch device for the lens; cuda when available by default.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ _CASE = os.environ.get("IDIOM_SAEREWARD_CASE", "top30")
 
 
 def _saedev() -> str:
+    """Return the torch device for the lens, from IDIOM_SAEREWARD_DEVICE or availability."""
     d = os.environ.get("IDIOM_SAEREWARD_DEVICE")
     if d:
         return d
@@ -44,14 +46,18 @@ def _saedev() -> str:
 
 @lru_cache(maxsize=1)
 def _sae():
-    """Load the frozen base plus SAE lens once, sharing the policy's GPU."""
+    """Load and cache the SAE and its host model."""
     from idiom import IDiomSAE
     return IDiomSAE.from_pretrained(_SAE_DIR, device=_saedev())
 
 
 @lru_cache(maxsize=1)
 def _featuresets() -> dict:
-    """Return {name: [feature ids]} for the configured case of the targets file."""
+    """Return the {name: [feature ids]} mapping for the configured case of the targets file.
+
+    Raises:
+        KeyError: If the configured case is not present in the targets file.
+    """
     blob = json.loads(Path(_FEATURES).read_text())
     if _CASE not in blob:
         cases = [k for k in blob if not k.startswith("_")]
@@ -62,20 +68,26 @@ def _featuresets() -> dict:
 
 @lru_cache(maxsize=32)
 def _target_ids(name: str):
-    """Return the feature-id LongTensor for a signature, on the SAE device."""
+    """Return a signature's feature ids as a LongTensor on the SAE's device."""
     return torch.tensor(_featuresets()[name], device=_sae().device, dtype=torch.long)
 
 
 @torch.no_grad()
 def feature_match(idr: str, name: str) -> float:
-    """Return the fraction of a signature's features that fire (top-k at any IDR residue).
+    """Return the fraction of a signature's features that fire on an IDR.
+
+    The IDR is encoded through the SAE in the unprompted FIM format, and a feature fires if it is
+    in the SAE top-k at any of the IDR's residues.
 
     Args:
         idr (str): The decoded IDR residue string.
         name (str): Signature name in the targets file.
 
     Returns:
-        float: Fraction of the signature's features that fire, or 0.0 for an empty string.
+        float: The fraction of the signature's features that fire, or 0.0 for an empty string.
+
+    Raises:
+        KeyError: If name is not a signature in the configured case.
     """
     if not idr:
         return 0.0
@@ -93,7 +105,7 @@ def feature_match(idr: str, name: str) -> float:
 
 
 def _sae_only_reward(name: str):
-    """Build the per-sequence feature-match reward for a signature (no classifier in the loop)."""
+    """Build the per-idr feature-match reward function for one signature."""
 
     def reward(idr: str) -> float:
         return feature_match(idr, name) if idr else 0.0
@@ -102,7 +114,7 @@ def _sae_only_reward(name: str):
 
 
 def _signature_names() -> list[str]:
-    """Signature names in the configured targets file (falls back to none if unreadable)."""
+    """Return the sorted signature names in the configured targets file, or [] if it is unreadable."""
     try:
         return sorted(_featuresets())
     except Exception:  # noqa: BLE001 - a bad/missing targets file must not break import

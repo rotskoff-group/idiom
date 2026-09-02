@@ -1,15 +1,13 @@
-"""Load a pretrained IDiomTransformer from any saved form.
+"""Load an IDiomTransformer from either on-disk form.
 
-Two on-disk forms exist and this module reads both:
+Two forms exist and this module reads both:
 
-- a Lightning .ckpt: training output; a state_dict with a "model." prefix plus a
-  hyper_parameters["model_cfg"] dict carrying the ModelConfig (every IDiom training module
-  persists it, so checkpoints are self-describing).
-- a released directory: config.json plus model.safetensors (see idiom.IDiom).
+- a Lightning .ckpt: a state_dict whose policy weights are prefixed "model.", plus a
+  hyper_parameters["model_cfg"] dict holding the ModelConfig.
+- a released directory: config.json plus model.safetensors.
 
-The architecture is never re-declared downstream; it is always recovered from the artifact.
-config_from_checkpoint reads it from a .ckpt, load_pretrained loads a ckpt, and load_model is
-format-agnostic and returns (model, cfg) for either form.
+Both carry their own ModelConfig, so the architecture is recovered from the artifact rather than
+supplied by the caller. load_model accepts either form, or a Hub repo id.
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ WEIGHTS_FILE = "model.safetensors"
 
 
 def _load_checkpoint(ckpt_path: str | Path) -> tuple[ModelConfig, dict]:
-    """Read a Lightning ckpt once, returning its stored ModelConfig and state_dict.
+    """Read a Lightning checkpoint, returning its stored ModelConfig and state_dict.
 
     Args:
         ckpt_path (str | Path): Path to the Lightning checkpoint.
@@ -49,7 +47,7 @@ def _load_checkpoint(ckpt_path: str | Path) -> tuple[ModelConfig, dict]:
 
 
 def config_from_checkpoint(ckpt_path: str | Path) -> ModelConfig:
-    """Recover the ModelConfig stored in a Lightning ckpt's hyperparameters.
+    """Return the ModelConfig stored in a Lightning checkpoint's hyperparameters.
 
     Args:
         ckpt_path (str | Path): Path to the Lightning checkpoint.
@@ -66,7 +64,10 @@ def config_from_checkpoint(ckpt_path: str | Path) -> ModelConfig:
 def load_pretrained(
     ckpt_path: str | Path, *, device: str | torch.device = "cpu", eval_mode: bool = True
 ) -> tuple[IDiomTransformer, ModelConfig]:
-    """Load an IDiomTransformer from a Lightning .ckpt (architecture read from the ckpt).
+    """Load an IDiomTransformer from a Lightning checkpoint.
+
+    Only keys prefixed "model." are loaded, so any other module stored in the checkpoint (such as
+    GRPO's frozen reference policy) is ignored.
 
     Args:
         ckpt_path (str | Path): Path to the Lightning checkpoint.
@@ -74,7 +75,11 @@ def load_pretrained(
         eval_mode (bool): If True, put the model in eval mode before returning.
 
     Returns:
-        tuple[IDiomTransformer, ModelConfig]: The loaded model and its config.
+        tuple[IDiomTransformer, ModelConfig]: The loaded model and the config read from the
+            checkpoint.
+
+    Raises:
+        ValueError: If the checkpoint carries no stored ModelConfig.
     """
     cfg, sd = _load_checkpoint(ckpt_path)
     model = IDiomTransformer(cfg)
@@ -88,7 +93,7 @@ def load_pretrained(
 def load_released(
     path: str | Path, *, device: str | torch.device = "cpu", eval_mode: bool = True
 ) -> tuple[IDiomTransformer, ModelConfig]:
-    """Load a released config.json plus model.safetensors directory into (model, cfg).
+    """Load a released directory holding config.json and model.safetensors.
 
     Args:
         path (str | Path): Path to the released model directory.
@@ -96,7 +101,8 @@ def load_released(
         eval_mode (bool): If True, put the model in eval mode before returning.
 
     Returns:
-        tuple[IDiomTransformer, ModelConfig]: The loaded model and its config.
+        tuple[IDiomTransformer, ModelConfig]: The loaded model and the config read from
+            config.json.
     """
     from safetensors.torch import load_model  # noqa: PLC0415
 
@@ -112,20 +118,22 @@ def load_released(
 def load_model(
     path: str | Path, *, device: str | torch.device = "cpu", eval_mode: bool = True
 ) -> tuple[IDiomTransformer, ModelConfig]:
-    """Load a model from either on-disk form, returning (model, cfg).
+    """Load a model from a checkpoint, a released directory, or a Hub repo id.
 
-    Accepts any of three forms: a local Lightning .ckpt, a local released directory (config.json +
-    model.safetensors), or a HuggingFace repo id (downloaded to a local snapshot first). A directory
-    with a config.json is a released model; any other local path is a Lightning .ckpt. This is the
-    single load entry point for every downstream stage.
+    A path that does not exist locally is treated as a Hub repo id and downloaded first. A
+    directory containing config.json is read as a released model; any other path is read as a
+    Lightning checkpoint.
 
     Args:
-        path (str | Path): A Lightning checkpoint, a released model directory, or a HF repo id.
+        path (str | Path): A Lightning checkpoint, a released model directory, or a Hub repo id.
         device (str | torch.device): Device to move the model to.
         eval_mode (bool): If True, put the model in eval mode before returning.
 
     Returns:
         tuple[IDiomTransformer, ModelConfig]: The loaded model and its config.
+
+    Raises:
+        ValueError: If the artifact is a checkpoint that carries no stored ModelConfig.
     """
     p = Path(path)
     if not p.exists():  # not a local path: treat it as a HF repo id and fetch the released snapshot

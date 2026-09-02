@@ -1,9 +1,7 @@
-"""GRPO entrypoint run via idiom_grpo: a pretrained checkpoint plus prompts plus a composite reward.
+"""The idiom_grpo entrypoint.
 
-build(cfg) wires the module and prompt set together (and is unit-testable); run(cfg) fits. The
-reward is a weighted sum of the enabled terms (entropy, length, an RL-SAE feature-code reward, and
-any number of external reward models), with the tuned defaults in configs/grpo.yaml; in-process
-reward functions are registered by importing reward.module before lookup.
+build(cfg) wires the GRPO module and its prompt dataset; run(cfg) configures the trainer and fits.
+The reward is a weighted sum of the terms enabled in cfg.reward; see configs/grpo.yaml.
 """
 
 from __future__ import annotations
@@ -28,17 +26,16 @@ __all__ = ["build", "build_reward_terms", "run"]
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     """Wire the GRPO module and prompt dataset from a resolved config.
 
-    RL has nothing to learn from a randomly initialized policy, so GRPO always warm-starts from a
-    pretrained checkpoint (cfg.init_from) and reads the architecture from it. cfg.prompts.mode picks
-    what the policy is optimized over, in the same vocabulary used everywhere else: "unprompted"
-    repeats the bare de novo prompt, "prompted" draws one flank prompt per protein in
-    cfg.prompts.fasta.
+    The policy is always warm-started from cfg.init_from, and its architecture is read from that
+    artifact. cfg.prompts.mode selects the prompt dataset: "unprompted" repeats the bare "132"
+    prompt cfg.prompts.n times, and "prompted" takes cfg.prompts.n_per flank prompts from each
+    record in cfg.prompts.fasta.
 
     Args:
-        cfg (DictConfig): Resolved GRPO config (grpo, reward, prompts, init_from).
+        cfg (DictConfig): Resolved GRPO config, with grpo, reward, prompts, and init_from.
 
     Returns:
-        tuple[LitGRPO, object]: The GRPO module and its prompt dataset.
+        tuple[LitGRPO, PromptDataset]: The GRPO module and its prompt dataset.
 
     Raises:
         ValueError: If cfg.prompts.mode is neither "unprompted" nor "prompted".
@@ -59,6 +56,10 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
 
 def run(cfg: DictConfig) -> None:
     """Build the module and prompts, configure the trainer and logger, and fit.
+
+    Writes the resolved config to cfg.out_dir and logs to Weights & Biases against the training
+    step. With cfg.trainer.checkpoint_every greater than 0, a checkpoint is kept every that many
+    steps alongside last.ckpt; otherwise only the final step is saved.
 
     Args:
         cfg (DictConfig): Resolved GRPO config.
@@ -106,7 +107,11 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="grpo")
 def main(cfg: DictConfig) -> None:
-    """Hydra entrypoint that runs GRPO post-training with the composed config."""
+    """Run GRPO post-training with the Hydra-composed config.
+
+    Args:
+        cfg (DictConfig): The composed config.
+    """
     run(cfg)
 
 

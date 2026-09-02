@@ -1,9 +1,8 @@
-"""GRPO objective as pure tensor functions (DAPO-style).
+"""The DAPO-style GRPO objective, as pure tensor functions.
 
-sequence_logprobs gives per-token log-probs of a sequence under a model. group_advantages turns
-rewards into advantages normalized within each prompt's group. grpo_loss is the PPO-clipped
-policy gradient minus a Schulman KL penalty to a reference, aggregated token-level over the whole
-batch (DAPO).
+sequence_logprobs returns per-token log-probs under a model, group_advantages normalizes rewards
+within each prompt's group, and grpo_loss combines a PPO-clipped policy-gradient term with a
+Schulman KL penalty to a reference policy, aggregated token-level over the batch.
 """
 
 from __future__ import annotations
@@ -14,14 +13,14 @@ from torch import Tensor
 
 
 def sequence_logprobs(model, tokens: Tensor) -> Tensor:
-    """Return per-token log-probs of tokens[:, 1:] under the model.
+    """Return the log-probability the model assigns each token given its prefix.
 
     Args:
         model: Model mapping token ids to next-token logits.
         tokens (Tensor): Token id sequence of shape [B, L].
 
     Returns:
-        Tensor: Per-token log-probs of shape [B, L-1].
+        Tensor: Log-probs of tokens[:, 1:], shape [B, L-1].
     """
     logits = model(tokens)[:, :-1]  # predict position t+1 from <=t
     logp = F.log_softmax(logits.float(), dim=-1)
@@ -29,21 +28,21 @@ def sequence_logprobs(model, tokens: Tensor) -> Tensor:
 
 
 def _kl_per_token(policy_logp: Tensor, ref_logp: Tensor) -> Tensor:
-    """Schulman k3 per-token KL estimate of policy to reference: exp(d) - d - 1 with d = ref - policy."""
+    """Return the Schulman k3 per-token KL estimate, exp(d) - d - 1 with d = ref - policy."""
     d = ref_logp - policy_logp
     return torch.exp(d) - d - 1.0
 
 
 def sequence_kl(policy_logp: Tensor, ref_logp: Tensor, completion_mask: Tensor) -> Tensor:
-    """Return the masked token-level mean of the Schulman KL, the same penalty grpo_loss applies.
+    """Return the token-level mean Schulman KL over the masked positions.
 
     Args:
-        policy_logp (Tensor): Per-token log-probs under the policy.
-        ref_logp (Tensor): Per-token log-probs under the reference.
-        completion_mask (Tensor): Mask selecting completion tokens.
+        policy_logp (Tensor): Per-token log-probs under the policy, shape [B, T].
+        ref_logp (Tensor): Per-token log-probs under the reference, shape [B, T].
+        completion_mask (Tensor): Mask selecting completion tokens, shape [B, T].
 
     Returns:
-        Tensor: Scalar mean KL over the masked tokens (for logging).
+        Tensor: The scalar mean KL.
     """
     kl = _kl_per_token(policy_logp, ref_logp)
     return (kl * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
@@ -52,15 +51,15 @@ def sequence_kl(policy_logp: Tensor, ref_logp: Tensor, completion_mask: Tensor) 
 def group_advantages(
     rewards: Tensor, group_size: int, *, normalize: bool = True, eps: float = 1e-8
 ) -> Tensor:
-    """Compute advantages as reward minus group mean, optionally divided by the group std.
+    """Compute advantages as each reward minus its group mean.
 
-    Rewards are reshaped into groups of group_size (one group per prompt).
+    Rewards are reshaped into consecutive groups of group_size, one group per prompt.
 
     Args:
         rewards (Tensor): Flat rewards of shape [B*G].
         group_size (int): Number of completions per prompt group.
-        normalize (bool): If True, divide each advantage by its group's standard deviation.
-        eps (float): Floor on the group std to avoid division by zero.
+        normalize (bool): If True, also divide each advantage by its group's standard deviation.
+        eps (float): Floor on the group standard deviation.
 
     Returns:
         Tensor: Flat advantages of shape [B*G].
@@ -82,19 +81,17 @@ def grpo_loss(
     beta_kl: float = 0.0,
     eps_clip: float = 0.2,
 ) -> Tensor:
-    """Compute the DAPO GRPO loss over completion tokens.
+    """Compute the GRPO loss over completion tokens.
 
-    The ratio exp(logp - logp.detach()) is identically 1 but carries the policy gradient (the TRL
-    trick); advantages are already folded in. The KL term is the Schulman approximation to the
-    reference. Aggregation is the sum over masked tokens divided by the total masked tokens (a
-    token-level mean).
+    The loss is the PPO-clipped policy-gradient term, optionally minus beta_kl times the Schulman
+    KL to the reference, summed over the masked tokens and divided by their count.
 
     Args:
         policy_logp (Tensor): Policy per-token log-probs of shape [B, T].
         ref_logp (Tensor): Reference per-token log-probs of shape [B, T].
         advantages (Tensor): Per-sequence advantages of shape [B].
         completion_mask (Tensor): Completion-token mask of shape [B, T].
-        beta_kl (float): Weight of the KL penalty (0 disables it).
+        beta_kl (float): Weight of the KL penalty; 0 omits the term.
         eps_clip (float): PPO clipping range around a ratio of 1.
 
     Returns:

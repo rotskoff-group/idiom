@@ -1,8 +1,7 @@
-"""SAE training entrypoint (idiom_sae): frozen IDiom -> streaming activations -> top-k SAE.
+"""The idiom_sae entrypoint.
 
-Activations are generated on the fly by the ActivationStore (no activation cache on disk). build
-wires the frozen model + record source + store + LitSAE; run fits and writes the release directory
-(sae_config.json + sae.safetensors, with host_model / layer / region recorded).
+build(cfg) wires the frozen host model, the record source, the streaming ActivationStore, and the
+LitSAE module; run(cfg) fits and writes the release directory.
 """
 
 from __future__ import annotations
@@ -27,13 +26,15 @@ from idiom.utils.device import resolve_device
 
 
 def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
-    """Wire the frozen model, record source, activation store, and LitSAE from config.
+    """Wire the host model, record source, activation store, and LitSAE from a config.
+
+    The host model is loaded from cfg.model_ckpt and its d_model sets the SAE input width.
 
     Args:
-        cfg (DictConfig): The training config.
+        cfg (DictConfig): Resolved SAE training config.
 
     Returns:
-        tuple[LitSAE, ActivationStore]: The LightningModule and its streaming activation store.
+        tuple[LitSAE, ActivationStore]: The LightningModule and its activation store.
     """
     device = resolve_device(cfg.device)
     tok = Tokenizer()
@@ -69,10 +70,14 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
 
 
 def run(cfg: DictConfig) -> None:
-    """Fit the SAE and write the release directory recording host_model / layer / region / fim_mode.
+    """Fit the SAE and write the release directory.
+
+    Writes the resolved config to cfg.out_dir, logs to Weights & Biases, and on completion saves
+    sae_config.json and sae.safetensors recording the host model, layer, region, and prompt format.
+    The recorded fim_mode is "unprompted" only when cfg.data.prompted_prob is 0.
 
     Args:
-        cfg (DictConfig): The training config.
+        cfg (DictConfig): Resolved SAE training config.
     """
     L.seed_everything(cfg.seed, workers=True)
     out_dir = Path(cfg.out_dir)
@@ -104,7 +109,11 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="sae")
 def main(cfg: DictConfig) -> None:
-    """Hydra entrypoint that trains an SAE with the composed config."""
+    """Train an SAE with the Hydra-composed config.
+
+    Args:
+        cfg (DictConfig): The composed config.
+    """
     run(cfg)
 
 

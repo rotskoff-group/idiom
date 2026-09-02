@@ -1,4 +1,4 @@
-"""Feature interpretation: build the per-residue feature-activation dataset and read/reduce it."""
+"""The per-residue feature-activation dataset: building it, reading it, and enrichment analysis."""
 
 from idiom.sae.features.build_feature_dataset import build_feature_dataset
 from idiom.sae.features.feature_activations import FeatureDataset

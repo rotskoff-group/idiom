@@ -1,9 +1,7 @@
-"""Read/write a trained SAE in its release form.
+"""The SAE release format: sae_config.json plus sae.safetensors.
 
-An SAE only means something attached to a host model at a layer, so the release records both a
-sae_config.json (host_model + layer + SparseCoder shape) and sae.safetensors. This is the single
-SAE artifact — training writes it, idiom.IDiomSAE and the analysis tools read it. Mirrors
-idiom.model.io for the transformer.
+The config records the host model, the layer, the residue region, the prompt format, and the
+SparseCoder shape, so a release can be loaded without any of them being supplied by the caller.
 """
 
 from __future__ import annotations
@@ -27,17 +25,20 @@ def save_sae(
     """Write sae_config.json and sae.safetensors for a trained SAE.
 
     Args:
-        sae (SparseCoder): The trained sparse coder to serialize.
-        out_dir (str | Path): Directory to write the release into (created if needed).
-        host_model (str | None): The model checkpoint/repo the SAE was trained against, recorded so
-            the release can self-load its host.
+        sae (SparseCoder): The sparse coder to serialize.
+        out_dir (str | Path): Directory to write the release into; created if needed.
+        host_model (str | None): The checkpoint path or Hub repo id of the host model, recorded so
+            the release can load its host.
         layer (int): The residual-stream layer the SAE was trained on.
-        region (str): The residue slice the SAE was trained on: "all", "idr", or "non_idr".
+        region (str): The residue region the SAE was trained on: "all", "idr", or "non_idr".
         fim_mode (str): The prompt format the residual stream was taken under: "prompted" or
             "unprompted".
 
     Returns:
-        Path: The output directory the release was written to.
+        Path: The output directory.
+
+    Raises:
+        ValueError: If fim_mode is neither "prompted" nor "unprompted".
     """
     from safetensors.torch import save_model  # noqa: PLC0415
 
@@ -66,12 +67,15 @@ def load_sae(
     """Load a released SAE directory into a SparseCoder and its config.
 
     Args:
-        path (str | Path): The release directory holding sae_config.json and sae.safetensors.
+        path (str | Path): Directory holding sae_config.json and sae.safetensors.
         device (str | torch.device): Device to move the loaded model onto.
 
     Returns:
-        tuple[SparseCoder, dict]: The evaluation-mode SparseCoder and the config dict (which carries
-            host_model and layer).
+        tuple[SparseCoder, dict]: The SparseCoder in eval mode, and the config dict, which carries
+            host_model, layer, region, and fim_mode.
+
+    Raises:
+        ValueError: If the config records a fim_mode that is not a valid prompting mode.
     """
     from safetensors.torch import load_model  # noqa: PLC0415
 

@@ -1,21 +1,15 @@
-"""Top-k / group-max sparse autoencoder for IDiom activations.
+"""The top-k / group-max sparse autoencoder.
 
-Faithful to EleutherAI sparsify (sparsify/sparse_coder.py, fused_encoder.py) and OpenAI
-sparse_autoencoder:
+The formulation follows EleutherAI sparsify and OpenAI sparse_autoencoder:
 
-- the encoder applies relu then top-k selection (sparsify fused_encoder);
+- the encoder applies ReLU then top-k selection;
 - b_dec is subtracted before the encoder and added back after the decoder;
-- the decoder is a single weight W_dec of shape [num_latents, d_in] with unit-norm rows (one
-  unit vector per latent), re-normalized every step;
-- the gradient component parallel to each decoder row is projected out before the step;
-- the main loss is the fraction of variance unexplained (FVU), normalized by the batch variance,
-  exactly as in sparsify (not raw summed MSE);
-- the AuxK loss revives dead latents by having the top d_in//2 dead latents predict the
-  reconstruction residual, normalized by total variance and down-weighted when few are dead;
-- an optional Multi-TopK auxiliary loss (Gao et al. 2024, "progressive recovery").
+- the decoder is a single weight W_dec of shape [num_latents, d_in] whose rows are unit-norm;
+- the main loss is the fraction of variance unexplained (FVU), normalized by the batch variance;
+- the AuxK loss has the top dead latents predict the reconstruction residual;
+- Multi-TopK is an optional auxiliary FVU computed at 4k active latents.
 
-forward returns a ForwardOutput with the losses pre-computed (sparsify style); the
-LightningModule just combines them.
+forward returns a ForwardOutput carrying the reconstruction and all three losses.
 """
 
 from __future__ import annotations
@@ -29,35 +23,52 @@ from torch import Tensor, nn
 
 
 class EncoderOutput(NamedTuple):
-    """Output of the encoder: the selected latents and their pre-selection activations."""
+    """The selected latents and the activations they were selected from.
+
+    Attributes:
+        top_acts (Tensor): Activations of the selected latents, shape [..., k].
+        top_indices (Tensor): Indices of the selected latents, shape [..., k].
+        pre_acts (Tensor): Post-ReLU activations before selection, shape [..., num_latents].
+    """
 
     top_acts: Tensor
-    """Activations of the top-k latents."""
     top_indices: Tensor
-    """Indices of the top-k latents."""
     pre_acts: Tensor
-    """Post-ReLU activations before top-k selection (used for the AuxK loss)."""
 
 
 class ForwardOutput(NamedTuple):
-    """Output of a full forward pass: the reconstruction plus the pre-computed losses."""
+    """The reconstruction of a forward pass and its losses.
+
+    Attributes:
+        sae_out (Tensor): The reconstruction, shape [..., d_in].
+        latent_acts (Tensor): Activations of the selected latents, shape [..., k].
+        latent_indices (Tensor): Indices of the selected latents, shape [..., k].
+        fvu (Tensor): Scalar fraction of variance unexplained.
+        auxk_loss (Tensor): Scalar dead-latent revival loss; 0 when no latents are marked dead.
+        multi_topk_fvu (Tensor): Scalar Multi-TopK FVU; 0 unless multi_topk is set.
+    """
 
     sae_out: Tensor
     latent_acts: Tensor
     latent_indices: Tensor
     fvu: Tensor
-    """Fraction of variance unexplained (the main loss)."""
     auxk_loss: Tensor
-    """Dead-latent revival loss (0 if no dead mask / no dead latents)."""
     multi_topk_fvu: Tensor
-    """Multi-TopK FVU (0 unless multi_topk)."""
 
 
 class SparseCoder(nn.Module):
     """Top-k (or group-max) sparse autoencoder over a single layer's residual stream.
 
-    Encodes an activation to a sparse set of latents and decodes back to the input space, with a
-    unit-norm decoder and the FVU / AuxK / Multi-TopK losses computed in forward.
+    Attributes:
+        d_in (int): Input dimension.
+        num_latents (int): Number of latents.
+        activation (str): Selection rule, "topk" or "groupmax".
+        multi_topk (bool): Whether the Multi-TopK auxiliary loss is computed.
+        normalize_decoder (bool): Whether decoder rows are held at unit norm.
+        k (Tensor): Number of latents kept active per token, stored as a buffer.
+        encoder (nn.Linear): The encoder projection.
+        W_dec (nn.Parameter): Decoder weight of shape [num_latents, d_in].
+        b_dec (nn.Parameter): Decoder bias of shape [d_in].
     """
 
     def __init__(
@@ -73,17 +84,20 @@ class SparseCoder(nn.Module):
         device: str | torch.device | None = None,
         dtype: torch.dtype | None = None,
     ):
-        """Build the sparse coder.
+        """Build the encoder, decoder, and decoder bias.
+
+        The decoder is initialized from the encoder weights and, when normalize_decoder is set,
+        row-normalized.
 
         Args:
             d_in (int): Input (residual-stream) dimension.
-            num_latents (int): Number of latents; if 0, defaults to d_in * expansion_factor.
+            num_latents (int): Number of latents; 0 uses d_in * expansion_factor.
             expansion_factor (int): Latents-per-input multiplier used when num_latents is 0.
             k (int): Number of latents kept active per token.
-            activation (Literal["topk", "groupmax"]): Selection rule: global top-k, or the max
+            activation (Literal["topk", "groupmax"]): Selection rule: global top-k, or the maximum
                 within each of k equal groups of latents.
             multi_topk (bool): If True, also compute the Multi-TopK auxiliary FVU.
-            normalize_decoder (bool): If True, keep each decoder row at unit norm.
+            normalize_decoder (bool): If True, initialize decoder rows to unit norm.
             device (str | torch.device | None): Device for the parameters.
             dtype (torch.dtype | None): Dtype for the parameters.
 
@@ -118,22 +132,24 @@ class SparseCoder(nn.Module):
 
     @property
     def device(self) -> torch.device:
+        """Device the parameters live on."""
         return self.encoder.weight.device
 
     @property
     def dtype(self) -> torch.dtype:
+        """Dtype of the parameters."""
         return self.encoder.weight.dtype
 
     # --- encode / decode ---
     def encode(self, x: Tensor) -> EncoderOutput:
-        """Encode an input: ReLU then top-k selection (sparsify fused_encoder).
+        """Encode an input by subtracting b_dec, projecting, applying ReLU, and selecting latents.
 
         Args:
             x (Tensor): Input activations of shape [..., d_in].
 
         Returns:
-            EncoderOutput: The top-k activations, their latent indices, and the full post-ReLU
-                pre_acts before selection.
+            EncoderOutput: The selected activations and indices, and the pre-selection activations.
+                The selected latents are not sorted by activation.
         """
         pre_acts = F.relu(self.encoder(x - self.b_dec))
         k = int(self.k)
@@ -151,7 +167,7 @@ class SparseCoder(nn.Module):
         return EncoderOutput(values, indices, pre_acts)
 
     def decode(self, top_acts: Tensor, top_indices: Tensor) -> Tensor:
-        """Sparse decode: weighted sum of the selected unit-norm decoder rows plus b_dec.
+        """Decode a sparse latent set as a weighted sum of decoder rows, plus b_dec.
 
         Args:
             top_acts (Tensor): Activations of the selected latents, shape [..., k].
@@ -164,15 +180,13 @@ class SparseCoder(nn.Module):
         return (top_acts.unsqueeze(-1) * chosen).sum(dim=-2) + self.b_dec
 
     def encode_dense(self, x: Tensor) -> Tensor:
-        """Return the full [..., num_latents] activation vector (top-k sparse, densified).
-
-        Convenience for analysis/steering — not used in the training loss path.
+        """Encode an input and scatter the selected latents into a dense vector.
 
         Args:
             x (Tensor): Input activations of shape [..., d_in].
 
         Returns:
-            Tensor: Dense latent activations of shape [..., num_latents], zero outside the top-k.
+            Tensor: Latent activations of shape [..., num_latents], zero outside the selected set.
         """
         top_acts, top_indices, _ = self.encode(x)
         out = x.new_zeros(*x.shape[:-1], self.num_latents)
@@ -192,14 +206,16 @@ class SparseCoder(nn.Module):
     def forward(self, x: Tensor, *, dead_mask: Tensor | None = None) -> ForwardOutput:
         """Encode, decode, and compute the reconstruction and auxiliary losses.
 
+        All three losses are normalized by the total variance of x within the batch.
+
         Args:
             x (Tensor): Input activations of shape [..., d_in].
-            dead_mask (Tensor | None): Boolean mask over latents marking dead ones; when given and
-                any are dead, the AuxK loss revives them against the reconstruction residual.
+            dead_mask (Tensor | None): Boolean mask over latents marking dead ones. When given and
+                any are dead, the AuxK loss fits those latents to the reconstruction residual.
 
         Returns:
-            ForwardOutput: The reconstruction, selected latents, and the FVU, AuxK, and Multi-TopK
-                losses (the last two are 0 when not applicable).
+            ForwardOutput: The reconstruction, the selected latents, and the FVU, AuxK, and
+                Multi-TopK losses; the last two are 0 when not applicable.
         """
         top_acts, top_indices, pre_acts = self.encode(x)
         sae_out = self.decode(top_acts, top_indices)
@@ -234,14 +250,18 @@ class SparseCoder(nn.Module):
     # --- decoder constraints (sparsify methods) ---
     @torch.no_grad()
     def set_decoder_norm_to_unit_norm(self):
-        """Rescale every decoder row to unit norm in place."""
+        """Rescale every decoder row to unit norm, in place."""
         eps = torch.finfo(self.W_dec.dtype).eps
         norm = self.W_dec.data.norm(dim=1, keepdim=True)
         self.W_dec.data /= norm + eps
 
     @torch.no_grad()
     def remove_gradient_parallel_to_decoder_directions(self):
-        """Project out the decoder-gradient component parallel to each unit-norm row before a step."""
+        """Subtract from the decoder gradient its component parallel to each decoder row, in place.
+
+        Raises:
+            AssertionError: If the decoder has no gradient.
+        """
         assert self.W_dec.grad is not None
         parallel = einops.einsum(self.W_dec.grad, self.W_dec.data, "f d, f d -> f")
         self.W_dec.grad -= einops.einsum(parallel, self.W_dec.data, "f, f d -> f d")

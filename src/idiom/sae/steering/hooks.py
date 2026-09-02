@@ -1,18 +1,18 @@
-"""Forward-hook injection into IDiom's residual stream.
+"""Forward hooks that modify the residual stream, and the context manager that installs them.
 
-Each IDiom transformer block returns its residual-stream output x of shape [B, L, d_model]. A
-PyTorch forward hook on model.blocks[layer] can return a modified tensor, which becomes the input
-to the next block — a clean way to patch / steer the residual stream without touching idiom's
-source (no nnsight needed, unlike InterPLM's ESM path).
+Each transformer block returns its residual-stream output of shape [B, L, d_model]. A forward hook
+registered on model.blocks[layer] returns a modified tensor, which becomes the input to the next
+block. The hooks here cover four kinds of edit:
 
-Two steering primitives:
-- add_direction_hook   adds a fixed vector (e.g. a scaled SAE decoder column).
-- sae_edit_hook        encodes with the SAE, edits latents, decodes, and substitutes.
+- add_direction_hook, add_relative_direction_hook, add_relative_renorm_direction_hook: add a
+  vector, sized absolutely, relative to the local residual norm, or relative with the norm
+  preserved;
+- subtract_contribution_hook: remove chosen features' decoder contribution;
+- sae_edit_hook: replace the residual with the SAE reconstruction of edited latents;
+- substitute_hook: replace the residual with a fixed vector.
 
-SAEs are trained only on a region of the residual stream (residues, or just the IDR / flanks;
-START / FIM-marker / control positions are always dropped), so edits are confined to that same
-region. Pass a tokenizer (and optional region) to steering and it recomputes the tokenizer's
-region_mask on every forward, which is what autoregressive generation needs as the sequence grows.
+The steering context manager installs a hook and, given a tokenizer, confines its effect to the
+positions selected by the tokenizer's region mask.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import torch
 
 
 def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callable:
-    """Return a hook that adds strength * direction to every position's residual vector.
+    """Build a hook that adds strength * direction to every position's residual vector.
 
     Args:
         direction (torch.Tensor): The vector to add, shape [d_model].
@@ -42,15 +42,12 @@ def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callab
 
 
 def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> Callable:
-    """Return a hook that adds alpha * ||x_pos|| * unit(direction) to each position.
+    """Build a hook that adds alpha * ||x|| * unit(direction) at each position.
 
-    The push is scaled to a fraction alpha of that position's own residual-stream norm, so the
-    steering magnitude is dimensionless and self-adapting (transfers across positions/layers/models)
-    rather than living in raw activation units. alpha ~ 0.5 means the push is half the local
-    residual.
+    The added vector is scaled by that position's own residual norm, so alpha is dimensionless.
 
     Args:
-        direction (torch.Tensor): The steering direction (normalized internally), shape [d_model].
+        direction (torch.Tensor): The steering direction, normalized internally, shape [d_model].
         alpha (float): Push size as a fraction of each position's residual norm.
 
     Returns:
@@ -67,16 +64,13 @@ def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> 
 
 
 def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> Callable:
-    """Return a hook like add_relative_direction_hook but that preserves each position's norm.
+    """Build a hook that adds a relative direction, then restores each position's original norm.
 
-    Each position is rescaled back to its original residual norm after the push, so steering rotates
-    x toward the feature at constant ||x|| (direction changes, norm preserved) instead of inflating
-    the residual. alpha controls how far the rotation goes; the result always has the same
-    per-position norm as the input.
+    The output has the same per-position norm as the input, so the edit changes direction only.
 
     Args:
-        direction (torch.Tensor): The steering direction (normalized internally), shape [d_model].
-        alpha (float): How far to rotate toward the feature.
+        direction (torch.Tensor): The steering direction, normalized internally, shape [d_model].
+        alpha (float): How far to rotate toward the direction.
 
     Returns:
         Callable: A forward hook.
@@ -93,20 +87,17 @@ def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1
 
 
 def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 1.0) -> Callable:
-    """Return a hook that removes the chosen features' actual contribution.
+    """Build a hook computing x - scale * sum_f act_f(x) * W_dec[f] over the chosen features.
 
-    Computes x - scale * sum_f act_f(x) * W_dec[f]: encodes the residual to read the selected
-    latents' real per-position activations and subtracts only their decoder contribution. Unlike
-    sae_edit_hook (which substitutes the full SAE reconstruction and so drops the reconstruction
-    residual / FVU), this leaves all other features and the off-manifold residual intact — a clean
-    directional ablation with no reconstruction-error confound. It is position-faithful: nothing is
-    removed where the feature did not fire (act_f = 0). scale=1 exactly erases the features; scale>1
-    over-ablates (pushes the residual past zero along those directions); scale<0 would amplify them.
+    Only the selected features' decoder contribution is removed; every other feature and the
+    reconstruction residual are left untouched, and nothing is removed at positions where the
+    feature did not fire. scale of 1 erases the features exactly, above 1 over-subtracts, and below
+    0 amplifies them.
 
     Args:
         sae: The SAE providing encode_dense and W_dec.
         feature_idxs (Sequence[int]): Latents to subtract.
-        scale (float): Over-ablation factor (1 erases exactly).
+        scale (float): Multiplier on the subtracted contribution.
 
     Returns:
         Callable: A forward hook.
@@ -123,13 +114,10 @@ def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 
 
 
 def substitute_hook(vector: torch.Tensor) -> Callable:
-    """Return a hook that replaces the entire residual stream with a fixed vector (broadcast).
-
-    Used as the mean-ablation baseline in fidelity eval: every position's residual becomes vector
-    (e.g. the dataset mean or sae.b_dec), destroying per-token information.
+    """Build a hook that replaces every position's residual vector with a fixed vector.
 
     Args:
-        vector (torch.Tensor): The replacement vector, shape [d_model].
+        vector (torch.Tensor): The replacement vector, shape [d_model], broadcast over positions.
 
     Returns:
         Callable: A forward hook.
@@ -143,16 +131,15 @@ def substitute_hook(vector: torch.Tensor) -> Callable:
 
 
 def sae_edit_hook(sae, edit_fn: Callable[[torch.Tensor], torch.Tensor]) -> Callable:
-    """Return a hook that replaces the residual with the SAE reconstruction after editing latents.
+    """Build a hook computing decode_dense(edit_fn(encode_dense(x))).
 
-    edit_fn maps the dense latent tensor [B, L, num_latents] to an edited latent tensor of the same
-    shape (e.g. clamp feature j to a target value, or zero it out). The residual is then
-    decode_dense(edit_fn(encode_dense(x))). Note this also incurs the SAE reconstruction error.
+    The residual is replaced by the SAE reconstruction, so the output also carries the SAE's
+    reconstruction error.
 
     Args:
         sae: The SAE providing encode_dense and decode_dense.
-        edit_fn (Callable[[torch.Tensor], torch.Tensor]): Maps a dense latent tensor to an edited
-            one of the same shape.
+        edit_fn (Callable[[torch.Tensor], torch.Tensor]): Maps a dense latent tensor of shape
+            [B, L, num_latents] to an edited tensor of the same shape.
 
     Returns:
         Callable: A forward hook.
@@ -169,10 +156,7 @@ def sae_edit_hook(sae, edit_fn: Callable[[torch.Tensor], torch.Tensor]) -> Calla
 def clamp_features_edit(
     feature_idxs: Sequence[int], values: Sequence[float]
 ) -> Callable[[torch.Tensor], torch.Tensor]:
-    """Return an edit_fn that clamps several latents at once (one SAE round-trip).
-
-    feature_idxs[k] is set to values[k] at every position. The edit acts on the full dense latent
-    tensor, so clamping N features costs the same encode/decode as clamping one.
+    """Build an edit function that sets each listed latent to a fixed value at every position.
 
     Args:
         feature_idxs (Sequence[int]): Latents to clamp.
@@ -199,29 +183,23 @@ def clamp_features_edit(
 
 @contextmanager
 def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str = "all"):
-    """Register hook on model.blocks[layer] (an IDiomTransformer block) for the duration of a block.
+    """Register a forward hook on one transformer block for the duration of the context.
 
-    When tokenizer is given, the edit is confined to the SAE's training region: each forward the
-    mask is recomputed via the tokenizer's region_mask (region), so START / FIM-marker / control
-    positions — and, for "idr"/"non_idr", the wrong side of the "2" marker — pass through
-    unmodified. With tokenizer=None the hook applies at every position.
-
-    Under KV-cached generation the model is fed one new token at a time, so the "2" marker that
-    defines the IDR boundary lives in the cache, not in the current input. The context therefore
-    accumulates the full running token sequence across forwards and masks the last output positions
-    against it — otherwise an "idr"/"non_idr" mask would see no "2" and silently zero out every edit
-    during decoding.
+    With a tokenizer given, the edit is confined to the positions the tokenizer's region mask
+    selects, recomputed on every forward pass. A pre-hook accumulates the running token sequence
+    across forwards, so the mask is correct during KV-cached decoding, when each forward sees only
+    the newest token. With tokenizer None the hook applies at every position.
 
     Args:
         model: An IDiomTransformer.
-        layer (int): The block index to hook.
+        layer (int): Index of the block to hook.
         hook (Callable): The forward hook to register.
-        tokenizer: Tokenizer used to recompute the region mask each forward; None applies the hook
+        tokenizer: Tokenizer used to recompute the region mask, or None to apply the hook
             everywhere.
-        region (str): The SAE's training region: "all", "idr", or "non_idr".
+        region (str): Positions to edit: "all", "idr", or "non_idr".
 
     Yields:
-        The model with the hook (and, when masking, the token-capture pre-hook) registered.
+        The model, with the hook registered; all hooks are removed on exit.
 
     Example:
         with steering(model, layer=6, hook=add_direction_hook(sae.W_dec[j], 8.0)):

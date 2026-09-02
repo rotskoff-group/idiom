@@ -1,8 +1,8 @@
-"""The IDiom transformer: sequence-only, pre-norm, RoPE, KV-cache-ready.
+"""The IDiom transformer: a sequence-only, pre-norm, RoPE transformer with KV-cache support.
 
-forward serves both training (full sequence, no cache) and autoregressive decoding (pass a
-KVCache; positions continue from cache.length). With return_hidden_states it also returns each
-block's residual-stream output, the activations the SAE and extractor consume.
+forward serves both a full-sequence pass (no cache) and autoregressive decoding (pass a KVCache,
+and positions continue from cache.length). With return_hidden_states it also returns each block's
+residual-stream output, which is what the SAE and the activation extractor consume.
 """
 
 from __future__ import annotations
@@ -18,23 +18,42 @@ from idiom.model.rope import Rope
 
 
 class SwiGLU(nn.Module):
-    """SwiGLU feed-forward: down(silu(gate) * up), with gate and up fused in one projection."""
+    """SwiGLU feed-forward network, with the gate and up projections fused into one matmul."""
 
     def __init__(self, d_model: int, expansion_ratio: float) -> None:
+        """Build the fused gate/up projection and the down projection.
+
+        Args:
+            d_model (int): Input and output width.
+            expansion_ratio (float): Hidden width as a multiple of d_model.
+        """
         super().__init__()
         hidden = int(expansion_ratio * d_model)
         self.w_gate_up = nn.Linear(d_model, 2 * hidden, bias=False)
         self.w_down = nn.Linear(hidden, d_model, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:
+        """Apply down(silu(gate) * up).
+
+        Args:
+            x (Tensor): Input of shape [..., d_model].
+
+        Returns:
+            Tensor: Output of shape [..., d_model].
+        """
         gate, up = self.w_gate_up(x).chunk(2, dim=-1)
         return self.w_down(F.silu(gate) * up)
 
 
 class Block(nn.Module):
-    """Pre-norm transformer block: x + attn(norm(x)), then x + ffn(norm(x))."""
+    """Pre-norm transformer block computing x + attn(norm(x)) then x + ffn(norm(x))."""
 
     def __init__(self, cfg: ModelConfig) -> None:
+        """Build the block's two norms, attention, and feed-forward network.
+
+        Args:
+            cfg (ModelConfig): Architecture config for the attention and SwiGLU submodules.
+        """
         super().__init__()
         self.attn_norm = RMSNorm(cfg.d_model, cfg.norm_eps)
         self.attn = Attention(cfg)
@@ -42,15 +61,39 @@ class Block(nn.Module):
         self.ffn = SwiGLU(cfg.d_model, cfg.expansion_ratio)
 
     def forward(self, x, rope, positions, cache=None, layer_idx=0):
+        """Apply the attention and feed-forward sublayers with residual connections.
+
+        Args:
+            x (Tensor): Residual stream of shape [B, L, d_model].
+            rope (Rope): Rotary embedding tables.
+            positions (Tensor): Absolute position index per element of the L axis.
+            cache (KVCache | None): Cache to read and extend, or None.
+            layer_idx (int): This block's index, used as the cache slot.
+
+        Returns:
+            Tensor: The updated residual stream, shape [B, L, d_model].
+        """
         x = x + self.attn(self.attn_norm(x), rope, positions, cache, layer_idx)
         x = x + self.ffn(self.ffn_norm(x))
         return x
 
 
 class IDiomTransformer(nn.Module):
-    """Sequence-only pre-norm transformer with RoPE, tied embeddings, and KV-cache support."""
+    """Sequence-only pre-norm transformer with RoPE, tied embeddings, and KV-cache support.
+
+    Attributes:
+        cfg (ModelConfig): The architecture this model was built from.
+    """
 
     def __init__(self, cfg: ModelConfig) -> None:
+        """Build the embedding, blocks, final norm, and output head, and initialize the weights.
+
+        Linear and embedding weights are drawn from N(0, 0.02); the residual-stream output
+        projections (attention wo and SwiGLU w_down) are rescaled by 1 / sqrt(2 * n_layers).
+
+        Args:
+            cfg (ModelConfig): The architecture to build.
+        """
         super().__init__()
         self.cfg = cfg
         self.embed = nn.Embedding(cfg.vocab_size, cfg.d_model)
@@ -73,6 +116,7 @@ class IDiomTransformer(nn.Module):
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:
+        """Initialize one Linear or Embedding module in place."""
         if isinstance(module, nn.Linear):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
@@ -83,9 +127,7 @@ class IDiomTransformer(nn.Module):
     def forward(self, tokens: Tensor, *, cache: KVCache | None = None, return_hidden_states: bool = False):
         """Run the transformer, optionally through a KV cache and returning the residual stream.
 
-        Positions continue from cache.length when a cache is given, so a cached decode step rotates
-        with the same RoPE angles a full forward would use — that is what makes cached and uncached
-        generation agree.
+        When a cache is given, positions continue from cache.length and the cache is extended by L.
 
         Args:
             tokens (Tensor): Token ids of shape [B, L].

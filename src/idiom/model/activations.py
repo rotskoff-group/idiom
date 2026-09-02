@@ -1,10 +1,8 @@
-"""Residual-stream activation extraction, shared by SAE training and user export.
+"""Residual-stream activation extraction.
 
-Runs the model with return_hidden_states and selects the residue positions (dropping FIM markers
-and control tokens via the tokenizer), returning the kept activation rows together with the
-alignment metadata (which sequence, which position, which residue) needed to map every vector
-back to its residue. The SAE stream and the extract export tool both call this, so what the SAE
-trains on and what users save are identical.
+Runs the model with return_hidden_states, selects positions with the tokenizer's region mask, and
+returns the kept activation rows together with the metadata needed to map each row back to the
+sequence, position, and residue it came from.
 """
 
 from __future__ import annotations
@@ -19,13 +17,21 @@ from idiom.data.tokenizer import Tokenizer
 
 @dataclass
 class LayerActivations:
-    """Kept activation rows at one layer, with per-row alignment metadata."""
+    """Kept activation rows at one layer, with per-row alignment metadata.
+
+    Attributes:
+        layer (int): The layer these activations were taken from.
+        values (Tensor): Residual-stream vectors, shape [N_kept, d_model].
+        seq_idx (Tensor): Row of the input batch each vector came from, shape [N_kept].
+        pos_idx (Tensor): Position within that token sequence, shape [N_kept].
+        token_id (Tensor): Token id at that position, shape [N_kept].
+    """
 
     layer: int
-    values: Tensor  # [N_kept, d_model] residual-stream vectors
-    seq_idx: Tensor  # [N_kept] row in the input batch each vector came from
-    pos_idx: Tensor  # [N_kept] position within that token sequence
-    token_id: Tensor  # [N_kept] residue token id (residue identity; map via tokenizer.decode)
+    values: Tensor
+    seq_idx: Tensor
+    pos_idx: Tensor
+    token_id: Tensor
 
 
 @torch.no_grad()
@@ -38,25 +44,25 @@ def extract_activations(
     drop_markers: bool = True,
     region: str = "all",
 ) -> dict[int, LayerActivations]:
-    """Extract residual-stream activations at the given layers for the kept positions.
+    """Extract residual-stream activations at the given layers for the selected positions.
 
-    region further restricts which residues are kept, by position relative to the FIM MIDDLE
-    ("2") marker that opens the IDR (1{prefix}3{suffix}2{IDR}): "all" keeps every residue, "idr"
-    keeps only residues after the "2" (the in-filled IDR), and "non_idr" keeps only residues
-    before it (the prefix/suffix flanks). A row with no "2" marker contributes nothing to "idr"
-    or "non_idr".
+    Positions are selected with Tokenizer.region_mask: control tokens are always dropped, and
+    region restricts by position relative to the FIM "2" marker that opens the IDR.
 
     Args:
-        model: The IDiom transformer to run.
-        tokens (Tensor): [B, L] token ids as fed to the model (START-prefixed, right-padded).
+        model: The transformer to run.
+        tokens (Tensor): Token ids of shape [B, L], as fed to the model.
         layers (list[int]): Layer indices whose residual stream to extract.
-        tokenizer (Tokenizer | None): Tokenizer for position selection (a default is used if None).
-        drop_markers (bool): If True (the SAE default), keep only real residues; if False, keep
-            residues plus FIM markers. Control tokens (START/STOP/PAD/MASK) are always dropped.
-        region (str): Residue region to keep: "all", "idr", or "non_idr".
+        tokenizer (Tokenizer | None): Tokenizer for position selection; a default if None.
+        drop_markers (bool): If True, keep only real residues; if False, also keep FIM markers.
+        region (str): Positions to keep: "all", "idr", or "non_idr".
 
     Returns:
-        dict[int, LayerActivations]: One LayerActivations per requested layer.
+        dict[int, LayerActivations]: One LayerActivations per requested layer, each holding the
+            same selected positions in the same order.
+
+    Raises:
+        ValueError: If region is not "all", "idr", or "non_idr".
     """
     tok = tokenizer or Tokenizer()
     _, hidden = model(tokens, return_hidden_states=True)

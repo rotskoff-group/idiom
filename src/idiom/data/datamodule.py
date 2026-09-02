@@ -1,8 +1,6 @@
 """Lightning DataModule over per-split record FASTAs.
 
-The curation step writes train.fasta, val.fasta, and test.fasta in the shared _IDR_x-y record
-format; the split is decided there, so this module just reads each file into a RecordDataset and
-serves batches. Tokenization and FIM assembly happen on the fly inside the dataset (no precompute).
+Reads one FASTA per split into a RecordDataset and serves padded batches.
 """
 
 from __future__ import annotations
@@ -18,7 +16,13 @@ from idiom.data.tokenizer import Tokenizer
 
 
 class RecordDataModule(L.LightningDataModule):
-    """Lightning DataModule that serves RecordDatasets built from per-split record FASTAs."""
+    """Lightning DataModule serving RecordDatasets built from per-split record FASTAs.
+
+    Attributes:
+        train_set (RecordDataset | None): The train split, built by setup().
+        val_set (RecordDataset | None): The validation split, or None if no val_fasta was given.
+        test_set (RecordDataset | None): The test split, or None if no test_fasta was given.
+    """
 
     def __init__(
         self,
@@ -40,10 +44,10 @@ class RecordDataModule(L.LightningDataModule):
             train_fasta (str | Path): Record FASTA for the train split.
             val_fasta (str | Path | None): Record FASTA for validation, or None to skip validation.
             test_fasta (str | Path | None): Record FASTA for test, or None to skip testing.
-            tokenizer (Tokenizer | None): Character tokenizer (a default Tokenizer is used if None).
+            tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
             max_len (int): Maximum model positions; longer records are dropped.
-            prompted_prob (float): Probability a sample uses the prompted (context) variant.
-            completion_only (bool): If True (SFT), compute loss only on the IDR completion.
+            prompted_prob (float): Probability that a sample uses the prompted variant.
+            completion_only (bool): If True, mask the loss to the IDR completion.
             batch_size (int): Batch size for all dataloaders.
             num_workers (int): DataLoader worker processes.
             seed (int): Seed for the per-sample prompted/unprompted choice.
@@ -77,6 +81,11 @@ class RecordDataModule(L.LightningDataModule):
         )
 
     def setup(self, stage: str | None = None) -> None:
+        """Build each configured split once.
+
+        Args:
+            stage (str | None): Lightning stage name; ignored, every configured split is built.
+        """
         # Idempotent: Lightning may call setup() more than once; only build each split once.
         if self.train_set is None:
             self.train_set = self._build(self.train_fasta)
@@ -96,11 +105,14 @@ class RecordDataModule(L.LightningDataModule):
         )
 
     def train_dataloader(self) -> DataLoader:
+        """Return a shuffled DataLoader over the train split, dropping the ragged last batch."""
         return self._loader(self.train_set, shuffle=True)
 
     def val_dataloader(self) -> DataLoader | None:
+        """Return a DataLoader over the validation split, or None if there is no val_fasta."""
         # None -> Lightning skips validation entirely (e.g. SFT with no held-out set)
         return self._loader(self.val_set, shuffle=False) if self.val_set is not None else None
 
     def test_dataloader(self) -> DataLoader | None:
+        """Return a DataLoader over the test split, or None if there is no test_fasta."""
         return self._loader(self.test_set, shuffle=False) if self.test_set is not None else None

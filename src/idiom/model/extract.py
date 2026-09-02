@@ -1,9 +1,8 @@
-"""Activation extraction for downstream use. Sequences or FASTA in, embeddings out, ESM extract.py style.
+"""Sequence and FASTA embedding, and the idiom_extract CLI.
 
-Reuses the SAE's extractor so exported vectors are identical to what the SAE trains on. Each
-record is FIM-formatted (full context), the residual stream is taken at the requested layers,
-and residues align 1:1 to their source positions (markers dropped). pool="mean" returns one
-vector per sequence (mean over the IDR residues); pool="none" returns per-residue rows.
+Each record is FIM-formatted, the residual stream is taken at the requested layers, and the
+residue rows are paired with their source positions in the original sequence. pool="mean" returns
+one vector per sequence, averaged over its IDR residues; pool="none" returns one row per residue.
 """
 
 from __future__ import annotations
@@ -30,23 +29,28 @@ from idiom.model.activations import extract_activations
 def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode=PROMPTED):
     """Embed sequences or FASTA records into residual-stream vectors at the requested layers.
 
-    inputs may be a record FASTA path, a bare sequence string, or a list of sequence strings /
-    Records (see idiom.data.io.to_records). A bare sequence is treated as an unprompted IDR (the
-    whole sequence is the IDR). fim_mode is the prompt format the activations are taken under:
-    "prompted" (1{prefix}3{suffix}2{IDR}, context) or "unprompted" (132{IDR}, de novo, no flanks).
+    Records are processed one at a time, so rows appear in input order.
 
     Args:
-        model: The IDiom transformer to run.
-        inputs (str | Path | Record | Iterable[str | Record]): A FASTA path, sequence, or list.
+        model: The transformer to run.
+        inputs (str | Path | Record | Iterable[str | Record]): A record FASTA path, a bare
+            sequence string, or an iterable of sequences and/or Records; see
+            idiom.data.io.to_records.
         layers (list[int]): Layer indices whose residual stream to extract.
-        pool (str): "mean" for one IDR-mean vector per sequence, "none" for per-residue rows.
-        tokenizer (Tokenizer | None): Tokenizer (a default is used if None).
+        pool (str): "mean" for one vector per sequence, averaged over its IDR residues, or "none"
+            for one row per residue.
+        tokenizer (Tokenizer | None): Tokenizer; a default Tokenizer if None.
         device (str | torch.device): Device to run the model on.
-        fim_mode (str): Prompt format, "prompted" or "unprompted".
+        fim_mode (str): Prompt format the activations are taken under, "prompted" or "unprompted".
 
     Returns:
-        dict: Mapping of layer to (values, index), where values is an [N, d] array and index is
-            a list of per-row metadata dicts.
+        dict[int, tuple]: Per layer, a (values, index) pair. values is an [N, d_model] array. For
+            pool="mean", index holds one dict per sequence with keys accession and n_idr; for
+            pool="none", one dict per residue with keys accession, source_pos, residue, and is_idr.
+
+    Raises:
+        ValueError: If fim_mode is neither "prompted" nor "unprompted", or an input sequence is
+            non-canonical.
     """
     tok = tokenizer or Tokenizer()
     variant = normalize_mode(fim_mode)
@@ -81,11 +85,11 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
 
 
 def write_embeddings(embeddings: dict, out_dir: str | Path) -> None:
-    """Write each layer's values as layer_<l>.npy plus a layer_<l>_index.csv.
+    """Write each layer's embeddings as "layer_<l>.npy" and its metadata as "layer_<l>_index.csv".
 
     Args:
         embeddings (dict): Mapping of layer to (values, index), as returned by embed_fasta.
-        out_dir (str | Path): Directory to create and write the .npy and .csv files into.
+        out_dir (str | Path): Directory to create and write into.
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -98,7 +102,7 @@ def write_embeddings(embeddings: dict, out_dir: str | Path) -> None:
 
 
 def main() -> None:
-    """Command-line entry point: export residual-stream embeddings from a FASTA."""
+    """Run the idiom_extract CLI, writing residual-stream embeddings from a FASTA to a directory."""
     import argparse
 
     from idiom.model.io import load_pretrained

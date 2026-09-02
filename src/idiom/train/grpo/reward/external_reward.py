@@ -1,19 +1,17 @@
-"""Run an external reward model, in its own environment, as a GRPO reward term.
+"""External reward models, run as subprocess scorers.
 
-A reward model that cannot be installed next to IDiom (a different python, torch, or CUDA) runs as a
-subprocess "scorer" spoken to over newline-delimited JSON, one exchange per GRPO step:
+A scorer is a program that speaks newline-delimited JSON on stdin and stdout, one exchange per
+GRPO step:
 
     ->  {"sequences": ["ACDEF...", "GHIKL..."]}
     <-  {"scores": [24.8, 31.2]}          # or {"error": "..."}
 
-A scorer imports nothing from IDiom, so it can live in any venv, conda env, or container. Each
-external term in configs/grpo.yaml carries its own cmd, so several coexist in one run; the scorer
-returns a raw value and the term's target/width shape it into a reward — the same quadratic penalty
-toward the target as the length and entropy guardrails (see the reward section of the top-level README).
+It imports nothing from IDiom, so it can run in any virtualenv, conda environment, or container.
+The scorer returns a raw value, which the term's target and width shape into a reward.
 
-Check a command before spending a GPU allocation:
+A command can be checked from the command line before it is used in a run:
 
-    uv run python -m idiom.train.grpo.reward.external_reward --cmd "<scorer command>" --target 25 --width 0.2
+    python -m idiom.train.grpo.reward.external_reward --cmd "<scorer command>" --target 25 --width 0.2
 """
 
 from __future__ import annotations
@@ -35,7 +33,7 @@ _PROBE = "MKVGSDEQ"  # handshake sequence: a valid IDR every scorer should be ab
 
 
 def _argv(cmd: str) -> list[str]:
-    """Split a command string into argv, accepting a JSON list for arguments shlex would mangle."""
+    """Split a command string into argv, accepting either shell quoting or a JSON list."""
     cmd = cmd.strip()
     if cmd.startswith("["):
         return [str(a) for a in json.loads(cmd)]
@@ -43,22 +41,19 @@ def _argv(cmd: str) -> list[str]:
 
 
 def parse_response(line: str, n: int) -> list[float]:
-    """Validate one NDJSON response line and return its n scores.
-
-    The length check is the important one: a scorer that returns the wrong number of scores would
-    silently misalign rewards with completions, which corrupts training without raising anywhere.
+    """Validate one response line and return its scores.
 
     Args:
         line (str): One line of the scorer's stdout.
         n (int): Number of sequences that were sent.
 
     Returns:
-        list[float]: The finite scores, in the order the sequences were sent.
+        list[float]: Exactly n finite scores, in the order the sequences were sent.
 
     Raises:
-        ValueError: If the line is not a JSON object, has no scores, has the wrong number of
-            scores, or holds a value that is not a finite number.
-        RuntimeError: If the scorer reported an error instead of scores.
+        ValueError: If the line is not a JSON object, carries no "scores" list, carries a number
+            of scores other than n, or holds a value that is not a finite number.
+        RuntimeError: If the scorer returned an "error" field instead of scores.
     """
     try:
         msg = json.loads(line)
@@ -89,19 +84,25 @@ def parse_response(line: str, n: int) -> list[float]:
 class Scorer:
     """A persistent scorer subprocess spoken to in newline-delimited JSON.
 
-    The child is started once and reused, so the reward model loads once rather than per step. Its
-    stderr is forwarded to ours (debugging a foreign environment blind is hopeless), a handshake
-    runs at startup so a broken command fails immediately, and a child that dies mid-run is
-    restarted once before the error is allowed to stop training.
+    The child is started on first use and reused across batches. Its stderr is forwarded to this
+    process's stderr with a label prefix, a handshake batch is sent at startup, and a child that
+    exits mid-run is restarted once per failed batch.
+
+    Attributes:
+        argv (list[str]): The scorer command, split into arguments.
+        cwd (str): Working directory for the child process.
+        timeout (float): Seconds to wait for a single response.
+        label (str): Tag prefixed to the child's forwarded stderr.
+        proc (subprocess.Popen | None): The running child, or None when not started.
     """
 
     def __init__(self, cmd: str, *, cwd: str | None = None, timeout: float = 300.0,
                  label: str = "external") -> None:
-        """Initialize the scorer without starting the child process.
+        """Record the command and settings without starting the child process.
 
         Args:
             cmd (str): Command that runs the scorer, shell-quoted or a JSON argv list.
-            cwd (str | None): Working directory for the child; defaults to the current directory.
+            cwd (str | None): Working directory for the child; the current directory if None.
             timeout (float): Seconds to wait for a single response.
             label (str): Short tag used to prefix the child's forwarded stderr.
         """
@@ -113,10 +114,13 @@ class Scorer:
         self._q: queue.Queue = queue.Queue()
 
     def start(self) -> None:
-        """Launch the child, begin draining its streams, and run the startup handshake.
+        """Launch the child, begin draining its streams, and send the handshake batch.
+
+        The child runs in its own process group and is terminated at interpreter exit.
 
         Raises:
-            RuntimeError: If the command cannot be run or fails to answer the handshake.
+            RuntimeError: If the command cannot be run, or does not answer the handshake with a
+                valid response within the timeout.
         """
         try:
             self.proc = subprocess.Popen(
@@ -142,18 +146,18 @@ class Scorer:
                 f"{{\"scores\": [...]}} to stdout; see the reward section of the top-level README.md") from e
 
     def _pump_stdout(self, proc: subprocess.Popen, q: queue.Queue) -> None:
-        """Forward the child's stdout lines to a queue, ending with None at EOF."""
+        """Forward the child's stdout lines to a queue, putting None at EOF."""
         for line in proc.stdout:
             q.put(line)
         q.put(None)
 
     def _pump_stderr(self, proc: subprocess.Popen) -> None:
-        """Forward the child's stderr to ours, prefixed, so its tracebacks reach the job log."""
+        """Forward the child's stderr lines to this process's stderr, prefixed with the label."""
         for line in proc.stderr:
             print(f"[{self.label}] {line.rstrip()}", file=sys.stderr, flush=True)
 
     def stop(self) -> None:
-        """Terminate the child process group, if it is still running."""
+        """Terminate the child's process group if it is still running."""
         proc, self.proc = self.proc, None
         if proc is None or proc.poll() is not None:
             return
@@ -163,7 +167,7 @@ class Scorer:
             proc.terminate()
 
     def roundtrip(self, seqs: list[str]) -> list[float]:
-        """Send one batch and read one response.
+        """Send one batch to the running child and read one response.
 
         Args:
             seqs (list[str]): Sequences to score.
@@ -172,8 +176,10 @@ class Scorer:
             list[float]: One score per sequence, in order.
 
         Raises:
-            TimeoutError: If no response arrives within the timeout.
-            BrokenPipeError: If the child exits without responding.
+            TimeoutError: If no response arrives within the timeout; the child is stopped.
+            BrokenPipeError: If the child's stdin is closed, or it exits without responding.
+            ValueError: If the response is malformed.
+            RuntimeError: If the scorer reports an error.
         """
         try:
             self.proc.stdin.write(json.dumps({"sequences": seqs}, separators=(",", ":")) + "\n")
@@ -192,13 +198,19 @@ class Scorer:
         return parse_response(line, len(seqs))
 
     def score(self, seqs: list[str]) -> list[float]:
-        """Score a batch, starting or restarting the child as needed.
+        """Score a batch, starting the child if it is not running.
+
+        If the child dies during the batch, it is restarted once and the batch is retried.
 
         Args:
             seqs (list[str]): Sequences to score.
 
         Returns:
             list[float]: One score per sequence, in order.
+
+        Raises:
+            RuntimeError: If the child cannot be started or fails the handshake.
+            BrokenPipeError: If the child dies again after the restart.
         """
         if self.proc is None or self.proc.poll() is not None:
             self.start()
@@ -213,20 +225,15 @@ class Scorer:
 
 
 def target_penalty(value: float, target: float | None, width: float) -> float:
-    """Shape a raw scorer value into a reward: a quadratic penalty toward target, or pass it through.
-
-    The same shaping as the length and entropy terms (base.quadratic_penalty): a value at the target
-    scores 0 and moves negative away from it, with width a tolerance relative to the target.
-    target=None passes the raw value through unchanged (for a monitor term, or a scorer that already
-    returns a calibrated reward).
+    """Shape a raw scorer value into a reward.
 
     Args:
         value (float): The scorer's raw value.
-        target (float | None): Target value; None passes the raw value through unchanged.
+        target (float | None): Target value, or None to return the raw value unchanged.
         width (float): Tolerance as a fraction of the target.
 
     Returns:
-        float: 0 at the target, increasingly negative away from it; or value when target is None.
+        float: The quadratic penalty of value against target, or value itself when target is None.
     """
     if target is None:
         return value
@@ -236,25 +243,26 @@ def target_penalty(value: float, target: float | None, width: float) -> float:
 def make_external_reward(cmd: str, *, target: float | None = None, width: float = 1.0,
                          timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
                          cache_max: int = 100_000, label: str = "external"):
-    """Build a batched reward that scores a whole GRPO step through one external scorer subprocess.
+    """Build a batched reward backed by one external scorer subprocess.
 
-    Each call makes an independent scorer with its own process and cache, so several external terms
-    (each its own command, environment and target) coexist in one run. Empty IDRs score 0.0 without
-    a round trip, and duplicate sequences within a step are sent once (GRPO produces both
-    constantly).
+    Each call creates an independent scorer with its own process and score cache, so several
+    external terms can run side by side. Within a batch, empty strings score 0.0 without a round
+    trip and duplicate sequences are sent once; scores are cached across batches until the cache
+    exceeds cache_max entries, at which point it is cleared.
 
     Args:
         cmd (str): Command that runs the scorer, shell-quoted or a JSON argv list.
-        target (float | None): Target value; None uses the raw scorer value as the reward.
+        target (float | None): Target value, or None to use the raw scorer value as the reward.
         width (float): Tolerance as a fraction of the target.
         timeout (float): Seconds to wait for one response.
-        maxlen (int): Truncate sequences to this length before sending (0 = no truncation).
-        cwd (str | None): Working directory for the child; defaults to the current directory.
-        cache_max (int): Maximum cached sequences before the cache is cleared.
+        maxlen (int): Truncate sequences to this length before sending; 0 sends them whole.
+        cwd (str | None): Working directory for the child; the current directory if None.
+        cache_max (int): Number of cached sequences above which the cache is cleared.
         label (str): Short tag for the term, used to prefix the child's stderr.
 
     Returns:
-        Callable[[list[str], int], list[float]]: Maps (idrs, group_size) to one reward per IDR.
+        Callable[[list[str], int], list[float]]: A function mapping (idrs, group_size) to one
+            reward per IDR, in order.
     """
     scorer = Scorer(cmd, cwd=cwd, timeout=timeout, label=label)
     cache: dict[str, float] = {}
@@ -272,13 +280,13 @@ def make_external_reward(cmd: str, *, target: float | None = None, width: float 
 
 
 def check(cmd: str, target: float | None, width: float, seqs: list[str] | None = None) -> int:
-    """Run a command over a few sequences and print the raw values and quadratic-penalty rewards.
+    """Run a scorer command over a few sequences and print its raw values and shaped rewards.
 
     Args:
         cmd (str): The scorer command to check.
         target (float | None): Target value, or None to show the raw value as the reward.
         width (float): Tolerance as a fraction of the target.
-        seqs (list[str] | None): Sequences to score; a small built-in set when None.
+        seqs (list[str] | None): Sequences to score; a small built-in set if None.
 
     Returns:
         int: 0 if the scorer answered, 1 if it failed.
@@ -307,10 +315,10 @@ def check(cmd: str, target: float | None, width: float, seqs: list[str] | None =
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Command-line entry point for checking an external scorer command.
+    """Parse arguments and check an external scorer command.
 
     Args:
-        argv (list[str] | None): Argument list; sys.argv[1:] when None.
+        argv (list[str] | None): Argument list; sys.argv[1:] if None.
 
     Returns:
         int: Process exit status.

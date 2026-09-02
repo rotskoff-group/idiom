@@ -1,10 +1,9 @@
-"""Compose the GRPO reward: a weighted sum of the enabled terms, scored a whole batch at a time.
+"""Composition of the GRPO reward from its configured terms.
 
-build_reward_terms turns a reward config (entropy, length, rl_sae, and any number of external terms)
-into one f(idrs, group_size) -> (totals, per-term breakdown), which is what LitGRPO calls once per
-step. Scoring the whole batch at once — rather than looping a per-idr function — is what lets a
-batched term (an external subprocess, an SAE lens) do one round trip per step instead of one per
-completion; per-idr terms are simply looped behind the same signature.
+build_reward_terms turns a reward config — the entropy, length, rl_sae, and external blocks — into
+a single function mapping (idrs, group_size) to per-idr totals and a matching per-term breakdown.
+Every term is scored a whole batch at a time; per-idr rewards are looped behind that signature,
+while batched terms such as an external scorer are called once per step.
 """
 
 from __future__ import annotations
@@ -19,13 +18,11 @@ from idiom.train.grpo.reward.external_reward import make_external_reward
 
 
 def _register_custom_rewards(spec: str | None) -> None:
-    """Import a user module so its register_reward decorators run before reward lookup.
-
-    spec is a dotted module path (for example analysis.my_rewards) or a path to a .py file. The
-    module just needs a register_reward("name")-decorated f(idr: str) -> float at import time.
+    """Import a user module so its register_reward decorators run.
 
     Args:
-        spec (str | None): Dotted module path or .py file path; a no-op when None or empty.
+        spec (str | None): A dotted module path or a path ending in ".py"; None or empty is a
+            no-op.
     """
     if not spec:
         return
@@ -41,15 +38,15 @@ def _register_custom_rewards(spec: str | None) -> None:
 
 
 def build_reward_terms(rcfg: DictConfig):
-    """Build the composite reward: a weighted sum of enabled terms, scored a whole batch at a time.
+    """Build the composite reward from a reward config.
 
-    The total for each completion is
+    The total for each completion is the sum of weight * score over the enabled terms:
 
         total = w_entropy * entropy + w_length * length + w_rl_sae * rl_sae + sum(w_i * external_i)
 
-    Each enabled term contributes weight * score. Terms are scored batch-wise: a plain per-idr
-    reward is looped, while a group/batched reward (an external subprocess, an SAE lens) runs once
-    for the whole step. A term with monitor=True is logged but left out of the total.
+    Each external entry is either a registered in-process reward, named by "name", or a subprocess
+    scorer given by "cmd". A term with monitor set to True is included in the breakdown but
+    excluded from the total.
 
     Args:
         rcfg (DictConfig): Reward config: an optional module plus the entropy, length, rl_sae, and

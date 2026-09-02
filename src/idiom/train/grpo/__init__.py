@@ -1,8 +1,11 @@
 """GRPO post-training.
 
-Rewards operate on the decoded IDR string (f(idr) -> float), and the GRPO objective is a few pure
-tensor functions (train/grpo/core.py). Online generation uses the KV-cached sampler. Rewards that
-need their own environment run as external subprocess scorers (train/grpo/reward/external_reward.py).
+Modules:
+    core: the GRPO objective as pure tensor functions.
+    data: prompt datasets and their collate function.
+    lit_grpo: the LightningModule running rollout, reward, and the GRPO step.
+    train_grpo: the idiom_grpo entrypoint.
+    reward: the reward registry, the composite reward, and the reward terms.
 """
 
 from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs

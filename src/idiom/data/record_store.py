@@ -1,17 +1,11 @@
-"""Memory-mapped columnar record store — fast, low-RAM, shared-across-ranks dataset backing.
+"""Memory-mapped columnar record store built from a record FASTA.
 
-read_records parses a multi-GB record FASTA into tens of millions of frozen Record objects; under
-DDP every rank repeats that parse, so startup is minutes and RAM is n_ranks x tens of GB (the
-53.6M-record train split is ~58 GB per process). This module converts a record FASTA once into a
-columnar on-disk store — contiguous sequence/accession byte buffers, CSR offset arrays, and
-IDR-coord arrays — read back via numpy.memmap: lazy, near-instant to open, and shared across
-processes through the OS page cache (one copy regardless of rank count).
+A store is a directory of flat binary files — contiguous sequence and accession byte buffers, CSR
+offset arrays, and IDR coordinate arrays — read back with numpy.memmap and indexed to a Record on
+demand. The record set is identical to idiom.data.io.read_records, which the builder consumes.
 
-Behavior is identical to idiom.data.io.read_records: the builder consumes read_records, so the
-non-canonical, malformed-header, and out-of-range drops are exactly the same.
-
-Build once, then training/SFT just point at the same FASTA (the store is a sidecar, auto-built and
-DDP-safe). Pre-build big splits with the idiom_build_store CLI so launches start in seconds:
+By default a store is a sidecar named "<fasta>.idiomstore", built on first use by open_or_build or
+ahead of time with the idiom_build_store CLI:
 
     idiom_build_store --fasta /path/train.fasta            # -> /path/train.fasta.idiomstore
 """
@@ -39,7 +33,14 @@ _BYTE_DTYPE = np.uint8
 
 
 def store_path_for(fasta: str | Path) -> Path:
-    """Return the default sidecar store directory for a record FASTA (<fasta>.idiomstore)."""
+    """Return the default sidecar store directory for a record FASTA.
+
+    Args:
+        fasta (str | Path): Path to the record FASTA.
+
+    Returns:
+        Path: The path "<fasta>.idiomstore".
+    """
     return Path(str(fasta) + STORE_SUFFIX)
 
 
@@ -51,19 +52,16 @@ def _source_sig(fasta: str | Path) -> dict:
 def build_record_store(
     fasta: str | Path, store_dir: str | Path | None = None, *, drop_noncanonical: bool = True
 ) -> Path:
-    """Parse fasta once (via read_records) into a columnar store and return its directory.
+    """Parse a record FASTA into a columnar store and return its directory.
 
-    The sequence/accession byte buffers are written to disk incrementally rather than accumulated,
-    and the offset/coord index arrays (~24 B/record) grow in memory until the end. The read side is
-    eager, though: read_records materializes the whole FASTA (via io.read_fasta) before the loop, so
-    a build's peak RAM is dominated by that one-time full-file parse — a cost paid once here so that
-    training, which opens the finished store via memmap, never pays it. Builds into a temp dir and
-    atomically renames, so a store dir is always complete.
+    The store is built into a temporary directory and atomically renamed into place. Peak memory is
+    dominated by read_records, which materializes the whole FASTA; the index arrays add about 24
+    bytes per record and the byte buffers are streamed to disk.
 
     Args:
         fasta (str | Path): Path to the record FASTA to convert.
-        store_dir (str | Path | None): Output store directory (default: <fasta>.idiomstore).
-        drop_noncanonical (bool): If True, drop non-canonical sequences (matching read_records).
+        store_dir (str | Path | None): Output store directory; "<fasta>.idiomstore" if None.
+        drop_noncanonical (bool): If True, drop non-canonical sequences, as read_records does.
 
     Returns:
         Path: The store directory.
@@ -112,9 +110,19 @@ def build_record_store(
 
 
 class RecordStore:
-    """Read-only, memory-mapped view over a built store; indexes to a Record lazily."""
+    """Read-only, memory-mapped view over a built store.
+
+    Attributes:
+        dir (Path): The store directory.
+        meta (dict): The store's meta.json contents.
+    """
 
     def __init__(self, store_dir: str | Path) -> None:
+        """Open a built store and memory-map its arrays.
+
+        Args:
+            store_dir (str | Path): Directory holding the store files.
+        """
         self.dir = Path(store_dir)
         self.meta = json.loads((self.dir / _META).read_text())
         n = self.meta["n"]
@@ -134,10 +142,22 @@ class RecordStore:
         return self.meta["n"]
 
     def seq_lengths(self) -> np.ndarray:
-        """Return the per-record full_seq length, vectorized (for fast length filtering)."""
+        """Return the full_seq length of every record.
+
+        Returns:
+            np.ndarray: An int64 array of per-record sequence lengths.
+        """
         return (self._seq_off[1:] - self._seq_off[:-1]).astype(np.int64)
 
     def __getitem__(self, i: int) -> Record:
+        """Decode one record from the memory-mapped buffers.
+
+        Args:
+            i (int): Record index.
+
+        Returns:
+            Record: The record at index i.
+        """
         s, e = int(self._seq_off[i]), int(self._seq_off[i + 1])
         a0, a1 = int(self._acc_off[i]), int(self._acc_off[i + 1])
         seq = self._seq[s:e].tobytes().decode("ascii")
@@ -159,17 +179,19 @@ def _valid(store_dir: Path, fasta: Path) -> bool:
 def open_or_build(
     fasta: str | Path, *, drop_noncanonical: bool = True, lock_timeout: float = 3600.0, poll: float = 2.0
 ) -> RecordStore:
-    """Return a RecordStore for fasta, building the sidecar store if missing or stale.
+    """Return a RecordStore for fasta, building the sidecar store if it is missing or stale.
 
-    DDP-safe: an O_EXCL lock file ensures exactly one rank builds while the others wait and then
-    mmap the result. A lock older than lock_timeout (a crashed builder) is broken.
+    A store is stale when its recorded version, source size, or source mtime no longer match the
+    FASTA. Concurrent callers coordinate through an O_EXCL lock file: one builds while the others
+    poll and then open the result. A lock older than lock_timeout is treated as abandoned and
+    removed.
 
     Args:
         fasta (str | Path): Path to the record FASTA.
         drop_noncanonical (bool): If True, drop non-canonical sequences when building.
-        lock_timeout (float): Seconds before a stale build lock is broken and before waiting ranks
-            give up.
-        poll (float): Seconds between checks while waiting for another rank to finish building.
+        lock_timeout (float): Seconds after which a lock is considered stale, and the limit on how
+            long a waiting caller blocks.
+        poll (float): Seconds between checks while waiting for another process to finish building.
 
     Returns:
         RecordStore: A memory-mapped store for fasta.
@@ -207,7 +229,7 @@ def open_or_build(
 
 
 def main() -> None:
-    """Build a memory-mapped record store from a FASTA path given on the command line."""
+    """Run the idiom_build_store CLI, building a record store from a FASTA and printing its size."""
     import argparse
 
     ap = argparse.ArgumentParser(description="Build a memory-mapped record store from a record FASTA.")

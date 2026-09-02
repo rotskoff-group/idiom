@@ -1,4 +1,4 @@
-"""Training the SAE: streaming activations, the Lightning module, and the idiom_sae entrypoint."""
+"""SAE training: the streaming activation store, the LightningModule, and the idiom_sae entrypoint."""
 
 from idiom.sae.training.activation_store import ActivationStore
 from idiom.sae.training.lit_sae import LitSAE

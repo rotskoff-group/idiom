@@ -1,8 +1,8 @@
-"""Training entrypoint for pretraining and SFT, run via idiom_train (--config-name sft for SFT).
+"""The idiom_train entrypoint, covering pretraining and SFT.
 
-build(cfg) wires the model, data, and module together (and is unit-testable); run(cfg) fits.
-Pretraining vs SFT is entirely a matter of config: SFT sets init_from (warm start) and
-data.completion_only=true (loss on the IDR only).
+build(cfg) wires the module and datamodule; run(cfg) configures the trainer and fits. SFT is
+selected by config alone (--config-name sft), which sets init_from for the warm start and
+data.completion_only for the loss mask.
 """
 
 from __future__ import annotations
@@ -23,10 +23,15 @@ from idiom.train.lit_autoregressive import LitAutoregressive
 
 
 def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
-    """Wire the module and datamodule from a resolved config (warm-starting for SFT).
+    """Wire the training module and datamodule from a resolved config.
+
+    With cfg.init_from set, the module is warm-started and its architecture comes from that
+    artifact; otherwise the architecture is built from cfg.model. The scheduler horizon is taken
+    from cfg.trainer.max_steps.
 
     Args:
-        cfg (DictConfig): Resolved training config (optim, trainer, model, data, seed).
+        cfg (DictConfig): Resolved training config, with optim, trainer, data, seed, and either
+            model or init_from.
 
     Returns:
         tuple[LitAutoregressive, RecordDataModule]: The training module and its datamodule.
@@ -57,6 +62,11 @@ def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
 
 def run(cfg: DictConfig) -> None:
     """Build the module and data, configure the trainer and logger, and fit.
+
+    Writes the resolved config to cfg.out_dir, logs to Weights & Biases, and checkpoints into
+    cfg.out_dir/checkpoints: a rolling last.ckpt every cfg.ckpt_every_n_steps steps, plus the three
+    best by val/loss when a validation set is configured. Training resumes from cfg.resume_from
+    when it is set.
 
     Args:
         cfg (DictConfig): Resolved training config.
@@ -112,7 +122,11 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="pretrain")
 def main(cfg: DictConfig) -> None:
-    """Hydra entrypoint that runs training with the composed config."""
+    """Run training with the Hydra-composed config.
+
+    Args:
+        cfg (DictConfig): The composed config.
+    """
     run(cfg)
 
 

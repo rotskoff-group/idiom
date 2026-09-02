@@ -1,18 +1,11 @@
-"""idiom.sae.eval — held-out validation of a trained SAE (or a layer-swept set of them).
+"""Held-out metrics for a trained SAE.
 
-Everything here answers "is this SAE faithful?" on data it was not trained on, always on the
-distribution it was trained on (the SAE's recorded region + fim_mode):
-
-- idiom.sae.eval.fidelity — downstream "loss recovered" (Gao): how much of IDiom's next-token
-  prediction survives when the layer's residual stream is replaced by sae(residual). This is the
-  gold-standard fidelity check (functional, not just MSE) and the residue-region edit-masking lives
-  here.
-- idiom.sae.eval.reconstruction — reconstruction (FVU / explained variance) and sparsity (mean L0,
-  dead-feature fraction, per-latent firing frequency) over held-out activations.
-
-These are reusable metric primitives (IDiomSAE.fidelity builds on compute_fidelity). The operator
-CLI that sweeps a directory of SAE releases and writes the per-layer figure CSV lives in the
-library primitives; callers assemble them into their own evaluation runs.
+Modules:
+    fidelity: substitution-loss "loss recovered", measuring how much of the host model's
+        next-token prediction survives when the residual stream is replaced by its SAE
+        reconstruction.
+    reconstruction: reconstruction quality (FVU, explained variance) and sparsity (mean L0, dead
+        fraction, per-latent firing frequency) over held-out activations.
 """
 
 from idiom.sae.eval.fidelity import FidelityResult, compute_fidelity

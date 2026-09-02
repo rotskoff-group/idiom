@@ -1,9 +1,9 @@
-"""Prompt source for GRPO, assembled on the fly (no separate RL dataset file).
+"""Prompt datasets for GRPO.
 
-Prompts are FIM generation prefixes (1{prefix}3{suffix}2), one builder per prompting mode: the bare
-"132" prompt for unprompted (de novo) optimization via unprompted_prompts, or one protein's flanks
-for prompted optimization via prompted_prompts. A batch is assumed equal-length (the typical case: a
-single prompt repeated, or one compartment's flank prompt).
+Prompts are FIM generation prefixes ("1{prefix}3{suffix}2"), with one builder per prompting mode:
+unprompted_prompts repeats the bare "132" prompt, and prompted_prompts draws one flank prompt per
+record in a FASTA. collate_prompts stacks prompts without padding, so a batch must be
+equal-length.
 """
 
 from __future__ import annotations
@@ -17,9 +17,15 @@ from idiom.data.tokenizer import Tokenizer
 
 
 class PromptDataset(Dataset):
-    """Map-style dataset of encoded GRPO generation prompts."""
+    """Map-style dataset of encoded generation prompts."""
 
     def __init__(self, prompts: list[str], tokenizer: Tokenizer | None = None) -> None:
+        """Encode the prompts once, at construction.
+
+        Args:
+            prompts (list[str]): FIM prompt strings.
+            tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
+        """
         self.tok = tokenizer or Tokenizer()
         self.encoded = [torch.tensor(self.tok.encode(p), dtype=torch.long) for p in prompts]
 
@@ -31,49 +37,46 @@ class PromptDataset(Dataset):
 
 
 def unprompted_prompts(n: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
-    """Return n copies of the bare "132" prompt for unprompted (de novo) optimization.
-
-    Every prompt is identical, so a batch is trivially equal-length and each one expands into its
-    own GRPO group of completions.
+    """Return a dataset of n copies of the bare "132" prompt.
 
     Args:
         n (int): Number of prompt copies to produce.
-        tokenizer (Tokenizer | None): Character tokenizer (a default is used if None).
+        tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
 
     Returns:
-        PromptDataset: Dataset of n identical de novo prompts.
+        PromptDataset: Dataset of n identical prompts.
     """
     return PromptDataset([fim_prompt()] * n, tokenizer)
 
 
 def prompted_prompts(fasta: str, n_per: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
-    """Return n_per copies of each record's flank prompt for prompted optimization.
+    """Return a dataset holding n_per copies of each record's flank prompt.
 
-    Flank prompts differ in length between records, so a batch must not mix them; n_per copies of
-    each keeps a shuffled batch equal-length in the common case where n_per is at least the batch
-    size. Length-bucket upstream if you need to mix records within a batch.
+    Flank prompts differ in length between records, so batches drawn from this dataset are
+    equal-length only when they do not mix records.
 
     Args:
         fasta (str): Path to the record FASTA to draw flank prompts from.
         n_per (int): Number of copies per record.
-        tokenizer (Tokenizer | None): Character tokenizer (a default is used if None).
+        tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
 
     Returns:
-        PromptDataset: Dataset of flank prompts, n_per per record.
+        PromptDataset: Dataset of flank prompts, n_per consecutive copies per record.
     """
     prompts = [fim_prompt(r.full_seq, r.idr_start, r.idr_end) for r in read_records(fasta)]
     return PromptDataset([p for p in prompts for _ in range(n_per)], tokenizer)
 
 
 def collate_prompts(batch: list[torch.Tensor]) -> torch.Tensor:
-    """Stack equal-length prompts into a [B, P] batch.
-
-    Length-bucket upstream if prompt lengths differ.
+    """Stack equal-length prompts into one batch.
 
     Args:
-        batch (list[torch.Tensor]): Equal-length encoded prompts.
+        batch (list[torch.Tensor]): Encoded prompts, which must all have the same length.
 
     Returns:
         torch.Tensor: Stacked prompts of shape [B, P].
+
+    Raises:
+        RuntimeError: If the prompts differ in length.
     """
     return torch.stack(batch)

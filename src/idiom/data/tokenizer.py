@@ -1,18 +1,12 @@
-"""Fixed-alphabet character tokenizer for IDiom.
+"""Fixed-alphabet character tokenizer.
 
-No data-derived vocabulary: the alphabet is fixed and documented here, so token ids are stable
-across datasets, models, and releases. Tokenization is a per-character lookup done on the fly in
-the dataset — there is no precompute step.
+The alphabet is fixed rather than data-derived, and tokenization is a per-character lookup.
 
 Id map (vocab size 27):
 
-    0..19     amino acids, in the order of RESIDUES below
-    20,21,22  FIM markers 1, 2, 3   (1=prefix, 3=suffix, 2=middle/IDR)
+    0..19     amino acids, in the order of RESIDUES
+    20,21,22  FIM markers 1, 2, 3   (1=prefix, 2=middle/IDR, 3=suffix)
     23 PAD    24 START    25 STOP    26 MASK
-
-The residues occupy the lowest ids on purpose: is_residue(i) is just i < 20, and the non-residue
-ids (FIM markers and control tokens) are exactly what the activation extractor drops to keep
-residue-only positions (see residue_mask).
 """
 
 from __future__ import annotations
@@ -34,9 +28,23 @@ SPECIALS = ("<pad>", "<start>", "<stop>", "<mask>")
 
 
 class Tokenizer:
-    """Character-level tokenizer over the fixed RESIDUES + FIM + SPECIALS alphabet."""
+    """Character-level tokenizer over the fixed RESIDUES + FIM + SPECIALS alphabet.
+
+    Attributes:
+        n_residues (int): Number of amino-acid tokens (20).
+        n_fim (int): Number of FIM marker tokens (3).
+        vocab_size (int): Total number of tokens (27).
+        pad_id (int): Token id of <pad>.
+        start_id (int): Token id of <start>.
+        stop_id (int): Token id of <stop>.
+        mask_id (int): Token id of <mask>.
+        fim_prefix_id (int): Token id of the "1" marker.
+        fim_middle_id (int): Token id of the "2" marker.
+        fim_suffix_id (int): Token id of the "3" marker.
+    """
 
     def __init__(self) -> None:
+        """Build the id maps and expose the token-class ids as attributes."""
         self._itos: list[str] = list(RESIDUES) + list(FIM) + list(SPECIALS)  # id -> token
         self._stoi: dict[str, int] = {c: i for i, c in enumerate(self._itos)}  # token -> id
         # Encodable chars only: specials never appear in a string, so they're not in here.
@@ -57,12 +65,10 @@ class Tokenizer:
 
     # --- validation ---
     def is_canonical(self, seq: str) -> bool:
-        """Return True if seq contains only the 20 canonical amino acids (no markers, no junk).
+        """Return whether seq contains only the 20 canonical amino acids.
 
-        This is the ingestion check for raw incoming sequences: any sequence that fails it is
-        dropped whole (no UNK token, no substitution) — see the FASTA reader and curation. FIM
-        markers are intentionally not canonical, since this gates raw protein/IDR sequences before
-        any FIM assembly.
+        FIM markers and control characters are not canonical, so a FIM-formatted string fails
+        this check.
 
         Args:
             seq (str): The sequence to check.
@@ -74,10 +80,7 @@ class Tokenizer:
 
     # --- encode / decode ---
     def encode(self, s: str) -> list[int]:
-        """Map a residue/FIM string to token ids (no control tokens added).
-
-        Hard-fails on any non-tokenizable character so a non-canonical residue can never slip
-        through silently — such sequences must be dropped upstream (see is_canonical).
+        """Map a residue/FIM string to token ids, adding no control tokens.
 
         Args:
             s (str): A string of residue and/or FIM-marker characters.
@@ -86,7 +89,7 @@ class Tokenizer:
             list[int]: The token id for each character, in order.
 
         Raises:
-            ValueError: If s contains a character that is not a residue or FIM marker.
+            ValueError: If s contains a character that is neither a residue nor a FIM marker.
         """
         try:
             return [self._char2id[c] for c in s]
@@ -97,13 +100,13 @@ class Tokenizer:
             ) from None
 
     def decode(self, ids: Iterable[int]) -> str:
-        """Map token ids back to a string, skipping control tokens (the inverse of encode).
+        """Map token ids back to a string, dropping control tokens.
 
         Args:
             ids (Iterable[int]): Token ids to decode.
 
         Returns:
-            str: The residue/FIM string; control-token ids are dropped.
+            str: The residue/FIM string.
         """
         n_seq = self.n_residues + self.n_fim
         return "".join(self._itos[int(i)] for i in ids if int(i) < n_seq)
@@ -118,11 +121,9 @@ class Tokenizer:
         return self.n_residues <= int(i) < self.n_residues + self.n_fim
 
     def residue_mask(self, ids: torch.Tensor) -> torch.Tensor:
-        """Return a boolean mask, True at real-residue positions (drops FIM markers and controls).
+        """Return a boolean mask that is True at real-residue positions.
 
-        This is the residue-only selector shared by SAE training and activation export, so what
-        the SAE sees and what users export are the same positions. Equivalent to region_mask with
-        region="all".
+        FIM markers and control tokens are masked out. Equivalent to region_mask with region="all".
 
         Args:
             ids (torch.Tensor): Token ids, shape [B, L].
@@ -135,21 +136,16 @@ class Tokenizer:
     def region_mask(
         self, ids: torch.Tensor, *, region: str = "all", drop_markers: bool = True
     ) -> torch.Tensor:
-        """Return a boolean [B, L] mask of the positions an SAE acts on, by token class and region.
-
-        This is the single selector shared across the whole SAE lifecycle — training
-        (extract_activations), feature-dataset building, fidelity substitution, and feature
-        steering all confine themselves to the same positions, so an SAE is always applied to the
-        distribution it was trained on.
+        """Return a boolean [B, L] mask of positions selected by token class and region.
 
         Control tokens (START/STOP/PAD/MASK) are always dropped. region then restricts by position
-        relative to the FIM MIDDLE (2) marker that opens the in-filled IDR (1{prefix}3{suffix}2{IDR}).
+        relative to the FIM MIDDLE ("2") marker that opens the IDR in "1{prefix}3{suffix}2{IDR}".
 
         Args:
             ids (torch.Tensor): Token ids, shape [B, L].
-            region (str): Which kept positions to keep: "all" for every kept position, "idr" for
-                only those after the 2 marker, "non_idr" for only those before it. A row with no
-                2 marker contributes nothing to "idr" or "non_idr".
+            region (str): Which kept positions to select: "all" for every kept position, "idr" for
+                only those after the "2" marker, "non_idr" for only those before it. A row with no
+                "2" marker contributes nothing to "idr" or "non_idr".
             drop_markers (bool): If True, keep only real residues; if False, also keep FIM markers.
 
         Returns:

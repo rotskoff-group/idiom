@@ -1,8 +1,15 @@
-"""idiom.model — the IDiom transformer, RoPE, KV-cache attention, and sampling.
+"""Model layer: the IDiom transformer, its components, sampling, and activation extraction.
 
-A sequence-only RMSNorm/SwiGLU/RoPE transformer with a KV cache (prefill plus single-token
-decoding, shared by inference and GRPO online generation), plus sampling and the shared
-residual-stream activation extractor.
+Modules:
+    config: the ModelConfig architecture dataclass and the released model sizes.
+    norms: RMSNorm.
+    rope: rotary position embeddings.
+    attention: multi-head self-attention and the KV cache.
+    transformer: the IDiomTransformer and its blocks.
+    sampling: KV-cached autoregressive generation.
+    activations: residual-stream activation extraction.
+    extract: sequence and FASTA embedding, plus the idiom_extract CLI.
+    io: loading a model from a checkpoint, a released directory, or the Hub.
 """
 
 from idiom.model.attention import KVCache

@@ -1,10 +1,8 @@
 """Multi-head self-attention with RoPE, QK-norm, and a KV cache.
 
-Causal masking: training and prefill process a square [L, L] block, so SDPA applies the causal
-mask (is_causal=True). With right-padding plus causal masking, real tokens never attend to pad
-positions (pad is always to their right), so no explicit pad mask is needed. A KV-cached decode
-step has one query against N cached keys (is_causal=False, since it should see all past). The
-rule below is just q_len == kv_len -> causal, else attend-all.
+Masking follows one rule: a square attention block (q_len == kv_len, i.e. training or prefill) is
+masked causally, and any other shape (a cached decode step, one query against the cached keys)
+attends to everything. Inputs are right-padded, so no explicit padding mask is used.
 """
 
 from __future__ import annotations
@@ -19,9 +17,20 @@ from idiom.model.rope import Rope
 
 
 class KVCache:
-    """Per-layer key/value cache for autoregressive decoding."""
+    """Per-layer key/value cache for autoregressive decoding.
+
+    Attributes:
+        k (list[Tensor | None]): Cached keys per layer, each [B, H, L, head_dim].
+        v (list[Tensor | None]): Cached values per layer, same shape.
+        length (int): Number of positions cached so far, advanced once per transformer forward.
+    """
 
     def __init__(self, n_layers: int) -> None:
+        """Build an empty cache with one key/value slot per layer.
+
+        Args:
+            n_layers (int): Number of transformer layers to reserve slots for.
+        """
         self.k: list[Tensor | None] = [None] * n_layers
         self.v: list[Tensor | None] = [None] * n_layers
         self.length = 0  # tokens cached so far (advanced by the transformer, once per forward)
@@ -50,6 +59,12 @@ class Attention(nn.Module):
     """Multi-head self-attention with RoPE, QK-norm, and an optional KV cache."""
 
     def __init__(self, cfg: ModelConfig) -> None:
+        """Build the fused QKV and output projections, and the optional QK norms.
+
+        Args:
+            cfg (ModelConfig): Architecture config supplying n_heads, head_dim, d_model, qk_norm,
+                and norm_eps.
+        """
         super().__init__()
         self.n_heads = cfg.n_heads
         self.head_dim = cfg.head_dim

@@ -1,17 +1,16 @@
-"""idiom.sae — top-k sparse autoencoders for interpreting IDiom.
+"""Sparse autoencoders over an IDiom residual stream.
 
-An SAE is defined by the slice of a host model's residual stream it reads: (host_model, layer,
-region). That triple is recorded in the release (idiom.sae.io) and applied identically at every
-stage, so the autoencoder is always used on the distribution it was trained on.
+An SAE is described by its host model, the layer it reads, the residue region it was trained on,
+and the prompt format those activations were taken under. All four are recorded in the release and
+reapplied by the downstream tools.
 
-Layout:
-- idiom.sae.sparse_coder — the top-k SparseCoder model;
-- idiom.sae.io — the release format (sae_config.json + sae.safetensors);
-- idiom.sae.training — streaming ActivationStore + LitSAE + the idiom_sae entrypoint;
-- idiom.sae.features — the per-residue feature-activation dataset, its reader, and the viewer;
-- idiom.sae.steering — residual-stream hooks and feature-steered generation;
-- idiom.sae.eval — held-out validation: substitution-loss "fraction recovered", reconstruction
-  (FVU), and sparsity/density.
+Subpackages and modules:
+    sparse_coder: the top-k SparseCoder module.
+    io: the release format, sae_config.json plus sae.safetensors.
+    training: the streaming ActivationStore, LitSAE, and the idiom_sae entrypoint.
+    features: the per-residue feature-activation dataset, its reader, enrichment, and the viewer.
+    steering: residual-stream hooks and feature-steered generation.
+    eval: substitution-loss fidelity, reconstruction, and sparsity metrics.
 """
 
 from idiom.sae.io import load_sae, save_sae

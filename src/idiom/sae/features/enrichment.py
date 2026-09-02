@@ -1,16 +1,15 @@
-"""Which SAE features are over-represented in a set of sequences, versus a background.
+"""Testing which SAE features are over-represented in a set of sequences against a background.
 
-Produces an RL-SAE target: encode a positive and a background set, find the features that fire in
-the positives far more than chance, and keep the strongest as a "signature" idiom_grpo can reward.
+A feature fires in a sequence if it is selected by the SAE at any of that sequence's residues,
+counted once per sequence. From the positive and background firing counts, enrich computes a
+Haldane-Anscombe log2 odds ratio, standardizes it against a hypergeometric null, converts that to a
+two-sided p-value, and controls the false discovery rate with Benjamini-Hochberg. A feature is
+enriched when its FDR, log2 odds ratio, and prevalence all pass the module's thresholds, and
+top_features keeps the strongest as a signature.
 
-A feature fires in a sequence if it is in the SAE top-k at any residue (one count per sequence). Per
-feature, from its positive and background firing counts, we take a Haldane-Anscombe log2 odds ratio,
-standardize against a hypergeometric null, convert to a two-sided p-value, and control the FDR with
-Benjamini-Hochberg. A feature is enriched when FDR < FDR_ALPHA, log2OR >= LOG2OR_FLOOR, and it fires
-in at least PREV_POS_FLOOR of the positives; the top N by log2OR form the signature.
-
-Caveat: features that merely track sequence length look enriched when the positive and background
-length distributions differ. Use a length-matched background (see examples/python/05_feature_enrichment.py).
+Features whose strongest firings sit at an IDR's first or last residues detect the excision
+boundary rather than a motif; boundary_features identifies them and top_features drops them by
+default.
 """
 
 from __future__ import annotations
@@ -37,15 +36,15 @@ _AA = set("ACDEFGHIKLMNPQRSTVWY")
 
 
 def feature_counts(feature_dir, keep=None) -> tuple[np.ndarray, int]:
-    """Count, per feature, how many sequences it fires in.
+    """Count, per feature, the number of sequences in which it fires at least once.
 
     Args:
-        feature_dir (str | Path): A feature dataset directory written by idiom_feature_dataset.
-        keep (Iterable[int] | None): Restrict to these sequence indices (else use all).
+        feature_dir (str | Path): A feature dataset directory.
+        keep (Iterable[int] | None): Restrict the count to these sequence indices, or None for all.
 
     Returns:
-        tuple[np.ndarray, int]: Per-feature sequence counts (length num_latents), and the number of
-            sequences counted.
+        tuple[np.ndarray, int]: Per-feature sequence counts of length num_latents, and the number
+            of sequences counted.
     """
     d = Path(feature_dir)
     ti = np.load(d / "top_indices.npy")
@@ -71,13 +70,14 @@ def feature_counts(feature_dir, keep=None) -> tuple[np.ndarray, int]:
 
 
 def bh_fdr(p: np.ndarray) -> np.ndarray:
-    """Benjamini-Hochberg adjusted p-values (q-values).
+    """Compute Benjamini-Hochberg adjusted p-values.
 
     Args:
         p (np.ndarray): Raw p-values.
 
     Returns:
-        np.ndarray: Adjusted p-values, same order as the input.
+        np.ndarray: Adjusted p-values in the input order, each clipped to [0, 1] and
+            non-decreasing in the raw p-value.
     """
     p = np.asarray(p, float)
     n = p.size
@@ -90,25 +90,29 @@ def bh_fdr(p: np.ndarray) -> np.ndarray:
 
 
 def _two_sided_p(z: np.ndarray) -> np.ndarray:
-    """Two-sided normal p-value for each z (erfc(|z|/sqrt 2), i.e. 2 * sf(|z|); no scipy needed)."""
+    """Return the two-sided normal p-value for each z, as erfc(|z| / sqrt(2))."""
     return np.array([math.erfc(abs(float(v)) / math.sqrt(2.0)) for v in z])
 
 
 def enrich(a: np.ndarray, n_pos: int, b: np.ndarray, n_neg: int, num_latents: int, *,
            smooth: float = SMOOTH, min_total_fire: int = MIN_TOTAL_FIRE) -> dict:
-    """Score every feature for over-representation in the positive set versus the background.
+    """Score every feature for over-representation in the positive set against the background.
+
+    Features whose pooled firing count is below min_total_fire are marked inactive and excluded
+    from the FDR correction, leaving their fdr entry NaN.
 
     Args:
         a (np.ndarray): Per-feature count of positive sequences in which the feature fires.
         n_pos (int): Number of positive sequences.
         b (np.ndarray): Per-feature count of background sequences in which the feature fires.
         n_neg (int): Number of background sequences.
-        num_latents (int): Total SAE latents.
-        smooth (float): Haldane-Anscombe pseudocount.
+        num_latents (int): Total number of SAE latents.
+        smooth (float): Pseudocount added to all four contingency cells.
         min_total_fire (int): Minimum pooled firing count for a feature to be tested.
 
     Returns:
-        dict: Arrays a, b, log2or, z, p, fdr, active, prev_pos, prev_neg, plus n_pos and n_neg.
+        dict: The counts a and b, the sizes n_pos and n_neg, and the per-feature arrays log2or, z,
+            p, fdr, active, prev_pos, and prev_neg.
     """
     a = np.pad(np.asarray(a, float), (0, num_latents - len(a)))
     b = np.pad(np.asarray(b, float), (0, num_latents - len(b)))
@@ -132,7 +136,7 @@ def enrich(a: np.ndarray, n_pos: int, b: np.ndarray, n_neg: int, num_latents: in
 def enriched_mask(result: dict, *, fdr_alpha: float = FDR_ALPHA,
                   log2or_floor: float = LOG2OR_FLOOR,
                   prev_pos_floor: float = PREV_POS_FLOOR) -> np.ndarray:
-    """Boolean mask of enriched features: passes FDR, odds-ratio, and prevalence floors.
+    """Return a boolean mask of the features passing the FDR, odds-ratio, and prevalence cutoffs.
 
     Args:
         result (dict): Output of enrich.
@@ -141,7 +145,7 @@ def enriched_mask(result: dict, *, fdr_alpha: float = FDR_ALPHA,
         prev_pos_floor (float): Minimum prevalence in the positive set.
 
     Returns:
-        np.ndarray: Boolean mask over all features.
+        np.ndarray: A boolean mask over all features.
     """
     return ((result["fdr"] < fdr_alpha)
             & (result["log2or"] >= log2or_floor)
@@ -151,22 +155,21 @@ def enriched_mask(result: dict, *, fdr_alpha: float = FDR_ALPHA,
 def boundary_features(feature_dir, feature_ids, *, edge: int = BOUNDARY_EDGE,
                       frac_thresh: float = BOUNDARY_FRAC,
                       top_windows: int = BOUNDARY_TOP_WINDOWS) -> set[int]:
-    """Find features that are positional boundary detectors rather than motif detectors.
+    """Identify features whose strongest firings sit at the first or last residues of a sequence.
 
-    IDRs are excised from their parent proteins, so their first and last residues are arbitrary cut
-    points. A feature whose strongest firings sit at those cuts is an artifact of the excision, not a
-    real motif, and is normally dropped from a signature.
+    For each candidate feature, the top_windows highest-activating firings are examined and the
+    feature is flagged if at least frac_thresh of them fall within edge residues of either end.
 
     Args:
-        feature_dir (str | Path): A feature dataset directory (ideally the background/corpus one).
+        feature_dir (str | Path): A feature dataset directory.
         feature_ids (Iterable[int]): Candidate features to test.
-        edge (int): Residues from either end that count as at the boundary.
-        frac_thresh (float): Flag a feature if at least this fraction of its top firings are at a
-            boundary.
+        edge (int): Number of residues from either end that count as a boundary.
+        frac_thresh (float): Fraction of top firings at a boundary above which a feature is
+            flagged.
         top_windows (int): Number of top-activating firings per feature to examine.
 
     Returns:
-        set[int]: The subset of feature_ids judged to be boundary artifacts.
+        set[int]: The subset of feature_ids that were flagged.
     """
     feature_ids = [int(f) for f in feature_ids]
     if not feature_ids:
@@ -220,21 +223,23 @@ def boundary_features(feature_dir, feature_ids, *, edge: int = BOUNDARY_EDGE,
 
 def top_features(result: dict, *, n: int = 30, prev_min: float = PREV_POS_FLOOR,
                  drop_boundary: bool = True, feature_dir=None, **mask_kwargs) -> list[int]:
-    """Select a signature: the top-n enriched features, ranked by log2 odds ratio.
+    """Select a signature as the top n enriched features, ranked by log2 odds ratio.
 
     Args:
         result (dict): Output of enrich.
-        n (int): How many features to keep.
+        n (int): Maximum number of features to keep.
         prev_min (float): Minimum prevalence in the positive set.
-        drop_boundary (bool): Drop positional boundary-artifact features (needs feature_dir).
-        feature_dir (str | Path | None): Feature dataset used to detect boundary features.
-        **mask_kwargs: Passed to enriched_mask (fdr_alpha, log2or_floor, prev_pos_floor).
+        drop_boundary (bool): If True, remove boundary features before truncating to n.
+        feature_dir (str | Path | None): Feature dataset used to detect boundary features;
+            required when drop_boundary is True.
+        **mask_kwargs: Forwarded to enriched_mask as fdr_alpha, log2or_floor, and prev_pos_floor.
 
     Returns:
-        list[int]: Feature ids, most enriched first (fewer than n if the pool is smaller).
+        list[int]: Feature ids in descending order of log2 odds ratio, fewer than n if the
+            enriched pool is smaller.
 
     Raises:
-        ValueError: If drop_boundary is set without a feature_dir.
+        ValueError: If drop_boundary is True and feature_dir is None.
     """
     mask = enriched_mask(result, **mask_kwargs) & (result["prev_pos"] >= prev_min)
     ids = np.where(mask)[0]
@@ -251,13 +256,16 @@ def top_features(result: dict, *, n: int = 30, prev_min: float = PREV_POS_FLOOR,
 
 def write_signature(path, signatures: dict[str, list[int]], *, case: str = "top30",
                     provenance: dict | None = None) -> Path:
-    """Write signatures in the format the RL-SAE reward reads.
+    """Write signatures to a JSON file in the format the RL-SAE reward reads.
+
+    An existing file is read and updated, so several cases can be written to one file. The named
+    case is replaced.
 
     Args:
         path (str | Path): Output JSON path.
         signatures (dict[str, list[int]]): Signature name to feature ids.
-        case (str): Case name under which to store them.
-        provenance (dict | None): Optional notes recorded under "_provenance".
+        case (str): Case name to store the signatures under.
+        provenance (dict | None): Notes merged into the file's "_provenance" entry.
 
     Returns:
         Path: The written path.

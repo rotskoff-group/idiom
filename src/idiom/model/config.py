@@ -1,11 +1,10 @@
 """Model hyperparameters for the IDiom transformer.
 
-A flat dataclass; the named sizes at the bottom are just factory helpers for the three released
-models, and every field is overridable. The architecture is the ESM-style block (RMSNorm, SwiGLU,
-QK-norm, no bias, tied embeddings) with RoPE positions and no structural tokens.
+ModelConfig is a flat dataclass describing the architecture: RMSNorm, SwiGLU, QK-norm, no bias,
+tied embeddings, and RoPE positions. It is stored inside every checkpoint and released directory,
+so idiom.model.io recovers it from the artifact rather than requiring it to be re-declared.
 
-A ModelConfig is never re-declared downstream: it travels inside every checkpoint and release
-(see idiom.model.io), so loading an artifact recovers the architecture that produced it.
+The factory functions at the bottom return the architectures of the three released models.
 """
 
 from __future__ import annotations
@@ -15,7 +14,23 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelConfig:
-    """Hyperparameters defining an IDiom transformer's architecture."""
+    """Hyperparameters defining an IDiom transformer's architecture.
+
+    Attributes:
+        vocab_size (int): Number of tokens in the tokenizer alphabet.
+        n_layers (int): Number of transformer blocks.
+        d_model (int): Residual-stream width; must be divisible by n_heads.
+        n_heads (int): Number of attention heads.
+        max_seq_len (int): Largest number of model positions, and the RoPE table length.
+        rope_base (float): Base of the RoPE inverse-frequency progression.
+        expansion_ratio (float): SwiGLU hidden width as a multiple of d_model.
+        norm_eps (float): Epsilon used by every RMSNorm.
+        qk_norm (bool): If True, apply RMSNorm to queries and keys before rotation.
+        tie_embeddings (bool): If True, share the embedding matrix with the output head.
+
+    Raises:
+        ValueError: If d_model is not divisible by n_heads, or head_dim is odd.
+    """
 
     vocab_size: int = 27  # idiom.data.tokenizer: 20 residues + 3 FIM markers + 4 controls
     n_layers: int = 12  # defaults = GPT-2 small (d768/12h, head_dim 64)
@@ -36,6 +51,7 @@ class ModelConfig:
 
     @property
     def head_dim(self) -> int:
+        """Per-head dimension, d_model // n_heads."""
         return self.d_model // self.n_heads
 
 

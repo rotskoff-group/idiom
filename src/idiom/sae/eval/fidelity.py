@@ -1,21 +1,14 @@
-"""Downstream fidelity of an SAE: how much of IDiom's next-token prediction survives when a
-layer's residual stream is replaced by the SAE reconstruction.
+"""Substitution-loss fidelity of an SAE.
 
-The Gao-style "loss recovered" metric, on IDiom's autoregressive objective. For each batch we
-compute next-token NLL three ways at the SAE's layer (via forward hooks on the block):
+For each batch the next-token NLL is computed three ways, using forward hooks on the SAE's layer:
 
     loss_clean   = NLL with the original residual stream
-    loss_sae     = NLL with residual replaced by sae(residual)
-    loss_ablate  = NLL with residual replaced by a baseline (mean / b_dec)
+    loss_sae     = NLL with the residual replaced by sae(residual)
+    loss_ablate  = NLL with the residual replaced by a fixed baseline vector
     pct_recovered = (loss_ablate - loss_sae) / (loss_ablate - loss_clean) * 100
 
-A perfect SAE recovers ~100%; the information-free baseline recovers 0%.
-
-The substitution and ablation baseline are applied only at the SAE's training region (via the
-tokenizer's region_mask) — the positions the SAE was trained on. The extractor drops START /
-FIM-marker / control activations, so editing them feeds the SAE out-of-distribution inputs that,
-through causal attention, corrupt predictions across the sequence and badly understate fidelity
-(e.g. 21% vs 80% recovered for the same checkpoint).
+A perfect reconstruction recovers 100 percent, and the information-free baseline recovers 0. Both
+the substitution and the ablation are confined to the SAE's training region.
 """
 
 from __future__ import annotations
@@ -30,7 +23,13 @@ from idiom.sae.steering.hooks import sae_edit_hook, steering, substitute_hook
 
 @dataclass
 class FidelityResult:
-    """The three mean next-token losses of a fidelity run and the percent-recovered they imply."""
+    """The three mean next-token losses of a fidelity run.
+
+    Attributes:
+        loss_clean (float): Mean NLL with the original residual stream.
+        loss_sae (float): Mean NLL with the residual replaced by its SAE reconstruction.
+        loss_ablate (float): Mean NLL with the residual replaced by the baseline vector.
+    """
 
     loss_clean: float
     loss_sae: float
@@ -38,7 +37,12 @@ class FidelityResult:
 
     @property
     def pct_loss_recovered(self) -> float:
-        """Return the percent of loss recovered: (ablate - sae) / (ablate - clean) * 100."""
+        """Percent of the ablated loss recovered by the SAE.
+
+        Returns:
+            float: (loss_ablate - loss_sae) / (loss_ablate - loss_clean) * 100, or NaN when the
+                clean and ablated losses are equal.
+        """
         denom = self.loss_ablate - self.loss_clean
         if abs(denom) < 1e-8:
             return float("nan")
@@ -62,27 +66,27 @@ def compute_fidelity(
     region: str = "all",
     device: str | torch.device | None = None,
 ) -> FidelityResult:
-    """Compute substitution-loss fidelity over (input, target, mask) batches from a RecordDataset.
+    """Compute substitution-loss fidelity over batches of (input, target, mask) triples.
+
+    Each batch is run three times, and the losses are summed over batches and divided by the total
+    number of non-pad target tokens.
 
     Args:
-        model: An IDiomTransformer (model(tokens) -> logits, with .blocks hook points).
-        sae: The trained SAE for layer (uses encode_dense / decode_dense / b_dec).
+        model: An IDiomTransformer, called as model(tokens) -> logits, with .blocks as hook points.
+        sae: The trained SAE for layer, providing encode_dense, decode_dense, and b_dec.
         layer (int): The residual-stream layer the SAE was trained on.
-        batches: Iterable of (input, target, loss_mask) triples.
-        pad_id (int): Ignore index for the next-token loss (tokenizer PAD = 23).
-        tokenizer (Tokenizer | None): Builds the per-forward region mask (fresh Tokenizer if None).
-        baseline (torch.Tensor | None): Ablation vector; defaults to sae.b_dec (mean-ablation).
-        region (str): The SAE's training region ("all", "idr", or "non_idr"). The SAE / ablation
-            edit is always confined to it — editing positions the SAE never saw (markers, START, the
-            wrong side of the "2") feeds it out-of-distribution inputs that corrupt predictions
-            through causal attention and badly understate fidelity.
-        device (str | torch.device | None): Device to run on (model's device if None).
+        batches: Iterable of (input, target, loss_mask) triples; the mask is unused.
+        pad_id (int): Ignore index for the next-token loss.
+        tokenizer (Tokenizer | None): Builds the per-forward region mask; a default if None.
+        baseline (torch.Tensor | None): The ablation vector; sae.b_dec if None.
+        region (str): Positions to edit: "all", "idr", or "non_idr".
+        device (str | torch.device | None): Device to run on; the model's device if None.
 
     Returns:
         FidelityResult: The mean clean, SAE-substituted, and ablated next-token losses.
 
     Raises:
-        ValueError: If no non-pad target tokens are found in the provided batches.
+        ValueError: If the batches contain no non-pad target tokens.
     """
     device = device or next(model.parameters()).device
     sae = sae.to(device).eval()

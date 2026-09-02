@@ -1,13 +1,13 @@
-"""LightningModule wrapping a SparseCoder.
+"""The LightningModule that trains a SparseCoder.
 
-The training recipe is faithful to EleutherAI sparsify (and OpenAI sparse_autoencoder):
+The recipe follows EleutherAI sparsify:
 
-- loss = fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8 (all computed in the SAE);
-- decoder rows renormalized to unit norm before every forward;
-- decoder gradient component parallel to its rows projected out before the optimizer step;
-- dead latents = not fired in the last dead_feature_tokens tokens; AuxK only when any;
-- Adam with LR auto-scaled 2e-4 / (num_latents / 2**14)**0.5 (sparsify) and linear warmup;
-- no gradient clipping by default (matches sparsify's fvu path).
+- loss = fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8;
+- decoder rows are renormalized to unit norm before every forward;
+- the decoder gradient component parallel to its rows is removed before the optimizer step;
+- a latent counts as dead once it has not fired in the last dead_feature_tokens tokens;
+- Adam, with the learning rate scaled as 2e-4 / (num_latents / 2**14)**0.5 unless one is given;
+- no gradient clipping unless grad_clip_norm is set.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from idiom.sae.sparse_coder import SparseCoder
 
 
 def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None):
+    """Build the LambdaLR multiplier: linear warmup, then optional linear decay to zero."""
     def fn(step: int) -> float:
         if warmup_steps > 0 and step < warmup_steps:
             return step / warmup_steps
@@ -30,7 +31,16 @@ def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None):
 
 
 class LitSAE(L.LightningModule):
-    """LightningModule that trains a SparseCoder with the sparsify FVU / AuxK recipe."""
+    """LightningModule that trains a SparseCoder on batches of activations.
+
+    Attributes:
+        sae (SparseCoder): The autoencoder being trained.
+        lr (float): The learning rate in use, whether passed in or auto-scaled.
+        auxk_alpha (float): Weight on the AuxK loss.
+        dead_feature_tokens (int): Tokens without firing after which a latent counts as dead.
+        grad_clip_norm (float | None): Gradient-norm clip value, or None for no clipping.
+        num_tokens_since_fired (Tensor): Per-latent count of tokens since that latent last fired.
+    """
 
     def __init__(
         self,
@@ -49,7 +59,7 @@ class LitSAE(L.LightningModule):
         dead_feature_tokens: int = 10_000_000,
         grad_clip_norm: float | None = None,
     ):
-        """Build the LightningModule and its SparseCoder.
+        """Build the SparseCoder and record the optimizer and schedule settings.
 
         Args:
             d_in (int): Input (residual-stream) dimension.
@@ -58,13 +68,13 @@ class LitSAE(L.LightningModule):
             activation (str): Selection rule, "topk" or "groupmax".
             multi_topk (bool): If True, add the Multi-TopK auxiliary loss.
             normalize_decoder (bool): If True, keep decoder rows at unit norm.
-            lr (float | None): Learning rate; if None, auto-scaled from num_latents (sparsify).
-            total_steps (int): Total optimizer steps, used by the LR schedule.
+            lr (float | None): Learning rate; scaled from num_latents if None.
+            total_steps (int): Scheduler horizon in optimizer steps.
             warmup_steps (int): Linear warmup steps at the start of training.
-            decay_start (int | None): Step at which linear LR decay begins (no decay if None).
-            auxk_alpha (float): Weight on the AuxK dead-latent revival loss.
-            dead_feature_tokens (int): A latent is dead if it has not fired in this many tokens.
-            grad_clip_norm (float | None): Gradient-norm clip value; no clipping if None.
+            decay_start (int | None): Step at which linear decay begins, or None for no decay.
+            auxk_alpha (float): Weight on the AuxK loss; 0 disables the dead-latent mask.
+            dead_feature_tokens (int): Tokens without firing after which a latent counts as dead.
+            grad_clip_norm (float | None): Gradient-norm clip value, or None for no clipping.
         """
         super().__init__()
         self.save_hyperparameters()
@@ -95,7 +105,7 @@ class LitSAE(L.LightningModule):
 
     @t.no_grad()
     def init_b_dec_from_mean(self, mean_activation: t.Tensor):
-        """Initialize the decoder bias to the data mean (sparsify init).
+        """Set the decoder bias to a precomputed mean activation.
 
         Args:
             mean_activation (t.Tensor): The mean activation vector of shape [d_in].
@@ -103,24 +113,19 @@ class LitSAE(L.LightningModule):
         self.sae.b_dec.data = mean_activation.to(self.sae.b_dec.device, self.sae.b_dec.dtype)
 
     def on_train_batch_start(self, *args, **kwargs):
-        """Re-impose the decoder unit-norm constraint before each forward (sparsify ordering).
-
-        The optimizer step can push rows off the unit sphere, and a latent's activation is only
-        interpretable as a magnitude along a *unit* direction, so the constraint is restored before
-        the rows are used rather than after they are updated.
-        """
+        """Renormalize the decoder rows to unit norm before each training batch."""
         if self.sae.normalize_decoder:
             self.sae.set_decoder_norm_to_unit_norm()
 
     def training_step(self, batch: t.Tensor, batch_idx: int):
-        """Run one SAE step on a batch of activations and update the dead-latent counters.
+        """Run one step on a batch of activations, updating and logging the dead-latent counters.
 
         Args:
             batch (t.Tensor): Activation rows of shape [n_tokens, d_in].
             batch_idx (int): Index of the batch within the epoch (unused).
 
         Returns:
-            t.Tensor: fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8.
+            t.Tensor: The scalar loss, fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8.
         """
         dead_mask = (
             self.num_tokens_since_fired > self.dead_feature_tokens if self.auxk_alpha > 0 else None
@@ -157,13 +162,12 @@ class LitSAE(L.LightningModule):
     def configure_gradient_clipping(
         self, optimizer, gradient_clip_val=None, gradient_clip_algorithm=None
     ):
-        """Project the decoder gradient onto the unit sphere's tangent space before the step.
+        """Remove the parallel decoder-gradient component, then clip if grad_clip_norm is set.
 
-        A gradient component parallel to a unit-norm decoder row only changes that row's length,
-        which the renorm then undoes — so it contributes nothing but does perturb the optimizer's
-        momentum estimates. Removing it here (sparsify's ordering: after backward, before the step)
-        keeps Adam's statistics about the directions that actually move. Lightning routes this
-        through the clipping hook because that is the one callback between the two.
+        Args:
+            optimizer: The optimizer about to step.
+            gradient_clip_val: Lightning's clip value; ignored in favour of grad_clip_norm.
+            gradient_clip_algorithm: Lightning's clip algorithm; ignored, the norm is always used.
         """
         if self.sae.normalize_decoder and self.sae.W_dec.grad is not None:
             self.sae.remove_gradient_parallel_to_decoder_directions()

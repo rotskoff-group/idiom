@@ -1,13 +1,12 @@
-"""On-the-fly training dataset: records -> FIM -> tokenize -> shifted targets.
+"""Training dataset mapping records to next-token-prediction pairs.
 
-Each __getitem__ assembles a FIM string from a Record (prompted vs unprompted chosen at random
-per sample), tokenizes it, and forms the next-token-prediction pair:
+Each item assembles a FIM string from a Record (prompted or unprompted, chosen at random per
+sample), tokenizes it, and forms the equal-length pair
 
     input  = [START, t0, t1, ..., t_{n-1}]
     target = [t0,    t1, ..., t_{n-1}, STOP]
 
-(same length, shifted by one). Padding is added in make_collate, and the loss ignores pad_id.
-This is a map-style dataset over an in-memory record list, or over a memory-mapped RecordStore.
+together with a boolean loss mask. Padding is added by make_collate.
 """
 
 from __future__ import annotations
@@ -31,7 +30,14 @@ FIM_OVERHEAD = 4
 
 
 def max_protein_len(max_len: int) -> int:
-    """Return the largest full_seq length whose prompted example fits in max_len positions."""
+    """Return the largest full_seq length whose example fits in max_len model positions.
+
+    Args:
+        max_len (int): Maximum number of model positions.
+
+    Returns:
+        int: max_len minus the START token and the three FIM markers.
+    """
     return max_len - FIM_OVERHEAD
 
 
@@ -41,13 +47,16 @@ def record_to_example(
     """Build the (input_ids, target_ids) next-token pair for one record.
 
     Args:
-        record (Record): The IDR record to encode.
+        record (Record): The record to encode.
         tokenizer (Tokenizer): Character tokenizer for the FIM string.
-        variant (str): "prompted" (conditioned on flanks) or "unprompted" (de novo).
+        variant (str): "prompted" or "unprompted".
 
     Returns:
-        tuple[torch.Tensor, torch.Tensor]: An (input_ids, target_ids) pair of equal-length
-            LongTensors, shifted by one.
+        tuple[torch.Tensor, torch.Tensor]: Equal-length input and target LongTensors, shifted by
+            one, with START prepended to the input and STOP appended to the target.
+
+    Raises:
+        ValueError: If variant is neither "prompted" nor "unprompted".
     """
     build = fim_prompted if normalize_mode(variant) == PROMPTED else fim_unprompted
     ids = tokenizer.encode(build(record.full_seq, record.idr_start, record.idr_end))
@@ -57,7 +66,10 @@ def record_to_example(
 
 
 class RecordDataset(Dataset):
-    """Map-style dataset over Records with on-the-fly FIM assembly and tokenization."""
+    """Map-style dataset over Records, yielding (input_ids, target_ids, loss_mask) triples.
+
+    Backed either by an in-memory sequence of Records or by a memory-mapped RecordStore.
+    """
 
     def __init__(
         self,
@@ -73,10 +85,12 @@ class RecordDataset(Dataset):
 
         Args:
             records (Iterable[Record] | RecordStore): Records to serve, or a memory-mapped store.
-            tokenizer (Tokenizer | None): Character tokenizer (a default Tokenizer is used if None).
-            max_len (int): Maximum model positions; longer records are dropped (logged).
-            prompted_prob (float): Probability a sample uses the prompted (context) variant.
-            completion_only (bool): If True (SFT), compute loss only on the IDR completion.
+            tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
+            max_len (int): Maximum model positions; longer records are dropped and the number
+                dropped is logged.
+            prompted_prob (float): Probability that a sample uses the prompted variant.
+            completion_only (bool): If True, mask the loss to the IDR completion; if False, to
+                every token.
             seed (int): Seed for the per-sample prompted/unprompted choice.
         """
         self.tok = tokenizer or Tokenizer()
@@ -109,6 +123,15 @@ class RecordDataset(Dataset):
         return len(self._keep) if self.store is not None else len(self.records)
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return the (input_ids, target_ids, loss_mask) triple for one record.
+
+        Args:
+            i (int): Index into the kept records.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor]: Equal-length input ids, target ids,
+                and a boolean mask selecting the target positions that contribute to the loss.
+        """
         rec = self.store[int(self._keep[i])] if self.store is not None else self.records[i]
         # per-sample augmentation: prompted (context) with prob prompted_prob, else unprompted
         variant = PROMPTED if self._rng.random() < self.prompted_prob else UNPROMPTED
@@ -128,10 +151,10 @@ def make_collate(pad_id: int):
     """Build a collate function that right-pads (input, target, loss_mask) triples into batches.
 
     Args:
-        pad_id (int): Token id used to pad input/target (the loss mask is padded with False).
+        pad_id (int): Token id used to pad the input and target; the loss mask is padded with False.
 
     Returns:
-        Callable: A collate(batch) function producing right-padded [B, L] tensors (x, y, m).
+        Callable: A function mapping a list of triples to right-padded [B, L] tensors.
     """
 
     def collate(batch):
