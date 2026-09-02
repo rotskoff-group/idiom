@@ -18,6 +18,10 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
+
+from idiom.data.dataset import RecordDataset, make_collate
+from idiom.data.io import read_records
 
 
 @dataclass
@@ -80,10 +84,8 @@ def reconstruction_stats(
     Raises:
         ValueError: If no activations are extracted.
     """
-    from torch.utils.data import DataLoader
-
-    from idiom.data.dataset import RecordDataset, make_collate
-    from idiom.data.io import read_records
+    # Deferred: idiom.sae.training.__init__ pulls in LitSAE and therefore Lightning, which would
+    # otherwise land on the plain `import idiom` inference path (~0.8 s and a training-only dep).
     from idiom.sae.training.activation_store import ActivationStore
 
     recs = read_records(fasta)

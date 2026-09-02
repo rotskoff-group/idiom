@@ -26,6 +26,9 @@ from pathlib import Path
 
 import torch
 
+from idiom import IDiomSAE
+from idiom.data.fim import fim_unprompted
+from idiom.model.activations import extract_activations
 from idiom.train.grpo.reward.base import register_reward
 
 # Targets ship as user-editable data in the repo's top-level rewards/rl_sae_targets/ (run from the
@@ -47,7 +50,6 @@ def _saedev() -> str:
 @lru_cache(maxsize=1)
 def _sae():
     """Load and cache the SAE and its host model."""
-    from idiom import IDiomSAE
     return IDiomSAE.from_pretrained(_SAE_DIR, device=_saedev())
 
 
@@ -91,8 +93,6 @@ def feature_match(idr: str, name: str) -> float:
     """
     if not idr:
         return 0.0
-    from idiom.data.fim import fim_unprompted
-    from idiom.model.activations import extract_activations
     sae = _sae()
     s = fim_unprompted(idr, 0, len(idr))                            # "132" + idr (unprompted)
     tokens = torch.tensor([[sae.tok.start_id, *sae.tok.encode(s)]], device=sae.device)
@@ -117,7 +117,7 @@ def _signature_names() -> list[str]:
     """Return the sorted signature names in the configured targets file, or [] if it is unreadable."""
     try:
         return sorted(_featuresets())
-    except Exception:  # noqa: BLE001 - a bad/missing targets file must not break import
+    except Exception:  # a bad/missing targets file must not break import
         return []
 
 

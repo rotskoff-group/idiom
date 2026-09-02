@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 import torch
+from safetensors.torch import load_model, save_model
 
 from idiom.data.fim import normalize_mode
 from idiom.sae.sparse_coder import SparseCoder
@@ -40,8 +41,6 @@ def save_sae(
     Raises:
         ValueError: If fim_mode is neither "prompted" nor "unprompted".
     """
-    from safetensors.torch import save_model  # noqa: PLC0415
-
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     cfg = {
@@ -77,8 +76,6 @@ def load_sae(
     Raises:
         ValueError: If the config records a fim_mode that is not a valid prompting mode.
     """
-    from safetensors.torch import load_model  # noqa: PLC0415
-
     d = Path(path)
     cfg = json.loads((d / SAE_CONFIG_FILE).read_text())
     if "fim_mode" in cfg:  # validate here, so a hand-edited config fails at load, not at first use

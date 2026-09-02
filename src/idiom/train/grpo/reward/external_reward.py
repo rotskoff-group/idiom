@@ -16,6 +16,7 @@ A command can be checked from the command line before it is used in a run:
 
 from __future__ import annotations
 
+import argparse
 import atexit
 import json
 import math
@@ -26,6 +27,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 
 from idiom.train.grpo.reward.base import quadratic_penalty
 
@@ -291,8 +293,6 @@ def check(cmd: str, target: float | None, width: float, seqs: list[str] | None =
     Returns:
         int: 0 if the scorer answered, 1 if it failed.
     """
-    import time
-
     seqs = seqs or ["MEEEKKKKSSSTTTDDDQQQQNNNN",
                     "GSGSGSGSGSGSGSGSGSGSGSGSGSGSGS",
                     "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ"]
@@ -323,8 +323,6 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         int: Process exit status.
     """
-    import argparse
-
     p = argparse.ArgumentParser(description="Check an external reward scorer command.")
     p.add_argument("--cmd", required=True, help="command that runs the scorer")
     p.add_argument("--target", type=float, default=None, help="target value (default: raw value)")

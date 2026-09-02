@@ -7,6 +7,7 @@ one vector per sequence, averaged over its IDR residues; pool="none" returns one
 
 from __future__ import annotations
 
+import argparse
 import csv
 from pathlib import Path
 
@@ -23,6 +24,8 @@ from idiom.data.fim import (
 from idiom.data.io import to_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
+from idiom.model.io import load_pretrained
+from idiom.utils.device import resolve_device
 
 
 @torch.no_grad()
@@ -103,11 +106,6 @@ def write_embeddings(embeddings: dict, out_dir: str | Path) -> None:
 
 def main() -> None:
     """Run the idiom_extract CLI, writing residual-stream embeddings from a FASTA to a directory."""
-    import argparse
-
-    from idiom.model.io import load_pretrained
-    from idiom.utils.device import resolve_device
-
     p = argparse.ArgumentParser(description="Export IDiom residual-stream embeddings from a FASTA.")
     p.add_argument("--fasta", required=True)
     p.add_argument("--ckpt", required=True, help="lightning .ckpt (arch read from it)")

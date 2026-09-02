@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from lightning.pytorch.utilities import grad_norm
 
 from idiom.model.config import ModelConfig
+from idiom.model.io import load_model
 from idiom.model.transformer import IDiomTransformer
 from idiom.train.schedulers import warmup_cosine
 
@@ -79,8 +80,6 @@ class LitAutoregressive(L.LightningModule):
         Returns:
             LitAutoregressive: A module holding the pretrained weights.
         """
-        from idiom.model.io import load_model  # noqa: PLC0415
-
         model, cfg = load_model(init_from, eval_mode=False)
         lit = cls(cfg, **kwargs)
         lit.model.load_state_dict(model.state_dict())

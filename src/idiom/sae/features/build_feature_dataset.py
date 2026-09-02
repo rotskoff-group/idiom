@@ -8,6 +8,7 @@ character of the stored sequence.
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -101,9 +102,7 @@ def build_feature_dataset(
 
 def main() -> None:
     """Run the idiom_feature_dataset CLI, building a feature dataset from a FASTA and an SAE."""
-    import argparse
-
-    from idiom import IDiomSAE
+    from idiom import IDiomSAE  # deferred: idiom/__init__ imports this module's package
 
     p = argparse.ArgumentParser(description="Build an SAE feature-activation dataset from a FASTA.")
     p.add_argument("--sae", required=True, help="trained SAE release dir (host model + layer read from it)")

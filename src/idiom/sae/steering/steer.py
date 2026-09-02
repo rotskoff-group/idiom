@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import torch
 
 from idiom.data.tokenizer import Tokenizer
+from idiom.model.sampling import generate
 from idiom.sae.steering.hooks import (
     add_direction_hook,
     add_relative_direction_hook,
@@ -171,8 +172,6 @@ def steer_generation(
     Returns:
         Tensor: Generated token ids of shape [n_samples, T].
     """
-    from idiom.model.sampling import generate  # noqa: PLC0415
-
     tok = tokenizer or Tokenizer()
     device = next(model.parameters()).device
     sae = sae.to(device).eval()

@@ -8,6 +8,8 @@ while batched terms such as an external scorer are called once per step.
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 from collections.abc import Callable
 
 from omegaconf import DictConfig
@@ -26,9 +28,6 @@ def _register_custom_rewards(spec: str | None) -> None:
     """
     if not spec:
         return
-    import importlib
-    import importlib.util
-
     if spec.endswith(".py"):
         mod_spec = importlib.util.spec_from_file_location("idiom_custom_rewards", spec)
         module = importlib.util.module_from_spec(mod_spec)
@@ -81,7 +80,7 @@ def build_reward_terms(rcfg: DictConfig):
         if rs.get("module"):
             _register_custom_rewards(rs.get("module"))  # user override of the bundled reward
         else:
-            import idiom.train.grpo.reward.rl_sae_reward  # noqa: F401  registers sae_only_<sig> on import
+            import idiom.train.grpo.reward.rl_sae_reward  # registers sae_only_<sig> on import
         terms.append(("rl_sae", float(rs.weight), resolve_reward(f"sae_only_{rs.signature}"),
                       bool(rs.get("monitor"))))
 

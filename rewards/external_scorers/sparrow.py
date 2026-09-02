@@ -25,7 +25,7 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _HERE]
 
-from sparrow import Protein  # noqa: E402
+from sparrow import Protein
 
 
 def value(sequence, prop):

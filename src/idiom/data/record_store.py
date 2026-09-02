@@ -12,6 +12,7 @@ ahead of time with the idiom_build_store CLI:
 
 from __future__ import annotations
 
+import argparse
 import array
 import json
 import os
@@ -230,8 +231,6 @@ def open_or_build(
 
 def main() -> None:
     """Run the idiom_build_store CLI, building a record store from a FASTA and printing its size."""
-    import argparse
-
     ap = argparse.ArgumentParser(description="Build a memory-mapped record store from a record FASTA.")
     ap.add_argument("--fasta", required=True)
     ap.add_argument("--out", help="store directory (default: <fasta>.idiomstore)")

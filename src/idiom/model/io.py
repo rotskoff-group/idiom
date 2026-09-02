@@ -16,6 +16,9 @@ import json
 from pathlib import Path
 
 import torch
+from huggingface_hub import snapshot_download
+# aliased: this module defines its own load_model below
+from safetensors.torch import load_model as _safetensors_load_model
 
 from idiom.model.config import ModelConfig
 from idiom.model.transformer import IDiomTransformer
@@ -104,12 +107,10 @@ def load_released(
         tuple[IDiomTransformer, ModelConfig]: The loaded model and the config read from
             config.json.
     """
-    from safetensors.torch import load_model  # noqa: PLC0415
-
     d = Path(path)
     cfg = ModelConfig(**json.loads((d / CONFIG_FILE).read_text()))
     model = IDiomTransformer(cfg)
-    load_model(model, str(d / WEIGHTS_FILE))  # handles the tied embedding
+    _safetensors_load_model(model, str(d / WEIGHTS_FILE))  # handles the tied embedding
     if eval_mode:
         model.eval()
     return model.to(device), cfg
@@ -137,8 +138,6 @@ def load_model(
     """
     p = Path(path)
     if not p.exists():  # not a local path: treat it as a HF repo id and fetch the released snapshot
-        from huggingface_hub import snapshot_download  # noqa: PLC0415
-
         p = Path(snapshot_download(str(path)))
     if p.is_dir() and (p / CONFIG_FILE).exists():
         return load_released(p, device=device, eval_mode=eval_mode)

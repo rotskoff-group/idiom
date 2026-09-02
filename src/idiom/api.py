@@ -15,19 +15,32 @@ Example:
 
 from __future__ import annotations
 
+import argparse
 import json
+import tempfile
+import warnings
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
 import torch
+from huggingface_hub import HfApi, snapshot_download
+from safetensors.torch import load_model, save_model
+from torch.utils.data import DataLoader
 
+from idiom.data.dataset import RecordDataset, make_collate
 from idiom.data.fim import UNPROMPTED, fim_prompt, normalize_mode
-from idiom.data.io import read_records
+from idiom.data.io import read_records, to_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.config import ModelConfig
 from idiom.model.extract import embed_fasta
+from idiom.model.io import load_pretrained
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
+from idiom.sae.eval.fidelity import compute_fidelity
+from idiom.sae.features.build_feature_dataset import build_feature_dataset as _build_feature_dataset
+from idiom.sae.io import load_sae, save_sae
+from idiom.sae.steering import SteeringSpec, steer_generation
 from idiom.utils.device import resolve_device
 
 CONFIG_FILE = "config.json"
@@ -46,8 +59,6 @@ def _resolve(name_or_path: str | Path) -> Path:
     p = Path(name_or_path)
     if p.exists():
         return p
-    from huggingface_hub import snapshot_download  # noqa: PLC0415
-
     return Path(snapshot_download(str(name_or_path)))
 
 
@@ -80,7 +91,6 @@ def _oversample(batch_fn, n: int, *, length_range: tuple[int, int] | None = None
         drawn += n
         rounds += 1
     if len(kept) < n:
-        import warnings  # noqa: PLC0415
         warnings.warn(f"generate: only {len(kept)}/{n} sequences fell in length {length_range} "
                       f"after {drawn} draws (max_oversample={max_oversample}); returning those.")
     return kept[:n]
@@ -138,8 +148,6 @@ class IDiom:
         Returns:
             IDiom: The loaded model wrapper.
         """
-        from safetensors.torch import load_model  # noqa: PLC0415
-
         d = _resolve(name_or_path)
         cfg = ModelConfig(**json.loads((d / CONFIG_FILE).read_text()))
         model = IDiomTransformer(cfg)
@@ -156,8 +164,6 @@ class IDiom:
         Returns:
             Path: The output directory.
         """
-        from safetensors.torch import save_model  # noqa: PLC0415
-
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         (d / CONFIG_FILE).write_text(json.dumps(asdict(self.model.cfg), indent=2))
@@ -183,10 +189,6 @@ class IDiom:
         Returns:
             str: The URL of the uploaded repo.
         """
-        import tempfile  # noqa: PLC0415
-
-        from huggingface_hub import HfApi  # noqa: PLC0415
-
         api = HfApi(token=token)
         api.create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
         with tempfile.TemporaryDirectory() as tmp:
@@ -209,8 +211,6 @@ class IDiom:
         Raises:
             ValueError: If the checkpoint carries no stored ModelConfig.
         """
-        from idiom.model.io import load_pretrained  # noqa: PLC0415
-
         dev = resolve_device(device)
         model, _ = load_pretrained(ckpt_path, device=dev)
         return cls(model, device=dev)
@@ -445,8 +445,6 @@ class IDiomSAE:
         Raises:
             ValueError: If model is None and the config records no host_model.
         """
-        from idiom.sae.io import load_sae  # noqa: PLC0415
-
         d = _resolve(name_or_path)
         sae, cfg = load_sae(d, device=resolve_device(device))
         if model is None:
@@ -469,8 +467,6 @@ class IDiomSAE:
         Returns:
             Path: The output directory.
         """
-        from idiom.sae.io import save_sae  # noqa: PLC0415
-
         return save_sae(self.sae, out_dir, host_model=host_model or self.host_model,
                         layer=self.layer, region=self.region, fim_mode=self.fim_mode)
 
@@ -495,10 +491,6 @@ class IDiomSAE:
         Returns:
             str: The URL of the uploaded repo.
         """
-        import tempfile  # noqa: PLC0415
-
-        from huggingface_hub import HfApi  # noqa: PLC0415
-
         api = HfApi(token=token)
         api.create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
         with tempfile.TemporaryDirectory() as tmp:
@@ -534,7 +526,6 @@ class IDiomSAE:
         feats = self.sae.encode_dense(x).cpu().numpy()
         if pool == "none":
             return feats, index
-        import numpy as np  # noqa: PLC0415
 
         rows: dict[str, list[int]] = {}
         for i, row in enumerate(index):
@@ -559,10 +550,7 @@ class IDiomSAE:
         Returns:
             Path: The output directory.
         """
-        from idiom.data.io import to_records  # noqa: PLC0415
-        from idiom.sae.features.build_feature_dataset import build_feature_dataset as _bfd  # noqa: PLC0415
-
-        return _bfd(self.model, self.sae, to_records(inputs), self.layer, out_dir,
+        return _build_feature_dataset(self.model, self.sae, to_records(inputs), self.layer, out_dir,
                     tokenizer=self.tok, device=self.device, batch_size=batch_size,
                     region=self.region, fim_mode=self.fim_mode)
 
@@ -602,8 +590,6 @@ class IDiomSAE:
         Returns:
             list[str]: The steered IDR residue strings, at most n of them.
         """
-        from idiom.sae.steering import SteeringSpec, steer_generation  # noqa: PLC0415
-
         spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode,
                             normalize=normalize, relative=relative, preserve_norm=preserve_norm)
         prompt_tokens = self.tok.encode(prompt) if prompt else None
@@ -635,12 +621,6 @@ class IDiomSAE:
             FidelityResult: The clean, SAE-substituted, and ablated losses, and the percent
                 recovered they imply.
         """
-        from torch.utils.data import DataLoader  # noqa: PLC0415
-
-        from idiom.data.dataset import RecordDataset, make_collate  # noqa: PLC0415
-        from idiom.data.io import to_records  # noqa: PLC0415
-        from idiom.sae.eval.fidelity import compute_fidelity  # noqa: PLC0415
-
         if prompted_prob is None:
             prompted_prob = 0.0 if self.fim_mode == UNPROMPTED else 1.0
 
@@ -679,8 +659,6 @@ def main(argv: list[str] | None = None) -> None:
     Args:
         argv (list[str] | None): Argument list; sys.argv[1:] if None.
     """
-    import argparse
-
     p = argparse.ArgumentParser(description="Generate IDRs with IDiom (writes a FASTA).")
     p.add_argument("mode", choices=["unprompted", "prompted"],
                    help="unprompted = de novo (no flanks); prompted = in-filled in flanking context")

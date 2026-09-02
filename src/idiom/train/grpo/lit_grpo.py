@@ -8,6 +8,7 @@ Prompts within a batch must be equal length.
 from __future__ import annotations
 
 import copy
+import random
 from collections.abc import Callable
 from dataclasses import asdict
 
@@ -16,6 +17,7 @@ import torch
 
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.config import ModelConfig
+from idiom.model.io import load_model
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
 from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs
@@ -122,8 +124,6 @@ class LitGRPO(L.LightningModule):
         Returns:
             LitGRPO: A module holding the pretrained weights in both the policy and the reference.
         """
-        from idiom.model.io import load_model  # noqa: PLC0415
-
         model, cfg = load_model(init_from, eval_mode=False)
         lit = cls(cfg, reward_fn, **kwargs)
         sd = model.state_dict()
@@ -215,8 +215,6 @@ class LitGRPO(L.LightningModule):
 
     def _print_samples(self, idrs: list[str], rewards: torch.Tensor) -> None:
         """Print up to n_log_samples randomly chosen completions with their rewards."""
-        import random
-
         n = min(self.n_log_samples, len(idrs))
         if n == 0:
             return

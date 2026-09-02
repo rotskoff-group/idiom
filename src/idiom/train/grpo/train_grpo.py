@@ -81,7 +81,7 @@ def run(cfg: DictConfig) -> None:
     try:
         wandb_logger.experiment.define_metric("trainer/global_step")
         wandb_logger.experiment.define_metric("*", step_metric="trainer/global_step")
-    except Exception:  # noqa: BLE001 - offline/disabled W&B has no experiment to configure
+    except Exception:  # offline/disabled W&B has no experiment to configure
         pass
     trainer_cfg = OmegaConf.to_container(cfg.trainer, resolve=True)
     ckpt_every = trainer_cfg.pop("checkpoint_every", 0)
