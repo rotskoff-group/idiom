@@ -121,7 +121,7 @@ def length_reward(idr: str, *, target_length: int, width: float = 1.0) -> float:
         float: The penalty (0 at the target length, -1.0 for an empty IDR).
     """
     if not idr:
-        return -1.0  # max penalty for an empty IDR (legacy)
+        return -1.0  # an empty IDR has no length to score; -1.0 is the one-tolerance-out penalty
     return quadratic_penalty(len(idr), target_length, width)
 
 
@@ -143,16 +143,3 @@ def entropy_reward(idr: str, *, target_entropy: float = 3.65, width: float = 1.0
     """
     return quadratic_penalty(sequence_entropy(idr), target_entropy, width)  # H=0 for empty IDR
 
-
-def quadratic_shaping(raw: float, *, target: float, scale: float = 1.0) -> float:
-    """Shape a raw reward toward a target value as 1 - scale * (raw - target)^2.
-
-    Args:
-        raw (float): The base reward value to shape.
-        target (float): Raw value at which the shaped reward peaks.
-        scale (float): Curvature of the quadratic falloff.
-
-    Returns:
-        float: The shaped reward.
-    """
-    return 1.0 - scale * (raw - target) ** 2

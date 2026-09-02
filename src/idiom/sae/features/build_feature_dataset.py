@@ -50,7 +50,7 @@ def build_feature_dataset(
         device (str | torch.device): Device to run extraction and encoding on.
         batch_size (int): Number of records per forward batch.
         region (str): Residues to keep: "all", "idr", or "non_idr".
-        fim_mode (str): Prompt format: "prompted" or "unprompted" (legacy idr/idp accepted).
+        fim_mode (str): Prompt format: "prompted" or "unprompted".
 
     Returns:
         Path: The output directory the dataset was written to.

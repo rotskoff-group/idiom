@@ -15,7 +15,7 @@ def _model():
 
 
 def test_fim_prompt():
-    assert fim_prompt() == "132"  # de-novo IDP
+    assert fim_prompt() == "132"  # unprompted (de novo)
     assert fim_prompt("MEDSKVDNRPQ", 4, 8) == "1MEDS3RPQ2"  # flanks of IDR seq[4:8]
 
 

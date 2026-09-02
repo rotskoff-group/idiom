@@ -67,15 +67,6 @@ def test_dataset_len_filter_and_getitem():
     assert m.shape == y.shape and m.all()  # pretraining default: loss on all tokens
 
 
-def test_dataset_prompted_prob_legacy_alias():
-    # deprecated fim_idr_prob / fim_full_prob still set prompted_prob
-    recs = [Record("a", "MEDSKVDNRPQ", 2, 5)]
-    assert RecordDataset(recs, TOK, max_len=64, fim_idr_prob=1.0).prompted_prob == 1.0
-    assert RecordDataset(recs, TOK, max_len=64, fim_full_prob=0.0).prompted_prob == 0.0
-    # the deprecated read-only attribute mirrors prompted_prob
-    assert RecordDataset(recs, TOK, max_len=64, prompted_prob=0.25).fim_idr_prob == 0.25
-
-
 def test_collate_pads():
     recs = [Record("a", "MEDSKVDNRPQ", 2, 5), Record("b", "ACDEFGHIKL", 1, 8)]
     ds = RecordDataset(recs, TOK, max_len=64, prompted_prob=1.0)

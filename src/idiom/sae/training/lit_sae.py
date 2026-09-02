@@ -103,11 +103,25 @@ class LitSAE(L.LightningModule):
         self.sae.b_dec.data = mean_activation.to(self.sae.b_dec.device, self.sae.b_dec.dtype)
 
     def on_train_batch_start(self, *args, **kwargs):
-        # Re-impose the unit-norm constraint before each forward (sparsify ordering).
+        """Re-impose the decoder unit-norm constraint before each forward (sparsify ordering).
+
+        The optimizer step can push rows off the unit sphere, and a latent's activation is only
+        interpretable as a magnitude along a *unit* direction, so the constraint is restored before
+        the rows are used rather than after they are updated.
+        """
         if self.sae.normalize_decoder:
             self.sae.set_decoder_norm_to_unit_norm()
 
     def training_step(self, batch: t.Tensor, batch_idx: int):
+        """Run one SAE step on a batch of activations and update the dead-latent counters.
+
+        Args:
+            batch (t.Tensor): Activation rows of shape [n_tokens, d_in].
+            batch_idx (int): Index of the batch within the epoch (unused).
+
+        Returns:
+            t.Tensor: fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8.
+        """
         dead_mask = (
             self.num_tokens_since_fired > self.dead_feature_tokens if self.auxk_alpha > 0 else None
         )
@@ -143,8 +157,14 @@ class LitSAE(L.LightningModule):
     def configure_gradient_clipping(
         self, optimizer, gradient_clip_val=None, gradient_clip_algorithm=None
     ):
-        # Project out the decoder-gradient component parallel to its unit-norm rows
-        # before the step (sparsify). Clipping is off by default to match sparsify.
+        """Project the decoder gradient onto the unit sphere's tangent space before the step.
+
+        A gradient component parallel to a unit-norm decoder row only changes that row's length,
+        which the renorm then undoes — so it contributes nothing but does perturb the optimizer's
+        momentum estimates. Removing it here (sparsify's ordering: after backward, before the step)
+        keeps Adam's statistics about the directions that actually move. Lightning routes this
+        through the clipping hook because that is the one callback between the two.
+        """
         if self.sae.normalize_decoder and self.sae.W_dec.grad is not None:
             self.sae.remove_gradient_parallel_to_decoder_directions()
         if self.grad_clip_norm is not None:
@@ -156,6 +176,12 @@ class LitSAE(L.LightningModule):
 
     @t.no_grad()
     def validation_step(self, batch: t.Tensor, batch_idx: int):
+        """Log held-out FVU / explained variance / L0 (no AuxK: dead-latent revival is training-only).
+
+        Args:
+            batch (t.Tensor): Activation rows of shape [n_tokens, d_in].
+            batch_idx (int): Index of the batch within the epoch (unused).
+        """
         out = self.sae(batch)
         l0 = (out.latent_acts > 0).float().sum(-1).mean()
         self.log_dict(
@@ -170,6 +196,7 @@ class LitSAE(L.LightningModule):
         )
 
     def configure_optimizers(self):
+        """Build Adam plus the per-step warmup / linear-decay schedule."""
         opt = t.optim.Adam(self.sae.parameters(), lr=self.lr, betas=(0.9, 0.999))
         sched = t.optim.lr_scheduler.LambdaLR(
             opt,

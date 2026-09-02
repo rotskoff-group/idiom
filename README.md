@@ -31,11 +31,21 @@ does not raise — it silently produces off-distribution output.
   sequence (`_IDR_1-<len>`).
 - **Python coordinates are 0-based, half-open** (`idr = seq[idr_start:idr_end]`), matching Python
   slicing. The 1-based header form is converted on read.
-- **Unprompted vs prompted**: unprompted generation uses the FIM prompt `132` (no flanks); prompted
-  generation conditions on the flanks as `1{prefix}3{suffix}2`. Older releases called these
-  IDP / context-IDR; the old names remain as deprecated aliases.
+- **Unprompted vs prompted** is a property of the *prompt*, not of the model: unprompted generation
+  uses the FIM prompt `132` (no flanks), prompted generation conditions on the flanks as
+  `1{prefix}3{suffix}2`. One model does both.
 - Sequences must use the **20 canonical amino acids**. Non-canonical entries in a FASTA are dropped
-  (with a logged count); a non-canonical sequence passed explicitly raises.
+  (with a logged count); a non-canonical sequence passed explicitly raises, so an input you named
+  yourself is never silently discarded.
+
+Three things in this repo are spelled "IDR" and they are *not* the same axis — worth reading once,
+because mixing them up is the easiest way to get quiet nonsense:
+
+| | Values | Means |
+|---|---|---|
+| the header span | `_IDR_x-y` | which residues of a protein are disordered |
+| `fim_mode` / prompting | `prompted` / `unprompted` | whether the prompt carries the flanks |
+| SAE `region` | `all` / `idr` / `non_idr` | which residues an SAE reads and edits |
 
 Functions that take sequences (`embed`, `encode`, `fidelity`, `build_feature_dataset`) accept a
 FASTA path, a single sequence string, or a list of sequences. A bare sequence string is treated as

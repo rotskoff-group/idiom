@@ -16,33 +16,33 @@ from __future__ import annotations
 # Sentinels: 1 opens the prefix, 3 opens the suffix, 2 opens the middle (the IDR).
 PREFIX, MIDDLE, SUFFIX = "1", "2", "3"
 
-# Prompting-mode vocabulary. The two modes below name whether the generated IDR is conditioned on
-# flanking context ("prompted") or produced de novo ("unprompted"). _MODE_ALIAS normalizes the
-# older vocabulary ("idr"/"idp" and "context"/"denovo") so old configs / call sites keep
-# working. NB: this is a different axis from the biological IDR object (idr_start/idr_end, _IDR_x-y)
-# and from the SAE region selector (all/idr/non_idr), neither of which is renamed.
+# Prompting-mode vocabulary: whether the generated IDR is conditioned on flanking context
+# ("prompted") or produced de novo ("unprompted"). NB: this is a different axis from the biological
+# IDR object (idr_start/idr_end, the _IDR_x-y header span) and from the SAE region selector
+# (all/idr/non_idr) — "idr" means something different in each, and none is derived from the others.
 PROMPTED, UNPROMPTED = "prompted", "unprompted"
-_MODE_ALIAS = {"idr": PROMPTED, "context": PROMPTED, "idp": UNPROMPTED, "denovo": UNPROMPTED}
 
 
 def normalize_mode(mode: str) -> str:
-    """Map a prompting-mode string to the canonical prompted / unprompted.
+    """Validate a prompting-mode string and return it unchanged.
 
-    Accepts the legacy aliases idr/context (-> prompted) and idp/denovo (-> unprompted).
+    Every prompting-mode value passes through here — the dataset's per-sample variant, the
+    extractor's fim_mode, and the fim_mode persisted in an SAE release — so a typo or an
+    unrecognized mode fails loudly at the call site instead of silently selecting the wrong FIM
+    format (which does not raise anywhere downstream; it just produces off-distribution output).
 
     Args:
-        mode (str): A prompting-mode string, canonical or legacy.
+        mode (str): A prompting-mode string.
 
     Returns:
         str: Either "prompted" or "unprompted".
 
     Raises:
-        ValueError: If mode is not a recognized mode or alias.
+        ValueError: If mode is neither "prompted" nor "unprompted".
     """
-    m = _MODE_ALIAS.get(mode, mode)
-    if m not in (PROMPTED, UNPROMPTED):
-        raise ValueError(f"mode must be 'prompted' or 'unprompted' (or a legacy alias), got {mode!r}")
-    return m
+    if mode not in (PROMPTED, UNPROMPTED):
+        raise ValueError(f"mode must be 'prompted' or 'unprompted', got {mode!r}")
+    return mode
 
 
 def fim_prompted(seq: str, start: int, end: int) -> str:
@@ -65,7 +65,7 @@ def fim_prompted(seq: str, start: int, end: int) -> str:
 def fim_unprompted(seq: str, start: int, end: int) -> str:
     """Build the unprompted FIM string 132{IDR}.
 
-    Prefix and suffix are empty, i.e. de-novo generation with no flanking context.
+    Prefix and suffix are empty, i.e. de novo generation with no flanking context.
 
     Args:
         seq (str): The full protein sequence.
@@ -76,11 +76,6 @@ def fim_unprompted(seq: str, start: int, end: int) -> str:
         str: The FIM-formatted string.
     """
     return f"{PREFIX}{SUFFIX}{MIDDLE}{seq[start:end]}"
-
-
-# Deprecated aliases (old vocabulary). Kept so existing imports keep working; prefer the names above.
-fim_idr = fim_prompted
-fim_idp = fim_unprompted
 
 
 def fim_prompt(seq: str = "", start: int = 0, end: int = 0) -> str:
@@ -112,7 +107,7 @@ def residue_source_positions(seq_len: int, start: int, end: int, variant: str = 
         seq_len (int): Length of the full sequence.
         start (int): IDR start index (0-based, inclusive).
         end (int): IDR end index (0-based, exclusive).
-        variant (str): "prompted" or "unprompted" (legacy "idr"/"idp" accepted).
+        variant (str): "prompted" or "unprompted".
 
     Returns:
         list[int]: The source position of each residue, in FIM order.

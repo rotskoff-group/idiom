@@ -76,7 +76,7 @@ def test_build_wires_pretrain_and_sft(tmp_path):
         "model": {"n_layers": 2, "d_model": 32, "n_heads": 4, "max_seq_len": 64, "vocab_size": 27},
         "optim": {"lr": 3e-4, "warmup_steps": 1, "weight_decay": 0.1, "min_lr_ratio": 0.1},
         "trainer": {"max_steps": 5},
-        "data": {"train_fasta": str(fasta), "val_fasta": None, "fim_idr_prob": 1.0,
+        "data": {"train_fasta": str(fasta), "val_fasta": None, "prompted_prob": 1.0,
                  "completion_only": True, "batch_size": 2, "num_workers": 0},
     }
     lit, dm = build(OmegaConf.create(base))

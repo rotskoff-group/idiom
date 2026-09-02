@@ -18,7 +18,7 @@ def main() -> None:
 
     model = IDiom.from_pretrained(args.model, device=args.device)
 
-    # 1. Unprompted: de-novo IDRs with no flanking context.
+    # 1. Unprompted: de novo IDRs with no flanking context.
     idrs = model.generate_unprompted(n=args.n, temperature=1.0, seed=0)
     print(f"unprompted: {len(idrs)} IDRs, mean length {sum(map(len, idrs)) / len(idrs):.0f}")
     print("  example:", idrs[0][:80])

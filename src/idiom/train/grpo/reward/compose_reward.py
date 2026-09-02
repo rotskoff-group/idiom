@@ -1,19 +1,20 @@
 """Compose the GRPO reward: a weighted sum of the enabled terms, scored a whole batch at a time.
 
 build_reward_terms turns a reward config (entropy, length, rl_sae, and any number of external terms)
-into one f(idrs, group_size) -> (totals, per-term breakdown). Legacy configs (a single reward.name,
-optional group/shaping/monitor) are desugared to the same term list first, so old configs and old
-checkpoints reproduce bit-for-bit.
+into one f(idrs, group_size) -> (totals, per-term breakdown), which is what LitGRPO calls once per
+step. Scoring the whole batch at once — rather than looping a per-idr function — is what lets a
+batched term (an external subprocess, an SAE lens) do one round trip per step instead of one per
+completion; per-idr terms are simply looped behind the same signature.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 from idiom.train.grpo.reward.base import (
-    entropy_reward, get_reward, length_reward, quadratic_shaping, register_reward, resolve_reward)
+    entropy_reward, length_reward, resolve_reward)
 from idiom.train.grpo.reward.external_reward import make_external_reward
 
 
@@ -50,19 +51,15 @@ def build_reward_terms(rcfg: DictConfig):
     reward is looped, while a group/batched reward (an external subprocess, an SAE lens) runs once
     for the whole step. A term with monitor=True is logged but left out of the total.
 
-    Legacy configs (a single reward.name, optional reward.group / reward.shaping / reward.monitor)
-    are desugared to the same term list first, so old configs and old checkpoints reproduce exactly.
-
     Args:
-        rcfg (DictConfig): Reward config (module plus the entropy, length, rl_sae, and external
-            blocks; or the legacy name/group/shaping/monitor/length/entropy shape).
+        rcfg (DictConfig): Reward config: an optional module plus the entropy, length, rl_sae, and
+            external blocks (see configs/grpo.yaml).
 
     Returns:
         Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]]: Maps
             (idrs, group_size) to the per-idr totals and a matching per-term breakdown (each dict
             holds every enabled term keyed by its log name, plus total).
     """
-    rcfg = _to_new_shape(rcfg)
     _register_custom_rewards(rcfg.get("module"))  # import user rewards before lookup
 
     # (log_key, weight, scorer(idrs, group_size) -> list[float], monitor)
@@ -129,67 +126,3 @@ def build_reward_terms(rcfg: DictConfig):
         return totals, breakdown
 
     return score_batch
-
-
-def _to_new_shape(rcfg: DictConfig) -> DictConfig:
-    """Desugar a legacy reward config (name/shaping/monitor) into the term-block shape.
-
-    A config that already has an rl_sae or external block is returned unchanged. Otherwise the
-    legacy base reward (name) becomes a single external term of weight 1.0; a legacy monitor becomes
-    a monitor term; and legacy shaping is preserved by wrapping the base reward in a registered
-    shaped alias. entropy and length blocks carry over untouched.
-
-    Args:
-        rcfg (DictConfig): A reward config in either shape.
-
-    Returns:
-        DictConfig: The config in the new term-block shape.
-    """
-    if "rl_sae" in rcfg or "external" in rcfg:
-        return rcfg
-    d = OmegaConf.to_container(rcfg, resolve=True)
-    external = []
-    base = d.get("name")
-    if base:
-        _register_custom_rewards(d.get("module"))  # so the base name resolves before we wrap it
-        name = base
-        sh = d.get("shaping") or {}
-        if sh.get("enabled"):
-            fn = get_reward(base)
-            name = f"__shaped__{base}"
-            register_reward(name)(
-                lambda idr, fn=fn, t=sh["target"], s=sh["scale"]:
-                    quadratic_shaping(fn(idr), target=t, scale=s))
-        external.append({"enabled": True, "weight": 1.0, "name": name})
-    if d.get("monitor"):
-        external.append({"enabled": True, "weight": 0.0, "name": d["monitor"], "monitor": True})
-    for k in ("name", "shaping", "monitor"):
-        d.pop(k, None)
-    d["external"] = external
-    return OmegaConf.create(d)
-
-
-def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float]]:
-    """Per-idr reward breakdown (back-compat shim over build_reward_terms).
-
-    Args:
-        rcfg (DictConfig): Reward config in either shape.
-
-    Returns:
-        Callable[[str], dict[str, float]]: Maps an IDR to its per-term breakdown (including total).
-    """
-    terms = build_reward_terms(rcfg)
-    return lambda idr: terms([idr], 1)[1][0]
-
-
-def build_reward(rcfg: DictConfig) -> Callable[[str], float]:
-    """Scalar reward the policy optimizes (back-compat shim over build_reward_terms).
-
-    Args:
-        rcfg (DictConfig): Reward config in either shape.
-
-    Returns:
-        Callable[[str], float]: Maps an IDR to its scalar total reward.
-    """
-    terms = build_reward_terms(rcfg)
-    return lambda idr: terms([idr], 1)[0][0]

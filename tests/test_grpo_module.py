@@ -13,7 +13,7 @@ TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len
 
 def test_grpo_step_runs_and_backprops():
     lit = LitGRPO(TINY, fraction_proline, group_size=2, max_new_tokens=6, beta_kl=0.02)
-    prompts = torch.tensor([TOK.encode("132")])  # one de-novo prompt -> group of 2 completions
+    prompts = torch.tensor([TOK.encode("132")])  # one unprompted prompt -> group of 2 completions
     loss = lit.training_step(prompts, 0)
     assert torch.isfinite(loss) and loss.requires_grad
     loss.backward()

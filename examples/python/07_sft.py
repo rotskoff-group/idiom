@@ -59,7 +59,7 @@ def main() -> None:
         print("  ", s)
 
     # SFT data, loss on the IDR completion only. These sets are whole-sequence IDRs (no flanks), so
-    # train the de-novo/unprompted form (prompted_prob=0.0) — for a full IDR the prompted "1{}3{}2{IDR}"
+    # train the unprompted form (prompted_prob=0.0) — for a full IDR the prompted "1{}3{}2{IDR}"
     # and unprompted "132{IDR}" strings are identical anyway. Raise prompted_prob only when your
     # records carry real flanking context you want to condition on.
     dm = RecordDataModule(

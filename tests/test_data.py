@@ -49,12 +49,17 @@ def test_fim_transforms():
     assert fim_unprompted(seq, start, end) == "132KVDN"
 
 
-def test_fim_legacy_aliases():
-    # old vocabulary kept as aliases: fim_idr == fim_prompted, fim_idp == fim_unprompted
-    from idiom.data.fim import fim_idp, fim_idr, normalize_mode
+def test_normalize_mode_validates():
+    import pytest
 
-    assert fim_idr is fim_prompted and fim_idp is fim_unprompted
-    assert normalize_mode("idr") == "prompted" and normalize_mode("denovo") == "unprompted"
+    from idiom.data.fim import normalize_mode
+
+    assert normalize_mode("prompted") == "prompted"
+    assert normalize_mode("unprompted") == "unprompted"
+    # There is one vocabulary: anything else raises rather than silently picking a FIM format.
+    for bad in ("idr", "idp", "denovo", "context", "Prompted", ""):
+        with pytest.raises(ValueError, match="prompted"):
+            normalize_mode(bad)
 
 
 def test_marker_drop_alignment_prompted():

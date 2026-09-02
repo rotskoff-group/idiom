@@ -43,7 +43,7 @@ def record_to_example(
     Args:
         record (Record): The IDR record to encode.
         tokenizer (Tokenizer): Character tokenizer for the FIM string.
-        variant (str): "prompted" (context) or "unprompted" (de novo); legacy "idr"/"idp" accepted.
+        variant (str): "prompted" (conditioned on flanks) or "unprompted" (de novo).
 
     Returns:
         tuple[torch.Tensor, torch.Tensor]: An (input_ids, target_ids) pair of equal-length
@@ -68,8 +68,6 @@ class RecordDataset(Dataset):
         prompted_prob: float = 0.5,
         completion_only: bool = False,
         seed: int = 0,
-        fim_idr_prob: float | None = None,   # deprecated alias for prompted_prob
-        fim_full_prob: float | None = None,  # deprecated alias for prompted_prob
     ) -> None:
         """Build the dataset, dropping records too long to fit max_len.
 
@@ -80,16 +78,9 @@ class RecordDataset(Dataset):
             prompted_prob (float): Probability a sample uses the prompted (context) variant.
             completion_only (bool): If True (SFT), compute loss only on the IDR completion.
             seed (int): Seed for the per-sample prompted/unprompted choice.
-            fim_idr_prob (float | None): Deprecated alias for prompted_prob.
-            fim_full_prob (float | None): Deprecated alias for prompted_prob.
         """
         self.tok = tokenizer or Tokenizer()
         self.max_len = int(max_len)
-        # back-compat: old callers/configs used fim_full_prob, then fim_idr_prob
-        if fim_full_prob is not None:
-            prompted_prob = fim_full_prob
-        if fim_idr_prob is not None:
-            prompted_prob = fim_idr_prob
         self.prompted_prob = float(prompted_prob)
         # completion_only=True -> SFT: compute loss only on the IDR completion (after the 2
         # marker). False -> pretraining: loss on every token.
@@ -113,11 +104,6 @@ class RecordDataset(Dataset):
             n_kept = len(self.records)
         if n_total - n_kept:
             log.info(f"RecordDataset: dropped {n_total - n_kept} record(s) longer than max_len={self.max_len}")
-
-    @property
-    def fim_idr_prob(self) -> float:
-        """Deprecated read-only alias for prompted_prob."""
-        return self.prompted_prob
 
     def __len__(self) -> int:
         return len(self._keep) if self.store is not None else len(self.records)

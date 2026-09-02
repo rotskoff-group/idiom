@@ -30,15 +30,6 @@ def test_generate_unprompted_returns_residue_strings():
     assert all(set(s) <= set(RESIDUES) for s in seqs)  # only residue chars (markers/controls stripped)
 
 
-def test_generate_legacy_aliases():
-    # old vocabulary kept as method aliases: generate_idp == generate_unprompted, idr == prompted
-    m = _idiom()
-    assert m.generate_idp.__func__ is m.generate_unprompted.__func__
-    assert m.generate_idr.__func__ is m.generate_prompted.__func__
-    # the alias actually runs
-    assert len(m.generate_idp(n=2, max_new_tokens=6, temperature=0, seed=0)) == 2
-
-
 def test_generate_prompted_and_fasta(tmp_path):
     m = _idiom()
     seqs = m.generate_prompted("MEDSKVDNRPQ", 4, 8, n=2, max_new_tokens=6, temperature=0)
@@ -141,7 +132,7 @@ def test_idiomsae_save_records_published_host_model(tmp_path):
 
     host = _idiom()
     sae = _idiom_sae(host)
-    sdir = sae.save_pretrained(tmp_path / "sae_rel", host_model="jxliu2/idiom-24l")
+    sdir = sae.save_pretrained(tmp_path / "sae_rel", host_model="jxliu2/idiom-300M")
     cfg = json.loads((sdir / "sae_config.json").read_text())
-    assert cfg["host_model"] == "jxliu2/idiom-24l"
+    assert cfg["host_model"] == "jxliu2/idiom-300M"
     assert hasattr(sae, "push_to_hub")

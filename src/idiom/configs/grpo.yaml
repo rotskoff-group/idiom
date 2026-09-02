@@ -1,4 +1,4 @@
-# GRPO post-training config (flat, D6).
+# GRPO post-training config.
 #   idiom_grpo init_from=jxliu2/idiom-20M reward.rl_sae.enabled=true prompts.mode=unprompted
 seed: 0
 device: auto
@@ -6,8 +6,8 @@ init_from: ???               # required: base to optimize (a .ckpt, a released d
 resume_from: null            # mid-run resume (optimizer/step/RNG) from a .ckpt
 
 prompts:
-  mode: unprompted           # unprompted ("132", de-novo) | record (per-protein flank prompts)
-  n: 1000                    # idp: number of prompts
+  mode: unprompted           # unprompted ("132", de novo) | record (per-protein flank prompts)
+  n: 1000                    # unprompted mode: number of prompts
   fasta: null                # record mode: FASTA of proteins (_IDR_x-y headers)
   n_per: 1000                # record mode: copies per protein
   batch_size: 4              # distinct prompts per micro-batch (each -> group_size completions); effective prompts/optimizer-step = batch_size * trainer.accumulate_grad_batches

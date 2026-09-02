@@ -1,8 +1,11 @@
 """Model hyperparameters for the IDiom transformer.
 
-A flat dataclass whose named sizes (12-layer, 24-layer, 36-layer) are just factory helpers;
-every field is overridable. The architecture is the ESM-style block (RMSNorm, SwiGLU, QK-norm,
-no bias, tied embeddings) with RoPE positions and no structural tokens.
+A flat dataclass; the named sizes at the bottom are just factory helpers for the three released
+models, and every field is overridable. The architecture is the ESM-style block (RMSNorm, SwiGLU,
+QK-norm, no bias, tied embeddings) with RoPE positions and no structural tokens.
+
+A ModelConfig is never re-declared downstream: it travels inside every checkpoint and release
+(see idiom.model.io), so loading an artifact recovers the architecture that produced it.
 """
 
 from __future__ import annotations
@@ -36,14 +39,18 @@ class ModelConfig:
         return self.d_model // self.n_heads
 
 
-# Named sizes = the GPT-2 family (head_dim 64 throughout); train 12L first, then scale.
-def idiom_12l() -> ModelConfig:  # GPT-2 small
+# The three released sizes, named for their parameter counts to match the Hub repo ids
+# (jxliu2/idiom-20M, -85M, -300M). head_dim is 64 throughout.
+def idiom_20m() -> ModelConfig:
+    """Architecture of jxliu2/idiom-20M (18.9M params)."""
+    return ModelConfig(n_layers=6, d_model=512, n_heads=8)
+
+
+def idiom_85m() -> ModelConfig:
+    """Architecture of jxliu2/idiom-85M (85M params)."""
     return ModelConfig(n_layers=12, d_model=768, n_heads=12)
 
 
-def idiom_24l() -> ModelConfig:  # GPT-2 medium, the primary retrain
+def idiom_300m() -> ModelConfig:
+    """Architecture of jxliu2/idiom-300M (302M params), the primary released model."""
     return ModelConfig(n_layers=24, d_model=1024, n_heads=16)
-
-
-def idiom_36l() -> ModelConfig:  # GPT-2 large
-    return ModelConfig(n_layers=36, d_model=1280, n_heads=20)

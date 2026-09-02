@@ -34,7 +34,6 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
     Records (see idiom.data.io.to_records). A bare sequence is treated as an unprompted IDR (the
     whole sequence is the IDR). fim_mode is the prompt format the activations are taken under:
     "prompted" (1{prefix}3{suffix}2{IDR}, context) or "unprompted" (132{IDR}, de novo, no flanks).
-    Legacy "idr"/"idp" accepted.
 
     Args:
         model: The IDiom transformer to run.
@@ -43,7 +42,7 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
         pool (str): "mean" for one IDR-mean vector per sequence, "none" for per-residue rows.
         tokenizer (Tokenizer | None): Tokenizer (a default is used if None).
         device (str | torch.device): Device to run the model on.
-        fim_mode (str): Prompt format, "prompted" or "unprompted" (legacy "idr"/"idp" accepted).
+        fim_mode (str): Prompt format, "prompted" or "unprompted".
 
     Returns:
         dict: Mapping of layer to (values, index), where values is an [N, d] array and index is

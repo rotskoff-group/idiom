@@ -1,4 +1,4 @@
-"""P5 SAE-streaming tests (CPU-only): ActivationStore -> LitSAE step, no h5."""
+"""P5 SAE-streaming tests (CPU-only): ActivationStore -> LitSAE step, and region partitioning."""
 
 import torch
 from torch.utils.data import DataLoader
@@ -49,8 +49,8 @@ def test_region_split_idr_vs_non_idr():
     assert n_idr == 9 * 8 and n_non == 8 * 8
 
 
-def test_region_on_denovo_132_format():
-    """de-novo '132{IDR}' has no flanks: region=idr keeps all 9 IDR/seq, non_idr keeps none."""
+def test_region_on_unprompted_132_format():
+    """Unprompted '132{IDR}' has no flanks: region=idr keeps all 9 IDR/seq, non_idr keeps none."""
     model = IDiomTransformer(TINY)
     ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=0.0)  # every sample is unprompted
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]

@@ -23,7 +23,6 @@ def perplexity(
     model, fasta: str, *, tokenizer: Tokenizer | None = None, max_len: int = 1024,
     prompted_prob: float = 0.5, batch_size: int = 32, num_workers: int = 4,
     device: str = "cuda", max_records: int | None = None, seed: int = 0,
-    fim_idr_prob: float | None = None,  # deprecated alias for prompted_prob
 ) -> dict[str, float]:
     """Compute mean per-token NLL (nats) and perplexity over fasta under the FIM loss.
 
@@ -41,14 +40,11 @@ def perplexity(
         device (str): Device to run the model on.
         max_records (int | None): If set, evaluate only the first this-many records.
         seed (int): Seed for the per-sample prompted/unprompted choice.
-        fim_idr_prob (float | None): Deprecated alias for prompted_prob.
 
     Returns:
         dict[str, float]: Keys "nll" (mean per-token NLL in nats), "perplexity" (exp of the NLL),
             and "n_tokens" (number of scored tokens).
     """
-    if fim_idr_prob is not None:  # deprecated alias
-        prompted_prob = fim_idr_prob
     tok = tokenizer or Tokenizer()
     records = read_records(fasta)
     if max_records is not None:

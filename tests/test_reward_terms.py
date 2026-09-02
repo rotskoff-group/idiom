@@ -1,98 +1,22 @@
 """Tests for the composite (weighted-sum) reward.
 
-Two things are checked: the new term-block config sums exactly as specified, and every legacy config
-shape (name / shaping / monitor + length + entropy) reproduces bit-for-bit through the desugaring, so
-old configs and old checkpoints train identically. The reference is a from-scratch reimplementation
-of the pre-refactor arithmetic, kept in this file.
+The reward is the whole GRPO objective, so the arithmetic is checked against an explicit
+from-scratch expectation rather than against itself: every enabled term contributes weight * score
+and nothing else does. The cases below cover each way a term can enter or leave the total —
+enabled/disabled, weighted, monitor-only, in-process vs. batched — because a term that silently
+drops out (or is double-counted) changes what the policy optimizes without failing anywhere.
 """
 
 import math
 
 from omegaconf import OmegaConf
 
-from idiom.train.grpo.reward import (
-    entropy_reward, get_reward, length_reward, quadratic_shaping, register_reward)
-from idiom.train.grpo.train_grpo import build_reward, build_reward_terms
+from idiom.train.grpo.reward import entropy_reward, length_reward, register_reward
+from idiom.train.grpo.train_grpo import build_reward_terms
 
 
-# ---- reference: the exact pre-refactor per-idr composition ----------------------------------
-
-
-def _legacy_total(rcfg, idr):
-    base = get_reward(rcfg["name"])(idr)
-    total = base
-    if rcfg["shaping"]["enabled"]:
-        total = quadratic_shaping(total, target=rcfg["shaping"]["target"], scale=rcfg["shaping"]["scale"])
-    if rcfg["length"]["enabled"]:
-        total += rcfg["length"]["weight"] * length_reward(
-            idr, target_length=rcfg["length"]["target_length"], width=rcfg["length"]["width"])
-    if rcfg["entropy"]["enabled"]:
-        total += rcfg["entropy"]["weight"] * entropy_reward(
-            idr, target_entropy=rcfg["entropy"]["target_entropy"], width=rcfg["entropy"]["width"])
-    return total
-
-
-def _legacy_cfg(**over):
-    base = {
-        "module": None,
-        "name": "fraction_proline",
-        "monitor": None,
-        "shaping": {"enabled": False, "target": 0.9, "scale": 1.0},
-        "length": {"enabled": True, "target_length": 100, "width": 1.0, "weight": 2.0},
-        "entropy": {"enabled": True, "target_entropy": 3.68, "width": 0.2, "weight": 0.5},
-    }
-    base.update(over)
-    return base
-
-
-IDRS = ["", "P" * 100, "PPPAAAKKK", "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ", "GSGS" * 30]
-
-
-# ---- legacy configs reproduce exactly -------------------------------------------------------
-
-
-def test_legacy_default_matches_reference():
-    cfg = _legacy_cfg()
-    reward = build_reward(OmegaConf.create(cfg))
-    for idr in IDRS:
-        assert reward(idr) == _legacy_total(cfg, idr)
-
-
-def test_legacy_with_shaping_matches_reference():
-    cfg = _legacy_cfg(shaping={"enabled": True, "target": 0.5, "scale": 2.0})
-    reward = build_reward(OmegaConf.create(cfg))
-    for idr in IDRS:
-        assert math.isclose(reward(idr), _legacy_total(cfg, idr), rel_tol=0, abs_tol=1e-12)
-
-
-def test_legacy_grid_matches_reference():
-    for shaping in (False, True):
-        for length in (False, True):
-            for entropy in (False, True):
-                cfg = _legacy_cfg(
-                    shaping={"enabled": shaping, "target": 0.9, "scale": 1.0},
-                    length={"enabled": length, "target_length": 80, "width": 0.5, "weight": 1.5},
-                    entropy={"enabled": entropy, "target_entropy": 3.5, "width": 0.3, "weight": 0.7},
-                )
-                reward = build_reward(OmegaConf.create(cfg))
-                for idr in IDRS:
-                    assert math.isclose(reward(idr), _legacy_total(cfg, idr), abs_tol=1e-12), (
-                        shaping, length, entropy, idr)
-
-
-def test_legacy_monitor_is_logged_not_optimized():
-    register_reward("_mon")(lambda idr: 42.0)
-    cfg = _legacy_cfg(monitor="_mon")
-    terms = build_reward_terms(OmegaConf.create(cfg))
-    totals, breakdown = terms(["PPPP"], 1)
-    assert breakdown[0]["_mon"] == 42.0            # logged
-    assert math.isclose(totals[0], _legacy_total(cfg, "PPPP"), abs_tol=1e-12)  # not in total
-
-
-# ---- new term-block config ------------------------------------------------------------------
-
-
-def _new_cfg(**over):
+def _cfg(**over):
+    """The configs/grpo.yaml term-block shape, with the guardrails on by default."""
     base = {
         "module": None,
         "entropy": {"enabled": True, "weight": 0.1, "target_entropy": 3.68, "width": 0.2},
@@ -104,70 +28,101 @@ def _new_cfg(**over):
     return OmegaConf.create(base)
 
 
-def test_new_weighted_sum():
+OFF = {"entropy": {"enabled": False, "weight": 0.0, "target_entropy": 3.68, "width": 0.2},
+       "length": {"enabled": False, "weight": 0.0, "target_length": 100, "width": 1.0}}
+
+
+def test_weighted_sum_matches_explicit_arithmetic():
     register_reward("_r_prol")(lambda idr: idr.count("P") / len(idr) if idr else 0.0)
     register_reward("_r_half")(lambda idr: 0.5)
-    cfg = _new_cfg(
-        external=[{"enabled": True, "weight": 2.0, "name": "_r_prol"},
-                  {"enabled": True, "weight": 3.0, "name": "_r_half"}],
-    )
-    terms = build_reward_terms(cfg)
-    idr = "P" * 100  # _r_prol = 1.0, length penalty 0 at target, entropy fixed
-    totals, breakdown = terms([idr], 1)
+    cfg = _cfg(external=[{"enabled": True, "weight": 2.0, "name": "_r_prol"},
+                         {"enabled": True, "weight": 3.0, "name": "_r_half"}])
+    idr = "P" * 100  # _r_prol = 1.0, and length sits exactly on the target
+    totals, breakdown = build_reward_terms(cfg)([idr], 1)
     expect = (0.1 * entropy_reward(idr, target_entropy=3.68, width=0.2)
               + 0.1 * length_reward(idr, target_length=100, width=1.0)
               + 2.0 * 1.0
               + 3.0 * 0.5)
     assert math.isclose(totals[0], expect, abs_tol=1e-12)
+    # the breakdown names every enabled term, which is what the per-term W&B logging keys off
     assert set(breakdown[0]) == {"entropy", "length", "_r_prol", "_r_half", "total"}
+    assert math.isclose(breakdown[0]["total"], totals[0], abs_tol=1e-12)
+
+
+def test_breakdown_entries_are_weighted_contributions():
+    register_reward("_r_one")(lambda idr: 1.0)
+    cfg = _cfg(**OFF, external=[{"enabled": True, "weight": 2.5, "name": "_r_one"}])
+    _, breakdown = build_reward_terms(cfg)(["ACDE"], 1)
+    assert breakdown[0]["_r_one"] == 2.5  # weight * score, not the raw score
+
+
+def test_multiple_external_rewards_sum():
+    register_reward("_r1")(lambda idr: 1.0)
+    register_reward("_r2")(lambda idr: 10.0)
+    cfg = _cfg(**OFF, external=[{"enabled": True, "weight": 1.0, "name": "_r1"},
+                                {"enabled": True, "weight": 0.5, "name": "_r2"}])
+    totals, _ = build_reward_terms(cfg)(["ACDE"], 1)
+    assert math.isclose(totals[0], 1.0 * 1.0 + 0.5 * 10.0, abs_tol=1e-12)
+
+
+def test_disabled_terms_drop_out_entirely():
+    register_reward("_r_off")(lambda idr: 99.0)
+    cfg = _cfg(**OFF, external=[{"enabled": False, "weight": 1.0, "name": "_r_off"}])
+    totals, breakdown = build_reward_terms(cfg)(["ACDE"], 1)
+    assert totals == [0.0] and breakdown[0] == {"total": 0.0}
+
+
+def test_monitor_term_is_logged_but_not_optimized():
+    register_reward("_watch")(lambda idr: 7.0)
+    cfg = _cfg(**OFF, external=[{"enabled": True, "weight": 99.0, "name": "_watch", "monitor": True}])
+    totals, breakdown = build_reward_terms(cfg)(["AA"], 1)
+    assert totals == [0.0]                  # excluded from the total despite the weight
+    assert breakdown[0]["_watch"] == 7.0    # and logged raw, not weighted
+
+
+def test_duplicate_term_labels_stay_distinct():
+    # two entries can name the same reward; their log keys must not collide and overwrite each other
+    register_reward("_dup")(lambda idr: 1.0)
+    cfg = _cfg(**OFF, external=[{"enabled": True, "weight": 1.0, "name": "_dup"},
+                                {"enabled": True, "weight": 2.0, "name": "_dup"}])
+    totals, breakdown = build_reward_terms(cfg)(["ACDE"], 1)
+    assert math.isclose(totals[0], 3.0, abs_tol=1e-12)
+    assert len(breakdown[0]) == 3  # two distinct term keys + total
+
+
+def test_module_is_imported_before_lookup(tmp_path):
+    # a user drops a *.py with @register_reward; reward.module imports it so the name resolves
+    mod = tmp_path / "myrew.py"
+    mod.write_text(
+        "from idiom.train.grpo.reward import register_reward\n"
+        "register_reward('_from_module')(lambda idr: 4.0)\n"
+    )
+    cfg = _cfg(**OFF, module=str(mod),
+               external=[{"enabled": True, "weight": 0.5, "name": "_from_module"}])
+    totals, _ = build_reward_terms(cfg)(["ACDE"], 1)
+    assert math.isclose(totals[0], 2.0, abs_tol=1e-12)
 
 
 def test_rl_sae_term_resolves_signature(tmp_path):
-    # the rl_sae block imports its module (default rewards/rl_sae.py) and resolves sae_only_<sig>
+    # the rl_sae block resolves sae_only_<signature>; module overrides the bundled reward so the
+    # test never loads a real SAE
     mod = tmp_path / "fake_rl_sae.py"
     mod.write_text(
         "from idiom.train.grpo.reward import register_reward\n"
         "register_reward('sae_only_myco')(lambda idr: 0.7 if idr else 0.0)\n"
     )
-    cfg = _new_cfg(
-        entropy={"enabled": False, "weight": 0.0, "target_entropy": 3.68, "width": 0.2},
-        length={"enabled": False, "weight": 0.0, "target_length": 100, "width": 1.0},
-        rl_sae={"enabled": True, "weight": 2.0, "signature": "myco", "module": str(mod)},
-    )
+    cfg = _cfg(**OFF,
+               rl_sae={"enabled": True, "weight": 2.0, "signature": "myco", "module": str(mod)})
     totals, breakdown = build_reward_terms(cfg)(["ACDE"], 1)
     assert math.isclose(totals[0], 2.0 * 0.7, abs_tol=1e-12)
     assert "rl_sae" in breakdown[0]
 
 
-def test_new_multiple_external_rewards():
-    register_reward("_r1")(lambda idr: 1.0)
-    register_reward("_r2")(lambda idr: 10.0)
-    cfg = _new_cfg(
-        entropy={"enabled": False, "weight": 0.1, "target_entropy": 3.68, "width": 0.2},
-        length={"enabled": False, "weight": 0.1, "target_length": 100, "width": 1.0},
-        external=[{"enabled": True, "weight": 1.0, "name": "_r1"},
-                  {"enabled": True, "weight": 0.5, "name": "_r2"}],
-    )
-    totals, _ = build_reward_terms(cfg)(["ACDE"], 1)
-    assert math.isclose(totals[0], 1.0 * 1.0 + 0.5 * 10.0, abs_tol=1e-12)
-
-
-def test_new_disabled_terms_drop_out():
-    cfg = _new_cfg(
-        entropy={"enabled": False, "weight": 0.1, "target_entropy": 3.68, "width": 0.2},
-        length={"enabled": False, "weight": 0.1, "target_length": 100, "width": 1.0},
-    )
-    totals, breakdown = build_reward_terms(cfg)(["ACDE"], 1)
-    assert totals == [0.0] and breakdown[0] == {"total": 0.0}  # nothing enabled -> zero reward
-
-
-def test_new_monitor_term():
-    register_reward("_watch")(lambda idr: 7.0)
-    cfg = _new_cfg(
-        entropy={"enabled": False, "weight": 0.0, "target_entropy": 3.68, "width": 0.2},
-        length={"enabled": False, "weight": 0.0, "target_length": 100, "width": 1.0},
-        external=[{"enabled": True, "weight": 99.0, "name": "_watch", "monitor": True}],
-    )
-    totals, breakdown = build_reward_terms(cfg)(["AA"], 1)
-    assert totals == [0.0]                  # monitor excluded from total despite weight
-    assert breakdown[0]["_watch"] == 7.0    # raw score logged
+def test_scores_stay_aligned_across_a_batch():
+    # totals[i] must correspond to idrs[i]; a term that reorders would corrupt the advantages
+    register_reward("_len")(lambda idr: float(len(idr)))
+    cfg = _cfg(**OFF, external=[{"enabled": True, "weight": 1.0, "name": "_len"}])
+    idrs = ["A", "AA", "AAA", ""]
+    totals, breakdown = build_reward_terms(cfg)(idrs, 2)
+    assert totals == [1.0, 2.0, 3.0, 0.0]
+    assert [b["total"] for b in breakdown] == totals

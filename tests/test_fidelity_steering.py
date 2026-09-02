@@ -1,4 +1,4 @@
-"""P5 fidelity + steering tests (CPU-only): rewired onto IDiomTransformer, no legacy refs."""
+"""P5 fidelity + steering tests (CPU-only): region-masked edits, substitution loss, steered sampling."""
 
 import torch
 from torch.utils.data import DataLoader

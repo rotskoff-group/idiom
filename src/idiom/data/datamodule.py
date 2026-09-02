@@ -33,8 +33,6 @@ class RecordDataModule(L.LightningDataModule):
         batch_size: int = 64,
         num_workers: int = 0,
         seed: int = 0,
-        fim_idr_prob: float | None = None,   # deprecated alias for prompted_prob
-        fim_full_prob: float | None = None,  # deprecated alias for prompted_prob
     ) -> None:
         """Configure the datamodule; the splits are built lazily in setup().
 
@@ -49,8 +47,6 @@ class RecordDataModule(L.LightningDataModule):
             batch_size (int): Batch size for all dataloaders.
             num_workers (int): DataLoader worker processes.
             seed (int): Seed for the per-sample prompted/unprompted choice.
-            fim_idr_prob (float | None): Deprecated alias for prompted_prob.
-            fim_full_prob (float | None): Deprecated alias for prompted_prob.
         """
         super().__init__()
         self.train_fasta = train_fasta
@@ -58,11 +54,6 @@ class RecordDataModule(L.LightningDataModule):
         self.test_fasta = test_fasta
         self.tok = tokenizer or Tokenizer()
         self.max_len = max_len
-        # back-compat: old callers/configs used fim_full_prob, then fim_idr_prob
-        if fim_full_prob is not None:
-            prompted_prob = fim_full_prob
-        if fim_idr_prob is not None:
-            prompted_prob = fim_idr_prob
         self.prompted_prob = prompted_prob
         self.completion_only = completion_only
         self.batch_size = batch_size

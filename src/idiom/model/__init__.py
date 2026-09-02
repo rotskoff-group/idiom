@@ -6,7 +6,7 @@ residual-stream activation extractor.
 """
 
 from idiom.model.attention import KVCache
-from idiom.model.config import ModelConfig, idiom_12l, idiom_24l, idiom_36l
+from idiom.model.config import ModelConfig, idiom_20m, idiom_85m, idiom_300m
 from idiom.model.sampling import generate, sample_next_token
 from idiom.model.transformer import IDiomTransformer
 
@@ -15,8 +15,8 @@ __all__ = [
     "KVCache",
     "ModelConfig",
     "generate",
-    "idiom_12l",
-    "idiom_24l",
-    "idiom_36l",
+    "idiom_20m",
+    "idiom_85m",
+    "idiom_300m",
     "sample_next_token",
 ]

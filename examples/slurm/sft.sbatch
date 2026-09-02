@@ -19,7 +19,7 @@ set -euo pipefail
 ###
 # SFT on 1 GPU: warm-start a released model and specialize it on one curated set (completion-only
 # loss). init_from takes a HF repo id, a released dir, or a .ckpt. The ProtGPS/effector sets are
-# whole-sequence IDRs (no flanks), so train the de-novo form (data.prompted_prob=0.0).
+# whole-sequence IDRs (no flanks), so train the unprompted form (data.prompted_prob=0.0).
 ###
 
 REPO="$SLURM_SUBMIT_DIR"                          # submit from the repo root

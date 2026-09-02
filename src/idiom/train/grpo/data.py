@@ -1,9 +1,9 @@
 """Prompt source for GRPO, assembled on the fly (no separate RL dataset file).
 
-Prompts are FIM generation prefixes (1{prefix}3{suffix}2): the de-novo prompt "132" for
-unprompted (de novo) optimization via idp_prompts, or one protein's flanks for prompted-IDR
-optimization. A batch is assumed equal-length (the typical case: a single prompt repeated, or
-one compartment's prompt).
+Prompts are FIM generation prefixes (1{prefix}3{suffix}2): the bare "132" prompt for unprompted
+(de novo) optimization via unprompted_prompts, or one protein's flanks for prompted optimization
+via record_prompts. A batch is assumed equal-length (the typical case: a single prompt repeated, or
+one compartment's flank prompt).
 """
 
 from __future__ import annotations
@@ -30,21 +30,24 @@ class PromptDataset(Dataset):
         return self.encoded[i]
 
 
-def idp_prompts(n: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
-    """Return n copies of the de-novo prompt "132" for unprompted optimization.
+def unprompted_prompts(n: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
+    """Return n copies of the bare "132" prompt for unprompted (de novo) optimization.
+
+    Every prompt is identical, so a batch is trivially equal-length and each one expands into its
+    own GRPO group of completions.
 
     Args:
         n (int): Number of prompt copies to produce.
         tokenizer (Tokenizer | None): Character tokenizer (a default is used if None).
 
     Returns:
-        PromptDataset: Dataset of n identical de-novo prompts.
+        PromptDataset: Dataset of n identical de novo prompts.
     """
     return PromptDataset([fim_prompt()] * n, tokenizer)
 
 
 def record_prompts(fasta: str, n_per: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
-    """Return n_per copies of each record's flank prompt for prompted-IDR optimization.
+    """Return n_per copies of each record's flank prompt for prompted optimization.
 
     Args:
         fasta (str): Path to the FASTA of records to draw flank prompts from.

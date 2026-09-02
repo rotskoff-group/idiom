@@ -81,6 +81,21 @@ class IDiomTransformer(nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, tokens: Tensor, *, cache: KVCache | None = None, return_hidden_states: bool = False):
+        """Run the transformer, optionally through a KV cache and returning the residual stream.
+
+        Positions continue from cache.length when a cache is given, so a cached decode step rotates
+        with the same RoPE angles a full forward would use — that is what makes cached and uncached
+        generation agree.
+
+        Args:
+            tokens (Tensor): Token ids of shape [B, L].
+            cache (KVCache | None): Cache to read and extend, or None for a full forward.
+            return_hidden_states (bool): If True, also return each block's residual-stream output.
+
+        Returns:
+            Tensor | tuple[Tensor, list[Tensor]]: Logits [B, L, vocab_size], or (logits, hidden)
+                where hidden[i] is the residual stream after block i (what the SAE consumes).
+        """
         B, L = tokens.shape
         past = cache.length if cache is not None else 0
         positions = torch.arange(past, past + L, device=tokens.device)

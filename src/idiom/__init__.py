@@ -3,11 +3,11 @@
 Public API:
 
     from idiom import IDiom, IDiomSAE
-    model = IDiom.from_pretrained("jxliu2/idiom-medium")
-    model.generate_unprompted(n=100)                          # de-novo IDRs
+    model = IDiom.from_pretrained("jxliu2/idiom-300M")
+    model.generate_unprompted(n=100)                                 # de novo IDRs
     model.generate_prompted(protein_seq, idr_start, idr_end, n=100)  # IDR in flanking context
-    model.embed("proteins.fasta", layers=[8])
-    sae = IDiomSAE.from_pretrained("jxliu2/idiom-medium-sae-L8", model=model)
+    model.embed("proteins.fasta", layers=[18])
+    sae = IDiomSAE.from_pretrained("jxliu2/idiomsae-300M-L18-k32")   # host model auto-loaded
     sae.encode("proteins.fasta")
 """
 

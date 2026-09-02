@@ -34,7 +34,7 @@ def save_sae(
         layer (int): The residual-stream layer the SAE was trained on.
         region (str): The residue slice the SAE was trained on: "all", "idr", or "non_idr".
         fim_mode (str): The prompt format the residual stream was taken under: "prompted" or
-            "unprompted" (legacy aliases normalized).
+            "unprompted".
 
     Returns:
         Path: The output directory the release was written to.
@@ -77,7 +77,7 @@ def load_sae(
 
     d = Path(path)
     cfg = json.loads((d / SAE_CONFIG_FILE).read_text())
-    if "fim_mode" in cfg:  # normalize legacy denovo/context/idp/idr -> unprompted/prompted
+    if "fim_mode" in cfg:  # validate here, so a hand-edited config fails at load, not at first use
         cfg["fim_mode"] = normalize_mode(cfg["fim_mode"])
     sae = SparseCoder(
         cfg["d_in"], num_latents=cfg["num_latents"], k=cfg["k"],

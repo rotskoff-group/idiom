@@ -1,8 +1,7 @@
-"""P0 SAE-port smoke tests (CPU-only): the merged SAE core works end to end."""
+"""P0 SAE core smoke test (CPU-only): encode/decode round-trip and top-k sparsity."""
 
 import torch
 
-from idiom.data.tokens import residue_position_mask, residue_token_ids
 from idiom.sae import SparseCoder
 
 
@@ -20,13 +19,3 @@ def test_sparse_coder_forward_cpu():
     assert sae.decode_dense(f).shape == x.shape
     # top-k sparsity: at most k strictly-positive latents per row.
     assert int((f > 0).sum(-1).max()) <= k
-
-
-def test_residue_mask():
-    # ids 0,1,2 are FIM markers ('1','2','3'); 3,4,5 are real residues.
-    token_info = {"alphabet": ["1", "2", "3", "A", "C", "D"]}
-    assert residue_token_ids(token_info) == [3, 4, 5]
-
-    toks = torch.tensor([[0, 3, 4, 1, 5, 2]])
-    mask = residue_position_mask(toks, token_info)
-    assert mask.tolist() == [[False, True, True, False, True, False]]

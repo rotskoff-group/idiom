@@ -26,22 +26,6 @@ from idiom.sae.training.lit_sae import LitSAE
 from idiom.utils.device import resolve_device
 
 
-def _prompted_prob(cfg: DictConfig) -> float:
-    """Return the probability of the prompted variant from config.
-
-    Accepts the deprecated fim_idr_prob / fim_full_prob keys as fallbacks.
-
-    Args:
-        cfg (DictConfig): The training config.
-
-    Returns:
-        float: The prompted-variant probability.
-    """
-    return cfg.data.get(
-        "prompted_prob", cfg.data.get("fim_idr_prob", cfg.data.get("fim_full_prob", 0.5))
-    )
-
-
 def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     """Wire the frozen model, record source, activation store, and LitSAE from config.
 
@@ -57,7 +41,7 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
 
     records = RecordDataset(
         open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len,
-        prompted_prob=_prompted_prob(cfg),
+        prompted_prob=cfg.data.get("prompted_prob", 0.5),
     )
     record_loader = DataLoader(
         records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id),
@@ -107,10 +91,11 @@ def run(cfg: DictConfig) -> None:
         **OmegaConf.to_container(cfg.trainer, resolve=True), logger=wandb_logger, default_root_dir=out_dir
     )
     trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
-    # canonical SAE release (host_model + layer + region + fim_mode recorded): loads via
-    # IDiomSAE.from_pretrained. fim_mode is "unprompted" iff training was pure de-novo
-    # (prompted_prob==0), else "prompted" — the prompt format downstream tools rebuild activations under.
-    fim_mode = UNPROMPTED if float(_prompted_prob(cfg)) == 0.0 else PROMPTED
+    # Canonical SAE release (host_model + layer + region + fim_mode recorded): loads via
+    # IDiomSAE.from_pretrained. fim_mode is the prompt format downstream tools must rebuild
+    # activations under, so it is "unprompted" only when training saw no flanks at all
+    # (prompted_prob == 0); any mixture means the SAE has seen prompted context and is recorded so.
+    fim_mode = UNPROMPTED if float(cfg.data.get("prompted_prob", 0.5)) == 0.0 else PROMPTED
     save_sae(
         lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer,
         region=cfg.get("region", "all"), fim_mode=fim_mode,
@@ -119,6 +104,7 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="sae")
 def main(cfg: DictConfig) -> None:
+    """Hydra entrypoint that trains an SAE with the composed config."""
     run(cfg)
 
 

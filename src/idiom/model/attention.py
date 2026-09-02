@@ -27,6 +27,16 @@ class KVCache:
         self.length = 0  # tokens cached so far (advanced by the transformer, once per forward)
 
     def update(self, layer: int, k: Tensor, v: Tensor) -> tuple[Tensor, Tensor]:
+        """Append this step's keys/values for one layer and return the full cached history.
+
+        Args:
+            layer (int): Layer index whose cache to extend.
+            k (Tensor): New keys of shape [B, H, L_new, head_dim].
+            v (Tensor): New values of the same shape.
+
+        Returns:
+            tuple[Tensor, Tensor]: The keys and values spanning past + current positions.
+        """
         # Append the new keys/values along the sequence dim (=2 for [B, H, L, head_dim]).
         if self.k[layer] is None:
             self.k[layer], self.v[layer] = k, v
@@ -56,6 +66,18 @@ class Attention(nn.Module):
         cache: KVCache | None = None,
         layer_idx: int = 0,
     ) -> Tensor:
+        """Attend over x, rotating q/k to the given absolute positions.
+
+        Args:
+            x (Tensor): Normalized input of shape [B, L, d_model].
+            rope (Rope): Rotary embedding tables.
+            positions (Tensor): Absolute position index per element of the L axis.
+            cache (KVCache | None): Cache to read and extend, or None for a full forward.
+            layer_idx (int): This layer's index, used as the cache slot.
+
+        Returns:
+            Tensor: The attention output of shape [B, L, d_model].
+        """
         B, L, _ = x.shape
         qkv = self.wqkv(x).view(B, L, 3, self.n_heads, self.head_dim)
         q, k, v = (t.transpose(1, 2) for t in qkv.unbind(2))  # each [B, H, L, head_dim]

@@ -1,8 +1,9 @@
 """GRPO entrypoint run via idiom_grpo: a pretrained checkpoint plus prompts plus a composite reward.
 
-build_reward_terms composes the reward as a weighted sum of enabled terms (entropy, length, an
-RL-SAE feature-code reward, and any number of external reward models), with the tuned defaults in
-configs/grpo.yaml. External reward models register via reward.module before launch.
+build(cfg) wires the module and prompt set together (and is unit-testable); run(cfg) fits. The
+reward is a weighted sum of the enabled terms (entropy, length, an RL-SAE feature-code reward, and
+any number of external reward models), with the tuned defaults in configs/grpo.yaml; in-process
+reward functions are registered by importing reward.module before lookup.
 """
 
 from __future__ import annotations
@@ -16,41 +17,44 @@ from lightning.pytorch.loggers import WandbLogger
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from idiom.train.grpo.data import collate_prompts, idp_prompts, record_prompts
+from idiom.data.fim import UNPROMPTED
+from idiom.train.grpo.data import collate_prompts, record_prompts, unprompted_prompts
 from idiom.train.grpo.lit_grpo import LitGRPO
+from idiom.train.grpo.reward import build_reward_terms
 
-# The composite reward lives in reward/ (build_reward/_components are back-compat shims over
-# build_reward_terms, re-exported here so old imports from train_grpo keep working).
-from idiom.train.grpo.reward import build_reward, build_reward_components, build_reward_terms
-
-__all__ = ["build", "build_reward", "build_reward_components", "build_reward_terms", "run"]
+__all__ = ["build", "build_reward_terms", "run"]
 
 
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     """Wire the GRPO module and prompt dataset from a resolved config.
 
-    Always warm-starts the policy from a pretrained checkpoint (cfg.init_from); the architecture
-    is read from that checkpoint. Builds the composite reward from cfg.reward, and an unprompted or
-    prompted-IDR prompt set based on cfg.prompts.mode (the legacy modes idp and denovo are accepted
-    for unprompted).
+    RL has nothing to learn from a randomly initialized policy, so GRPO always warm-starts from a
+    pretrained checkpoint (cfg.init_from) and reads the architecture from it. cfg.prompts.mode picks
+    what the policy is optimized over: "unprompted" repeats the bare de novo prompt, "record" draws
+    one flank prompt per protein in cfg.prompts.fasta.
 
     Args:
         cfg (DictConfig): Resolved GRPO config (grpo, reward, prompts, init_from).
 
     Returns:
         tuple[LitGRPO, object]: The GRPO module and its prompt dataset.
+
+    Raises:
+        ValueError: If cfg.prompts.mode is neither "unprompted" nor "record".
     """
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
-    # GRPO always warm-starts from a pretrained policy; architecture is read from that checkpoint.
     # One composite reward: a weighted sum of the enabled terms, scored a whole batch per step.
     reward_terms = build_reward_terms(cfg.reward)
     lit = LitGRPO.init_from_checkpoint(cfg.init_from, reward_terms=reward_terms, **grpo_kw)
 
-    # "idp"/"denovo" kept for back-compat with old configs; "unprompted" is the current vocabulary
-    if cfg.prompts.mode in ("unprompted", "idp", "denovo"):
-        ds = idp_prompts(cfg.prompts.n)
-    else:
+    if cfg.prompts.mode == UNPROMPTED:
+        ds = unprompted_prompts(cfg.prompts.n)
+    elif cfg.prompts.mode == "record":
         ds = record_prompts(cfg.prompts.fasta, cfg.prompts.n_per)
+    else:
+        raise ValueError(
+            f"prompts.mode must be 'unprompted' or 'record', got {cfg.prompts.mode!r}"
+        )
     return lit, ds
 
 
