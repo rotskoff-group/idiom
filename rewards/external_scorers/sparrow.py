@@ -5,10 +5,10 @@ IDiom. The config's cmd lets uv build sparrow on demand (no install step); see t
 the top-level README for cache and pinning guidance. In configs/grpo.yaml:
 
     reward.external:
-      - {enabled: true, weight: 0.5, target: 25, width: 3,
+      - {enabled: true, weight: 0.5, target: 25, width: 0.2,
          cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
 
-It returns the raw property value (the term's target/width band it into a reward). --property is any
+It returns the raw property value (the term's target/width shape it into a reward — a quadratic penalty toward the target). --property is any
 ALBATROSS predictor (radius_of_gyration, end_to_end_distance, asphericity, scaling_exponent,
 prefactor) or a sequence parameter (FCR, NCPR, kappa, SCD, complexity). Note kappa returns -1.0 for a
 sequence with no charged residues (a sentinel a policy can reach by removing all charge), so target

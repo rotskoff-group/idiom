@@ -87,21 +87,42 @@ def sequence_entropy(idr: str) -> float:
     return -sum((c / n) * math.log2(c / n) for c in Counter(idr).values())
 
 
+def quadratic_penalty(value: float, target: float, width: float) -> float:
+    """Quadratic penalty -((value - target) / (target * width))^2: 0 at the target, negative away.
+
+    The shared shaping for every target-seeking term (length, entropy, and external scorers). width
+    is a tolerance relative to the target, so the penalty reaches -1 at a deviation of width*|target|
+    and its magnitude is scale-free (choosing bits vs nats, or A vs nm, leaves it unchanged as long
+    as the target is converted too). When target is 0 the relative scale is undefined, so width is
+    used as an absolute tolerance instead.
+
+    Args:
+        value (float): The measured value to score.
+        target (float): The value at which the penalty is 0.
+        width (float): Tolerance as a fraction of the target (absolute when target is 0).
+
+    Returns:
+        float: 0 at the target, increasingly negative (unbounded) as value moves away.
+    """
+    scale = target * width if target else width  # relative tolerance; absolute when target == 0
+    d = (value - target) / scale
+    return -(d * d)
+
+
 def length_reward(idr: str, *, target_length: int, width: float = 1.0) -> float:
     """Quadratic length penalty -((len - target_length) / (target_length * width))^2, max 0 at target.
 
     Args:
         idr (str): The decoded IDR residue string.
         target_length (int): Desired IDR length.
-        width (float): Scale of the tolerance band around the target.
+        width (float): Tolerance as a fraction of the target length.
 
     Returns:
         float: The penalty (0 at the target length, -1.0 for an empty IDR).
     """
     if not idr:
         return -1.0  # max penalty for an empty IDR (legacy)
-    d = (len(idr) - target_length) / (target_length * width)
-    return -(d * d)
+    return quadratic_penalty(len(idr), target_length, width)
 
 
 def entropy_reward(idr: str, *, target_entropy: float = 3.65, width: float = 1.0) -> float:
@@ -115,13 +136,12 @@ def entropy_reward(idr: str, *, target_entropy: float = 3.65, width: float = 1.0
     Args:
         idr (str): The decoded IDR residue string.
         target_entropy (float): Desired composition entropy in bits.
-        width (float): Scale of the tolerance band around the target.
+        width (float): Tolerance as a fraction of the target entropy.
 
     Returns:
         float: The penalty (0 at the target entropy).
     """
-    d = (sequence_entropy(idr) - target_entropy) / (target_entropy * width)  # H=0 for empty IDR
-    return -(d * d)
+    return quadratic_penalty(sequence_entropy(idr), target_entropy, width)  # H=0 for empty IDR
 
 
 def quadratic_shaping(raw: float, *, target: float, scale: float = 1.0) -> float:

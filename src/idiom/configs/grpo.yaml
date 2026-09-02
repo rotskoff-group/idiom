@@ -35,7 +35,7 @@ reward:                      # total = sum of the enabled terms, each scaled by 
                              #   in-process (a registered reward): {enabled, weight, name: aromatic_fraction, module: rewards/example_rewards.py}
                              #   subprocess (own env, built on demand by uv -- set UV_CACHE_DIR to scratch):
                              #     {enabled, weight, target, width, cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
-                             # a subprocess scorer returns a raw value; target/width band it to (0,1]. monitor: true logs an entry without adding it to the total.
+                             # a subprocess scorer returns a raw value; target/width shape it with a quadratic penalty toward target (like entropy/length). monitor: true logs an entry without adding it to the total.
 
 trainer:
   max_steps: 3000

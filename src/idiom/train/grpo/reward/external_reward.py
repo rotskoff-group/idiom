@@ -8,12 +8,12 @@ subprocess "scorer" spoken to over newline-delimited JSON, one exchange per GRPO
 
 A scorer imports nothing from IDiom, so it can live in any venv, conda env, or container. Each
 external term in configs/grpo.yaml carries its own cmd, so several coexist in one run; the scorer
-returns a raw value and the term's target/width band it to a reward (see the reward section of the
-top-level README).
+returns a raw value and the term's target/width shape it into a reward — the same quadratic penalty
+toward the target as the length and entropy guardrails (see the reward section of the top-level README).
 
 Check a command before spending a GPU allocation:
 
-    uv run python -m idiom.train.grpo.reward.external_reward --cmd "<scorer command>" --target 25 --width 3
+    uv run python -m idiom.train.grpo.reward.external_reward --cmd "<scorer command>" --target 25 --width 0.2
 """
 
 from __future__ import annotations
@@ -28,6 +28,8 @@ import signal
 import subprocess
 import sys
 import threading
+
+from idiom.train.grpo.reward.base import quadratic_penalty
 
 _PROBE = "MKVGSDEQ"  # handshake sequence: a valid IDR every scorer should be able to score
 
@@ -210,21 +212,25 @@ class Scorer:
             return self.roundtrip(seqs)
 
 
-def band(value: float, target: float | None, width: float) -> float:
-    """Map a raw scorer value to a reward through a target band, or pass it through.
+def target_penalty(value: float, target: float | None, width: float) -> float:
+    """Shape a raw scorer value into a reward: a quadratic penalty toward target, or pass it through.
+
+    The same shaping as the length and entropy terms (base.quadratic_penalty): a value at the target
+    scores 0 and moves negative away from it, with width a tolerance relative to the target.
+    target=None passes the raw value through unchanged (for a monitor term, or a scorer that already
+    returns a calibrated reward).
 
     Args:
         value (float): The scorer's raw value.
-        target (float | None): Band centre; None passes the raw value through unchanged.
-        width (float): Band width in the value's own units.
+        target (float | None): Target value; None passes the raw value through unchanged.
+        width (float): Tolerance as a fraction of the target.
 
     Returns:
-        float: exp(-((value - target) / width)^2 / 2) in (0, 1] when target is set, else value.
+        float: 0 at the target, increasingly negative away from it; or value when target is None.
     """
     if target is None:
         return value
-    d = (value - target) / width
-    return math.exp(-0.5 * d * d)
+    return quadratic_penalty(value, target, width)
 
 
 def make_external_reward(cmd: str, *, target: float | None = None, width: float = 1.0,
@@ -239,8 +245,8 @@ def make_external_reward(cmd: str, *, target: float | None = None, width: float 
 
     Args:
         cmd (str): Command that runs the scorer, shell-quoted or a JSON argv list.
-        target (float | None): Band centre; None uses the raw scorer value as the reward.
-        width (float): Band width in the value's own units.
+        target (float | None): Target value; None uses the raw scorer value as the reward.
+        width (float): Tolerance as a fraction of the target.
         timeout (float): Seconds to wait for one response.
         maxlen (int): Truncate sequences to this length before sending (0 = no truncation).
         cwd (str | None): Working directory for the child; defaults to the current directory.
@@ -260,18 +266,18 @@ def make_external_reward(cmd: str, *, target: float | None = None, width: float 
             if len(cache) > cache_max:
                 cache.clear()
             cache.update(zip(todo, values))
-        return [band(cache[s], target, width) if s else 0.0 for s in idrs]
+        return [target_penalty(cache[s], target, width) if s else 0.0 for s in idrs]
 
     return reward
 
 
 def check(cmd: str, target: float | None, width: float, seqs: list[str] | None = None) -> int:
-    """Run a command over a few sequences and print the raw values and band rewards it produces.
+    """Run a command over a few sequences and print the raw values and quadratic-penalty rewards.
 
     Args:
         cmd (str): The scorer command to check.
-        target (float | None): Band centre, or None to show the raw value as the reward.
-        width (float): Band width.
+        target (float | None): Target value, or None to show the raw value as the reward.
+        width (float): Tolerance as a fraction of the target.
         seqs (list[str] | None): Sequences to score; a small built-in set when None.
 
     Returns:
@@ -283,7 +289,7 @@ def check(cmd: str, target: float | None, width: float, seqs: list[str] | None =
                     "GSGSGSGSGSGSGSGSGSGSGSGSGSGSGS",
                     "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ"]
     print(f"command : {cmd or '(none -- pass --cmd)'}")
-    print(f"reward  : {'raw value' if target is None else f'band(target={target:g}, width={width:g})'}")
+    print(f"reward  : {'raw value' if target is None else f'penalty(target={target:g}, width={width:g})'}")
     scorer = Scorer(cmd, timeout=300.0)
     t0 = time.monotonic()
     try:
@@ -296,7 +302,7 @@ def check(cmd: str, target: float | None, width: float, seqs: list[str] | None =
     print(f"\nstartup + {len(seqs)} sequences in {time.monotonic() - t0:.1f}s\n")
     print(f"{'raw':>12}  {'reward':>8}  sequence")
     for s, v in zip(seqs, values):
-        print(f"{v:12.4f}  {band(v, target, width):8.4f}  {s[:44]}")
+        print(f"{v:12.4f}  {target_penalty(v, target, width):8.4f}  {s[:44]}")
     return 0
 
 
@@ -313,8 +319,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = argparse.ArgumentParser(description="Check an external reward scorer command.")
     p.add_argument("--cmd", required=True, help="command that runs the scorer")
-    p.add_argument("--target", type=float, default=None, help="band centre (default: raw value)")
-    p.add_argument("--width", type=float, default=1.0, help="band width")
+    p.add_argument("--target", type=float, default=None, help="target value (default: raw value)")
+    p.add_argument("--width", type=float, default=1.0, help="tolerance as a fraction of the target")
     p.add_argument("sequences", nargs="*", help="sequences to score instead of the built-in set")
     args = p.parse_args(argv)
     return check(args.cmd, args.target, args.width, args.sequences or None)

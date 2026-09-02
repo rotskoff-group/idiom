@@ -174,21 +174,23 @@ demand, so the config is all you write:
 ```yaml
 # design IDRs with a radius of gyration near 25 A, scored by sparrow in its own environment
 reward.external:
-  - {enabled: true, weight: 0.5, target: 25, width: 3,
+  - {enabled: true, weight: 0.5, target: 25, width: 0.2,
      cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
 ```
 
-The scorer returns a **raw value**; the term's `target`/`width` band it into `(0, 1]` — kept on the
-IDiom side so you retune the objective without touching that environment. `monitor: true` logs a term
-without adding it to the total, and because each command lives in the config, several external
-rewards — each its own environment and target — combine in one run. Point uv's cache at scratch and
-verify a command before spending a GPU allocation:
+The scorer returns a **raw value**; the term's `target`/`width` shape it with a quadratic penalty
+toward the target — the same form as the entropy/length guardrails (0 at the target, negative away,
+`width` a fractional tolerance, so `0.2` reaches −1 at a 20% deviation) — kept on the IDiom side so
+you retune the objective without touching that environment. `monitor: true` logs a term without
+adding it to the total, and because each command lives in the config, several external rewards — each
+its own environment and target — combine in one run. Point uv's cache at scratch and verify a command
+before spending a GPU allocation:
 
 ```bash
 export UV_CACHE_DIR=/scratch/you/uv-cache   # several GB; keep it off your home directory
 uv run python -m idiom.train.grpo.reward.external_reward \
   --cmd "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration" \
-  --target 25 --width 3
+  --target 25 --width 0.2
 ```
 
 uv builds the environment once at the startup handshake (~30s for sparrow, which needs a C compiler;

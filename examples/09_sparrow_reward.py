@@ -4,9 +4,10 @@ Same GRPO loop as 08, but the reward is a separate program instead of an in-proc
 sparrow (https://github.com/idptools/sparrow) scorer that predicts a biophysical property of each
 IDR. It imports nothing from IDiom and runs in its own environment, which uv builds on demand from
 the cmd — no install step. The scorer returns a raw value (e.g. radius of gyration in A); the term's
-target/width band it into a reward, so the policy is pushed toward IDRs near that target.
+target/width shape it with a quadratic penalty toward the target (the same form as the entropy/length
+guardrails), so the policy is pushed toward IDRs near that target.
 
-    uv run python examples/09_sparrow_reward.py --property radius_of_gyration --target 25 --width 3
+    uv run python examples/09_sparrow_reward.py --property radius_of_gyration --target 25 --width 0.2
 
 The first step builds sparrow (~30s, needs a C compiler and network); every run after is a uv cache
 hit. Point UV_CACHE_DIR at scratch if your home directory is small. A GPU is recommended for the
@@ -44,8 +45,8 @@ def main() -> None:
                    help="base to optimize: a HF repo id, a released dir, or a .ckpt")
     p.add_argument("--property", default="radius_of_gyration",
                    help="sparrow property to target (radius_of_gyration, asphericity, FCR, kappa, ...)")
-    p.add_argument("--target", type=float, default=25.0, help="band centre in the property's units")
-    p.add_argument("--width", type=float, default=3.0, help="band width in the property's units")
+    p.add_argument("--target", type=float, default=25.0, help="target value in the property's units")
+    p.add_argument("--width", type=float, default=0.2, help="tolerance as a fraction of the target")
     p.add_argument("--sparrow-spec", default="sparrow @ git+https://github.com/idptools/sparrow.git",
                    help="uv --with spec for sparrow (pin @<commit> for reproducibility)")
     p.add_argument("--steps", type=int, default=5, help="optimizer steps (small for a demo)")
@@ -63,7 +64,7 @@ def main() -> None:
     cmd = (f"uv run --isolated --no-project --with '{args.sparrow_spec}' "
            f"python rewards/external_scorers/sparrow.py --property {args.property}")
 
-    # Pre-flight: build the scorer once and print raw values + banded rewards, so a broken command
+    # Pre-flight: build the scorer once and print raw values + shaped rewards, so a broken command
     # fails here (seconds) rather than after warm-starting the policy. This is the same check the
     # `idiom.train.grpo.reward.external_reward` CLI runs.
     if not args.skip_check:
@@ -102,7 +103,7 @@ def main() -> None:
     trainer.fit(lit, dl)
 
     print(f"mean reward after RL:  {mean_reward(reward_terms, lit.model, gen_device, 16, args.group_size):+.3f}")
-    print(f"(reward bands sparrow's {args.property} toward {args.target}; entropy keeps it natural)")
+    print(f"(reward is a quadratic penalty on sparrow's {args.property} toward {args.target}; entropy keeps it natural)")
 
 
 if __name__ == "__main__":

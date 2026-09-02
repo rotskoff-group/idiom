@@ -11,7 +11,12 @@ import textwrap
 
 import pytest
 
-from idiom.train.grpo.reward.external_reward import Scorer, band, make_external_reward, parse_response
+from idiom.train.grpo.reward.external_reward import (
+    Scorer,
+    make_external_reward,
+    parse_response,
+    target_penalty,
+)
 
 
 def _scorer(tmp_path, body, name="fake_scorer.py", **kw):
@@ -149,14 +154,15 @@ def test_scorer_error_response_propagates(tmp_path):
         s.stop()
 
 
-# ---------------------------------------------------------------- band + reward
+# ---------------------------------------------------------------- target penalty + reward
 
 
-def test_band_transform():
-    assert band(24.8, None, 1.0) == 24.8            # no target: the raw value is the reward
-    assert band(25.0, 25.0, 3.0) == pytest.approx(1.0)
-    assert band(28.0, 25.0, 3.0) == pytest.approx(0.6065, abs=1e-4)  # one width out
-    assert 0.0 < band(100.0, 25.0, 3.0) < 1e-3      # bounded, not exploding
+def test_target_penalty_transform():
+    assert target_penalty(24.8, None, 1.0) == 24.8              # no target: raw value is the reward
+    assert target_penalty(25.0, 25.0, 0.2) == 0.0              # 0 at the target
+    assert target_penalty(30.0, 25.0, 0.2) == pytest.approx(-1.0)  # one tolerance out (20% = 5) -> -1
+    assert target_penalty(100.0, 25.0, 0.2) == pytest.approx(-225.0)  # unbounded, not saturating
+    assert target_penalty(2.0, 0.0, 1.0) == -4.0              # target 0 -> width is an absolute scale
 
 
 def _batched_scorer_file(tmp_path, counter):
@@ -189,20 +195,20 @@ def test_make_external_reward_batches_dedups_and_caches(tmp_path):
     assert batches[2] == '["GG"]'            # only the uncached sequence
 
 
-def test_make_external_reward_applies_band(tmp_path):
+def test_make_external_reward_applies_penalty(tmp_path):
     reward = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}",
                                   cwd=str(tmp_path), target=3.0, width=1.0)
-    # "AAA" -> raw 3.0 -> band(3,3,1)=1.0 ; "AAAAA" -> raw 5.0 -> band(5,3,1)
+    # "AAA" -> raw 3.0 -> penalty(3,3,1)=0.0 ; "AAAAA" -> raw 5.0 -> penalty(5,3,1)
     scores = reward(["AAA", "AAAAA"], 2)
-    assert scores[0] == pytest.approx(1.0)
-    assert scores[1] == pytest.approx(band(5.0, 3.0, 1.0))
+    assert scores[0] == pytest.approx(0.0)
+    assert scores[1] == pytest.approx(target_penalty(5.0, 3.0, 1.0))
 
 
 def test_two_external_rewards_are_independent(tmp_path):
     # different commands/targets in one run must not share global state
     r1 = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path), target=3.0, width=1.0)
     r2 = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))  # raw
-    assert r1(["AAA"], 1)[0] == pytest.approx(1.0)     # banded at 3
+    assert r1(["AAA"], 1)[0] == pytest.approx(0.0)     # penalty 0 at the target (3)
     assert r2(["AAA"], 1)[0] == pytest.approx(3.0)     # raw length
 
 

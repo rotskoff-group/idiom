@@ -12,6 +12,7 @@ from idiom.train.grpo.reward.base import (
     entropy_reward,
     get_reward,
     length_reward,
+    quadratic_penalty,
     quadratic_shaping,
     register_reward,
     resolve_reward,
@@ -22,12 +23,16 @@ from idiom.train.grpo.reward.compose_reward import (
     build_reward_components,
     build_reward_terms,
 )
-from idiom.train.grpo.reward.external_reward import Scorer, band, make_external_reward, parse_response
+from idiom.train.grpo.reward.external_reward import (
+    Scorer,
+    make_external_reward,
+    parse_response,
+    target_penalty,
+)
 
 __all__ = [
     "REWARD_REGISTRY",
     "Scorer",
-    "band",
     "build_reward",
     "build_reward_components",
     "build_reward_terms",
@@ -36,8 +41,10 @@ __all__ = [
     "length_reward",
     "make_external_reward",
     "parse_response",
+    "quadratic_penalty",
     "quadratic_shaping",
     "register_reward",
     "resolve_reward",
     "sequence_entropy",
+    "target_penalty",
 ]
