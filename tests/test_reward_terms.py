@@ -1,9 +1,9 @@
 """Tests for the composite (weighted-sum) reward.
 
 Two things are checked: the new term-block config sums exactly as specified, and every legacy config
-shape (name / group / shaping / monitor + length + entropy) reproduces bit-for-bit through the
-desugaring, so old configs and old checkpoints train identically. The reference is a from-scratch
-reimplementation of the pre-refactor arithmetic, kept in this file.
+shape (name / shaping / monitor + length + entropy) reproduces bit-for-bit through the desugaring, so
+old configs and old checkpoints train identically. The reference is a from-scratch reimplementation
+of the pre-refactor arithmetic, kept in this file.
 """
 
 import math
@@ -11,8 +11,7 @@ import math
 from omegaconf import OmegaConf
 
 from idiom.train.grpo.reward import (
-    entropy_reward, get_reward, length_reward, quadratic_shaping, register_group_reward,
-    register_reward)
+    entropy_reward, get_reward, length_reward, quadratic_shaping, register_reward)
 from idiom.train.grpo.train_grpo import build_reward, build_reward_terms
 
 
@@ -37,7 +36,6 @@ def _legacy_cfg(**over):
     base = {
         "module": None,
         "name": "fraction_proline",
-        "group": None,
         "monitor": None,
         "shaping": {"enabled": False, "target": 0.9, "scale": 1.0},
         "length": {"enabled": True, "target_length": 100, "width": 1.0, "weight": 2.0},
@@ -80,20 +78,6 @@ def test_legacy_grid_matches_reference():
                 for idr in IDRS:
                     assert math.isclose(reward(idr), _legacy_total(cfg, idr), abs_tol=1e-12), (
                         shaping, length, entropy, idr)
-
-
-def test_legacy_group_reward_matches_reference():
-    # a legacy group reward: base scored on the whole batch, then per-idr length/entropy added,
-    # shaping never applied (the old group path forced it off)
-    register_group_reward("_grp_len")(lambda idrs, gs: [float(len(x)) for x in idrs])
-    cfg = _legacy_cfg(name=None, group="_grp_len")
-    terms = build_reward_terms(OmegaConf.create(cfg))
-    totals, _ = terms(IDRS, 1)
-    for idr, total in zip(IDRS, totals):
-        expect = float(len(idr))
-        expect += cfg["length"]["weight"] * length_reward(idr, target_length=100, width=1.0)
-        expect += cfg["entropy"]["weight"] * entropy_reward(idr, target_entropy=3.68, width=0.2)
-        assert math.isclose(total, expect, abs_tol=1e-12)
 
 
 def test_legacy_monitor_is_logged_not_optimized():
@@ -175,20 +159,6 @@ def test_new_disabled_terms_drop_out():
     )
     totals, breakdown = build_reward_terms(cfg)(["ACDE"], 1)
     assert totals == [0.0] and breakdown[0] == {"total": 0.0}  # nothing enabled -> zero reward
-
-
-def test_new_external_batched_reward():
-    # a batched (group-registered) external reward is called once for the whole batch
-    calls = []
-    register_group_reward("_batched")(lambda idrs, gs: calls.append(len(idrs)) or [float(len(x)) for x in idrs])
-    cfg = _new_cfg(
-        entropy={"enabled": False, "weight": 0.0, "target_entropy": 3.68, "width": 0.2},
-        length={"enabled": False, "weight": 0.0, "target_length": 100, "width": 1.0},
-        external=[{"enabled": True, "weight": 1.0, "name": "_batched"}],
-    )
-    totals, _ = build_reward_terms(cfg)(["AA", "CCC", "DDDD"], 3)
-    assert totals == [2.0, 3.0, 4.0]
-    assert calls == [3]  # one call for the whole batch, not one per completion
 
 
 def test_new_monitor_term():

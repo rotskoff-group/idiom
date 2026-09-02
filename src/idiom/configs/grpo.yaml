@@ -28,7 +28,7 @@ grpo:
 reward:                      # total = sum of the enabled terms, each scaled by its weight
   module: null               # optional: a *.py / module with @register_reward, imported first
                              #   (e.g. rewards/example_rewards.py — copy/edit for your own)
-  entropy: {enabled: true,  weight: 1.0, target_entropy: 3.68, width: 0.2}  # bits (2.55 nats); corpus IDR mean ~3.64. naturalness guardrail
+  entropy: {enabled: true,  weight: 1.0, target_entropy: 3.65, width: 0.2}  # bits (~2.53 nats); corpus IDR mean ~3.64. naturalness guardrail
   length:  {enabled: true,  weight: 1.0, target_length: 100, width: 1.0}
   rl_sae:  {enabled: false, weight: 1.0, signature: nucleolus}              # reproduce a target SAE feature code (targets in rewards/rl_sae_targets/)
   external: []               # bring-your-own reward models; each entry is one of:
@@ -38,13 +38,13 @@ reward:                      # total = sum of the enabled terms, each scaled by 
                              # a subprocess scorer returns a raw value; target/width band it to (0,1]. monitor: true logs an entry without adding it to the total.
 
 trainer:
-  max_steps: 1500
+  max_steps: 3000
   accelerator: auto
   devices: 1
   gradient_clip_val: 1.0
   accumulate_grad_batches: 2  # accumulate N micro-batches per optimizer step (halves peak memory vs. one big batch)
   log_every_n_steps: 1     # log EVERY step so W&B's native _step axis == the real training step (0..max_steps)
-  checkpoint_every: 500    # save a periodic checkpoint every N optimizer steps (0 = last only)
+  checkpoint_every: 0    # save a periodic checkpoint every N optimizer steps (0 = last only)
 
 out_dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor/runs}/grpo
 

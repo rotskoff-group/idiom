@@ -8,13 +8,11 @@ in foreign environments, and rl_sae_targets/ signature files. The RL-SAE reward 
 """
 
 from idiom.train.grpo.reward.base import (
-    GROUP_REWARD_REGISTRY,
     REWARD_REGISTRY,
     entropy_reward,
     get_reward,
     length_reward,
     quadratic_shaping,
-    register_group_reward,
     register_reward,
     resolve_reward,
     sequence_entropy,
@@ -27,7 +25,6 @@ from idiom.train.grpo.reward.compose_reward import (
 from idiom.train.grpo.reward.external_reward import Scorer, band, make_external_reward, parse_response
 
 __all__ = [
-    "GROUP_REWARD_REGISTRY",
     "REWARD_REGISTRY",
     "Scorer",
     "band",
@@ -40,7 +37,6 @@ __all__ = [
     "make_external_reward",
     "parse_response",
     "quadratic_shaping",
-    "register_group_reward",
     "register_reward",
     "resolve_reward",
     "sequence_entropy",

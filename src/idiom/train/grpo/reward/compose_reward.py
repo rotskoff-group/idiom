@@ -132,13 +132,12 @@ def build_reward_terms(rcfg: DictConfig):
 
 
 def _to_new_shape(rcfg: DictConfig) -> DictConfig:
-    """Desugar a legacy reward config (name/group/shaping/monitor) into the term-block shape.
+    """Desugar a legacy reward config (name/shaping/monitor) into the term-block shape.
 
     A config that already has an rl_sae or external block is returned unchanged. Otherwise the
-    legacy base reward (group takes precedence over name, matching the old build) becomes a single
-    external term of weight 1.0; a legacy monitor becomes a monitor term; and legacy shaping is
-    preserved by wrapping the base reward in a registered shaped alias. entropy and length blocks
-    carry over untouched.
+    legacy base reward (name) becomes a single external term of weight 1.0; a legacy monitor becomes
+    a monitor term; and legacy shaping is preserved by wrapping the base reward in a registered
+    shaped alias. entropy and length blocks carry over untouched.
 
     Args:
         rcfg (DictConfig): A reward config in either shape.
@@ -150,7 +149,7 @@ def _to_new_shape(rcfg: DictConfig) -> DictConfig:
         return rcfg
     d = OmegaConf.to_container(rcfg, resolve=True)
     external = []
-    base = d.get("group") or d.get("name")  # legacy: group overrode name
+    base = d.get("name")
     if base:
         _register_custom_rewards(d.get("module"))  # so the base name resolves before we wrap it
         name = base
@@ -164,7 +163,7 @@ def _to_new_shape(rcfg: DictConfig) -> DictConfig:
         external.append({"enabled": True, "weight": 1.0, "name": name})
     if d.get("monitor"):
         external.append({"enabled": True, "weight": 0.0, "name": d["monitor"], "monitor": True})
-    for k in ("name", "group", "shaping", "monitor"):
+    for k in ("name", "shaping", "monitor"):
         d.pop(k, None)
     d["external"] = external
     return OmegaConf.create(d)

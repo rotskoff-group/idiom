@@ -133,7 +133,7 @@ reward models — configured in `src/idiom/configs/grpo.yaml`:
 
 ```yaml
 reward:
-  entropy: {enabled: true,  weight: 1.0, target_entropy: 3.68, width: 0.2}   # naturalness guardrail
+  entropy: {enabled: true,  weight: 1.0, target_entropy: 3.65, width: 0.2}   # naturalness guardrail
   length:  {enabled: true,  weight: 1.0, target_length: 100, width: 1.0}
   rl_sae:  {enabled: false, weight: 1.0, signature: nucleolus}
   external: []
@@ -155,11 +155,21 @@ Signatures ship in `rewards/rl_sae_targets/` for the released SAE (cases `top30`
 with `IDIOM_SAEREWARD_CASE`). **Build a signature from your own sequences** with
 `examples/05_feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
 
-**Bring your own reward model.** Each `external` term is either a simple in-process Python function,
+**Bring your own reward model.** Each `external` term is either a simple in-process Python function
 or a command that runs a reward model in its own environment (for one whose dependencies conflict
-with IDiom's — a different python, torch, or CUDA). For the in-process case, copy
-`rewards/example_rewards.py`. For the subprocess case there is no install step — let uv build and
-cache the environment on demand, so the config is all you write:
+with IDiom's — a different python, torch, or CUDA). The editable reward content lives in `rewards/`:
+`example_rewards.py` (copy-me in-process rewards), `scorers/` (external programs), and
+`rl_sae_targets/` (SAE signatures).
+
+*In-process* — register an `f(idr) -> float` in a module and name it (copy `rewards/example_rewards.py`):
+
+```yaml
+reward.external:
+  - {enabled: true, weight: 1.0, name: aromatic_fraction, module: rewards/example_rewards.py}
+```
+
+*A command in its own environment* — no install step; let uv build and cache the environment on
+demand, so the config is all you write:
 
 ```yaml
 # design IDRs with a radius of gyration near 25 A, scored by sparrow in its own environment
@@ -168,22 +178,39 @@ reward.external:
      cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/scorers/sparrow.py --property radius_of_gyration"}
 ```
 
+The scorer returns a **raw value**; the term's `target`/`width` band it into `(0, 1]` — kept on the
+IDiom side so you retune the objective without touching that environment. `monitor: true` logs a term
+without adding it to the total, and because each command lives in the config, several external
+rewards — each its own environment and target — combine in one run. Point uv's cache at scratch and
+verify a command before spending a GPU allocation:
+
 ```bash
-# point uv's cache at scratch (it is several GB), then verify before spending a GPU allocation
-export UV_CACHE_DIR=/scratch/you/uv-cache
-python -m idiom.train.grpo.reward.external_reward \
+export UV_CACHE_DIR=/scratch/you/uv-cache   # several GB; keep it off your home directory
+uv run python -m idiom.train.grpo.reward.external_reward \
   --cmd "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/scorers/sparrow.py --property radius_of_gyration" \
   --target 25 --width 3
 ```
 
-uv builds the environment once at startup (about 30s for sparrow, which needs a C compiler; every
-run after is a cache hit); pin `@<commit>` for a reproducible build. The scorer is a fifteen-line
-program that reads `{"sequences": [...]}` from stdin and writes `{"scores": [...]}` to stdout,
-importing nothing from IDiom — so the same `cmd` form covers an on-demand uv env, a pre-built venv, a
-conda env, or a container. Because the command lives in the config, several external rewards, each
-its own environment and target, combine in one run. [`rewards/README.md`](rewards/README.md) has the
-details, with [sparrow](https://github.com/idptools/sparrow) (biophysics: Rᵧ, asphericity, charge
-patterning) as the worked example.
+uv builds the environment once at the startup handshake (~30s for sparrow, which needs a C compiler;
+every run after is a cache hit); pin `@<commit>` for a reproducible build.
+
+**Writing a scorer.** A scorer is a standalone program — copy `rewards/scorers/example.py` — that
+speaks newline-delimited JSON on stdin/stdout, one exchange per GRPO step, importing nothing from
+IDiom:
+
+```
+->  {"sequences": ["ACDEF...", "GHIKL..."]}
+<-  {"scores": [24.8, 31.2]}          # or {"error": "..."}
+```
+
+Return one finite score per sequence, in order (a count mismatch is rejected, so misaligned rewards
+can't silently corrupt training); flush after each response; keep stdout for the protocol and send
+logs to stderr; and load the model once at import (the process is reused for the whole run). Since it
+imports nothing from IDiom, the same `cmd` form covers an on-demand uv env, a pre-built venv
+(`/path/venv/bin/python …`), a conda env (`conda run -n env python …`), or a container
+(`docker run -i …`). The worked example is [sparrow](https://github.com/idptools/sparrow) (biophysics:
+radius of gyration, asphericity, scaling exponent, charge patterning); `rewards/scorers/example.py` is
+the bare template.
 
 ## Command-line reference
 

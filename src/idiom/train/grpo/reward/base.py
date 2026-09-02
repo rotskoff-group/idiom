@@ -48,54 +48,26 @@ def get_reward(name: str) -> Callable[[str], float]:
     return REWARD_REGISTRY[name]
 
 
-# GROUP rewards: f(idrs: list[str], group_size: int) -> list[float]. Unlike per-idr rewards, these see
-# the whole batch of completions and can score a completion RELATIVE to its GRPO group (e.g. reward
-# population coverage / diversity of the SAE code rather than per-sequence cramming).
-GROUP_REWARD_REGISTRY: dict[str, Callable[[list, int], list]] = {}
-
-
-def register_group_reward(name: str):
-    """Return a decorator that registers a group reward function under name.
-
-    Args:
-        name (str): Registry key for the decorated group reward function.
-
-    Returns:
-        Callable: A decorator that registers an f(idrs: list[str], group_size: int) -> list and
-            returns it unchanged.
-    """
-
-    def deco(fn: Callable[[list, int], list]) -> Callable[[list, int], list]:
-        GROUP_REWARD_REGISTRY[name] = fn
-        return fn
-
-    return deco
-
-
 def resolve_reward(name: str) -> Callable[[list[str], int], list[float]]:
-    """Return a batch scorer f(idrs, group_size) -> list[float] for any registered reward name.
+    """Return a batch scorer f(idrs, group_size) -> list[float] for a registered per-idr reward.
 
-    A group reward is used directly (it scores the whole batch in one call, which is what lets an
-    external subprocess or SAE lens run once per step instead of once per completion). A plain
-    per-idr reward is lifted by looping. This uniform signature is how the composite reward sums
-    per-idr terms (entropy, length) and batched terms (external scorers) in one place.
+    The per-idr reward is lifted to the batch signature by looping. This uniform signature is how the
+    composite reward sums per-idr terms (entropy, length, rl_sae) and batched terms (external
+    scorers, which score the whole step in one call) in one place.
 
     Args:
-        name (str): Registry key, in either the per-idr or the group registry.
+        name (str): Registry key of a per-idr reward.
 
     Returns:
         Callable[[list[str], int], list[float]]: One score per IDR, in order.
 
     Raises:
-        KeyError: If no reward is registered under name in either registry.
+        KeyError: If no reward is registered under name.
     """
-    if name in GROUP_REWARD_REGISTRY:
-        return GROUP_REWARD_REGISTRY[name]
     if name in REWARD_REGISTRY:
         fn = REWARD_REGISTRY[name]
         return lambda idrs, group_size: [fn(idr) for idr in idrs]
-    raise KeyError(f"unknown reward {name!r}; registered: "
-                   f"{sorted(set(REWARD_REGISTRY) | set(GROUP_REWARD_REGISTRY))}")
+    raise KeyError(f"unknown reward {name!r}; registered: {sorted(REWARD_REGISTRY)}")
 
 
 def sequence_entropy(idr: str) -> float:
@@ -132,10 +104,10 @@ def length_reward(idr: str, *, target_length: int, width: float = 1.0) -> float:
     return -(d * d)
 
 
-def entropy_reward(idr: str, *, target_entropy: float = 3.68, width: float = 1.0) -> float:
+def entropy_reward(idr: str, *, target_entropy: float = 3.65, width: float = 1.0) -> float:
     """Quadratic entropy penalty -((H - target_entropy) / (target_entropy * width))^2, max 0 at target.
 
-    H and target_entropy are in bits (see sequence_entropy). The default 3.68 bits equals 2.55
+    H and target_entropy are in bits (see sequence_entropy). The default 3.65 bits equals about 2.53
     nats (the corpus-matched target; AFDB IDR mean about 3.64 bits). Because the penalty is a
     ratio, switching from nats to bits leaves the reward (and training dynamics) unchanged as long
     as the configured target is converted too.

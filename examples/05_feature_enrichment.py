@@ -6,7 +6,7 @@ far more often than in a background, writes the top ones as a "signature", and p
 The signature is directly consumable by the rl_sae reward, so the last thing this prints is
 the idiom_grpo command that designs new sequences carrying that same feature code.
 
-    python examples/05_feature_enrichment.py --positive my_seqs.fasta --name my_target --out enr/
+    uv run python examples/05_feature_enrichment.py --positive my_seqs.fasta --name my_target --out enr/
 
 The background defaults to the held-out validation split of the pretraining corpus, downloaded from
 the Hub. A GPU is strongly recommended: the cost is dominated by encoding the background.

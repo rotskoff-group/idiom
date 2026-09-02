@@ -1,8 +1,8 @@
 """Score IDRs with sparrow (https://github.com/idptools/sparrow) as an external GRPO reward.
 
 The worked example of an external reward: it runs in its own environment and imports nothing from
-IDiom. The config's cmd lets uv build sparrow on demand (no install step); see rewards/README.md for
-cache and pinning guidance. In configs/grpo.yaml:
+IDiom. The config's cmd lets uv build sparrow on demand (no install step); see the reward section of
+the top-level README for cache and pinning guidance. In configs/grpo.yaml:
 
     reward.external:
       - {enabled: true, weight: 0.5, target: 25, width: 3,
