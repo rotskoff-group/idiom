@@ -28,14 +28,19 @@ grpo:
 reward:                      # total = sum of the enabled terms, each scaled by its weight
   module: null               # optional: a *.py / module with @register_reward, imported first
                              #   (e.g. rewards/example_rewards.py — copy/edit for your own)
-  entropy: {enabled: true,  weight: 1.0, target_entropy: 3.65, width: 0.2}  # bits (~2.53 nats); corpus IDR mean ~3.64. naturalness guardrail
-  length:  {enabled: true,  weight: 1.0, target_length: 100, width: 1.0}
-  rl_sae:  {enabled: false, weight: 1.0, signature: nucleolus}              # reproduce a target SAE feature code (targets in rewards/rl_sae_targets/)
-  external: []               # bring-your-own reward models; each entry is one of:
-                             #   in-process (a registered reward): {enabled, weight, name: aromatic_fraction, module: rewards/example_rewards.py}
-                             #   subprocess (own env, built on demand by uv -- set UV_CACHE_DIR to scratch):
-                             #     {enabled, weight, target, width, cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
-                             # a subprocess scorer returns a raw value; target/width shape it with a quadratic penalty toward target (like entropy/length). monitor: true logs an entry without adding it to the total.
+  
+  entropy: {enabled: true,  weight: 1.0, target_entropy: 3.65, width: 0.2} # entropy in bits
+  length:  {enabled: true,  weight: 1.0, target_length: 100, width: 1.0} # length in residues
+  
+  rl_sae:  {enabled: false, weight: 1.0, signature: nucleolus} 
+  # reproduce a target SAE feature code (targets in rewards/rl_sae_targets/)
+
+  external: []
+  # external: bring-your-own reward models; each entry is one of:
+  # in-process (a registered reward): {enabled, weight, name: aromatic_fraction, module: rewards/example_rewards.py}
+  # subprocess (own env, built on demand by uv -- set UV_CACHE_DIR to scratch):
+  # {enabled, weight, target, width, cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
+  # a subprocess scorer returns a raw value; target/width shape it with a quadratic penalty toward target (like entropy/length). monitor: true logs an entry without adding it to the total.
 
 trainer:
   max_steps: 3000
