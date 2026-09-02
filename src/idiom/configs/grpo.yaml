@@ -6,7 +6,7 @@ init_from: ???               # required: base to optimize (a .ckpt, a released d
 resume_from: null            # mid-run resume (optimizer/step/RNG) from a .ckpt
 
 prompts:
-  mode: unprompted           # unprompted ("132", de novo) | record (per-protein flank prompts)
+  mode: unprompted           # unprompted ("132", de novo) | prompted (per-protein flank prompts)
   n: 1000                    # unprompted mode: number of prompts
   fasta: null                # record mode: FASTA of proteins (_IDR_x-y headers)
   n_per: 1000                # record mode: copies per protein

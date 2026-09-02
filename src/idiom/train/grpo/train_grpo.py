@@ -17,8 +17,8 @@ from lightning.pytorch.loggers import WandbLogger
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from idiom.data.fim import UNPROMPTED
-from idiom.train.grpo.data import collate_prompts, record_prompts, unprompted_prompts
+from idiom.data.fim import UNPROMPTED, normalize_mode
+from idiom.train.grpo.data import collate_prompts, prompted_prompts, unprompted_prompts
 from idiom.train.grpo.lit_grpo import LitGRPO
 from idiom.train.grpo.reward import build_reward_terms
 
@@ -30,8 +30,9 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
 
     RL has nothing to learn from a randomly initialized policy, so GRPO always warm-starts from a
     pretrained checkpoint (cfg.init_from) and reads the architecture from it. cfg.prompts.mode picks
-    what the policy is optimized over: "unprompted" repeats the bare de novo prompt, "record" draws
-    one flank prompt per protein in cfg.prompts.fasta.
+    what the policy is optimized over, in the same vocabulary used everywhere else: "unprompted"
+    repeats the bare de novo prompt, "prompted" draws one flank prompt per protein in
+    cfg.prompts.fasta.
 
     Args:
         cfg (DictConfig): Resolved GRPO config (grpo, reward, prompts, init_from).
@@ -40,21 +41,19 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
         tuple[LitGRPO, object]: The GRPO module and its prompt dataset.
 
     Raises:
-        ValueError: If cfg.prompts.mode is neither "unprompted" nor "record".
+        ValueError: If cfg.prompts.mode is neither "unprompted" nor "prompted".
     """
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
     # One composite reward: a weighted sum of the enabled terms, scored a whole batch per step.
     reward_terms = build_reward_terms(cfg.reward)
     lit = LitGRPO.init_from_checkpoint(cfg.init_from, reward_terms=reward_terms, **grpo_kw)
 
-    if cfg.prompts.mode == UNPROMPTED:
+    # prompts.mode takes the same two values as every other prompting-mode field, so it goes
+    # through the same validation gate rather than carrying its own vocabulary.
+    if normalize_mode(cfg.prompts.mode) == UNPROMPTED:
         ds = unprompted_prompts(cfg.prompts.n)
-    elif cfg.prompts.mode == "record":
-        ds = record_prompts(cfg.prompts.fasta, cfg.prompts.n_per)
     else:
-        raise ValueError(
-            f"prompts.mode must be 'unprompted' or 'record', got {cfg.prompts.mode!r}"
-        )
+        ds = prompted_prompts(cfg.prompts.fasta, cfg.prompts.n_per)
     return lit, ds
 
 

@@ -83,5 +83,5 @@ def test_build_rejects_unknown_prompt_mode(tmp_path):
         "reward": _reward_cfg(),
         "prompts": {"mode": "idp", "n": 16, "fasta": None, "n_per": 1, "batch_size": 4},
     })
-    with pytest.raises(ValueError, match="'unprompted' or 'record'"):
+    with pytest.raises(ValueError, match="'prompted' or 'unprompted'"):
         build(cfg)

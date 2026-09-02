@@ -1,9 +1,9 @@
 """Prompt source for GRPO, assembled on the fly (no separate RL dataset file).
 
-Prompts are FIM generation prefixes (1{prefix}3{suffix}2): the bare "132" prompt for unprompted
-(de novo) optimization via unprompted_prompts, or one protein's flanks for prompted optimization
-via record_prompts. A batch is assumed equal-length (the typical case: a single prompt repeated, or
-one compartment's flank prompt).
+Prompts are FIM generation prefixes (1{prefix}3{suffix}2), one builder per prompting mode: the bare
+"132" prompt for unprompted (de novo) optimization via unprompted_prompts, or one protein's flanks
+for prompted optimization via prompted_prompts. A batch is assumed equal-length (the typical case: a
+single prompt repeated, or one compartment's flank prompt).
 """
 
 from __future__ import annotations
@@ -46,11 +46,15 @@ def unprompted_prompts(n: int, tokenizer: Tokenizer | None = None) -> PromptData
     return PromptDataset([fim_prompt()] * n, tokenizer)
 
 
-def record_prompts(fasta: str, n_per: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
+def prompted_prompts(fasta: str, n_per: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
     """Return n_per copies of each record's flank prompt for prompted optimization.
 
+    Flank prompts differ in length between records, so a batch must not mix them; n_per copies of
+    each keeps a shuffled batch equal-length in the common case where n_per is at least the batch
+    size. Length-bucket upstream if you need to mix records within a batch.
+
     Args:
-        fasta (str): Path to the FASTA of records to draw flank prompts from.
+        fasta (str): Path to the record FASTA to draw flank prompts from.
         n_per (int): Number of copies per record.
         tokenizer (Tokenizer | None): Character tokenizer (a default is used if None).
 
