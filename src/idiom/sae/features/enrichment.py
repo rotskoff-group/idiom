@@ -10,7 +10,7 @@ Benjamini-Hochberg. A feature is enriched when FDR < FDR_ALPHA, log2OR >= LOG2OR
 in at least PREV_POS_FLOOR of the positives; the top N by log2OR form the signature.
 
 Caveat: features that merely track sequence length look enriched when the positive and background
-length distributions differ. Use a length-matched background (see examples/05_feature_enrichment.py).
+length distributions differ. Use a length-matched background (see examples/python/05_feature_enrichment.py).
 """
 
 from __future__ import annotations

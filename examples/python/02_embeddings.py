@@ -2,7 +2,7 @@
 
 Inputs may be a FASTA path, a single sequence string, or a list of sequences.
 
-    uv run python examples/02_embeddings.py --model jxliu2/idiom-300M --layer 18
+    uv run python examples/python/02_embeddings.py --model jxliu2/idiom-300M --layer 18
 """
 
 import argparse

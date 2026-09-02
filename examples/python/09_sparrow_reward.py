@@ -7,7 +7,7 @@ the cmd — no install step. The scorer returns a raw value (e.g. radius of gyra
 target/width shape it with a quadratic penalty toward the target (the same form as the entropy/length
 guardrails), so the policy is pushed toward IDRs near that target.
 
-    uv run python examples/09_sparrow_reward.py --property radius_of_gyration --target 25 --width 0.2
+    uv run python examples/python/09_sparrow_reward.py --property radius_of_gyration --target 25 --width 0.2
 
 The first step builds sparrow (~30s, needs a C compiler and network); every run after is a uv cache
 hit. Point UV_CACHE_DIR at scratch if your home directory is small. A GPU is recommended for the

@@ -3,24 +3,26 @@
 Short, runnable scripts covering everything IDiom does — generation, embeddings, SAE
 interpretability and steering, feature enrichment and logos, and RL/SFT post-training. Each loads a
 model by HF repo id or local path, so they work against released weights or your own checkpoints.
-Small input sets live in `example_data/` (see below), so the analysis and training examples run with
-no arguments.
+
+Layout: the Python scripts are in [`python/`](python/), small input sets in
+[`example_data/`](example_data/) (so the analysis and training scripts run with no arguments), and
+Slurm `sbatch` templates in [`slurm/`](slurm/). Run everything from the repo root.
 
 ```bash
 # generation, embeddings, interpretability
-uv run python examples/01_generate.py        --model jxliu2/idiom-300M
-uv run python examples/02_embeddings.py      --model jxliu2/idiom-300M
-uv run python examples/03_sae_features.py    --sae   jxliu2/idiomsae-300M-L18-k32   # + steering
+uv run python examples/python/01_generate.py        --model jxliu2/idiom-300M
+uv run python examples/python/02_embeddings.py      --model jxliu2/idiom-300M
+uv run python examples/python/03_sae_features.py    --sae   jxliu2/idiomsae-300M-L18-k32   # + steering
 
 # custom rewards, feature enrichment + logos
-uv run python examples/04_custom_reward.py                                          # no GPU/weights
-uv run python examples/05_feature_enrichment.py --positive example_data/protgps/nucleolus.fasta
-uv run python examples/06_feature_logos.py      --positive example_data/protgps/nucleolus.fasta
+uv run python examples/python/04_custom_reward.py                                          # no GPU/weights
+uv run python examples/python/05_feature_enrichment.py --positive examples/example_data/protgps/nucleolus.fasta
+uv run python examples/python/06_feature_logos.py      --positive examples/example_data/protgps/nucleolus.fasta
 
 # post-training (run a real, tiny loop end to end)
-uv run python examples/07_sft.py            --init-from jxliu2/idiom-20M --steps 30
-uv run python examples/08_grpo.py           --init-from jxliu2/idiom-20M --steps 5
-uv run python examples/09_sparrow_reward.py --init-from jxliu2/idiom-20M --steps 5   # external reward
+uv run python examples/python/07_sft.py            --init-from jxliu2/idiom-20M --steps 30
+uv run python examples/python/08_grpo.py           --init-from jxliu2/idiom-20M --steps 5
+uv run python examples/python/09_sparrow_reward.py --init-from jxliu2/idiom-20M --steps 5   # external reward
 ```
 
 A GPU is recommended for anything that runs the model (1–3, 5–9); pass `--device cpu` to force CPU.

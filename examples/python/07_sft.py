@@ -8,7 +8,7 @@ anywhere in a minute or two; a real run uses more steps, a bigger base, and the 
     idiom_train --config-name sft init_from=jxliu2/idiom-300M \
       data.train_fasta=examples/example_data/protgps/nucleolus.fasta
 
-    uv run python examples/07_sft.py --steps 30
+    uv run python examples/python/07_sft.py --steps 30
 
 A GPU is recommended; pass --device cpu (and keep --init-from small) to force CPU.
 """

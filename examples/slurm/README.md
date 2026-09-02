@@ -1,57 +1,59 @@
 # Slurm job templates
 
-`sbatch` scripts for the training entrypoints on a Slurm cluster. They're **templates** — edit the
-`#SBATCH` header for your site and fill in the data paths — but the launch pattern (Lightning + Slurm
-DDP) is correct as written.
+`sbatch` scripts for the training entrypoints. Each script spells out **every config value as a Hydra
+override** (so the run is fully reproducible from the script alone), self-logs its own contents into
+the Slurm log, pins `out_dir` / `hydra.run.dir`, and auto-resumes from a rolling `last.ckpt`.
 
 | Script | Job | GPUs |
 |--------|-----|------|
-| `pretrain.sbatch` | pretrain from scratch (`idiom_train`) | 8 (DDP) |
+| `pretrain.sbatch` | pretrain 24L from scratch (`idiom_train`) | 8 |
 | `sft.sbatch` | fine-tune a released model (`idiom_train --config-name sft`) | 1 |
-| `grpo.sbatch` | RL post-training (`idiom_grpo`) | 1 |
+| `grpo.sbatch` | RL post-training toward an SAE signature (`idiom_grpo`) | 1 |
 | `sae.sbatch` | train a top-k SAE (`idiom_sae`) | 1 |
 
 ## Submit
 
-Run from the **repo root** (the scripts `cd "$SLURM_SUBMIT_DIR"` and `source .venv/bin/activate`,
-which `uv sync` created):
+Run from the **repo root** (the scripts use `$SLURM_SUBMIT_DIR` as the repo, `cd` there, and
+`source .venv/bin/activate`, which `uv sync` created). Create the log dir once:
 
 ```bash
+mkdir -p slurm_out                 # #SBATCH --output writes here; Slurm won't create it
 sbatch examples/slurm/pretrain.sbatch
-squeue --me                     # watch the queue
-tail -f slurm-idiom-pretrain-*.out
+squeue --me
+tail -f slurm_out/slurm-*.out
 ```
 
 ## Before you submit, edit
 
-- **`#SBATCH` header** — `--partition`, `--account` (delete if your site has none), `--time`, `--mem`.
-- **Data paths** in the `srun` line (`data.train_fasta=…`, etc.).
-- **`IDIOM_OUT`** — where checkpoints and Hydra run dirs go. Keep it on scratch, **not** in the repo
-  (the configs default `IDIOM_OUT` to `./runs`, which would write into your checkout).
-- **W&B** — the scripts set `WANDB_MODE=offline`; run `wandb login` (or set `WANDB_API_KEY`) and
-  remove that line for live logging.
+- **`#SBATCH` header** — `--partition` (and `--account` if your site needs one), `--time`, and the
+  memory/CPU directives for your cluster.
+- **`OUT`** at the top of the script — where checkpoints and the Hydra run dir go. Keep it on scratch;
+  the scripts pin `out_dir`/`hydra.run.dir` to it so nothing lands in the repo.
+- **Data paths** — `data.train_fasta` / `data.val_fasta` (pretrain), `data.fasta` (SAE). The SFT/GRPO
+  scripts default to the bundled `example_data`; point them at your own set for a real run.
+- **W&B** — scripts export `WANDB_MODE=offline`; `wandb login` (or set `WANDB_API_KEY`) and submit with
+  `WANDB_MODE=online sbatch …` for live logging.
 - **`UV_CACHE_DIR`** (GRPO with an external reward only) — point it at scratch; on-demand reward envs
   (e.g. sparrow) are several GB.
 
-## The DDP rule (multi-GPU)
+## Multi-GPU: no `srun`
 
-Lightning auto-detects Slurm from the job environment, and `srun` launches **one process per task**,
-each bound to one GPU. So the geometry must line up:
+These follow the convention of **not** wrapping the command in `srun`: one Slurm task owns the node,
+and Lightning launches one DDP process per GPU itself from `trainer.devices`. So on one node:
 
 ```
---ntasks-per-node  ==  --gpus-per-node  ==  trainer.devices     (per node)
+--gpus-per-node  ==  trainer.devices           # 8 for pretrain, 1 for the rest
+--cpus-per-task   covers all DataLoader workers  # e.g. 32 = 4 workers/GPU x 8 GPUs
 ```
 
-`pretrain.sbatch` uses 8 of each (matching `configs/pretrain.yaml`'s `devices: 8`); the single-GPU
-jobs use 1. Always launch the training command with `srun` — that's what lets Lightning place one
-rank per GPU. Per-GPU `batch_size` × `devices` × `accumulate_grad_batches` is the global batch.
+`data.batch_size` is **per GPU**; global batch = `batch_size × devices × accumulate_grad_batches`.
+For **multi-node** DDP, Lightning's in-process launcher is single-node — launch with `srun` and
+`--ntasks-per-node = gpus-per-node` instead, and add `+trainer.num_nodes=$SLURM_NNODES`.
 
-**Multi-node:** raise `--nodes`, keep `--ntasks-per-node` at the per-node GPU count, and append
-`+trainer.num_nodes=$SLURM_NNODES` to the `srun` command. Nothing else changes.
+## Auto-resume
 
-## Scaling the single-GPU jobs
-
-`sft` / `grpo` / `sae` are single-GPU here for simplicity. To run any of them on N GPUs, set
-`--ntasks-per-node=N --gpus-per-node=N` and add `trainer.devices=N` to the command — the same DDP
-rule applies. (For big pretraining runs prefer `idiom_build_store` first so every rank memory-maps
-one shared copy of the corpus instead of re-parsing the FASTA.)
+Each training script checks `$OUT/checkpoints/last.ckpt` and, if present, adds `resume_from=…` to
+continue (optimizer, global step, LR schedule, and RNG are all restored). A fresh run starts from
+scratch; after a Slurm timeout, just re-submit the same script and it picks up where it left off.
+(`grpo.sbatch` sets `trainer.checkpoint_every=500` so a `last.ckpt` exists to resume from; `sae.sbatch`
+has no fixed `last.ckpt` — pass `resume_from=<ckpt>` by hand.)

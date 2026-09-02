@@ -7,7 +7,7 @@ rl_sae config block (this file is imported automatically):
     idiom_grpo init_from=... reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
 
 Keep the grpo.yaml entropy term on as the naturalness guardrail. Bring your own signature by pointing
-IDIOM_SAEREWARD_FEATURES at a JSON of the same shape (build one with examples/05_feature_enrichment.py).
+IDIOM_SAEREWARD_FEATURES at a JSON of the same shape (build one with examples/python/05_feature_enrichment.py).
 
 Environment variables:
     IDIOM_SAEREWARD_SAE       SAE to use as the lens (HF repo id or local dir)

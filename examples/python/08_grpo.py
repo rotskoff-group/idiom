@@ -8,7 +8,7 @@ should climb over a handful of steps. Defaults run anywhere in a couple of minut
 
     idiom_grpo init_from=jxliu2/idiom-300M reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
 
-    uv run python examples/08_grpo.py --steps 5
+    uv run python examples/python/08_grpo.py --steps 5
 
 A GPU is recommended (each step generates many completions); pass --device cpu to force CPU.
 """

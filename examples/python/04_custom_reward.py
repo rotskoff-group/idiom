@@ -3,7 +3,7 @@
 A reward is just f(idr: str) -> float registered by name. This script only defines and demonstrates
 rewards (no training, no GPU, no weights); the printed command runs the actual RL.
 
-    uv run python examples/04_custom_reward.py
+    uv run python examples/python/04_custom_reward.py
 """
 
 from idiom.train.grpo.reward import get_reward, register_reward
@@ -24,7 +24,7 @@ def main() -> None:
     print("\nRun RL post-training with a custom reward (an external term names it):\n")
     print("  idiom_grpo init_from=/path/to/base.ckpt \\")
     print("    '+reward.external=[{enabled: true, weight: 1.0, name: aromatic_fraction, "
-          "module: examples/04_custom_reward.py}]'\n")
+          "module: examples/python/04_custom_reward.py}]'\n")
     print("Reward toward an SAE feature signature (RL-SAE) instead:\n")
     print("  idiom_grpo init_from=/path/to/base.ckpt \\")
     print("    reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus")

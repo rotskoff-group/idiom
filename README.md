@@ -153,7 +153,7 @@ idiom_grpo init_from=jxliu2/idiom-300M reward.rl_sae.enabled=true reward.rl_sae.
 
 Signatures ship in `rewards/rl_sae_targets/` for the released SAE (cases `top30` and `private30`, select
 with `IDIOM_SAEREWARD_CASE`). **Build a signature from your own sequences** with
-`examples/05_feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
+`examples/python/05_feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
 
 **Bring your own reward model.** Each `external` term is either a simple in-process Python function
 or a command that runs a reward model in its own environment (for one whose dependencies conflict
@@ -272,7 +272,7 @@ under CC BY 4.0, inherited from AlphaFold DB / UniProt; the code in this reposit
 |------|------|
 | `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + steering + features + eval), `utils`, public `IDiom`/`IDiomSAE` API |
 | `rewards/` | user-editable GRPO reward content: `rl_sae_targets/` (SAE signatures), a copy-me in-process reward, and `external_scorers/` (external models) |
-| `examples/` | short runnable scripts (generation, embeddings, SAE features + steering, enrichment + logos, SFT, RL) with small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
+| `examples/` | runnable examples: `python/` scripts (generation, embeddings, SAE features + steering, enrichment + logos, SFT, RL), `slurm/` sbatch templates, and small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
 | `assets/` | static assets (figures for docs) |
 | `tests/` | unit/integration tests for the library |
 

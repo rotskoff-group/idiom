@@ -2,7 +2,7 @@
 
 The SAE records its host model and layer, so from_pretrained loads the pair in one call.
 
-    uv run python examples/03_sae_features.py --sae jxliu2/idiomsae-300M-L18-k32
+    uv run python examples/python/03_sae_features.py --sae jxliu2/idiomsae-300M-L18-k32
 """
 
 import argparse

@@ -6,7 +6,7 @@ feature it takes the top-activating windows across the positive set, stacks them
 information-content logo (logomaker). Point --signature at 05's signature.json to logo exactly the
 enriched features, or omit it to logo the most active features on the set.
 
-    uv run python examples/06_feature_logos.py --positive examples/example_data/protgps/nucleolus.fasta
+    uv run python examples/python/06_feature_logos.py --positive examples/example_data/protgps/nucleolus.fasta
 
 A GPU is recommended (the cost is encoding the positive set through the SAE); pass --device cpu to
 force CPU.

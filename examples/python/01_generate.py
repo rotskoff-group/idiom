@@ -1,6 +1,6 @@
 """Generate IDRs, unprompted (de novo) and prompted (conditioned on flanks).
 
-    uv run python examples/01_generate.py --model jxliu2/idiom-300M --n 10
+    uv run python examples/python/01_generate.py --model jxliu2/idiom-300M --n 10
 """
 
 import argparse
