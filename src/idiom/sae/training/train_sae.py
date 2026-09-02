@@ -19,7 +19,7 @@ from idiom.data.dataset import RecordDataset, make_collate
 from idiom.data.fim import PROMPTED, UNPROMPTED
 from idiom.data.record_store import open_or_build
 from idiom.data.tokenizer import Tokenizer
-from idiom.model.io import load_pretrained
+from idiom.model.io import load_model
 from idiom.sae.io import save_sae
 from idiom.sae.training.activation_store import ActivationStore
 from idiom.sae.training.lit_sae import LitSAE
@@ -53,7 +53,7 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     """
     device = resolve_device(cfg.device)
     tok = Tokenizer()
-    model, model_cfg = load_pretrained(cfg.model_ckpt, device=device)  # arch read from the checkpoint
+    model, model_cfg = load_model(cfg.model_ckpt, device=device)  # a .ckpt, released dir, or HF repo id
 
     records = RecordDataset(
         open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len,

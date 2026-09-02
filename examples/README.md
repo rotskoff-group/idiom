@@ -56,6 +56,13 @@ a GPU, or use the `idiom_train` / `idiom_grpo` CLIs for full runs. Training on a
 memory-mapped `<fasta>.idiomstore/` sidecar next to it on first run (git-ignored; delete it to
 rebuild).
 
+## Running on a Slurm cluster
+
+For real training runs, [`slurm/`](slurm/) has `sbatch` templates for each entrypoint — multi-GPU
+DDP pretraining plus single-GPU SFT, GRPO, and SAE training — with the Lightning + Slurm launch
+pattern set up correctly. Submit from the repo root, e.g. `sbatch examples/slurm/pretrain.sbatch`;
+see [`slurm/README.md`](slurm/README.md) for the `#SBATCH` fields to edit and the multi-node/DDP rule.
+
 ## `example_data/`
 
 Small IDR sets used by the enrichment, logo, SFT, and RL examples. Each FASTA is a **subset** (≤150

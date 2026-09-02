@@ -1,8 +1,8 @@
 # SAE training config (flat, D6). Streaming activations from a frozen IDiom (no h5).
-#   idiom_sae model_ckpt=/path/pretrained.ckpt data.fasta=/path/records.fasta layer=8
+#   idiom_sae model_ckpt=jxliu2/idiom-300M data.fasta=/path/records.fasta layer=18
 seed: 0
 device: auto
-model_ckpt: ???              # pretrained IDiom checkpoint; the model architecture is read from it
+model_ckpt: ???              # frozen base: a .ckpt, a released dir, or a HF repo id (e.g. jxliu2/idiom-300M); arch read from it
 resume_from: null            # mid-run resume (optimizer/step/RNG) from a .ckpt
 
 layer: 8                     # residual-stream block to train the SAE on (must be < n_layers)
