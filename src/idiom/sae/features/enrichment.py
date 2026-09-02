@@ -1,21 +1,16 @@
 """Which SAE features are over-represented in a set of sequences, versus a background.
 
-This is the analysis that produces an RL-SAE target: encode a positive set and a background set
-into feature datasets, ask which features fire in the positives far more often than chance, and keep
-the strongest as a "signature" that idiom_grpo can then reward a policy for reproducing.
+Produces an RL-SAE target: encode a positive and a background set, find the features that fire in
+the positives far more than chance, and keep the strongest as a "signature" idiom_grpo can reward.
 
-The unit is one sequence, max-pooled: a feature fires in a sequence if it is in the SAE top-k at any
-residue. For each feature, with a firing in the positive set and b in the background, we compute a
-Haldane-Anscombe log2 odds ratio and standardize the observed count against a hypergeometric null,
-then convert to a two-sided p-value and control the false discovery rate with Benjamini-Hochberg.
+A feature fires in a sequence if it is in the SAE top-k at any residue (one count per sequence). Per
+feature, from its positive and background firing counts, we take a Haldane-Anscombe log2 odds ratio,
+standardize against a hypergeometric null, convert to a two-sided p-value, and control the FDR with
+Benjamini-Hochberg. A feature is enriched when FDR < FDR_ALPHA, log2OR >= LOG2OR_FLOOR, and it fires
+in at least PREV_POS_FLOOR of the positives; the top N by log2OR form the signature.
 
-A feature counts as enriched when its FDR is below FDR_ALPHA, its log2 odds ratio is at least
-LOG2OR_FLOOR, and it fires in at least PREV_POS_FLOOR of the positive set. Enriched features are
-ranked by log2 odds ratio and the top N are taken as the signature.
-
-Caveat on the background: features that merely track sequence length will look enriched if the
-positive and background length distributions differ, which they usually do. Draw a length-matched
-background where you can (see examples/05_feature_enrichment.py).
+Caveat: features that merely track sequence length look enriched when the positive and background
+length distributions differ. Use a length-matched background (see examples/05_feature_enrichment.py).
 """
 
 from __future__ import annotations

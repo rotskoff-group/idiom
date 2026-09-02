@@ -127,51 +127,63 @@ idiom_train data.train_fasta=corpus.fasta model.n_layers=24 model.d_model=1024
 idiom_train --config-name sft init_from=/path/base.ckpt data.train_fasta=sft.fasta
 ```
 
-**GRPO post-training** optimizes any reward over generated IDRs. A reward is just
-`f(idr: str) -> float` registered by name, so adding your own is a few lines:
+**GRPO post-training** optimizes a reward over generated IDRs. The reward is a **weighted sum of
+terms** — entropy and length guardrails, an RL-SAE feature-code reward, and any number of external
+reward models — configured in `src/idiom/configs/grpo.yaml`:
 
-```python
-from idiom.train.grpo.rewards import register_reward
+```yaml
+reward:
+  entropy: {enabled: true,  weight: 1.0, target_entropy: 3.68, width: 0.2}   # naturalness guardrail
+  length:  {enabled: true,  weight: 1.0, target_length: 100, width: 1.0}
+  rl_sae:  {enabled: false, weight: 1.0, signature: nucleolus}
+  external: []
+```
 
-@register_reward("aromatic_fraction")
-def aromatic_fraction(idr: str) -> float:
-    return sum(idr.count(a) for a in "FWY") / len(idr) if idr else 0.0
+`total = Σ weightᵢ · termᵢ`, and that total drives the GRPO advantages. Toggle a term with
+`enabled`, scale it with `weight`.
+
+**RL toward SAE features (RL-SAE).** The `rl_sae` term rewards a model for reproducing a target's
+interpretable SAE feature code, scored through a frozen IDiom base + SAE as a fixed lens — so a
+reward gain requires encoding the real code, not merely satisfying a classifier. The reward model is
+IDiom itself, so it needs no third-party dependency and runs straight after `uv sync`:
+
+```bash
+idiom_grpo init_from=/path/base.ckpt reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
+```
+
+Signatures ship in `rewards/signatures/` for the released SAE (cases `top30` and `private30`, select
+with `IDIOM_SAEREWARD_CASE`). **Build a signature from your own sequences** with
+`examples/05_feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
+
+**Bring your own reward model.** Each `external` term is either a simple in-process Python function,
+or a command that runs a reward model in its own environment (for one whose dependencies conflict
+with IDiom's — a different python, torch, or CUDA). For the in-process case, copy
+`rewards/builtin_rewards.py`. For the subprocess case there is no install step — let uv build and
+cache the environment on demand, so the config is all you write:
+
+```yaml
+# design IDRs with a radius of gyration near 25 A, scored by sparrow in its own environment
+reward.external:
+  - {enabled: true, weight: 0.5, target: 25, width: 3,
+     cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/scorers/sparrow.py --property radius_of_gyration"}
 ```
 
 ```bash
-idiom_grpo init_from=/path/base.ckpt \
-  reward.module=rewards/example_rewards.py reward.name=aromatic_fraction
+# point uv's cache at scratch (it is several GB), then verify before spending a GPU allocation
+export UV_CACHE_DIR=/scratch/you/uv-cache
+python -m idiom.train.grpo.external \
+  --cmd "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/scorers/sparrow.py --property radius_of_gyration" \
+  --target 25 --width 3
 ```
 
-The composite reward adds optional **length** and **entropy** shaping terms (the entropy term is the
-naturalness guardrail against low-complexity reward hacking), plus an optional `monitor` reward that
-is logged but not optimized. See `src/idiom/configs/grpo.yaml`.
-
-**Group rewards** score each completion *relative to its GRPO group* rather than on its own —
-register with `@register_group_reward` (`f(idrs, group_size) -> list[float]`) and select via
-`reward.group=`.
-
-**RL toward SAE features (RL-SAE).** `rewards/rl_sae_reward.py` rewards a model for reproducing a
-target's interpretable SAE feature code, scored through a frozen IDiom base + SAE as a fixed lens —
-so a reward gain requires encoding the real code, not merely satisfying a classifier. The "reward
-model" is IDiom itself, so this needs no third-party dependency and runs straight after `uv sync`:
-
-```bash
-# fraction of the target signature's features that fire in the completion
-idiom_grpo init_from=... reward.module=rewards/rl_sae_reward.py \
-  reward.name=sae_only_nucleolus
-```
-
-Signatures ship in `rewards/rl_sae_feature_sets/` for the released SAE, in two cases: `top30` (the
-30 most enriched features per set) and `private30` (only features enriched in exactly one set, so the
-target is specific rather than shared). Select with `IDIOM_SAEREWARD_CASE`, and **build a signature
-from your own sequences** with `examples/05_feature_enrichment.py`, pointing
-`IDIOM_SAEREWARD_FEATURES` at the result — rewards are registered for whatever names it contains.
-
-Rewards that combine the feature code with a localization classifier (`protgps_feat_<c>` =
-ProtGPS + λ·feature-match) and the classifier rewards themselves (`protgps_<compartment>`, plus the
-selectivity variants `protgps_sel_*` / `protgps_anchor_*`) live in `rewards/protgps_reward.py`, which
-needs the vendored model and `uv sync --extra protgps`.
+uv builds the environment once at startup (about 30s for sparrow, which needs a C compiler; every
+run after is a cache hit); pin `@<commit>` for a reproducible build. The scorer is a fifteen-line
+program that reads `{"sequences": [...]}` from stdin and writes `{"scores": [...]}` to stdout,
+importing nothing from IDiom — so the same `cmd` form covers an on-demand uv env, a pre-built venv, a
+conda env, or a container. Because the command lives in the config, several external rewards, each
+its own environment and target, combine in one run. [`rewards/README.md`](rewards/README.md) has the
+details, with [sparrow](https://github.com/idptools/sparrow) (biophysics: Rᵧ, asphericity, charge
+patterning) as the worked example.
 
 ## Command-line reference
 
@@ -230,8 +242,8 @@ under CC BY 4.0, inherited from AlphaFold DB / UniProt; the code in this reposit
 | Path | Role |
 |------|------|
 | `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + steering + features + eval), `utils`, public `IDiom`/`IDiomSAE` API |
-| `rewards/` | GRPO reward definitions + the vendored ProtGPS reward model |
-| `examples/` | short runnable scripts: generation, embeddings, SAE features, custom rewards |
+| `rewards/` | GRPO reward definitions: RL-SAE, custom in-process rewards, and `scorers/` (external models) |
+| `examples/` | short runnable scripts: generation, embeddings, SAE features, custom rewards, feature enrichment |
 | `assets/` | static assets (figures for docs) |
 | `tests/` | unit/integration tests for the library |
 

@@ -35,12 +35,13 @@ def main() -> None:
     group = ["AAAA", "AAAAAAAAAAAA", "AAAAAAAA"]
     print("  length_diversity(group) =", [round(x, 3) for x in length_diversity(group, len(group))])
 
-    print("\nRun RL post-training with a custom reward:\n")
+    print("\nRun RL post-training with a custom reward (an external term names it):\n")
     print("  idiom_grpo init_from=/path/to/base.ckpt \\")
-    print("    reward.module=examples/04_custom_reward.py reward.name=aromatic_fraction\n")
+    print("    '+reward.external=[{enabled: true, weight: 1.0, name: aromatic_fraction, "
+          "module: examples/04_custom_reward.py}]'\n")
     print("Reward toward an SAE feature signature (RL-SAE) instead:\n")
     print("  idiom_grpo init_from=/path/to/base.ckpt \\")
-    print("    reward.module=rewards/rl_sae_reward.py reward.name=sae_only_nucleolus")
+    print("    reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus")
 
 
 if __name__ == "__main__":

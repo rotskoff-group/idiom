@@ -1,7 +1,7 @@
 """Feature-steered IDiom generation.
 
 Goal: bias IDiom's IDR generation toward (or away from) the biology a chosen SAE feature encodes —
-e.g. push a base-model generation toward a protGPS condensate by amplifying the feature that the
+e.g. push a base-model generation toward a target condensate by amplifying the feature the
 corresponding RL model upregulates.
 
 This wires idiom.sae.steering.hooks into idiom's autoregressive sampler. The sampling loop is the

@@ -1,9 +1,8 @@
 """GRPO post-training.
 
-Rewards operate on the decoded IDR string (f(idr) -> float), and the GRPO objective is a few
-pure tensor functions (train/grpo/core.py). Online generation uses the KV-cached sampler. Heavy
-rewards (ProtGPS) load a vendored model and are operator-wired; the fraction, length, and entropy
-rewards are pure and tested.
+Rewards operate on the decoded IDR string (f(idr) -> float), and the GRPO objective is a few pure
+tensor functions (train/grpo/core.py). Online generation uses the KV-cached sampler. Rewards that
+need their own environment run as external subprocess scorers (train/grpo/external.py).
 """
 
 from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs

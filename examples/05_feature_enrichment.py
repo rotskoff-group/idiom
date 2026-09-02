@@ -3,7 +3,7 @@
 This is the analysis half of the RL-SAE pipeline. Give it a set of sequences you care about (a
 compartment, a functional class, hits from a screen) and it reports which SAE features fire in them
 far more often than in a background, writes the top ones as a "signature", and plots the result.
-The signature is directly consumable by rewards/rl_sae_reward.py, so the last thing this prints is
+The signature is directly consumable by the rl_sae reward, so the last thing this prints is
 the idiom_grpo command that designs new sequences carrying that same feature code.
 
     python examples/05_feature_enrichment.py --positive my_seqs.fasta --name my_target --out enr/
@@ -229,7 +229,7 @@ def main() -> None:
     print(f"\nTrain a model to reproduce this feature code:\n"
           f"  IDIOM_SAEREWARD_FEATURES={sig_path} IDIOM_SAEREWARD_CASE={args.case} \\\n"
           f"    idiom_grpo init_from=/path/to/base.ckpt \\\n"
-          f"      reward.module=rewards/rl_sae_reward.py reward.name=sae_only_{args.name}")
+          f"      reward.rl_sae.enabled=true reward.rl_sae.signature={args.name}")
 
 
 if __name__ == "__main__":

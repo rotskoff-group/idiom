@@ -1,8 +1,8 @@
 """GRPO entrypoint run via idiom_grpo: a pretrained checkpoint plus prompts plus a composite reward.
 
-build_reward composes a base reward with optional quadratic shaping, length, and entropy terms
-(the tuned defaults live in configs/grpo.yaml). ProtGPS is operator-wired (it loads a vendored
-model); register it under the name protgps before launching.
+build_reward_terms composes the reward as a weighted sum of enabled terms (entropy, length, an
+RL-SAE feature-code reward, and any number of external reward models), with the tuned defaults in
+configs/grpo.yaml. External reward models register via reward.module before launch.
 """
 
 from __future__ import annotations
@@ -18,9 +18,14 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from idiom.train.grpo.data import collate_prompts, idp_prompts, record_prompts
+from idiom.train.grpo.external import make_external_reward
 from idiom.train.grpo.lit_grpo import LitGRPO
 from idiom.train.grpo.rewards import (
-    entropy_reward, get_group_reward, get_reward, length_reward, quadratic_shaping)
+    entropy_reward, get_reward, length_reward, quadratic_shaping, register_reward, resolve_reward)
+
+# The RL-SAE reward ships in rewards/ (not the installed wheel), registered on import via the same
+# reward.module mechanism as any custom reward; the rl_sae config block imports it automatically.
+_RL_SAE_MODULE = "rewards/rl_sae.py"
 
 
 def _register_custom_rewards(spec: str | None) -> None:
@@ -45,118 +50,167 @@ def _register_custom_rewards(spec: str | None) -> None:
         importlib.import_module(spec)
 
 
-def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float]]:
-    """Build a composed reward that returns a per-term breakdown for logging.
+def build_reward_terms(rcfg: DictConfig):
+    """Build the composite reward: a weighted sum of enabled terms, scored a whole batch at a time.
 
-    The breakdown always includes raw (the base reward before any shaping) and total (the scalar
-    the policy optimizes); length and entropy appear only when those terms are enabled. raw is
-    logged as train/reward_raw so the base signal is visible separately from shaping.
+    The total for each completion is
+
+        total = w_entropy * entropy + w_length * length + w_rl_sae * rl_sae + sum(w_i * external_i)
+
+    Each enabled term contributes weight * score. Terms are scored batch-wise: a plain per-idr
+    reward is looped, while a group/batched reward (an external subprocess, an SAE lens) runs once
+    for the whole step. A term with monitor=True is logged but left out of the total.
+
+    Legacy configs (a single reward.name, optional reward.group / reward.shaping / reward.monitor)
+    are desugared to the same term list first, so old configs and old checkpoints reproduce exactly.
 
     Args:
-        rcfg (DictConfig): Reward config (name, optional module and monitor, and the shaping,
-            length, and entropy term settings).
+        rcfg (DictConfig): Reward config (module plus the entropy, length, rl_sae, and external
+            blocks; or the legacy name/group/shaping/monitor/length/entropy shape).
 
     Returns:
-        Callable[[str], dict[str, float]]: Maps an IDR to its per-term reward breakdown.
+        Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]]: Maps
+            (idrs, group_size) to the per-idr totals and a matching per-term breakdown (each dict
+            holds every enabled term keyed by its log name, plus total).
     """
-    _register_custom_rewards(rcfg.get("module"))  # user rewards (or operator-registered protgps)
-    base = get_reward(rcfg.name)
-    # optional monitor reward: computed + logged (train/reward_monitor) but NOT added to total, so
-    # you can watch a metric (e.g. ProtGPS) during a run that does not optimize it.
-    monitor_name = rcfg.get("monitor")
-    monitor = get_reward(monitor_name) if monitor_name else None
+    rcfg = _to_new_shape(rcfg)
+    _register_custom_rewards(rcfg.get("module"))  # import user rewards before lookup
 
-    def components(idr: str) -> dict[str, float]:
-        raw = base(idr)
-        total = raw
-        if rcfg.shaping.enabled:
-            total = quadratic_shaping(total, target=rcfg.shaping.target, scale=rcfg.shaping.scale)
-        out = {"raw": raw}
-        if rcfg.length.enabled:
-            lr = rcfg.length.weight * length_reward(
-                idr, target_length=rcfg.length.target_length, width=rcfg.length.width
-            )
-            out["length"] = lr
-            total += lr
-        if rcfg.entropy.enabled:
-            er = rcfg.entropy.weight * entropy_reward(
-                idr, target_entropy=rcfg.entropy.target_entropy, width=rcfg.entropy.width
-            )
-            out["entropy"] = er
-            total += er
-        if monitor is not None:
-            out["monitor"] = monitor(idr)   # logged only; deliberately excluded from total
-        out["total"] = total
-        return out
+    # (log_key, weight, scorer(idrs, group_size) -> list[float], monitor)
+    terms: list[tuple[str, float, Callable, bool]] = []
 
-    return components
+    ent = rcfg.get("entropy")
+    if ent and ent.get("enabled"):
+        te, wd = ent.target_entropy, ent.width
+        terms.append(("entropy", float(ent.weight),
+                      lambda idrs, gs, te=te, wd=wd:
+                          [entropy_reward(x, target_entropy=te, width=wd) for x in idrs], False))
+
+    ln = rcfg.get("length")
+    if ln and ln.get("enabled"):
+        tl, wd = ln.target_length, ln.width
+        terms.append(("length", float(ln.weight),
+                      lambda idrs, gs, tl=tl, wd=wd:
+                          [length_reward(x, target_length=tl, width=wd) for x in idrs], False))
+
+    rs = rcfg.get("rl_sae")
+    if rs and rs.get("enabled"):
+        _register_custom_rewards(rs.get("module") or _RL_SAE_MODULE)  # registers sae_only_<sig>
+        terms.append(("rl_sae", float(rs.weight), resolve_reward(f"sae_only_{rs.signature}"),
+                      bool(rs.get("monitor"))))
+
+    # external rewards ("bring your own"): each entry is EITHER a subprocess scorer (cmd, run in its
+    # own environment) OR a registered in-process reward (name, e.g. a custom reward from
+    # rewards/builtin_rewards.py). A per-entry module is imported first so its name resolves.
+    seen = {k for k, *_ in terms}
+    for i, ext in enumerate(rcfg.get("external") or []):
+        if not ext.get("enabled"):
+            continue
+        if ext.get("module"):
+            _register_custom_rewards(ext.get("module"))
+        label = ext.get("name") or f"external{i}"
+        key = label if label not in seen else f"{label}_{i}"
+        seen.add(key)
+        if ext.get("cmd"):
+            scorer = make_external_reward(
+                ext.cmd, target=ext.get("target"), width=float(ext.get("width", 1.0)),
+                timeout=float(ext.get("timeout", 300.0)), maxlen=int(ext.get("maxlen", 0)), label=key)
+        else:
+            scorer = resolve_reward(ext.name)
+        terms.append((key, float(ext.weight), scorer, bool(ext.get("monitor"))))
+
+    def score_batch(idrs: list[str], group_size: int):
+        n = len(idrs)
+        totals = [0.0] * n
+        breakdown: list[dict[str, float]] = [{} for _ in range(n)]
+        for key, weight, scorer, monitor in terms:
+            scores = scorer(idrs, group_size)
+            for i in range(n):
+                if monitor:
+                    breakdown[i][key] = scores[i]          # logged, excluded from total
+                else:
+                    val = weight * scores[i]
+                    breakdown[i][key] = val
+                    totals[i] += val
+        for i in range(n):
+            breakdown[i]["total"] = totals[i]
+        return totals, breakdown
+
+    return score_batch
+
+
+def _to_new_shape(rcfg: DictConfig) -> DictConfig:
+    """Desugar a legacy reward config (name/group/shaping/monitor) into the term-block shape.
+
+    A config that already has an rl_sae or external block is returned unchanged. Otherwise the
+    legacy base reward (group takes precedence over name, matching the old build) becomes a single
+    external term of weight 1.0; a legacy monitor becomes a monitor term; and legacy shaping is
+    preserved by wrapping the base reward in a registered shaped alias. entropy and length blocks
+    carry over untouched.
+
+    Args:
+        rcfg (DictConfig): A reward config in either shape.
+
+    Returns:
+        DictConfig: The config in the new term-block shape.
+    """
+    if "rl_sae" in rcfg or "external" in rcfg:
+        return rcfg
+    d = OmegaConf.to_container(rcfg, resolve=True)
+    external = []
+    base = d.get("group") or d.get("name")  # legacy: group overrode name
+    if base:
+        _register_custom_rewards(d.get("module"))  # so the base name resolves before we wrap it
+        name = base
+        sh = d.get("shaping") or {}
+        if sh.get("enabled"):
+            fn = get_reward(base)
+            name = f"__shaped__{base}"
+            register_reward(name)(
+                lambda idr, fn=fn, t=sh["target"], s=sh["scale"]:
+                    quadratic_shaping(fn(idr), target=t, scale=s))
+        external.append({"enabled": True, "weight": 1.0, "name": name})
+    if d.get("monitor"):
+        external.append({"enabled": True, "weight": 0.0, "name": d["monitor"], "monitor": True})
+    for k in ("name", "group", "shaping", "monitor"):
+        d.pop(k, None)
+    d["external"] = external
+    return OmegaConf.create(d)
+
+
+def build_reward_components(rcfg: DictConfig) -> Callable[[str], dict[str, float]]:
+    """Per-idr reward breakdown (back-compat shim over build_reward_terms).
+
+    Args:
+        rcfg (DictConfig): Reward config in either shape.
+
+    Returns:
+        Callable[[str], dict[str, float]]: Maps an IDR to its per-term breakdown (including total).
+    """
+    terms = build_reward_terms(rcfg)
+    return lambda idr: terms([idr], 1)[1][0]
 
 
 def build_reward(rcfg: DictConfig) -> Callable[[str], float]:
-    """Build the scalar reward the policy optimizes (the total term of build_reward_components).
+    """Scalar reward the policy optimizes (back-compat shim over build_reward_terms).
 
     Args:
-        rcfg (DictConfig): Reward config passed through to build_reward_components.
+        rcfg (DictConfig): Reward config in either shape.
 
     Returns:
         Callable[[str], float]: Maps an IDR to its scalar total reward.
     """
-    components = build_reward_components(rcfg)
-    return lambda idr: components(idr)["total"]
-
-
-def build_group_reward_components(rcfg: DictConfig):
-    """Build a group-aware reward breakdown of f(idrs, group_size) -> list of per-idr dicts.
-
-    Each dict holds raw, optional length, entropy, and monitor, and total. raw is a group reward
-    (each completion scored relative to its GRPO group, for example SAE-code coverage); length,
-    entropy, and monitor stay per-idr, mirroring build_reward_components. total excludes monitor.
-    Shaping is not applied because group rewards are already relative.
-
-    Args:
-        rcfg (DictConfig): Reward config (group, optional module and monitor, and the length and
-            entropy term settings).
-
-    Returns:
-        Callable: Maps (idrs, group_size) to a list of per-idr reward breakdowns.
-    """
-    _register_custom_rewards(rcfg.get("module"))
-    group_base = get_group_reward(rcfg.group)
-    monitor_name = rcfg.get("monitor")
-    monitor = get_reward(monitor_name) if monitor_name else None
-
-    def components(idrs, group_size):
-        base = group_base(idrs, group_size)
-        out = []
-        for idr, b in zip(idrs, base):
-            total = b
-            d = {"raw": b}
-            if rcfg.length.enabled:
-                lr = rcfg.length.weight * length_reward(
-                    idr, target_length=rcfg.length.target_length, width=rcfg.length.width)
-                d["length"] = lr
-                total += lr
-            if rcfg.entropy.enabled:
-                er = rcfg.entropy.weight * entropy_reward(
-                    idr, target_entropy=rcfg.entropy.target_entropy, width=rcfg.entropy.width)
-                d["entropy"] = er
-                total += er
-            if monitor is not None:
-                d["monitor"] = monitor(idr)
-            d["total"] = total
-            out.append(d)
-        return out
-
-    return components
+    terms = build_reward_terms(rcfg)
+    return lambda idr: terms([idr], 1)[0][0]
 
 
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     """Wire the GRPO module and prompt dataset from a resolved config.
 
     Always warm-starts the policy from a pretrained checkpoint (cfg.init_from); the architecture
-    is read from that checkpoint. Selects a group-aware or per-idr reward based on cfg.reward, and
-    an unprompted or prompted-IDR prompt set based on cfg.prompts.mode (the legacy modes idp and
-    denovo are accepted for unprompted).
+    is read from that checkpoint. Builds the composite reward from cfg.reward, and an unprompted or
+    prompted-IDR prompt set based on cfg.prompts.mode (the legacy modes idp and denovo are accepted
+    for unprompted).
 
     Args:
         cfg (DictConfig): Resolved GRPO config (grpo, reward, prompts, init_from).
@@ -166,17 +220,9 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     """
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
     # GRPO always warm-starts from a pretrained policy; architecture is read from that checkpoint.
-    if cfg.reward.get("group"):  # group-aware reward (population coverage): scored per GRPO group
-        gcomp = build_group_reward_components(cfg.reward)
-        lit = LitGRPO.init_from_checkpoint(
-            cfg.init_from, lambda idr: 0.0, group_reward_components=gcomp, **grpo_kw
-        )
-    else:  # standard per-idr reward + per-term logging (train/reward_raw, _length, _entropy)
-        components = build_reward_components(cfg.reward)
-        reward = lambda idr: components(idr)["total"]  # noqa: E731 - scalar the policy optimizes
-        lit = LitGRPO.init_from_checkpoint(
-            cfg.init_from, reward, reward_components=components, **grpo_kw
-        )
+    # One composite reward: a weighted sum of the enabled terms, scored a whole batch per step.
+    reward_terms = build_reward_terms(cfg.reward)
+    lit = LitGRPO.init_from_checkpoint(cfg.init_from, reward_terms=reward_terms, **grpo_kw)
 
     # "idp"/"denovo" kept for back-compat with old configs; "unprompted" is the current vocabulary
     if cfg.prompts.mode in ("unprompted", "idp", "denovo"):

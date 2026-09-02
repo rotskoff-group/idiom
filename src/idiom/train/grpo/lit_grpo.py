@@ -44,18 +44,16 @@ class LitGRPO(L.LightningModule):
         normalize_advantage (bool): If True, divide advantages by the group std.
         log_samples_every (int): Print example completions every this many steps (0 disables).
         n_log_samples (int): Number of example completions to print when logging.
-        reward_components (Callable[[str], dict[str, float]] | None): Optional per-term reward
-            breakdown; when set it is the source of the scalar reward and drives per-term logging.
-        group_reward_components (Callable[[list[str], int], list[dict[str, float]]] | None):
-            Optional group-aware breakdown scoring each completion relative to its group; takes
-            precedence over reward_components.
+        reward_terms (Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]] | None):
+            The composite reward; when set it scores the whole batch and drives per-term logging,
+            and reward_fn is not used.
         tokenizer (Tokenizer | None): Character tokenizer (a default is used if None).
     """
 
     def __init__(
         self,
         cfg: ModelConfig,
-        reward_fn: Callable[[str], float],
+        reward_fn: Callable[[str], float] | None = None,
         *,
         group_size: int = 8,
         max_new_tokens: int = 256,
@@ -68,8 +66,7 @@ class LitGRPO(L.LightningModule):
         normalize_advantage: bool = True,
         log_samples_every: int = 25,
         n_log_samples: int = 3,
-        reward_components: Callable[[str], dict[str, float]] | None = None,
-        group_reward_components: Callable[[list[str], int], list[dict[str, float]]] | None = None,
+        reward_terms: Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]] | None = None,
         tokenizer: Tokenizer | None = None,
     ) -> None:
         super().__init__()
@@ -82,14 +79,12 @@ class LitGRPO(L.LightningModule):
         self.reference = copy.deepcopy(self.model).eval()
         self.reference.requires_grad_(False)
 
+        # The composite reward: f(idrs, group_size) -> (totals, per-term breakdown). When set it is
+        # the source of the scalar reward (so reward_fn is not called) and drives per-term logging.
+        # reward_fn is the simple fallback used when no term breakdown is wired (e.g. unit tests).
+        assert reward_fn is not None or reward_terms is not None, "pass reward_fn or reward_terms"
         self.reward_fn = reward_fn
-        # Optional per-term breakdown ({"raw", "length", "entropy", "total"}); when set it is the
-        # source of the scalar reward (so reward_fn is not also called) and drives per-term logging.
-        self.reward_components = reward_components
-        # Optional GROUP-aware breakdown: f(idrs, group_size) -> list of per-idr breakdown dicts. When
-        # set, it is the source of the scalar reward (so each completion can be scored relative to its
-        # group, e.g. SAE-code population coverage). Takes precedence over reward_components.
-        self.group_reward_components = group_reward_components
+        self.reward_terms = reward_terms
         self.tok = tokenizer or Tokenizer()
         self.group_size = group_size
         self.max_new_tokens = max_new_tokens
@@ -104,7 +99,7 @@ class LitGRPO(L.LightningModule):
         self.n_log_samples = n_log_samples
 
     @classmethod
-    def init_from_checkpoint(cls, ckpt_path, reward_fn, **kwargs) -> "LitGRPO":
+    def init_from_checkpoint(cls, ckpt_path, reward_fn=None, **kwargs) -> "LitGRPO":
         """Warm-start GRPO from a pretrained checkpoint (architecture read from it).
 
         Both the policy and the frozen reference are loaded with the checkpoint's weights.
@@ -133,7 +128,7 @@ class LitGRPO(L.LightningModule):
                 break  # completion ends at the first STOP/PAD
             if self.tok.is_residue(i):
                 ids.append(i)  # residues only; drop stray FIM markers (1/2/3) the model may emit
-        return self.tok.decode(ids)  # clean residue string for the reward fn (e.g. ProtGPS/ESM)
+        return self.tok.decode(ids)  # clean residue string for the reward fn (e.g. an external scorer)
 
     def training_step(self, batch: torch.Tensor, batch_idx: int):
         """Roll out completions, score them, and return the GRPO loss for one batch."""
@@ -156,16 +151,13 @@ class LitGRPO(L.LightningModule):
         mask[:, P:] = (completions != self.tok.pad_id).float()
 
         idrs = [self._decode_idr(completions[i]) for i in range(BG)]
-        # Per-term breakdown when available (raw/length/entropy/total); else just the scalar reward.
-        # A group-aware breakdown (scores each completion relative to its group) takes precedence.
-        if self.group_reward_components is not None:
-            breakdown = self.group_reward_components(idrs, self.group_size)
+        # The composite reward scores the whole batch at once (so a batched/external term runs once
+        # per step) and returns a per-term breakdown for logging; reward_fn is the simple fallback.
+        if self.reward_terms is not None:
+            totals, breakdown = self.reward_terms(idrs, self.group_size)
         else:
-            breakdown = [self.reward_components(idr) for idr in idrs] if self.reward_components else None
-        rewards = torch.tensor(
-            [b["total"] for b in breakdown] if breakdown else [self.reward_fn(idr) for idr in idrs],
-            device=rep.device, dtype=torch.float,
-        )
+            totals, breakdown = [self.reward_fn(idr) for idr in idrs], None
+        rewards = torch.tensor(totals, device=rep.device, dtype=torch.float)
         advantages = group_advantages(rewards, self.group_size, normalize=self.normalize_advantage)
 
         if self.log_samples_every and self.global_step % self.log_samples_every == 0:

@@ -1,22 +1,13 @@
 """RL-SAE rewards: reward a policy for reproducing a target's interpretable SAE feature code.
 
-A feature "fires" in a sequence when it is in the SAE top-k at any IDR residue (the prevalence
-definition used by the enrichment analysis). Two reward families are registered for every signature
-in the targets file:
+Registers sae_only_<name> for every signature in the targets file -- the fraction of that target's
+features that fire (are in the SAE top-k at any IDR residue) in the completion. Enable via the
+rl_sae config block (this file is imported automatically):
 
-    sae_only_<name>   fraction of the target's features that fire in the completion.
+    idiom_grpo init_from=... reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
 
-Select it with reward.name=:
-
-    idiom_grpo init_from=... reward.module=rewards/rl_sae_reward.py \
-        reward.name=sae_only_nucleolus
-
-Keep the grpo.yaml entropy term on: it is the naturalness guardrail against low-complexity
-reward-hacking.
-
-Bring your own signature by pointing IDIOM_SAEREWARD_FEATURES at a JSON file of the same shape,
-{case: {name: [feature_ids]}} -- rewards are registered for whatever names it contains. Build one
-from your own sequences with examples/05_feature_enrichment.py.
+Keep the grpo.yaml entropy term on as the naturalness guardrail. Bring your own signature by pointing
+IDIOM_SAEREWARD_FEATURES at a JSON of the same shape (build one with examples/05_feature_enrichment.py).
 
 Environment variables:
     IDIOM_SAEREWARD_SAE       SAE to use as the lens (HF repo id or local dir)
@@ -39,7 +30,7 @@ from idiom.train.grpo.rewards import register_reward
 _SAE_DIR = os.environ.get("IDIOM_SAEREWARD_SAE", "jxliu2/idiomsae-300M-L18-k32")
 _FEATURES = os.environ.get(
     "IDIOM_SAEREWARD_FEATURES",
-    str(Path(__file__).resolve().parent / "rl_sae_feature_sets" / "idiomsae-300M-L18-k32.json"))
+    str(Path(__file__).resolve().parent / "signatures" / "idiomsae-300M-L18-k32.json"))
 _CASE = os.environ.get("IDIOM_SAEREWARD_CASE", "top30")
 
 

@@ -39,14 +39,6 @@ include = [
     "/src"
 ]
 
-[project.optional-dependencies]
-# The vendored ProtGPS reward model (rewards/protgps/) imports pytorch_lightning 1.x, which is a
-# different distribution from the `lightning` 2.x the library itself uses. Only needed to run the
-# protgps_* rewards: uv sync --extra protgps
-protgps = [
-    "pytorch-lightning>=1.9,<2",
-]
-
 [dependency-groups]
 dev = [
     "ruff>=0.14.13",

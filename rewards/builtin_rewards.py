@@ -1,15 +1,16 @@
-"""Example custom GRPO rewards — copy and edit this file for your own.
+"""Simple in-process GRPO rewards — copy and edit this file for your own.
 
 A reward is f(idr: str) -> float: it receives the decoded IDR residue string and returns a scalar.
-Register it with the register_reward("name") decorator; the optional shaping / length / entropy terms
-are added on top by the config, so you usually only write the base signal.
+Register it with the register_reward("name") decorator; the entropy and length terms are added on
+top by the config, so you usually only write the base signal.
 
-Use it by pointing GRPO at this file and selecting the name:
+Use it by adding an external term that names the reward and points at the file that registers it:
 
-    idiom_grpo init_from=... reward.module=rewards/example_rewards.py reward.name=aromatic_fraction
+    reward.external:
+      - {enabled: true, weight: 1.0, name: aromatic_fraction, module: rewards/builtin_rewards.py}
 
-reward.module accepts a *.py path (like here) or a dotted module path; it is imported before the
-reward is looked up, so the decorators below run and register the rewards.
+module accepts a *.py path (like here) or a dotted module path; it is imported before the reward is
+looked up, so the decorators below run and register the rewards.
 """
 
 from idiom.train.grpo.rewards import register_reward

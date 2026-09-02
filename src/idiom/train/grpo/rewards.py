@@ -1,9 +1,8 @@
 """GRPO reward functions of the form f(idr: str) -> float over the decoded IDR residue string.
 
-A registry maps names to reward functions (the config selects one). Composition (for example a
-base reward plus length and entropy shaping) is assembled in the GRPO module from these building
-blocks. ProtGPS (localization) also fits f(idr) -> float but loads a vendored model, so it is
-registered lazily in the operator path, not here.
+A registry maps names to reward functions; the composite reward (a weighted sum of terms) is
+assembled in train_grpo from these building blocks. Rewards that need their own environment run as
+external subprocess scorers instead (train/grpo/external.py).
 """
 
 from __future__ import annotations
@@ -88,6 +87,32 @@ def get_group_reward(name: str) -> Callable[[list, int], list]:
     if name not in GROUP_REWARD_REGISTRY:
         raise KeyError(f"unknown group reward {name!r}; registered: {sorted(GROUP_REWARD_REGISTRY)}")
     return GROUP_REWARD_REGISTRY[name]
+
+
+def resolve_reward(name: str) -> Callable[[list[str], int], list[float]]:
+    """Return a batch scorer f(idrs, group_size) -> list[float] for any registered reward name.
+
+    A group reward is used directly (it scores the whole batch in one call, which is what lets an
+    external subprocess or SAE lens run once per step instead of once per completion). A plain
+    per-idr reward is lifted by looping. This uniform signature is how the composite reward sums
+    per-idr terms (entropy, length) and batched terms (external scorers) in one place.
+
+    Args:
+        name (str): Registry key, in either the per-idr or the group registry.
+
+    Returns:
+        Callable[[list[str], int], list[float]]: One score per IDR, in order.
+
+    Raises:
+        KeyError: If no reward is registered under name in either registry.
+    """
+    if name in GROUP_REWARD_REGISTRY:
+        return GROUP_REWARD_REGISTRY[name]
+    if name in REWARD_REGISTRY:
+        fn = REWARD_REGISTRY[name]
+        return lambda idrs, group_size: [fn(idr) for idr in idrs]
+    raise KeyError(f"unknown reward {name!r}; registered: "
+                   f"{sorted(set(REWARD_REGISTRY) | set(GROUP_REWARD_REGISTRY))}")
 
 
 def _fraction(idr: str, aa: str) -> float:
