@@ -37,12 +37,12 @@ trainer:                     # global batch 1024 = 32/GPU * 8 GPUs * accum 4 (me
   gradient_clip_val: 0.0     # paper: no gradient clipping
   accumulate_grad_batches: 4
 
-out_dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor/runs}/pretrain
+out_dir: ${oc.env:IDIOM_OUT,./runs}/pretrain
 
 # Hydra run/sweep dir -> experiment dir (keeps the repo clean); override via IDIOM_OUT.
 hydra:
   run:
-    dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   sweep:
-    dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.num}

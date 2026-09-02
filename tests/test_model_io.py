@@ -35,8 +35,9 @@ def test_config_from_checkpoint_errors_without_stored_cfg(tmp_path):
 
 def test_load_pretrained_reads_arch_from_checkpoint(tmp_path):
     m, ckpt = _ckpt(tmp_path)
-    loaded = load_pretrained(ckpt)  # no cfg — arch is read from the ckpt
+    loaded, cfg = load_pretrained(ckpt)  # arch is read from the ckpt
     assert loaded.cfg == CFG
+    assert cfg == CFG
     for a, b in zip(m.state_dict().values(), loaded.state_dict().values()):
         assert torch.equal(a, b)
     assert not loaded.training  # eval mode

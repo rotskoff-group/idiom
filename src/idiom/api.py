@@ -207,7 +207,8 @@ class IDiom:
         from idiom.model.io import load_pretrained  # noqa: PLC0415
 
         dev = resolve_device(device)
-        return cls(load_pretrained(ckpt_path, device=dev), device=dev)
+        model, _ = load_pretrained(ckpt_path, device=dev)
+        return cls(model, device=dev)
 
     # --- generation ---
     def _decode_idr(self, row: torch.Tensor) -> str:

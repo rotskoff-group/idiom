@@ -53,8 +53,7 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     """
     device = resolve_device(cfg.device)
     tok = Tokenizer()
-    model = load_pretrained(cfg.model_ckpt, device=device)  # arch read from the checkpoint
-    model_cfg = model.cfg
+    model, model_cfg = load_pretrained(cfg.model_ckpt, device=device)  # arch read from the checkpoint
 
     records = RecordDataset(
         open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len,

@@ -114,7 +114,7 @@ def main() -> None:
     args = p.parse_args()
 
     device = resolve_device()
-    model = load_pretrained(args.ckpt, device=device)
+    model, _ = load_pretrained(args.ckpt, device=device)
     emb = embed_fasta(model, args.fasta, args.layers, pool=args.pool, device=device)
     write_embeddings(emb, args.out)
 

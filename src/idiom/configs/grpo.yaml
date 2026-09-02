@@ -46,12 +46,12 @@ trainer:
   log_every_n_steps: 1     # log EVERY step so W&B's native _step axis == the real training step (0..max_steps)
   checkpoint_every: 0    # save a periodic checkpoint every N optimizer steps (0 = last only)
 
-out_dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor/runs}/grpo
+out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo
 
 # Hydra run/sweep dir -> experiment dir (keeps the repo clean); override via IDIOM_OUT.
 hydra:
   run:
-    dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   sweep:
-    dir: ${oc.env:IDIOM_OUT,/data2/scratch/group_scratch/idr_plm/2026-06-14_refactor}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.num}

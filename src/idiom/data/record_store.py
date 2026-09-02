@@ -53,8 +53,12 @@ def build_record_store(
 ) -> Path:
     """Parse fasta once (via read_records) into a columnar store and return its directory.
 
-    Writes the byte buffers by streaming; only the small offset/coord index arrays are held in RAM
-    (~24 B/record). Builds into a temp dir and atomically renames, so a store dir is always complete.
+    The sequence/accession byte buffers are written to disk incrementally rather than accumulated,
+    and the offset/coord index arrays (~24 B/record) grow in memory until the end. The read side is
+    eager, though: read_records materializes the whole FASTA (via io.read_fasta) before the loop, so
+    a build's peak RAM is dominated by that one-time full-file parse — a cost paid once here so that
+    training, which opens the finished store via memmap, never pays it. Builds into a temp dir and
+    atomically renames, so a store dir is always complete.
 
     Args:
         fasta (str | Path): Path to the record FASTA to convert.
