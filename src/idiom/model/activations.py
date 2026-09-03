@@ -67,7 +67,7 @@ def extract_activations(
     tok = tokenizer or Tokenizer()
     _, hidden = model(tokens, return_hidden_states=True)
 
-    # Single shared selector (token class + IDR region) — identical to what fidelity/steering use.
+    # Single shared selector (token class + IDR region) — identical to what steering uses.
     keep = tok.region_mask(tokens, region=region, drop_markers=drop_markers)  # [B, L] bool
     seq_idx, pos_idx = keep.nonzero(as_tuple=True)  # flat indices of kept tokens
 

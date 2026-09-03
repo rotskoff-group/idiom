@@ -1,14 +1,11 @@
-"""P5 fidelity + steering tests (CPU-only): region-masked edits, substitution loss, steered sampling."""
+"""P5 steering tests (CPU-only): region-masked residual edits and steered sampling."""
 
 import torch
-from torch.utils.data import DataLoader
 
-from idiom.data.dataset import RecordDataset, make_collate
 from idiom.data.io import Record
 from idiom.data.tokenizer import Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.sae import SparseCoder
-from idiom.sae.eval.fidelity import compute_fidelity
 from idiom.sae.steer import SteeringSpec, add_direction_hook, steer_generation, steering
 
 TOK = Tokenizer()
@@ -25,17 +22,6 @@ def test_steering_context_only_edits_residues():
         steered = model(tokens)
     # logits change somewhere (edit applied), but START/markers were left unsteered.
     assert not torch.allclose(base, steered)
-
-
-def test_compute_fidelity_runs():
-    model = IDiomTransformer(TINY).eval()
-    sae = SparseCoder(TINY.d_model, num_latents=32, k=4)
-    ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=1.0)
-    batches = list(DataLoader(ds, batch_size=2, collate_fn=make_collate(TOK.pad_id)))
-    res = compute_fidelity(model, sae, layer=1, batches=batches, pad_id=TOK.pad_id, tokenizer=TOK)
-    for v in (res.loss_clean, res.loss_sae, res.loss_ablate):
-        assert v == v and v >= 0  # finite, non-negative NLLs
-    assert isinstance(res.pct_loss_recovered, float)
 
 
 def test_steer_generation_runs():

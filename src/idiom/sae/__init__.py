@@ -9,7 +9,6 @@ Subpackages:
     train: the streaming ActivationStore, LitSAE, and the idiom_sae entrypoint.
     features: the per-residue feature-activation dataset, its reader, enrichment, and the viewer.
     steer: residual-stream hooks and feature-steered generation.
-    eval: substitution-loss fidelity, reconstruction, and sparsity metrics.
 """
 
 from idiom.sae.model import SparseCoder, load_sae, save_sae

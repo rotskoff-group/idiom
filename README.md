@@ -63,7 +63,7 @@ because mixing them up is the easiest way to get quiet nonsense:
 | `fim_mode` / prompting | `prompted` / `unprompted` | whether the prompt carries the flanks |
 | SAE `region` | `all` / `idr` / `non_idr` | which residues an SAE reads and edits |
 
-Functions that take sequences (`embed`, `encode`, `fidelity`, `build_feature_dataset`) accept a
+Functions that take sequences (`embed`, `encode`, `build_feature_dataset`) accept a
 FASTA path, a single sequence string, or a list of sequences. A bare sequence string is treated as
 an unprompted IDR (the whole sequence is the IDR).
 
@@ -115,7 +115,6 @@ seqs = sae.steer_generate(feature=1234, strength=0.5, n=100)
 seqs = sae.steer_generate(feature=[12, 44], strength=0.3, relative=True, preserve_norm=True)
 
 # How much of the model's behaviour the SAE preserves (Gao "loss recovered")
-fid = sae.fidelity("records.fasta")
 print(fid.pct_loss_recovered)
 ```
 
@@ -135,9 +134,6 @@ Train your own SAE on any layer (streaming activations, no cached activations on
 ```bash
 idiom_sae model_ckpt=/path/model.ckpt data.fasta=/path/records.fasta layer=18 sae.k=32
 ```
-
-Reconstruction/sparsity metrics (FVU, explained variance, mean L0, dead fraction, per-feature
-firing frequency) are available as library primitives in `idiom.sae.eval`.
 
 ## 3. Training and RL post-training
 

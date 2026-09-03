@@ -3,7 +3,7 @@
 IDiom wraps an IDiomTransformer and its Tokenizer, and provides loading and saving in the released
 format, generation of unprompted and prompted IDRs to strings or FASTA, and residual-stream
 embeddings. IDiomSAE bundles a trained SAE with its host model and layer, and provides feature
-activations, feature-steered generation, and fidelity.
+activations, and feature-steered generation.
 
 Example:
     from idiom import IDiom
@@ -37,7 +37,6 @@ from idiom.model.extract import embed_fasta
 from idiom.model.io import load_pretrained
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
-from idiom.sae.eval.fidelity import compute_fidelity
 from idiom.sae.features.build_feature_dataset import build_feature_dataset as _build_feature_dataset
 from idiom.sae.model.io import load_sae, save_sae
 from idiom.sae.steer import SteeringSpec, steer_generation
@@ -366,7 +365,7 @@ class IDiomSAE:
     """A sparse autoencoder bundled with its host model, layer, and training distribution.
 
     The recorded region and fim_mode are applied automatically by encode, build_feature_dataset,
-    steer_generate, and fidelity.
+    and steer_generate.
 
     Attributes:
         sae (SparseCoder): The trained autoencoder, in eval mode on the host's device.
@@ -382,7 +381,6 @@ class IDiomSAE:
         sae = IDiomSAE.from_pretrained("jxliu2/idiomsae-300M-L18-k32")
         feats, accessions = sae.encode("proteins.fasta")
         seqs = sae.steer_generate(feature=1234, strength=0.5, n=100)
-        fid = sae.fidelity("records.fasta")
     """
 
     def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None,
@@ -406,7 +404,7 @@ class IDiomSAE:
         self.host_model = host_model
         # The distribution this SAE was trained on: which residues it reads (region) and the prompt
         # format those activations were taken under (fim_mode). Both are reapplied automatically
-        # everywhere downstream — encode, steering, fidelity, feature datasets — so the SAE is never
+        # everywhere downstream — encode, steering, feature datasets — so the SAE is never
         # run on a distribution it did not see. They are independent axes, and "idr" in region (a
         # residue slice) means something different from "prompted" in fim_mode (a prompt format).
         self.region = region
@@ -620,31 +618,6 @@ class IDiomSAE:
             return [self.host._decode_idr(row) for row in out]
 
         return _oversample(_batch, n, length_range=length_range, max_oversample=max_oversample, seed=seed)
-
-    # --- fidelity ---
-    @torch.no_grad()
-    def fidelity(self, inputs, *, batch_size: int = 16, prompted_prob: float | None = None):
-        """Compute substitution-loss fidelity over sequences or a record FASTA.
-
-        Args:
-            inputs (str | Path | list[str]): A record FASTA path, a bare sequence string, or an
-                iterable of sequences and/or Records.
-            batch_size (int): Records per batch.
-            prompted_prob (float | None): Probability of the prompted variant; taken from the SAE's
-                fim_mode if None, as 0.0 for unprompted and 1.0 for prompted.
-
-        Returns:
-            FidelityResult: The clean, SAE-substituted, and ablated losses, and the percent
-                recovered they imply.
-        """
-        if prompted_prob is None:
-            prompted_prob = 0.0 if self.fim_mode == UNPROMPTED else 1.0
-
-        ds = RecordDataset(to_records(inputs), self.tok, max_len=self.model.cfg.max_seq_len,
-                           prompted_prob=prompted_prob)
-        dl = DataLoader(ds, batch_size=batch_size, collate_fn=make_collate(self.tok.pad_id))
-        return compute_fidelity(self.model, self.sae, self.layer, dl, pad_id=self.tok.pad_id,
-                                tokenizer=self.tok, region=self.region, device=self.device)
 
 
 def _idr_header(accession: str, seq: str) -> str:
