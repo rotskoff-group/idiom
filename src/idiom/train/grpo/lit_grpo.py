@@ -20,8 +20,8 @@ from idiom.model.config import ModelConfig
 from idiom.model.io import load_model
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
+from idiom.rewards.custom_rewards import sequence_entropy
 from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs
-from idiom.train.grpo.reward import sequence_entropy
 
 
 class LitGRPO(L.LightningModule):

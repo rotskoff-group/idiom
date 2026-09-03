@@ -67,7 +67,7 @@ def test_init_from_checkpoint_roundtrip(tmp_path):
 def test_build_wires_pretrain_and_sft(tmp_path):
     from omegaconf import OmegaConf
 
-    from idiom.train.train import build
+    from idiom.train.autoreg.train_autoreg import build
 
     fasta = tmp_path / "train.fasta"
     fasta.write_text(">A_IDR_3-6\nMEDSKVDNRPQ\n>B_IDR_2-5\nACDEFGHIKL\n")

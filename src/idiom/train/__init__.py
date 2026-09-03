@@ -1,13 +1,13 @@
-"""Training layer: pretraining, SFT, and GRPO post-training on PyTorch Lightning.
+"""Training layer: one subpackage per training method, each self-contained.
 
-Modules:
-    lit_autoregressive: the LightningModule shared by pretraining and SFT.
-    schedulers: the warmup-cosine learning-rate schedule.
-    train: the idiom_train entrypoint.
-    grpo: the GRPO post-training package.
+Subpackages:
+    autoreg: pretraining and SFT (the idiom_train entrypoint).
+    grpo: GRPO post-training against a composed reward (the idiom_grpo entrypoint).
+
+Each holds its own LightningModule, its data handling where it differs, and its entrypoint, so a
+new method is a new sibling package rather than a change to an existing one.
 """
 
-from idiom.train.lit_autoregressive import LitAutoregressive
-from idiom.train.schedulers import warmup_cosine
+from idiom.train.autoreg import LitAutoregressive, warmup_cosine
 
 __all__ = ["LitAutoregressive", "warmup_cosine"]

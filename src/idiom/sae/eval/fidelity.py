@@ -18,7 +18,7 @@ from dataclasses import dataclass
 import torch
 
 from idiom.data.tokenizer import Tokenizer
-from idiom.sae.steering.hooks import sae_edit_hook, steering, substitute_hook
+from idiom.sae.steer.hooks import sae_edit_hook, steering, substitute_hook
 
 
 @dataclass

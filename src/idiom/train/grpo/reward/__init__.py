@@ -6,17 +6,16 @@ weighted sum of the shaped rewards over the configured terms.
 
 Modules:
     registry: the reward registry and the per-batch context rewards receive.
-    basic_rewards: the built-in rewards (composition entropy, length).
     shaping: the shaping rules a term can apply to a raw reward, and their registry.
     external: subprocess scorers that run a reward model in its own environment.
-    rl_sae_reward: rewards for reproducing a target's SAE feature code, imported on demand.
     compose: config validation and the weighted-sum composition that LitGRPO calls.
 
-User-editable reward content -- copyable in-process rewards, external scorer programs, and SAE
-signature files -- lives in the repository's top-level rewards/ directory.
+The rewards themselves are not here: every one that ships -- the entropy and length guardrails, the
+charge and motif examples, the SAE feature reward, and the external scorer programs -- lives in
+idiom.rewards, so that all reward content sits in one editable place. This package is the machinery
+that registers, shapes, and composes them.
 """
 
-from idiom.train.grpo.reward.basic_rewards import sequence_entropy, sequence_length
 from idiom.train.grpo.reward.compose import (
     RewardTermSpec,
     build_reward,
@@ -60,7 +59,5 @@ __all__ = [
     "quadratic_penalty",
     "register_reward",
     "register_shaping",
-    "sequence_entropy",
-    "sequence_length",
     "tolerance",
 ]

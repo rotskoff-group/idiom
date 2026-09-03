@@ -1,0 +1,141 @@
+# Examples
+
+Two kinds, split by what they are for. **Walkthroughs** in [`scripts/`](scripts/) are for looking
+at things — generating, reading and steering SAE features, and finding which features matter for
+your sequences. **Training scripts** in [`slurm/`](slurm/) are for running things — pretraining,
+SFT, SAE training, and RL — each a single script that spells out every config value.
+
+Small input sets live in [`example_data/`](example_data/), so the walkthroughs run with no
+arguments. Submit the training scripts from the repo root.
+
+## Walkthroughs
+
+Each is a plain top-to-bottom script — no arguments, no `main()`. Run one with `uv run`, and edit
+the block of constants at the top of the file to point it at your own model, SAE, or sequences:
+
+```bash
+uv run cookbook/scripts/generate_and_embed.py
+```
+
+| Script | Covers | Needs |
+|--------|--------|-------|
+| [`generate_and_embed.py`](scripts/generate_and_embed.py) | unprompted (de novo) and prompted (context-conditioned) generation; residual-stream embeddings, pooled and per-residue | GPU, weights |
+| [`sae_features.py`](scripts/sae_features.py) | which SAE features fire on a sequence, and **causal steering** along one of them | GPU, weights |
+| [`feature_enrichment.py`](scripts/feature_enrichment.py) | which features are enriched in your own set → signature + **volcano** plot + **sequence logos** of what they detect | GPU, weights |
+
+They read in that order, and each ends by pointing at the next. `DEVICE = "auto"` in every
+parameter block falls back to CPU. Figures are written next to their outputs as PNGs rather than
+shown, so the scripts run the same over SSH or under a scheduler.
+
+## The RL-SAE pipeline, end to end
+
+`scripts/feature_enrichment.py → slurm/grpo.bash` is the RL-SAE story on your own sequences: the
+walkthrough finds the SAE features enriched in a set (against the held-out validation background,
+downloaded from the Hub), shows the residue grammar those features encode, and writes a signature;
+the training script then post-trains a model to reproduce that feature code. Point
+`IDIOM_SAEREWARD_FEATURES` at your signature and switch on the RL-SAE term:
+
+```bash
+IDIOM_SAEREWARD_FEATURES=enr/signature.json IDIOM_SAEREWARD_CASE=top30 \
+  idiom_grpo init_from=jxliu2/idiom-300M \
+    reward.terms.2.enabled=true reward.terms.2.reward=sae_only_<name>
+```
+
+`sft.bash` is the supervised counterpart — specialize a model on the set directly — and
+`grpo_external.bash` swaps in a reward model that runs in its own environment (sparrow) instead of
+the SAE.
+
+Every training script warm-starts from anything `model/io.load_model` accepts: a HF repo id, a local
+released directory, or a Lightning `.ckpt`. Training on a FASTA auto-builds a memory-mapped
+`<fasta>.idiomstore/` sidecar next to it on first run (git-ignored; delete it to rebuild).
+
+## Training scripts
+
+Each spells out **every config value as a Hydra override** (so the run is reproducible from the
+script alone), self-logs its own contents into the job log, and pins `out_dir` / `hydra.run.dir`.
+
+| Script | Job | GPUs |
+|--------|-----|------|
+| `pretrain.bash` | pretrain 24L from scratch (`idiom_train`) | 8 |
+| `sft.bash` | fine-tune a released model (`idiom_train --config-name sft`) | 1 |
+| `grpo.bash` | RL post-training toward an SAE signature (`idiom_grpo`) | 1 |
+| `grpo_external.bash` | RL toward an external reward model in its own env (sparrow) | 1 |
+| `sae.bash` | train a top-k SAE (`idiom_sae`) | 1 |
+
+They are `.bash` because they run **either way** — submit them to Slurm, or run them directly on a
+machine you already have:
+
+```bash
+mkdir -p slurm_out                 # #SBATCH --output writes here; Slurm won't create it
+sbatch cookbook/slurm/pretrain.bash
+squeue --me
+tail -f slurm_out/slurm-*.out
+```
+
+```bash
+bash cookbook/slurm/sft.bash       # same script, no scheduler; the #SBATCH lines are just comments
+```
+
+Under `sbatch` the repo is `$SLURM_SUBMIT_DIR`, so submit from the repo root; under `bash` it is
+resolved from the script's own location, so you can run it from anywhere. Either way the script
+activates `.venv`, which `uv sync` created.
+
+**Before you submit, edit:**
+
+- **`#SBATCH` header** — `--partition` (and `--account` if your site needs one), `--time`, and the
+  memory/CPU directives for your cluster.
+- **`OUT`** at the top of the script — where checkpoints and the Hydra run dir go. Keep it on scratch;
+  the scripts pin `out_dir`/`hydra.run.dir` to it so nothing lands in the repo.
+- **Data paths** — `data.train_fasta` / `data.val_fasta` (pretrain), `data.fasta` (SAE). The SFT/GRPO
+  scripts default to the bundled `example_data`; point them at your own set for a real run.
+- **W&B** — scripts export `WANDB_MODE=offline`; `wandb login` (or set `WANDB_API_KEY`) and submit with
+  `WANDB_MODE=online sbatch …` for live logging.
+- **`UV_CACHE_DIR`** (GRPO with an external reward only) — point it at scratch; on-demand reward envs
+  (e.g. sparrow) are several GB.
+
+**Multi-GPU: no `srun`.** These follow the convention of **not** wrapping the command in `srun`: one
+Slurm task owns the node, and Lightning launches one DDP process per GPU itself from
+`trainer.devices`. So on one node:
+
+```
+--gpus-per-node  ==  trainer.devices           # 8 for pretrain, 1 for the rest
+--cpus-per-task   covers all DataLoader workers  # e.g. 32 = 4 workers/GPU x 8 GPUs
+```
+
+`data.batch_size` is **per GPU**; global batch = `batch_size × devices × accumulate_grad_batches`.
+For **multi-node** DDP, Lightning's in-process launcher is single-node — launch with `srun` and
+`--ntasks-per-node = gpus-per-node` instead, and add `+trainer.num_nodes=$SLURM_NNODES`.
+
+**Resuming.** `pretrain.bash` and `sft.bash` check `$OUT/checkpoints/last.ckpt` and, if present,
+add `resume_from=…` to continue (optimizer, global step, LR schedule, and RNG are all restored), so
+after a Slurm timeout you just re-submit the same script and it picks up where it left off. The GRPO
+and SAE scripts keep only a final checkpoint, so there is no rolling `last.ckpt` to resume from:
+pass `resume_from=<ckpt>` by hand, or set `trainer.checkpoint_every=<N>` in `grpo.bash` to keep
+periodic checkpoints plus a rolling `last.ckpt`.
+
+## `example_data/`
+
+Small IDR sets used by the enrichment walkthrough and the SFT and RL scripts. Each FASTA is a
+**subset** (≤150 records) of a curated positive set, with IDiom `_IDR_x-y` headers, so it drops
+straight into `sae.encode`, `build_feature_dataset`, `idiom_train`, and the enrichment pipeline.
+These are demo-sized excerpts, not the full datasets used in the paper.
+
+```
+example_data/
+  protgps/     6 subcellular-condensate IDR sets, from ProtGPS
+    stress_granule.fasta  p-body.fasta  nuclear_speckle.fasta
+    nucleolus.fasta       chromosome.fasta  nuclear_pore_complex.fasta
+  effector/    2 transcriptional-effector IDR sets, from DelRosso et al. 2023
+    ad.fasta   activation domains
+    rd.fasta   repression domains
+```
+
+Every sequence is a fully disordered IDR (the whole record is the span, no flanks). The `effector/`
+headers also carry the source gene and measured strength as free-text fields after the accession;
+IDiom reads only the leading `{accession}_IDR_{x}-{y}` token and ignores the rest.
+
+**Provenance and licensing.** `protgps/` — condensate IDR sets from **ProtGPS** (Kilgore et al.;
+<https://github.com/pgmikhael/protgps>). `effector/` — activation/repression domain IDRs from
+**DelRosso et al., *Nature* 2023**, "Large-scale mapping and mutagenesis of human transcriptional
+effector domains." These excerpts are redistributed for demonstration only; cite the original works
+if you use them, and consult their licenses for any other use.

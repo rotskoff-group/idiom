@@ -12,6 +12,16 @@ The repository supports three things equally: **generation**, **SAE interpretabi
 
 ## Install
 
+Install the package to use IDiom — generation, embeddings, SAEs, and all the training entrypoints
+work from this alone:
+
+```bash
+pip install git+https://github.com/rotskoff-group/idiom.git      # or: uv pip install git+...
+```
+
+Clone instead if you want the cookbook (Slurm templates, example data, walkthrough scripts), the
+tests, or to modify IDiom itself:
+
 ```bash
 git clone https://github.com/rotskoff-group/idiom.git
 cd idiom
@@ -20,6 +30,12 @@ uv sync          # creates .venv, installs dependencies and the idiom package (w
 
 Then either activate the environment (`source .venv/bin/activate`) or prefix commands with
 `uv run` (e.g. `uv run idiom_generate ...`). Python >= 3.10.
+
+**A note on torch.** IDiom requires `torch>=2.4` but does not pin a build, because the right one
+depends on your driver. A clone gets torch 2.4.0+cu121 from `uv.lock`; a plain `pip install`
+resolves the newest compatible torch, which on an older driver fails at first use with *"The NVIDIA
+driver on your system is too old"*. If that happens, install the build matching your CUDA from
+[pytorch.org](https://pytorch.org/get-started/locally/) first, then install IDiom.
 
 ## Sequence conventions (read this first)
 
@@ -183,21 +199,23 @@ idiom_grpo init_from=jxliu2/idiom-300M \
   reward.terms.2.enabled=true reward.terms.2.reward=sae_only_nucleolus
 ```
 
-Signatures ship in `rewards/rl_sae_targets/` for the released SAE (cases `top30` and `private30`, select
+Signatures ship in `idiom/rewards/rl_sae_targets/` for the released SAE (cases `top30` and `private30`, select
 with `IDIOM_SAEREWARD_CASE`). **Build a signature from your own sequences** with
-`examples/scripts/feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
+`cookbook/scripts/feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
 
 **Bring your own reward model.** A term names either a registered in-process reward or a command
 that runs a reward model in its own environment (for one whose dependencies conflict with IDiom's —
-a different python, torch, or CUDA). The editable reward content lives in `rewards/`:
-`custom_rewards.py` (copy-me in-process rewards), `external_rewards/` (external programs), and
-`rl_sae_targets/` (SAE signatures).
+a different python, torch, or CUDA). The reward content ships inside the package (`idiom/rewards/`): `custom_rewards.py` (copy-me
+in-process rewards), `external_rewards/` (external programs), and `rl_sae_targets/` (SAE
+signatures). Configs address it with the `${idiom_rewards:...}` resolver, so the paths work from any
+working directory and in any install. They are reference examples: to write your own, put a
+file anywhere and name it in the term (see **Extending IDiom**), rather than editing these.
 
-*In-process* — register an `f(idr) -> float` in a module and name it (copy `rewards/custom_rewards.py`):
+*In-process* — register an `f(idr) -> float` in a module and name it (copy the pattern from `idiom/rewards/custom_rewards.py`):
 
 ```yaml
 reward.terms:
-  - {reward: net_charge_fraction, module: rewards/custom_rewards.py, weight: 1.0,
+  - {reward: net_charge_fraction, module: "${idiom_rewards:custom_rewards.py}", weight: 1.0,
      shaping: {type: gaussian, target: 0.25, width: 0.5}}
 ```
 
@@ -208,22 +226,22 @@ demand and the config only names the script:
 ```yaml
 # design IDRs with a radius of gyration near 25 A, scored by sparrow in its own environment
 reward.terms:
-  - {cmd: "uv run --script rewards/external_rewards/sparrow.py --property radius_of_gyration",
+  - {cmd: "uv run --script ${idiom_rewards:external_rewards/sparrow.py} --property radius_of_gyration",
      label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}
 ```
 
-Six scorers ship in `rewards/external_rewards/`, each self-contained — the PEP 723 header is the
+Six scorers ship in `idiom/rewards/external_rewards/`, each self-contained — the PEP 723 header is the
 whole environment, and any model weights are fetched on first use, so a fresh clone needs no setup
 step:
 
 | Scorer | Reward | Environment and weights | Cost per 32 sequences |
 |---|---|---|---|
-| [`sparrow.py`](rewards/external_rewards/sparrow.py) | single-chain biophysics: radius of gyration, asphericity, scaling exponent, FCR, kappa | [sparrow](https://github.com/idptools/sparrow) from git; no weights | 2.8 s (CPU) |
-| [`finches.py`](rewards/external_rewards/finches.py) | epsilon interaction parameter, self or against a `--partner` sequence | [finches](https://github.com/idptools/finches) from git; forcefield parameters ship in the package | 0.1 s (CPU) |
-| [`protgps.py`](rewards/external_rewards/protgps.py) | condensate compartment probability (ESM-2 classifier) | [ProtGPS](https://github.com/pgmikhael/protgps) on python 3.8 / torch 2.0; 166 MB of weights from Zenodo (CC BY 4.0) | 1.6 s (CPU) |
-| [`paddle.py`](rewards/external_rewards/paddle.py) | transcriptional activation strength, max-Z over 53-residue windows | [PADDLE](https://github.com/asanborn/PADDLE) on TensorFlow; 36 MB of models cloned from GitHub (Apache-2.0) | 3 s (CPU) |
-| [`starling.py`](rewards/external_rewards/starling.py) | ensemble radius of gyration or end-to-end distance, from a generated conformational ensemble | [STARLING](https://github.com/idptools/starling) from PyPI; 1.5 GB of weights auto-downloaded | 9 s (GPU) |
-| [`pspred.py`](rewards/external_rewards/pspred.py) | phase-separation thermodynamics: transfer free energy in kT, or saturation concentration in mg/mL | [PSpred](https://github.com/KULL-Centre/_2024_buelow_PSpred) scripts and models (3.7 MB) fetched from GitHub | 4.7 s (CPU) |
+| [`sparrow.py`](src/idiom/rewards/external_rewards/sparrow.py) | single-chain biophysics: radius of gyration, asphericity, scaling exponent, FCR, kappa | [sparrow](https://github.com/idptools/sparrow) from git; no weights | 2.8 s (CPU) |
+| [`finches.py`](src/idiom/rewards/external_rewards/finches.py) | epsilon interaction parameter, self or against a `--partner` sequence | [finches](https://github.com/idptools/finches) from git; forcefield parameters ship in the package | 0.1 s (CPU) |
+| [`protgps.py`](src/idiom/rewards/external_rewards/protgps.py) | condensate compartment probability (ESM-2 classifier) | [ProtGPS](https://github.com/pgmikhael/protgps) on python 3.8 / torch 2.0; 166 MB of weights from Zenodo (CC BY 4.0) | 1.6 s (CPU) |
+| [`paddle.py`](src/idiom/rewards/external_rewards/paddle.py) | transcriptional activation strength, max-Z over 53-residue windows | [PADDLE](https://github.com/asanborn/PADDLE) on TensorFlow; 36 MB of models cloned from GitHub (Apache-2.0) | 3 s (CPU) |
+| [`starling.py`](src/idiom/rewards/external_rewards/starling.py) | ensemble radius of gyration or end-to-end distance, from a generated conformational ensemble | [STARLING](https://github.com/idptools/starling) from PyPI; 1.5 GB of weights auto-downloaded | 9 s (GPU) |
+| [`pspred.py`](src/idiom/rewards/external_rewards/pspred.py) | phase-separation thermodynamics: transfer free energy in kT, or saturation concentration in mg/mL | [PSpred](https://github.com/KULL-Centre/_2024_buelow_PSpred) scripts and models (3.7 MB) fetched from GitHub | 4.7 s (CPU) |
 
 They cover five different notions of "good": single-chain biophysics, interaction chemistry,
 phase-separation thermodynamics, a learned classifier, and an experimental activation assay. A cold machine spends about 2 GB and a few minutes on the first
@@ -238,14 +256,14 @@ run. Point uv's cache at scratch and verify a command before spending a GPU allo
 ```bash
 export UV_CACHE_DIR=/scratch/you/uv-cache   # several GB; keep it off your home directory
 uv run python -m idiom.train.grpo.reward.external \
-  --cmd "uv run --script rewards/external_rewards/sparrow.py --property radius_of_gyration" \
+  --cmd "uv run --script ${idiom_rewards:external_rewards/sparrow.py} --property radius_of_gyration" \
   --shaping quadratic --target 25 --width 0.2
 ```
 
 uv builds the environment once at the startup handshake (~30s for sparrow, which needs a C compiler;
 every run after is a cache hit); pin `@<commit>` in the script's header for a reproducible build.
 
-**Writing a scorer.** A scorer is a standalone program — copy `rewards/external_rewards/sparrow.py` — that
+**Writing a scorer.** A scorer is a standalone program — copy `idiom/rewards/external_rewards/sparrow.py` — that
 speaks newline-delimited JSON on stdin/stdout, one exchange per GRPO step, importing nothing from
 IDiom:
 
@@ -279,10 +297,59 @@ your driver in the PEP 723 header. Since it
 imports nothing from IDiom, the same `cmd` form covers an on-demand uv env, a pre-built venv
 (`/path/venv/bin/python …`), a conda env (`conda run -n env python …`), or a container
 (`docker run -i …`). The worked example is
-[`rewards/external_rewards/sparrow.py`](rewards/external_rewards/sparrow.py), which wraps
+[`idiom/rewards/external_rewards/sparrow.py`](src/idiom/rewards/external_rewards/sparrow.py), which wraps
 [sparrow](https://github.com/idptools/sparrow) for biophysics (radius of gyration, asphericity,
 scaling exponent, charge patterning); strip its `value()` down to your own model and the rest of the
 file is the protocol boilerplate you keep.
+
+## Extending IDiom
+
+Everything below works from a plain `pip install` — your code lives in your project, not in this
+repository, and the shipped versions are reference examples to copy rather than files to edit.
+
+**Your own reward.** Register `f(idr) -> float` in a file anywhere and name that file in the term:
+
+```yaml
+reward.terms:
+  - {reward: my_reward, module: /path/to/my_rewards.py, weight: 1.0}
+```
+
+**Your own reward model**, in its own environment — write a program that speaks the scorer protocol
+(see *Writing a scorer* below) and name the command:
+
+```yaml
+reward.terms:
+  - {cmd: "uv run --script /path/to/my_scorer.py", label: mine, weight: 1.0}
+```
+
+**Your own config.** Keep it in your project and inherit the shipped one, rather than forking it:
+
+```yaml
+# my_grpo.yaml
+defaults:
+  - grpo
+  - _self_
+
+init_from: jxliu2/idiom-300M
+reward:
+  terms:
+    - {reward: my_reward, module: /path/to/my_rewards.py, weight: 1.0}
+    - {reward: entropy, module: "${idiom_rewards:custom_rewards.py}", weight: 1.0,
+       shaping: {type: quadratic, target: 3.65, width: 0.2}}
+```
+
+```bash
+idiom_grpo --config-dir . --config-name my_grpo
+```
+
+`${idiom_rewards:...}` resolves to the shipped reward files wherever IDiom is installed. **Quote it
+inside a flow mapping** (`{...}` on one line) — unquoted, YAML reads the `{` as a nested mapping and
+fails before Hydra sees it.
+
+**A new training method.** `src/idiom/train/` holds one self-contained package per method — `autoreg`
+(pretraining and SFT) and `grpo` — each with its own LightningModule, config, and entrypoint. A new
+method (DPO, say) is a new sibling package plus a config and a `[project.scripts]` entry, not a
+change to an existing one.
 
 ## Command-line reference
 
@@ -340,9 +407,9 @@ under CC BY 4.0, inherited from AlphaFold DB / UniProt; the code in this reposit
 
 | Path | Role |
 |------|------|
-| `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + steering + features + eval), `utils`, public `IDiom`/`IDiomSAE` API |
-| `rewards/` | user-editable GRPO reward content: `rl_sae_targets/` (SAE signatures), a copy-me in-process reward, and `external_rewards/` (external models) |
-| `examples/` | `scripts/` (generation and embeddings, SAE features + steering, enrichment + logos), `slurm/` training scripts (pretrain, SFT, GRPO, SAE), and small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
+| `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train/` one package per training method (`autoreg` = pretraining and SFT, `grpo` = RL post-training), `sae/` (`model`, `train`, `steer`, `features`, `eval`), `rewards/` (shipped reward content), `utils`, public `IDiom`/`IDiomSAE` API |
+
+| `cookbook/` | `scripts/` (generation and embeddings, SAE features + steering, enrichment + logos), `slurm/` training scripts (pretrain, SFT, GRPO, SAE), and small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
 | `assets/` | static assets (figures for docs) |
 | `tests/` | unit/integration tests for the library |
 

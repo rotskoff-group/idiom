@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from omegaconf import DictConfig, OmegaConf
 
+import idiom.configs  # noqa: F401 - registers the ${idiom_rewards:...} path resolver
 from idiom.train.grpo.reward.external import make_external_reward
 from idiom.train.grpo.reward.registry import Batch, get_reward
 from idiom.train.grpo.reward.shaping import build_shaping

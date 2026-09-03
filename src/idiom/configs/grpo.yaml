@@ -41,33 +41,33 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
     - enabled: true
       reward: entropy
       weight: 1.0
-      module: null
+      module: ${idiom_rewards:custom_rewards.py}
       shaping: {type: quadratic, target: 3.65, width: 0.2} # bits
 
     - enabled: true
       reward: length
       weight: 1.0
-      module: null
+      module: ${idiom_rewards:custom_rewards.py}
       shaping: {type: quadratic, target: 100, width: 1.0} # residues
 
-    # Reproduce a target's SAE feature code; signatures in rewards/rl_sae_targets/.
+    # Reproduce a target's SAE feature code; the signature ships beside the reward.
     - enabled: false
       reward: sae_only_nucleolus
       weight: 1.0
-      module: idiom.train.grpo.reward.rl_sae_reward
+      module: ${idiom_rewards:rl_sae_reward/rl_sae_reward.py}
       shaping: null
 
     # Your own in-process reward: register f(idr) -> float and name it here.
     - enabled: false
       reward: net_charge_fraction
       weight: 1.0
-      module: rewards/custom_rewards.py
+      module: ${idiom_rewards:custom_rewards.py}
       shaping: {type: gaussian, target: 0.25, width: 0.5}
 
     # Your own reward model in its own environment; its deps live in the scorer script (PEP 723).
     # Point UV_CACHE_DIR at scratch -- an on-demand env is several GB.
     - enabled: false
-      cmd: "uv run --script rewards/external_rewards/sparrow.py --property radius_of_gyration"
+      cmd: "uv run --script ${idiom_rewards:external_rewards/sparrow.py} --property radius_of_gyration"
       label: rg
       weight: 0.5
       shaping: {type: quadratic, target: 25, width: 0.2}
@@ -81,14 +81,14 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
     # Interaction chemistry: epsilon < 0 is attractive (FUS-LC-like is about -8.5, IDiom's base
     # generations +3.3), so a negative target designs self-attractive, condensate-prone IDRs.
     - enabled: false
-      cmd: "uv run --script rewards/external_rewards/finches.py --mode homotypic"
+      cmd: "uv run --script ${idiom_rewards:external_rewards/finches.py} --mode homotypic"
       label: eps
       weight: 1.0
       shaping: {type: quadratic, target: -6.0, width: 0.3}
 
     # Condensate compartment probability from ProtGPS (ESM-2). Already in [0, 1], so no shaping.
     - enabled: false
-      cmd: "uv run --script rewards/external_rewards/protgps.py --compartment nucleolus"
+      cmd: "uv run --script ${idiom_rewards:external_rewards/protgps.py} --compartment nucleolus"
       label: protgps
       weight: 1.0
 
@@ -96,7 +96,7 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
     # activation domains score about 3-8, IDiom's base generations near 0; the Z-scale needs no
     # shaping if you simply want it as high as possible.
     - enabled: false
-      cmd: "uv run --script rewards/external_rewards/paddle.py"
+      cmd: "uv run --script ${idiom_rewards:external_rewards/paddle.py}"
       label: paddle
       weight: 1.0
       timeout: 600.0
@@ -105,7 +105,7 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
     # simulations. LAF1 scores about -6 kT and poly-GS about +0.3, so a negative target designs
     # sequences that phase-separate readily. --target logcdil_mgml gives saturation concentration.
     - enabled: false
-      cmd: "uv run --script rewards/external_rewards/pspred.py --target dG"
+      cmd: "uv run --script ${idiom_rewards:external_rewards/pspred.py} --target dG"
       label: dG
       weight: 1.0
       shaping: {type: quadratic, target: -6.0, width: 0.3}
@@ -113,7 +113,7 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
     # Ensemble dimensions from a STARLING-generated conformational ensemble: the same quantity
     # sparrow regresses, sampled instead. About 9 s per step on a GPU, so give it a long timeout.
     - enabled: false
-      cmd: "uv run --script rewards/external_rewards/starling.py --property radius_of_gyration"
+      cmd: "uv run --script ${idiom_rewards:external_rewards/starling.py} --property radius_of_gyration"
       label: rg_ens
       weight: 1.0
       shaping: {type: quadratic, target: 25, width: 0.2}

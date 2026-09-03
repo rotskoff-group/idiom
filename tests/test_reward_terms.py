@@ -15,7 +15,7 @@ import pytest
 from omegaconf import OmegaConf
 
 from idiom.train.grpo.reward import build_reward, quadratic_penalty, register_reward
-from idiom.train.grpo.reward import sequence_entropy as entropy
+from idiom.rewards.custom_rewards import sequence_entropy as entropy
 
 GUARDRAILS = [
     {"reward": "entropy", "weight": 0.1, "shaping": {"type": "quadratic", "target": 3.68, "width": 0.2}},

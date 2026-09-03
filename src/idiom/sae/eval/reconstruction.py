@@ -84,9 +84,9 @@ def reconstruction_stats(
     Raises:
         ValueError: If no activations are extracted.
     """
-    # Deferred: idiom.sae.training.__init__ pulls in LitSAE and therefore Lightning, which would
+    # Deferred: idiom.sae.train.__init__ pulls in LitSAE and therefore Lightning, which would
     # otherwise land on the plain `import idiom` inference path (~0.8 s and a training-only dep).
-    from idiom.sae.training.activation_store import ActivationStore
+    from idiom.sae.train.activation_store import ActivationStore
 
     recs = read_records(fasta)
     if max_records:

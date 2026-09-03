@@ -9,7 +9,7 @@ from idiom.data.tokenizer import Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.sae import SparseCoder
 from idiom.sae.eval.fidelity import compute_fidelity
-from idiom.sae.steering import SteeringSpec, add_direction_hook, steer_generation, steering
+from idiom.sae.steer import SteeringSpec, add_direction_hook, steer_generation, steering
 
 TOK = Tokenizer()
 TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=64)

@@ -39,8 +39,8 @@ from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
 from idiom.sae.eval.fidelity import compute_fidelity
 from idiom.sae.features.build_feature_dataset import build_feature_dataset as _build_feature_dataset
-from idiom.sae.io import load_sae, save_sae
-from idiom.sae.steering import SteeringSpec, steer_generation
+from idiom.sae.model.io import load_sae, save_sae
+from idiom.sae.steer import SteeringSpec, steer_generation
 from idiom.utils.device import resolve_device
 
 CONFIG_FILE = "config.json"

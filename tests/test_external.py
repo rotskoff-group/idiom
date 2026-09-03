@@ -16,6 +16,7 @@ from idiom.train.grpo.reward.external import (
     make_external_reward,
     parse_response,
 )
+from idiom.rewards import rewards_path
 from idiom.train.grpo.reward.registry import Batch
 
 
@@ -240,7 +241,7 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
                 return 0.25
     """))
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))  # inherited by the scorer subprocess
-    scorer = Scorer([sys.executable, "rewards/external_rewards/sparrow.py",
+    scorer = Scorer([sys.executable, str(rewards_path("external_rewards/sparrow.py")),
                      "--property", "radius_of_gyration"], timeout=30)
     try:
         assert scorer.score(["FWY", "AAAAA", ""]) == [6.0, 10.0, 0.0]
