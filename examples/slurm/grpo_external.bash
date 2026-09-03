@@ -47,16 +47,7 @@ echo "host=$(hostname)  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
 python -m idiom.train.grpo.reward.external \
     --cmd "$SCORER" --shaping quadratic --target "$TARGET" --width "$WIDTH"
 
-# ---- auto-resume from the rolling last.ckpt (needs trainer.checkpoint_every > 0, set below) ----
-CKPT_DIR="$OUT/checkpoints"
-RESUME=""
-if [[ -f "$CKPT_DIR/last.ckpt" ]]; then
-  RESUME="resume_from=$CKPT_DIR/last.ckpt"
-  echo "RESUMING from $CKPT_DIR/last.ckpt"
-fi
-
 idiom_grpo \
-    ${RESUME} \
     seed=0 \
     device=auto \
     init_from=jxliu2/idiom-300M \
@@ -84,7 +75,7 @@ idiom_grpo \
     trainer.gradient_clip_val=1.0 \
     trainer.accumulate_grad_batches=2 \
     trainer.log_every_n_steps=1 \
-    trainer.checkpoint_every=500 \
+    trainer.checkpoint_every=0 \
     out_dir="$OUT" \
     hydra.run.dir="$OUT/hydra"
 

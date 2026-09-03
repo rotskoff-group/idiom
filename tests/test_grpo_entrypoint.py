@@ -56,7 +56,8 @@ def test_shipped_example_rewards_register():
     path = Path(__file__).resolve().parents[1] / "rewards" / "custom_rewards.py"
     import_module_spec(str(path))
     # 3 of 4 are aromatic
-    assert get_reward("aromatic_fraction")(["FWYA"], Batch()) == [0.75]
+    assert get_reward("net_charge_fraction")(["KKDE"], Batch()) == [0.0]
+    assert get_reward("fraction_charged")(["KKDE"], Batch()) == [1.0]
 
 
 def test_build_wires_module_and_prompts(tmp_path):

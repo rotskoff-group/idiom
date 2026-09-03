@@ -52,13 +52,13 @@ idiom_train --config-name sft \
     data.val_fasta=null \
     data.prompted_prob=0.0 \
     data.completion_only=true \
-    data.batch_size=32 \
+    data.batch_size=16 \
     data.num_workers=8 \
     optim.lr=1.0e-5 \
     optim.warmup_steps=100 \
     optim.weight_decay=0.1 \
     optim.min_lr_ratio=0.1 \
-    trainer.max_steps=2000 \
+    trainer.max_steps=1000 \
     trainer.accelerator=auto \
     trainer.devices=1 \
     trainer.precision=bf16-mixed \

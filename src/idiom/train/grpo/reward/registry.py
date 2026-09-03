@@ -11,7 +11,7 @@ after shaping, and the *total reward* is the weighted sum over terms that GRPO o
 
 register_reward accepts either form:
 
-    @register_reward("aromatic_fraction")                 # f(idr) -> float, lifted to a batch
+    @register_reward("net_charge_fraction")               # f(idr) -> float, lifted to a batch
     @register_reward("sae_only_nucleolus", batched=True)  # f(idrs, batch) -> list[float]
 
 The batched form is for rewards that cost less per batch than per sequence, such as a GPU forward

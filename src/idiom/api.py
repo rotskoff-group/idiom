@@ -412,6 +412,12 @@ class IDiomSAE:
         self.region = region
         self.fim_mode = normalize_mode(fim_mode)
 
+    def __repr__(self) -> str:
+        """Show the training distribution, so the regime is visible without reading the card."""
+        return (f"IDiomSAE(host={self.host_model!r}, layer={self.layer}, region={self.region!r}, "
+                f"fim_mode={self.fim_mode!r}, latents={self.sae.num_latents}, "
+                f"k={getattr(self.sae, 'k', '?')})")
+
     # convenience pass-throughs to the host model
     @property
     def model(self) -> IDiomTransformer:
@@ -512,6 +518,8 @@ class IDiomSAE:
             pool (str): "none" for per-residue rows, or "mean" to average over each record's
                 residues within region.
             region (str | None): "all", "idr", or "non_idr"; the SAE's training region if None.
+                Only meaningful for a prompted-mode SAE: under fim_mode "unprompted" the record is
+                encoded as "132{IDR}", so no flanking residues exist and only "idr" is available.
 
         Returns:
             tuple: With pool="none", an [N_res, num_latents] array and a list of per-row metadata
@@ -519,6 +527,14 @@ class IDiomSAE:
                 [N_seq, num_latents] array and the list of accessions it corresponds to.
         """
         region = region or self.region
+        # An unprompted-mode SAE only ever sees "132{IDR}", so there are no non-IDR residues to
+        # select: silently returning IDR features under the name "all" (or an empty array for
+        # "non_idr") would hide the SAE's training distribution from the caller.
+        if self.fim_mode == UNPROMPTED and region != "idr":
+            raise ValueError(
+                f"region={region!r} is not available from this SAE: it was trained in unprompted "
+                f"mode ('132{{IDR}}'), so only IDR residues are encoded and there are no flanking "
+                f"residues to select. Use region='idr', or an SAE trained with fim_mode='prompted'.")
         emb = embed_fasta(self.model, inputs, [self.layer], pool="none", tokenizer=self.tok,
                           device=self.device, fim_mode=self.fim_mode)
         values, index = emb[self.layer]

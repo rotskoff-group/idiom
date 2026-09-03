@@ -52,8 +52,7 @@ released directory, or a Lightning `.ckpt`. Training on a FASTA auto-builds a me
 ## Training scripts
 
 Each spells out **every config value as a Hydra override** (so the run is reproducible from the
-script alone), self-logs its own contents into the job log, pins `out_dir` / `hydra.run.dir`, and
-auto-resumes from a rolling `last.ckpt`.
+script alone), self-logs its own contents into the job log, and pins `out_dir` / `hydra.run.dir`.
 
 | Script | Job | GPUs |
 |--------|-----|------|
@@ -107,11 +106,12 @@ Slurm task owns the node, and Lightning launches one DDP process per GPU itself 
 For **multi-node** DDP, Lightning's in-process launcher is single-node — launch with `srun` and
 `--ntasks-per-node = gpus-per-node` instead, and add `+trainer.num_nodes=$SLURM_NNODES`.
 
-**Auto-resume.** Each training script checks `$OUT/checkpoints/last.ckpt` and, if present, adds
-`resume_from=…` to continue (optimizer, global step, LR schedule, and RNG are all restored). A fresh
-run starts from scratch; after a Slurm timeout, just re-submit the same script and it picks up where
-it left off. (The GRPO scripts set `trainer.checkpoint_every=500` so a `last.ckpt` exists to resume
-from; `sae.bash` has no fixed `last.ckpt` — pass `resume_from=<ckpt>` by hand.)
+**Resuming.** `pretrain.bash` and `sft.bash` check `$OUT/checkpoints/last.ckpt` and, if present,
+add `resume_from=…` to continue (optimizer, global step, LR schedule, and RNG are all restored), so
+after a Slurm timeout you just re-submit the same script and it picks up where it left off. The GRPO
+and SAE scripts keep only a final checkpoint, so there is no rolling `last.ckpt` to resume from:
+pass `resume_from=<ckpt>` by hand, or set `trainer.checkpoint_every=<N>` in `grpo.bash` to keep
+periodic checkpoints plus a rolling `last.ckpt`.
 
 ## `example_data/`
 

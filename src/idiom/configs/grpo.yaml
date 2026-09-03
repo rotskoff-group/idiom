@@ -59,10 +59,10 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
 
     # Your own in-process reward: register f(idr) -> float and name it here.
     - enabled: false
-      reward: aromatic_fraction
+      reward: net_charge_fraction
       weight: 1.0
       module: rewards/custom_rewards.py
-      shaping: {type: gaussian, target: 0.15, width: 0.5}
+      shaping: {type: gaussian, target: 0.25, width: 0.5}
 
     # Your own reward model in its own environment; its deps live in the scorer script (PEP 723).
     # Point UV_CACHE_DIR at scratch -- an on-demand env is several GB.

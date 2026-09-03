@@ -197,8 +197,8 @@ a different python, torch, or CUDA). The editable reward content lives in `rewar
 
 ```yaml
 reward.terms:
-  - {reward: aromatic_fraction, module: rewards/custom_rewards.py, weight: 1.0,
-     shaping: {type: gaussian, target: 0.15, width: 0.5}}
+  - {reward: net_charge_fraction, module: rewards/custom_rewards.py, weight: 1.0,
+     shaping: {type: gaussian, target: 0.25, width: 0.5}}
 ```
 
 *A command in its own environment* — no install step. The scorer declares its own dependencies in a

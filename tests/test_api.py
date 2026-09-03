@@ -87,11 +87,11 @@ def test_embed_noncanonical_raises():
         _idiom().embed("MEDSX", layers=[1])
 
 
-def _idiom_sae(host):
+def _idiom_sae(host, *, region="all", fim_mode="prompted"):
     from idiom.sae import SparseCoder
 
     sae = SparseCoder(TINY.d_model, num_latents=TINY.d_model * 4, k=8)
-    return IDiomSAE(sae, host, layer=1)
+    return IDiomSAE(sae, host, layer=1, region=region, fim_mode=fim_mode)
 
 
 def test_idiomsae_save_and_from_pretrained_roundtrip(tmp_path):
@@ -117,6 +117,25 @@ def test_idiomsae_encode_and_steer(tmp_path):
     assert feats.shape == (1, sae.sae.num_latents) and accs == ["A"]
     seqs = sae.steer_generate(feature=0, strength=1.0, n=2, max_new_tokens=6, temperature=0)
     assert len(seqs) == 2 and all(isinstance(s, str) for s in seqs)
+
+
+def test_idiomsae_encode_rejects_a_region_an_unprompted_sae_cannot_produce():
+    # an unprompted-mode SAE only ever sees "132{IDR}": there are no flanking residues to select,
+    # so asking for them must say so rather than silently returning IDR features (or nothing)
+    import pytest
+
+    sae = _idiom_sae(_idiom(), fim_mode="unprompted")
+    for region in ("all", "non_idr"):
+        with pytest.raises(ValueError, match="trained in unprompted mode"):
+            sae.encode(["MEDSKVDN"], pool="mean", region=region)
+    feats, _ = sae.encode(["MEDSKVDN"], pool="mean", region="idr")  # the one it can produce
+    assert feats.shape == (1, sae.sae.num_latents)
+
+
+def test_idiomsae_repr_shows_the_training_distribution():
+    # printing the object is the cheapest way for a downstream user to see the regime
+    r = repr(_idiom_sae(_idiom(), region="idr", fim_mode="unprompted"))
+    assert "region='idr'" in r and "fim_mode='unprompted'" in r and "layer=1" in r
 
 
 def test_idiomsae_encode_plain_strings():
