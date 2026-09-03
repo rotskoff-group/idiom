@@ -212,7 +212,7 @@ reward.terms:
      label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}
 ```
 
-Five scorers ship in `rewards/external_rewards/`, each self-contained — the PEP 723 header is the
+Six scorers ship in `rewards/external_rewards/`, each self-contained — the PEP 723 header is the
 whole environment, and any model weights are fetched on first use, so a fresh clone needs no setup
 step:
 
@@ -223,9 +223,10 @@ step:
 | [`protgps.py`](rewards/external_rewards/protgps.py) | condensate compartment probability (ESM-2 classifier) | [ProtGPS](https://github.com/pgmikhael/protgps) on python 3.8 / torch 2.0; 166 MB of weights from Zenodo (CC BY 4.0) | 1.6 s (CPU) |
 | [`paddle.py`](rewards/external_rewards/paddle.py) | transcriptional activation strength, max-Z over 53-residue windows | [PADDLE](https://github.com/asanborn/PADDLE) on TensorFlow; 36 MB of models cloned from GitHub (Apache-2.0) | 3 s (CPU) |
 | [`starling.py`](rewards/external_rewards/starling.py) | ensemble radius of gyration or end-to-end distance, from a generated conformational ensemble | [STARLING](https://github.com/idptools/starling) from PyPI; 1.5 GB of weights auto-downloaded | 9 s (GPU) |
+| [`pspred.py`](rewards/external_rewards/pspred.py) | phase-separation thermodynamics: transfer free energy in kT, or saturation concentration in mg/mL | [PSpred](https://github.com/KULL-Centre/_2024_buelow_PSpred) scripts and models (3.7 MB) fetched from GitHub | 4.7 s (CPU) |
 
-They cover four different notions of "good": biophysics, interaction chemistry, a learned classifier,
-and an experimental activation assay. A cold machine spends about 2 GB and a few minutes on the first
+They cover five different notions of "good": single-chain biophysics, interaction chemistry,
+phase-separation thermodynamics, a learned classifier, and an experimental activation assay. A cold machine spends about 2 GB and a few minutes on the first
 run of each; everything after is a cache hit.
 
 `cmd` also takes a list of arguments (`[python, /path/my scorer.py, --flag, value]`) when shell

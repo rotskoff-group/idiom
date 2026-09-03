@@ -26,10 +26,6 @@ import re
 
 from idiom.train.grpo.reward import register_reward
 
-# Motif regexes as used in the IDiom manuscript: the SUMOylation consensus and its NDSM variant.
-SUMO_PSI_KXE = re.compile(r"[VILMF]K.E")
-NDSM = re.compile(r"[VILMF]K.E[DE]+")
-
 
 @register_reward("net_charge_fraction")
 def net_charge_fraction(idr: str) -> float:
@@ -85,7 +81,8 @@ def sumo_motif_count(idr: str) -> float:
     Returns:
         float: Number of non-overlapping matches.
     """
-    return float(len(SUMO_PSI_KXE.findall(idr)))
+    psi_kxe = r"[VILMF]K.E"
+    return float(len(re.findall(psi_kxe, idr)))
 
 
 @register_reward("ndsm_motif_count")
@@ -101,4 +98,5 @@ def ndsm_motif_count(idr: str) -> float:
     Returns:
         float: Number of non-overlapping matches.
     """
-    return float(len(NDSM.findall(idr)))
+    ndsm = r"[VILMF]K.E[DE]+"
+    return float(len(re.findall(ndsm, idr)))

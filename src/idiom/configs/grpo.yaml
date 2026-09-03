@@ -101,6 +101,15 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
       weight: 1.0
       timeout: 600.0
 
+    # Phase-separation thermodynamics (PSpred): transfer free energy in kT, trained on CALVADOS
+    # simulations. LAF1 scores about -6 kT and poly-GS about +0.3, so a negative target designs
+    # sequences that phase-separate readily. --target logcdil_mgml gives saturation concentration.
+    - enabled: false
+      cmd: "uv run --script rewards/external_rewards/pspred.py --target dG"
+      label: dG
+      weight: 1.0
+      shaping: {type: quadratic, target: -6.0, width: 0.3}
+
     # Ensemble dimensions from a STARLING-generated conformational ensemble: the same quantity
     # sparrow regresses, sampled instead. About 9 s per step on a GPU, so give it a long timeout.
     - enabled: false
