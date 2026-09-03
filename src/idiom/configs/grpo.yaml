@@ -75,6 +75,41 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
       maxlen: 0 # truncate sequences to this length before sending; 0 sends them whole
       cwd: null # working directory for the child; the current directory if null
 
+    # The other shipped scorers, each self-contained: the PEP 723 header is the environment and any
+    # weights are fetched on first use. See the reward section of the top-level README.md.
+
+    # Interaction chemistry: epsilon < 0 is attractive (FUS-LC-like is about -8.5, IDiom's base
+    # generations +3.3), so a negative target designs self-attractive, condensate-prone IDRs.
+    - enabled: false
+      cmd: "uv run --script rewards/external_rewards/finches.py --mode homotypic"
+      label: eps
+      weight: 1.0
+      shaping: {type: quadratic, target: -6.0, width: 0.3}
+
+    # Condensate compartment probability from ProtGPS (ESM-2). Already in [0, 1], so no shaping.
+    - enabled: false
+      cmd: "uv run --script rewards/external_rewards/protgps.py --compartment nucleolus"
+      label: protgps
+      weight: 1.0
+
+    # Transcriptional activation strength (PADDLE, max Z over 53-residue windows). Natural
+    # activation domains score about 3-8, IDiom's base generations near 0; the Z-scale needs no
+    # shaping if you simply want it as high as possible.
+    - enabled: false
+      cmd: "uv run --script rewards/external_rewards/paddle.py"
+      label: paddle
+      weight: 1.0
+      timeout: 600.0
+
+    # Ensemble dimensions from a STARLING-generated conformational ensemble: the same quantity
+    # sparrow regresses, sampled instead. About 9 s per step on a GPU, so give it a long timeout.
+    - enabled: false
+      cmd: "uv run --script rewards/external_rewards/starling.py --property radius_of_gyration"
+      label: rg_ens
+      weight: 1.0
+      shaping: {type: quadratic, target: 25, width: 0.2}
+      timeout: 900.0
+
 out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo
 
 # Run and sweep dirs go to the experiment dir, not the repo; override with IDIOM_OUT.

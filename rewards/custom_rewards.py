@@ -22,7 +22,13 @@ guardrails while no longer being disordered. The charge rewards below are safer:
 inside the natural IDR range, and charge is itself disorder-promoting.
 """
 
+import re
+
 from idiom.train.grpo.reward import register_reward
+
+# Motif regexes as used in the IDiom manuscript: the SUMOylation consensus and its NDSM variant.
+SUMO_PSI_KXE = re.compile(r"[VILMF]K.E")
+NDSM = re.compile(r"[VILMF]K.E[DE]+")
 
 
 @register_reward("net_charge_fraction")
@@ -62,3 +68,37 @@ def fraction_charged(idr: str) -> float:
         float: (D + E + K + R) divided by length, or 0.0 for an empty string.
     """
     return sum(idr.count(a) for a in "DEKR") / len(idr) if idr else 0.0
+
+
+@register_reward("sumo_motif_count")
+def sumo_motif_count(idr: str) -> float:
+    """Return the number of psi-KxE SUMOylation consensus motifs in an IDR.
+
+    psi-KxE (hydrophobic-Lys-any-Glu, regex [VILMF]K.E) is the SUMO consensus; SUMOylation and the
+    corepressor recruitment that follows is a common route to transcriptional repression. Because
+    SUMO-mediated interactions depend on avidity, motif *density* matters, which is why this counts
+    rather than reporting presence. Natural repression-domain IDRs carry about 0.6 per sequence.
+
+    Args:
+        idr (str): The decoded IDR residue string.
+
+    Returns:
+        float: Number of non-overlapping matches.
+    """
+    return float(len(SUMO_PSI_KXE.findall(idr)))
+
+
+@register_reward("ndsm_motif_count")
+def ndsm_motif_count(idr: str) -> float:
+    """Return the number of NDSM (negatively charged amino acid-dependent SUMOylation motif) hits.
+
+    The NDSM variant extends psi-KxE with a downstream acidic stretch ([VILMF]K.E[DE]+), which
+    raises SUMOylation efficiency. Natural repression-domain IDRs carry about 0.1 per sequence.
+
+    Args:
+        idr (str): The decoded IDR residue string.
+
+    Returns:
+        float: Number of non-overlapping matches.
+    """
+    return float(len(NDSM.findall(idr)))

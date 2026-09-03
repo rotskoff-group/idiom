@@ -212,6 +212,22 @@ reward.terms:
      label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}
 ```
 
+Five scorers ship in `rewards/external_rewards/`, each self-contained — the PEP 723 header is the
+whole environment, and any model weights are fetched on first use, so a fresh clone needs no setup
+step:
+
+| Scorer | Reward | Environment and weights | Cost per 32 sequences |
+|---|---|---|---|
+| [`sparrow.py`](rewards/external_rewards/sparrow.py) | single-chain biophysics: radius of gyration, asphericity, scaling exponent, FCR, kappa | [sparrow](https://github.com/idptools/sparrow) from git; no weights | 2.8 s (CPU) |
+| [`finches.py`](rewards/external_rewards/finches.py) | epsilon interaction parameter, self or against a `--partner` sequence | [finches](https://github.com/idptools/finches) from git; forcefield parameters ship in the package | 0.1 s (CPU) |
+| [`protgps.py`](rewards/external_rewards/protgps.py) | condensate compartment probability (ESM-2 classifier) | [ProtGPS](https://github.com/pgmikhael/protgps) on python 3.8 / torch 2.0; 166 MB of weights from Zenodo (CC BY 4.0) | 1.6 s (CPU) |
+| [`paddle.py`](rewards/external_rewards/paddle.py) | transcriptional activation strength, max-Z over 53-residue windows | [PADDLE](https://github.com/asanborn/PADDLE) on TensorFlow; 36 MB of models cloned from GitHub (Apache-2.0) | 3 s (CPU) |
+| [`starling.py`](rewards/external_rewards/starling.py) | ensemble radius of gyration or end-to-end distance, from a generated conformational ensemble | [STARLING](https://github.com/idptools/starling) from PyPI; 1.5 GB of weights auto-downloaded | 9 s (GPU) |
+
+They cover four different notions of "good": biophysics, interaction chemistry, a learned classifier,
+and an experimental activation assay. A cold machine spends about 2 GB and a few minutes on the first
+run of each; everything after is a cache hit.
+
 `cmd` also takes a list of arguments (`[python, /path/my scorer.py, --flag, value]`) when shell
 quoting gets in the way. The scorer returns a **raw reward** and stops there; shaping it stays on the
 IDiom side, so the objective is retuned without touching that environment. Because each command
@@ -238,8 +254,27 @@ IDiom:
 ```
 
 Return one finite score per sequence, in order (a count mismatch is rejected, so misaligned rewards
-can't silently corrupt training); flush after each response; keep stdout for the protocol and send
-logs to stderr; and load the model once at import (the process is reused for the whole run). Since it
+can't silently corrupt training); flush after each response; and load the model once at import (the
+process is reused for the whole run).
+
+**stdout is the protocol.** Many model libraries print on import or first load — ProtGPS writes
+`Using ESM hidden layers 6`, STARLING writes `Using DDIM sampler`, TensorFlow announces itself — and
+a single stray line there is read as a malformed response, so the run dies at the handshake with
+`scorer wrote a non-JSON line`. Take the real stdout for yourself and send everything else to stderr,
+which the parent forwards to its log with the term's label:
+
+```python
+_PROTOCOL_STDOUT = sys.stdout
+sys.stdout = sys.stderr              # library chatter goes to the log, not the protocol
+...
+print(json.dumps(response), file=_PROTOCOL_STDOUT, flush=True)
+```
+
+Two more traps worth knowing. A scorer named after the package it wraps (`finches.py` importing
+`finches`) shadows that package, because python puts the script's own directory first on `sys.path`
+— drop it before importing. And a scorer's environment resolves its own torch, which can be newer
+than the host CUDA driver (`The NVIDIA driver on your system is too old`); pin the build that matches
+your driver in the PEP 723 header. Since it
 imports nothing from IDiom, the same `cmd` form covers an on-demand uv env, a pre-built venv
 (`/path/venv/bin/python …`), a conda env (`conda run -n env python …`), or a container
 (`docker run -i …`). The worked example is
