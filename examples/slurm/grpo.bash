@@ -64,7 +64,7 @@ idiom_grpo \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
     reward.module=null \
-    reward.terms='[{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}, {reward: length, weight: 1.0, shaping: {type: quadratic, target: 100, width: 1.0}}, {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.rl_sae, weight: 1.0}]' \
+    reward.terms='[{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}, {reward: length, weight: 1.0, shaping: {type: quadratic, target: 100, width: 1.0}}, {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.rl_sae_reward, weight: 1.0}]' \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \
     trainer.devices=1 \

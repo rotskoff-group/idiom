@@ -118,13 +118,13 @@ def test_no_terms_scores_zero():
 
 
 def test_the_same_reward_can_appear_twice_under_distinct_labels():
-    # e.g. one term uses the raw value while another targets a particular value
+    # e.g. one term uses the raw value while another shapes or weights it differently
     register_reward("_r_dup")(lambda idr: 1.0)
     cfg = _cfg([{"reward": "_r_dup", "weight": 1.0},
-                {"reward": "_r_dup", "label": "_r_dup_floor", "weight": 2.0}])
+                {"reward": "_r_dup", "label": "_r_dup_scaled", "weight": 2.0}])
     totals, breakdown = build_reward(cfg)(["ACDE"], 1)
     assert math.isclose(totals[0], 3.0, abs_tol=1e-12)
-    assert breakdown[0]["_r_dup"] == 1.0 and breakdown[0]["_r_dup_floor"] == 2.0
+    assert breakdown[0]["_r_dup"] == 1.0 and breakdown[0]["_r_dup_scaled"] == 2.0
 
 
 def test_batched_reward_sees_the_whole_batch():

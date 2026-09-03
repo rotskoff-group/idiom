@@ -151,10 +151,10 @@ reward:
 
 `total = Σ weightᵢ · shapingᵢ(rewardᵢ)`, and that total drives the GRPO advantages. The split is what
 keeps the config small: any reward can be aimed at a target or used raw without being rewritten,
-and the same one can appear twice under different labels. Shaping types are
+and the same one can appear twice under different labels. Shaping is
 `quadratic` (0 at the target, −1 one `width` out, unbounded below), `gaussian` (the bounded version,
-for when several targets have to coexist), `zscore` (standardized within each rollout group), or
-omitted, which uses the raw value.
+for when several targets have to coexist), or omitted, which uses the raw value — what the RL-SAE
+term does, its raw reward already being a fraction in [0, 1].
 
 Two ways to take a term out, and they differ: `weight: 0` keeps it running and logged (watch a
 quantity without optimizing it), while `enabled: false` skips it entirely — nothing imported, no
@@ -185,7 +185,7 @@ idiom_grpo init_from=jxliu2/idiom-300M \
 
 Signatures ship in `rewards/rl_sae_targets/` for the released SAE (cases `top30` and `private30`, select
 with `IDIOM_SAEREWARD_CASE`). **Build a signature from your own sequences** with
-`examples/notebooks/feature_enrichment.ipynb` and point `IDIOM_SAEREWARD_FEATURES` at it.
+`examples/scripts/feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
 
 **Bring your own reward model.** A term names either a registered in-process reward or a command
 that runs a reward model in its own environment (for one whose dependencies conflict with IDiom's —
@@ -306,7 +306,7 @@ under CC BY 4.0, inherited from AlphaFold DB / UniProt; the code in this reposit
 |------|------|
 | `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + steering + features + eval), `utils`, public `IDiom`/`IDiomSAE` API |
 | `rewards/` | user-editable GRPO reward content: `rl_sae_targets/` (SAE signatures), a copy-me in-process reward, and `external_rewards/` (external models) |
-| `examples/` | `notebooks/` (generation and embeddings, SAE features + steering, enrichment + logos, reward terms), `slurm/` training scripts (pretrain, SFT, GRPO, SAE), and small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
+| `examples/` | `scripts/` (generation and embeddings, SAE features + steering, enrichment + logos), `slurm/` training scripts (pretrain, SFT, GRPO, SAE), and small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
 | `assets/` | static assets (figures for docs) |
 | `tests/` | unit/integration tests for the library |
 

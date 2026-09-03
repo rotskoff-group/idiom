@@ -299,8 +299,8 @@ def check(cmd, shaping_spec: dict | None = None, seqs: list[str] | None = None) 
         scorer.stop()
     print(f"\nstartup + {len(seqs)} sequences in {time.monotonic() - t0:.1f}s\n")
     print(f"{'raw':>12}  {'shaped':>8}  sequence")
-    for s, v, r in zip(seqs, values, shaping(values, Batch())):
-        print(f"{v:12.4f}  {r:8.4f}  {s[:44]}")
+    for s, v in zip(seqs, values):
+        print(f"{v:12.4f}  {shaping(v):8.4f}  {s[:44]}")
     return 0
 
 

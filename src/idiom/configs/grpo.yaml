@@ -25,32 +25,6 @@ grpo:
   log_samples_every: 5 # print example generations every N steps (0 disables)
   n_log_samples: 3
 
-reward: # total = sum over enabled terms of weight * shaping(reward(idr))
-  module: null # optional *.py or module with @register_reward, imported first
-
-  # Each term is one raw reward plus the shaping that says what a good value is. Give a reward name
-  # or a cmd, not both. shaping is optional; without it the raw reward is used as-is. Types:
-  # quadratic and gaussian (target + width), zscore. enabled: false skips a term entirely;
-  # weight: 0 runs and logs it without optimizing it. Each enabled term logs <label> (its
-  # contribution) and <label>_raw (its raw reward).
-  terms:
-    - {reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}} # bits
-    - {reward: length, weight: 1.0, shaping: {type: quadratic, target: 100, width: 1.0}} # residues
-
-    # Reproduce a target's SAE feature code; signatures in rewards/rl_sae_targets/.
-    - {enabled: false, reward: sae_only_nucleolus, weight: 1.0,
-       module: idiom.train.grpo.reward.rl_sae}
-
-    # Your own in-process reward: register f(idr) -> float and name it here.
-    - {enabled: false, reward: aromatic_fraction, weight: 1.0,
-       module: rewards/custom_rewards.py, shaping: {type: gaussian, target: 0.15, width: 0.5}}
-
-    # Your own reward model in its own environment; its deps live in the scorer script (PEP 723).
-    # Point UV_CACHE_DIR at scratch -- an on-demand env is several GB.
-    - {enabled: false, label: rg, weight: 0.5,
-       cmd: "uv run --script rewards/external_rewards/sparrow.py --property radius_of_gyration",
-       shaping: {type: quadratic, target: 25, width: 0.2}}
-
 trainer:
   max_steps: 3000
   accelerator: auto
@@ -59,6 +33,47 @@ trainer:
   accumulate_grad_batches: 2 # micro-batches per optimizer step; halves peak memory
   log_every_n_steps: 1 # every step, so W&B's _step axis matches the training step
   checkpoint_every: 0 # periodic checkpoint every N steps (0 = last only)
+
+reward: # total = sum over enabled terms of weight * shaping(reward(idr))
+  module: null # optional *.py or module with @register_reward, imported first
+
+  terms:
+    - enabled: true
+      reward: entropy
+      weight: 1.0
+      module: null
+      shaping: {type: quadratic, target: 3.65, width: 0.2} # bits
+
+    - enabled: true
+      reward: length
+      weight: 1.0
+      module: null
+      shaping: {type: quadratic, target: 100, width: 1.0} # residues
+
+    # Reproduce a target's SAE feature code; signatures in rewards/rl_sae_targets/.
+    - enabled: false
+      reward: sae_only_nucleolus
+      weight: 1.0
+      module: idiom.train.grpo.reward.rl_sae_reward
+      shaping: null
+
+    # Your own in-process reward: register f(idr) -> float and name it here.
+    - enabled: false
+      reward: aromatic_fraction
+      weight: 1.0
+      module: rewards/custom_rewards.py
+      shaping: {type: gaussian, target: 0.15, width: 0.5}
+
+    # Your own reward model in its own environment; its deps live in the scorer script (PEP 723).
+    # Point UV_CACHE_DIR at scratch -- an on-demand env is several GB.
+    - enabled: false
+      cmd: "uv run --script rewards/external_rewards/sparrow.py --property radius_of_gyration"
+      label: rg
+      weight: 0.5
+      shaping: {type: quadratic, target: 25, width: 0.2}
+      timeout: 300.0 # seconds to wait for one response
+      maxlen: 0 # truncate sequences to this length before sending; 0 sends them whole
+      cwd: null # working directory for the child; the current directory if null
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo
 

@@ -6,45 +6,37 @@ passed through untouched:
     shaping: {type: quadratic, target: 100, width: 1.0}
     (omitted)                                          # identity
 
-quadratic is unbounded below, so a term far from its target can swamp the rest of the sum; gaussian
-is the bounded alternative when several targets have to coexist, at the cost of flattening far from
-the target, where it stops distinguishing bad from worse. zscore normalizes within each GRPO group
-and is the way to combine rewards whose scales you do not know in advance.
+quadratic is what the shipped guardrails use: 0 at the target and unbounded below, so a term far
+from its target can swamp the rest of the sum. gaussian is the bounded alternative when several
+targets have to coexist, at the cost of flattening far from the target, where it stops
+distinguishing bad from worse. A reward already on a sensible scale -- a fraction in [0, 1], say --
+takes no shaping at all.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from statistics import fmean, pstdev
 
-from idiom.train.grpo.reward.registry import Batch
-
-# type -> factory(**params) -> shaping(values, batch) -> list[float]
-SHAPING_REGISTRY: dict[str, Callable[..., Callable[[list[float], Batch], list[float]]]] = {}
+# type -> factory(**params) -> shaping(value) -> float
+SHAPING_REGISTRY: dict[str, Callable[..., Callable[[float], float]]] = {}
 
 
-def register_shaping(shaping_type: str, *, elementwise: bool = True):
+def register_shaping(shaping_type: str):
     """Return a decorator that registers a shaping factory under type.
+
+    A factory takes the shaping spec's parameters and returns the rule itself, f(value) -> float,
+    which is applied to each raw reward in the batch.
 
     Args:
         shaping_type (str): The name used in a term's shaping.type.
-        elementwise (bool): True if the factory returns a scalar f(value) -> float, which is lifted
-            over the batch; False if it returns f(values, batch) -> list[float] directly, which a
-            group-relative shaping rule needs.
 
     Returns:
         Callable: A decorator that registers the factory and returns it unchanged.
     """
 
     def deco(factory):
-        if elementwise:
-            def batched_factory(**params):
-                f = factory(**params)
-                return lambda values, batch: [f(v) for v in values]
-            SHAPING_REGISTRY[shaping_type] = batched_factory
-        else:
-            SHAPING_REGISTRY[shaping_type] = factory
+        SHAPING_REGISTRY[shaping_type] = factory
         return factory
 
     return deco
@@ -118,37 +110,14 @@ def _gaussian(*, target: float, width: float = 1.0):
     return lambda value: gaussian_score(value, target, width)
 
 
-@register_shaping("zscore", elementwise=False)
-def _zscore():
-    """Build the shaping rule that standardizes values within each GRPO group.
-
-    The batch is split into consecutive groups of batch.group_size, matching the rollout layout;
-    a group whose values are all equal scores 0, since no completion in it is better than another.
-    """
-
-    def shaping(values: list[float], batch: Batch) -> list[float]:
-        g = batch.group_size
-        if g < 2 or len(values) % g:  # not a clean grouping (e.g. a unit test); use the whole batch
-            g = len(values)
-        out: list[float] = []
-        for start in range(0, len(values), g):
-            chunk = values[start:start + g]
-            sd = pstdev(chunk) if len(chunk) > 1 else 0.0
-            mean = fmean(chunk)
-            out += [0.0] * len(chunk) if sd == 0 else [(v - mean) / sd for v in chunk]
-        return out
-
-    return shaping
-
-
-def build_shaping(spec) -> Callable[[list[float], Batch], list[float]]:
+def build_shaping(spec) -> Callable[[float], float]:
     """Build a shaping rule from a term's shaping spec.
 
     Args:
         spec: A mapping with a "type" plus that shaping type's parameters, or None for identity.
 
     Returns:
-        Callable[[list[float], Batch], list[float]]: Maps raw rewards to shaped ones.
+        Callable[[float], float]: Maps one raw reward to its shaped value.
 
     Raises:
         ValueError: If the shaping type is missing or unknown, or its parameters do not fit it.

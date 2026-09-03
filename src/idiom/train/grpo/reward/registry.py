@@ -32,7 +32,8 @@ class Batch:
 
     Attributes:
         group_size (int): Number of completions sampled per prompt. Consecutive runs of this many
-            IDRs form one GRPO group, which is what group-relative shaping such as zscore needs.
+            IDRs form one GRPO group, which is what a batched reward needs to score a completion
+            against the others it was sampled with.
     """
 
     group_size: int = 1

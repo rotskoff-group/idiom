@@ -3,7 +3,7 @@
 A reward is f(idr: str) -> float: it receives the decoded IDR residue string and returns one raw
 value in whatever units suit it. Register it with the register_reward("name") decorator and write
 only that value — what counts as a good one is the term's shaping, set in the config, so the same
-reward serves as a target, a floor, or a logged-only diagnostic.
+reward serves as a target, a guardrail, or a logged-only diagnostic.
 
 Use it by adding a term that names the reward and points at the file that registers it:
 

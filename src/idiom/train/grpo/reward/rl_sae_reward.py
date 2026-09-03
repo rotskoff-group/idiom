@@ -7,10 +7,10 @@ fraction in [0, 1], so a term usually leaves it unshaped. Naming the module on t
 which is what keeps torch and the SAE out of a run that does not use one:
 
     reward.terms:
-      - {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.rl_sae, weight: 1.0}
+      - {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.rl_sae_reward, weight: 1.0}
 
 The targets file maps a case name to a mapping of signature name to feature ids, and can be built
-with examples/notebooks/feature_enrichment.ipynb.
+with examples/scripts/feature_enrichment.py.
 
 Environment variables:
     IDIOM_SAEREWARD_SAE: SAE to use as the lens, as a Hub repo id or local directory.

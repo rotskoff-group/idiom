@@ -41,12 +41,6 @@ include = [
 dev = [
     "pytest>=8.0",
 ]
-notebooks = [          # examples/notebooks: uv sync --group notebooks
-    "jupyterlab>=4.0",
-    "nbformat>=5.10",
-    "nbclient>=0.10",
-    "ipywidgets>=8.0",   # tqdm progress bars render in-notebook
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

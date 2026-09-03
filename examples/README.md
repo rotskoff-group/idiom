@@ -1,38 +1,39 @@
 # Examples
 
-Two kinds, split by what they are for. **Notebooks** in [`notebooks/`](notebooks/) are for looking
-at things — generating, reading and steering SAE features, finding which features matter for your
-sequences, and seeing what a reward term does. **Training scripts** in [`slurm/`](slurm/) are for
-running things — pretraining, SFT, SAE training, and RL — each a single script that spells out
-every config value.
+Two kinds, split by what they are for. **Walkthroughs** in [`scripts/`](scripts/) are for looking
+at things — generating, reading and steering SAE features, and finding which features matter for
+your sequences. **Training scripts** in [`slurm/`](slurm/) are for running things — pretraining,
+SFT, SAE training, and RL — each a single script that spells out every config value.
 
-Small input sets live in [`example_data/`](example_data/), so the analysis examples run with no
-arguments. Run everything from the repo root.
+Small input sets live in [`example_data/`](example_data/), so the walkthroughs run with no
+arguments. Submit the training scripts from the repo root.
 
-## Notebooks
+## Walkthroughs
+
+Each is a plain top-to-bottom script — no arguments, no `main()`. Run one with `uv run`, and edit
+the block of constants at the top of the file to point it at your own model, SAE, or sequences:
 
 ```bash
-uv sync --group notebooks
-uv run jupyter lab examples/notebooks
+uv run examples/scripts/generate_and_embed.py
 ```
 
-| Notebook | Covers | Needs |
-|----------|--------|-------|
-| [`generate_and_embed.ipynb`](notebooks/generate_and_embed.ipynb) | unprompted (de novo) and prompted (context-conditioned) generation; residual-stream embeddings, pooled and per-residue | GPU, weights |
-| [`sae_features.ipynb`](notebooks/sae_features.ipynb) | which SAE features fire on a sequence, and **causal steering** along one of them | GPU, weights |
-| [`feature_enrichment.ipynb`](notebooks/feature_enrichment.ipynb) | which features are enriched in your own set → signature + **volcano** plot + **sequence logos** of what they detect | GPU, weights |
-| [`rewards.ipynb`](notebooks/rewards.ipynb) | rewards and shaping: what a reward term is made of, and how to write your own | nothing |
+| Script | Covers | Needs |
+|--------|--------|-------|
+| [`generate_and_embed.py`](scripts/generate_and_embed.py) | unprompted (de novo) and prompted (context-conditioned) generation; residual-stream embeddings, pooled and per-residue | GPU, weights |
+| [`sae_features.py`](scripts/sae_features.py) | which SAE features fire on a sequence, and **causal steering** along one of them | GPU, weights |
+| [`feature_enrichment.py`](scripts/feature_enrichment.py) | which features are enriched in your own set → signature + **volcano** plot + **sequence logos** of what they detect | GPU, weights |
 
-They read in that order, and each ends by pointing at the next. `device="auto"` in every parameter
-cell falls back to CPU, and `rewards.ipynb` needs neither a GPU nor weights, so it runs anywhere.
+They read in that order, and each ends by pointing at the next. `DEVICE = "auto"` in every
+parameter block falls back to CPU. Figures are written next to their outputs as PNGs rather than
+shown, so the scripts run the same over SSH or under a scheduler.
 
 ## The RL-SAE pipeline, end to end
 
-`feature_enrichment.ipynb → slurm/grpo.bash` is the RL-SAE story on your own sequences: the notebook
-finds the SAE features enriched in a set (against the held-out validation background, downloaded
-from the Hub), shows the residue grammar those features encode, and writes a signature; the training
-script then post-trains a model to reproduce that feature code. Point `IDIOM_SAEREWARD_FEATURES` at your
-signature and switch on the RL-SAE term:
+`scripts/feature_enrichment.py → slurm/grpo.bash` is the RL-SAE story on your own sequences: the
+walkthrough finds the SAE features enriched in a set (against the held-out validation background,
+downloaded from the Hub), shows the residue grammar those features encode, and writes a signature;
+the training script then post-trains a model to reproduce that feature code. Point
+`IDIOM_SAEREWARD_FEATURES` at your signature and switch on the RL-SAE term:
 
 ```bash
 IDIOM_SAEREWARD_FEATURES=enr/signature.json IDIOM_SAEREWARD_CASE=top30 \
@@ -114,10 +115,10 @@ from; `sae.bash` has no fixed `last.ckpt` — pass `resume_from=<ckpt>` by hand.
 
 ## `example_data/`
 
-Small IDR sets used by the enrichment notebook and the SFT and RL scripts. Each FASTA is a **subset** (≤150
-records) of a curated positive set, with IDiom `_IDR_x-y` headers, so it drops straight into
-`sae.encode`, `build_feature_dataset`, `idiom_train`, and the enrichment pipeline. These are
-demo-sized excerpts, not the full datasets used in the paper.
+Small IDR sets used by the enrichment walkthrough and the SFT and RL scripts. Each FASTA is a
+**subset** (≤150 records) of a curated positive set, with IDiom `_IDR_x-y` headers, so it drops
+straight into `sae.encode`, `build_feature_dataset`, `idiom_train`, and the enrichment pipeline.
+These are demo-sized excerpts, not the full datasets used in the paper.
 
 ```
 example_data/

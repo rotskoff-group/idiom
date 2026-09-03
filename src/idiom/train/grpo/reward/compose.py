@@ -35,7 +35,7 @@ TERM_KEYS = {"enabled", "reward", "cmd", "label", "weight", "shaping", "module",
 
 
 @dataclass(frozen=True)
-class TermSpec:
+class RewardTermSpec:
     """One validated reward term.
 
     Attributes:
@@ -77,7 +77,7 @@ def import_module_spec(spec: str | None) -> None:
         importlib.import_module(spec)
 
 
-def parse_terms(rcfg: DictConfig) -> list[TermSpec]:
+def parse_terms(rcfg: DictConfig) -> list[RewardTermSpec]:
     """Validate a reward config and return its terms.
 
     Any module named by the config, or by a term, is imported first so that reward names resolve.
@@ -90,7 +90,7 @@ def parse_terms(rcfg: DictConfig) -> list[TermSpec]:
         rcfg (DictConfig): The reward config: an optional module plus a terms list.
 
     Returns:
-        list[TermSpec]: One validated spec per term, in config order.
+        list[RewardTermSpec]: One validated spec per term, in config order.
 
     Raises:
         ValueError: If an enabled term carries an unknown key, names neither or both of reward and
@@ -99,7 +99,7 @@ def parse_terms(rcfg: DictConfig) -> list[TermSpec]:
     cfg = OmegaConf.to_container(rcfg, resolve=True) if isinstance(rcfg, DictConfig) else dict(rcfg)
     import_module_spec(cfg.get("module"))
 
-    specs: list[TermSpec] = []
+    specs: list[RewardTermSpec] = []
     seen: set[str] = set()
     for i, raw in enumerate(cfg.get("terms") or []):
         where = f"reward.terms[{i}]"
@@ -125,12 +125,12 @@ def parse_terms(rcfg: DictConfig) -> list[TermSpec]:
         if reward is not None:
             get_reward(reward)  # fail here, by name, rather than on the first training step
 
-        specs.append(TermSpec(label=label, weight=float(term.pop("weight", 1.0)),
-                              reward=reward, cmd=cmd, **term))
+        specs.append(RewardTermSpec(label=label, weight=float(term.pop("weight", 1.0)),
+                                    reward=reward, cmd=cmd, **term))
     return specs
 
 
-def _source(spec: TermSpec) -> Callable[[list[str], Batch], list[float]]:
+def _source(spec: RewardTermSpec) -> Callable[[list[str], Batch], list[float]]:
     """Return the batched function producing a term's raw rewards."""
     if spec.reward is not None:
         return get_reward(spec.reward)
@@ -161,12 +161,11 @@ def build_reward(rcfg: DictConfig):
         totals = [0.0] * len(idrs)
         breakdown: list[dict[str, float]] = [{} for _ in idrs]
         for label, weight, source, shaping in terms:
-            raw = source(idrs, batch)
-            shaped = shaping(raw, batch)
-            for i, (raw_i, shaped_i) in enumerate(zip(raw, shaped)):
-                breakdown[i][f"{label}_raw"] = raw_i         # the raw reward, in its own units
-                breakdown[i][label] = weight * shaped_i      # its contribution to the objective
-                totals[i] += weight * shaped_i
+            for i, raw_i in enumerate(source(idrs, batch)):
+                shaped_i = weight * shaping(raw_i)
+                breakdown[i][f"{label}_raw"] = raw_i     # the raw reward, in its own units
+                breakdown[i][label] = shaped_i           # its contribution to the objective
+                totals[i] += shaped_i
         for i, total in enumerate(totals):
             breakdown[i]["total"] = total
         return totals, breakdown
