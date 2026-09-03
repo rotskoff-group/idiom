@@ -7,11 +7,13 @@ GRPO step:
     <-  {"scores": [24.8, 31.2]}          # or {"error": "..."}
 
 It imports nothing from IDiom, so it can run in any virtualenv, conda environment, or container.
-The scorer returns a raw value, which the term's target and width shape into a reward.
+The scorer returns a raw reward in its own units; the term's shaping turns that into a shaped one, so
+the objective is retuned on the IDiom side without touching the scorer's environment.
 
 A command can be checked from the command line before it is used in a run:
 
-    python -m idiom.train.grpo.reward.external_reward --cmd "<scorer command>" --target 25 --width 0.2
+    python -m idiom.train.grpo.reward.external --cmd "<scorer command>" \
+        --shaping quadratic --target 25 --width 0.2
 """
 
 from __future__ import annotations
@@ -29,13 +31,20 @@ import sys
 import threading
 import time
 
-from idiom.train.grpo.reward.base import quadratic_penalty
+from idiom.train.grpo.reward.registry import Batch
+from idiom.train.grpo.reward.shaping import build_shaping
 
 _PROBE = "MKVGSDEQ"  # handshake sequence: a valid IDR every scorer should be able to score
 
 
-def _argv(cmd: str) -> list[str]:
-    """Split a command string into argv, accepting either shell quoting or a JSON list."""
+def _argv(cmd) -> list[str]:
+    """Return a command as argv, accepting a list, a JSON list, or a shell-quoted string.
+
+    The list form is the escape hatch from quoting: an argument holding spaces or quotes of its
+    own survives it unchanged.
+    """
+    if isinstance(cmd, (list, tuple)):
+        return [str(a) for a in cmd]
     cmd = cmd.strip()
     if cmd.startswith("["):
         return [str(a) for a in json.loads(cmd)]
@@ -91,19 +100,19 @@ class Scorer:
     exits mid-run is restarted once per failed batch.
 
     Attributes:
-        argv (list[str]): The scorer command, split into arguments.
+        argv (list[str]): The scorer command, as arguments.
         cwd (str): Working directory for the child process.
         timeout (float): Seconds to wait for a single response.
         label (str): Tag prefixed to the child's forwarded stderr.
         proc (subprocess.Popen | None): The running child, or None when not started.
     """
 
-    def __init__(self, cmd: str, *, cwd: str | None = None, timeout: float = 300.0,
+    def __init__(self, cmd, *, cwd: str | None = None, timeout: float = 300.0,
                  label: str = "external") -> None:
         """Record the command and settings without starting the child process.
 
         Args:
-            cmd (str): Command that runs the scorer, shell-quoted or a JSON argv list.
+            cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
             cwd (str | None): Working directory for the child; the current directory if None.
             timeout (float): Seconds to wait for a single response.
             label (str): Short tag used to prefix the child's forwarded stderr.
@@ -226,25 +235,8 @@ class Scorer:
             return self.roundtrip(seqs)
 
 
-def target_penalty(value: float, target: float | None, width: float) -> float:
-    """Shape a raw scorer value into a reward.
-
-    Args:
-        value (float): The scorer's raw value.
-        target (float | None): Target value, or None to return the raw value unchanged.
-        width (float): Tolerance as a fraction of the target.
-
-    Returns:
-        float: The quadratic penalty of value against target, or value itself when target is None.
-    """
-    if target is None:
-        return value
-    return quadratic_penalty(value, target, width)
-
-
-def make_external_reward(cmd: str, *, target: float | None = None, width: float = 1.0,
-                         timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
-                         cache_max: int = 100_000, label: str = "external"):
+def make_external_reward(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
+                          cache_max: int = 100_000, label: str = "external"):
     """Build a batched reward backed by one external scorer subprocess.
 
     Each call creates an independent scorer with its own process and score cache, so several
@@ -253,9 +245,7 @@ def make_external_reward(cmd: str, *, target: float | None = None, width: float 
     exceeds cache_max entries, at which point it is cleared.
 
     Args:
-        cmd (str): Command that runs the scorer, shell-quoted or a JSON argv list.
-        target (float | None): Target value, or None to use the raw scorer value as the reward.
-        width (float): Tolerance as a fraction of the target.
+        cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
         timeout (float): Seconds to wait for one response.
         maxlen (int): Truncate sequences to this length before sending; 0 sends them whole.
         cwd (str | None): Working directory for the child; the current directory if None.
@@ -263,31 +253,30 @@ def make_external_reward(cmd: str, *, target: float | None = None, width: float 
         label (str): Short tag for the term, used to prefix the child's stderr.
 
     Returns:
-        Callable[[list[str], int], list[float]]: A function mapping (idrs, group_size) to one
-            reward per IDR, in order.
+        Callable[[list[str], Batch], list[float]]: Maps a batch of IDRs to the scorer's raw rewards,
+            in order. Shaping them is the term's job, not the scorer's.
     """
     scorer = Scorer(cmd, cwd=cwd, timeout=timeout, label=label)
     cache: dict[str, float] = {}
 
-    def reward(idrs: list[str], group_size: int) -> list[float]:
+    def reward(idrs: list[str], batch: Batch) -> list[float]:
         todo = list(dict.fromkeys(s for s in idrs if s and s not in cache))
         if todo:
             values = scorer.score([s[:maxlen] if maxlen else s for s in todo])
             if len(cache) > cache_max:
                 cache.clear()
             cache.update(zip(todo, values))
-        return [target_penalty(cache[s], target, width) if s else 0.0 for s in idrs]
+        return [cache[s] if s else 0.0 for s in idrs]
 
     return reward
 
 
-def check(cmd: str, target: float | None, width: float, seqs: list[str] | None = None) -> int:
-    """Run a scorer command over a few sequences and print its raw values and shaped rewards.
+def check(cmd, shaping_spec: dict | None = None, seqs: list[str] | None = None) -> int:
+    """Run a scorer command over a few sequences and print its raw and shaped rewards.
 
     Args:
-        cmd (str): The scorer command to check.
-        target (float | None): Target value, or None to show the raw value as the reward.
-        width (float): Tolerance as a fraction of the target.
+        cmd (str | list[str]): The scorer command to check.
+        shaping_spec (dict | None): A term's shaping spec, or None to show the raw reward unshaped.
         seqs (list[str] | None): Sequences to score; a small built-in set if None.
 
     Returns:
@@ -296,8 +285,9 @@ def check(cmd: str, target: float | None, width: float, seqs: list[str] | None =
     seqs = seqs or ["MEEEKKKKSSSTTTDDDQQQQNNNN",
                     "GSGSGSGSGSGSGSGSGSGSGSGSGSGSGS",
                     "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ"]
-    print(f"command : {cmd or '(none -- pass --cmd)'}")
-    print(f"reward  : {'raw value' if target is None else f'penalty(target={target:g}, width={width:g})'}")
+    shaping = build_shaping(shaping_spec)
+    print(f"command : {cmd}")
+    print(f"shaping : {shaping_spec or 'none (the raw reward is used as-is)'}")
     scorer = Scorer(cmd, timeout=300.0)
     t0 = time.monotonic()
     try:
@@ -308,9 +298,9 @@ def check(cmd: str, target: float | None, width: float, seqs: list[str] | None =
     finally:
         scorer.stop()
     print(f"\nstartup + {len(seqs)} sequences in {time.monotonic() - t0:.1f}s\n")
-    print(f"{'raw':>12}  {'reward':>8}  sequence")
-    for s, v in zip(seqs, values):
-        print(f"{v:12.4f}  {target_penalty(v, target, width):8.4f}  {s[:44]}")
+    print(f"{'raw':>12}  {'shaped':>8}  sequence")
+    for s, v, r in zip(seqs, values, shaping(values, Batch())):
+        print(f"{v:12.4f}  {r:8.4f}  {s[:44]}")
     return 0
 
 
@@ -325,11 +315,22 @@ def main(argv: list[str] | None = None) -> int:
     """
     p = argparse.ArgumentParser(description="Check an external reward scorer command.")
     p.add_argument("--cmd", required=True, help="command that runs the scorer")
-    p.add_argument("--target", type=float, default=None, help="target value (default: raw value)")
-    p.add_argument("--width", type=float, default=1.0, help="tolerance as a fraction of the target")
+    p.add_argument("--shaping", default="identity", help="shaping type applied to the raw reward")
+    p.add_argument("--target", type=float, default=None, help="target for the shaping")
+    p.add_argument("--width", type=float, default=None, help="tolerance as a fraction of the target")
     p.add_argument("sequences", nargs="*", help="sequences to score instead of the built-in set")
     args = p.parse_args(argv)
-    return check(args.cmd, args.target, args.width, args.sequences or None)
+
+    spec = {"type": args.shaping}
+    if args.target is not None:
+        spec["target"] = args.target
+    if args.width is not None:
+        spec["width"] = args.width
+    try:
+        return check(args.cmd, None if args.shaping == "identity" else spec, args.sequences or None)
+    except ValueError as e:  # a bad --shaping combination, reported without a traceback
+        print(f"FAILED: {e}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

@@ -2,13 +2,15 @@
 
 Importing this module registers one reward per signature in the targets file, named
 "sae_only_<signature>". Each scores an IDR by the fraction of that signature's features that fire,
-meaning they appear in the SAE top-k at any of the IDR's residues. The reward is enabled through
-the rl_sae config block, which imports this module on demand:
+meaning they appear in the SAE top-k at any of the IDR's residues. The raw value is already a
+fraction in [0, 1], so a term usually leaves it unshaped. Naming the module on the term imports it,
+which is what keeps torch and the SAE out of a run that does not use one:
 
-    idiom_grpo init_from=... reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
+    reward.terms:
+      - {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.rl_sae, weight: 1.0}
 
 The targets file maps a case name to a mapping of signature name to feature ids, and can be built
-with examples/python/05_feature_enrichment.py.
+with examples/notebooks/feature_enrichment.ipynb.
 
 Environment variables:
     IDIOM_SAEREWARD_SAE: SAE to use as the lens, as a Hub repo id or local directory.
@@ -29,7 +31,7 @@ import torch
 from idiom import IDiomSAE
 from idiom.data.fim import fim_unprompted
 from idiom.model.activations import extract_activations
-from idiom.train.grpo.reward.base import register_reward
+from idiom.train.grpo.reward.registry import register_reward
 
 # Targets ship as user-editable data in the repo's top-level rewards/rl_sae_targets/ (run from the
 # repo root); point IDIOM_SAEREWARD_FEATURES at your own JSON of the same shape to override.
@@ -105,7 +107,7 @@ def feature_match(idr: str, name: str) -> float:
 
 
 def _sae_only_reward(name: str):
-    """Build the per-idr feature-match reward function for one signature."""
+    """Build the per-idr feature-match reward for one signature."""
 
     def reward(idr: str) -> float:
         return feature_match(idr, name) if idr else 0.0

@@ -11,12 +11,12 @@ import textwrap
 
 import pytest
 
-from idiom.train.grpo.reward.external_reward import (
+from idiom.train.grpo.reward.external import (
     Scorer,
     make_external_reward,
     parse_response,
-    target_penalty,
 )
+from idiom.train.grpo.reward.registry import Batch
 
 
 def _scorer(tmp_path, body, name="fake_scorer.py", **kw):
@@ -154,15 +154,7 @@ def test_scorer_error_response_propagates(tmp_path):
         s.stop()
 
 
-# ---------------------------------------------------------------- target penalty + reward
-
-
-def test_target_penalty_transform():
-    assert target_penalty(24.8, None, 1.0) == 24.8              # no target: raw value is the reward
-    assert target_penalty(25.0, 25.0, 0.2) == 0.0              # 0 at the target
-    assert target_penalty(30.0, 25.0, 0.2) == pytest.approx(-1.0)  # one tolerance out (20% = 5) -> -1
-    assert target_penalty(100.0, 25.0, 0.2) == pytest.approx(-225.0)  # unbounded, not saturating
-    assert target_penalty(2.0, 0.0, 1.0) == -4.0              # target 0 -> width is an absolute scale
+# ---------------------------------------------------------------- the batched reward
 
 
 def _batched_scorer_file(tmp_path, counter):
@@ -186,8 +178,8 @@ def test_make_external_reward_batches_dedups_and_caches(tmp_path):
     counter = tmp_path / "calls.txt"
     path = _batched_scorer_file(tmp_path, counter)
     reward = make_external_reward(f"{sys.executable} {path}", cwd=str(tmp_path))
-    assert reward(["AAA", "", "AAA", "CCCCC"], 4) == [3.0, 0.0, 3.0, 5.0]
-    assert reward(["AAA", "GG"], 2) == [3.0, 2.0]
+    assert reward(["AAA", "", "AAA", "CCCCC"], Batch(4)) == [3.0, 0.0, 3.0, 5.0]
+    assert reward(["AAA", "GG"], Batch(2)) == [3.0, 2.0]
 
     batches = [line for line in counter.read_text().splitlines() if line]
     assert batches[0] == '["MKVGSDEQ"]'      # the handshake
@@ -195,34 +187,62 @@ def test_make_external_reward_batches_dedups_and_caches(tmp_path):
     assert batches[2] == '["GG"]'            # only the uncached sequence
 
 
-def test_make_external_reward_applies_penalty(tmp_path):
-    reward = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}",
-                                  cwd=str(tmp_path), target=3.0, width=1.0)
-    # "AAA" -> raw 3.0 -> penalty(3,3,1)=0.0 ; "AAAAA" -> raw 5.0 -> penalty(5,3,1)
-    scores = reward(["AAA", "AAAAA"], 2)
-    assert scores[0] == pytest.approx(0.0)
-    assert scores[1] == pytest.approx(target_penalty(5.0, 3.0, 1.0))
+def test_make_external_reward_returns_the_raw_value(tmp_path):
+    # the scorer reports its own units and stops there; shaping is the term's job, not the
+    # subprocess's, so the objective is retuned without touching that environment
+    reward = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
+    assert reward(["AAA", "AAAAA"], Batch(2)) == [3.0, 5.0]
 
 
 def test_two_external_rewards_are_independent(tmp_path):
-    # different commands/targets in one run must not share global state
-    r1 = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path), target=3.0, width=1.0)
-    r2 = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))  # raw
-    assert r1(["AAA"], 1)[0] == pytest.approx(0.0)     # penalty 0 at the target (3)
-    assert r2(["AAA"], 1)[0] == pytest.approx(3.0)     # raw length
+    # two scorers in one run get their own process and cache, and must not share global state
+    m1 = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
+    m2 = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path),
+                               maxlen=2)
+    assert m1(["AAAAA"], Batch(1))[0] == pytest.approx(5.0)
+    assert m2(["AAAAA"], Batch(1))[0] == pytest.approx(2.0)  # truncated before it was sent
 
 
-def _scorer_path(tmp_path):
-    path = tmp_path / "len_scorer.py"
+def test_a_command_can_be_given_as_an_argument_list(tmp_path):
+    # the escape hatch from shell quoting: a path with a space in it survives unsplit
+    path = _scorer_path(tmp_path, name="len scorer.py")
+    reward = make_external_reward([sys.executable, str(path)], cwd=str(tmp_path))
+    assert reward(["AAA"], Batch(1)) == [3.0]
+
+
+def _scorer_path(tmp_path, name="len_scorer.py"):
+    path = tmp_path / name
     path.write_text(textwrap.dedent(ECHO_LENGTHS))
     return path
 
 
-def test_example_scorer_speaks_the_protocol():
-    """The copyable template must actually work, since users start from it."""
-    s = Scorer(f"{sys.executable} rewards/external_scorers/example.py", timeout=30)
+def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
+    """The shipped scorer must work, since users copy it as their starting template.
+
+    sparrow itself is a heavy build, so a stub package standing in for it is put on the child's
+    import path. That leaves the real script's argument parsing, protocol loop, and error handling
+    under test without a network round trip -- and the script strips its own directory from
+    sys.path precisely so the stub is what "import sparrow" finds.
+    """
+    (tmp_path / "sparrow.py").write_text(textwrap.dedent("""
+        class _Predictor:
+            def __init__(self, seq):
+                self.seq = seq
+            def radius_of_gyration(self):
+                return 2.0 * len(self.seq)
+
+        class Protein:
+            def __init__(self, seq):
+                self.seq = seq
+                self.predictor = _Predictor(seq)
+            @property
+            def FCR(self):
+                return 0.25
+    """))
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))  # inherited by the scorer subprocess
+    scorer = Scorer([sys.executable, "rewards/external_rewards/sparrow.py",
+                     "--property", "radius_of_gyration"], timeout=30)
     try:
-        scores = s.score(["FWY", "AAAAA"])
+        assert scorer.score(["FWY", "AAAAA", ""]) == [6.0, 10.0, 0.0]
     finally:
-        s.stop()
-    assert scores == [pytest.approx(1.0), pytest.approx(0.0)]
+        scorer.stop()

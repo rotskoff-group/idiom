@@ -8,11 +8,11 @@
 #SBATCH --partition=gpu             # EDIT: your GPU partition
 # #SBATCH --account=your_account    # EDIT: uncomment if your site requires an account
 # #SBATCH --nodelist=node01         # EDIT: uncomment to pin an 8-GPU node
-#SBATCH --output=./slurm_out/slurm-%j.out   # run `mkdir -p slurm_out` once before submitting
+#SBATCH --output=./slurm_out/slurm-%j.out   # sbatch only; run `mkdir -p slurm_out` first
 
-echo "===== BEGIN SLURM SCRIPT: $0 ====="    # save the script verbatim into the slurm log
+echo "===== BEGIN SCRIPT: $0 ====="    # save the script verbatim into the slurm log
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
-echo "===== END   SLURM SCRIPT: $0 ====="
+echo "===== END   SCRIPT: $0 ====="
 echo; echo
 
 set -euo pipefail
@@ -24,7 +24,8 @@ set -euo pipefail
 # process per GPU itself (trainer.devices=8). Lower data.batch_size if you hit OOM.
 ###
 
-REPO="$SLURM_SUBMIT_DIR"                          # submit from the repo root
+# Repo root: where sbatch was submitted from, or this script's own location under bash.
+REPO="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 OUT="${IDIOM_OUT:-$HOME/idiom-runs}/pretrain"     # EDIT: keep runs on scratch, not in the repo
 TRAIN_FASTA=/path/to/train.fasta                  # EDIT
 VAL_FASTA=/path/to/validation.fasta               # EDIT

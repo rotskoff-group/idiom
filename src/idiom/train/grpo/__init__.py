@@ -5,7 +5,7 @@ Modules:
     data: prompt datasets and their collate function.
     lit_grpo: the LightningModule running rollout, reward, and the GRPO step.
     train_grpo: the idiom_grpo entrypoint.
-    reward: the reward registry, the composite reward, and the reward terms.
+    reward: the reward and shaping registries and the total-reward composition.
 """
 
 from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs

@@ -1,16 +1,19 @@
 """Simple in-process GRPO rewards — copy and edit this file for your own.
 
-A reward is f(idr: str) -> float: it receives the decoded IDR residue string and returns a scalar.
-Register it with the register_reward("name") decorator; the entropy and length terms are added on
-top by the config, so you usually only write the base signal.
+A reward is f(idr: str) -> float: it receives the decoded IDR residue string and returns one raw
+value in whatever units suit it. Register it with the register_reward("name") decorator and write
+only that value — what counts as a good one is the term's shaping, set in the config, so the same
+reward serves as a target, a floor, or a logged-only diagnostic.
 
-Use it by adding an external term that names the reward and points at the file that registers it:
+Use it by adding a term that names the reward and points at the file that registers it:
 
-    reward.external:
-      - {enabled: true, weight: 1.0, name: aromatic_fraction, module: rewards/example_rewards.py}
+    reward.terms:
+      - {reward: aromatic_fraction, module: rewards/custom_rewards.py, weight: 1.0,
+         shaping: {type: gaussian, target: 0.15, width: 0.5}}
 
 module accepts a *.py path (like here) or a dotted module path; it is imported before the reward is
-looked up, so the decorators below run and register the rewards.
+looked up, so the decorators below run and register the rewards. Omit shaping to use the raw value
+directly, which for a fraction means pushing it toward 1.
 """
 
 from idiom.train.grpo.reward import register_reward

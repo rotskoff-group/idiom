@@ -7,11 +7,11 @@
 #SBATCH --mem-per-cpu=8GB
 #SBATCH --partition=gpu             # EDIT: your GPU partition
 # #SBATCH --account=your_account    # EDIT: uncomment if your site requires an account
-#SBATCH --output=./slurm_out/slurm-%j.out   # run `mkdir -p slurm_out` once before submitting
+#SBATCH --output=./slurm_out/slurm-%j.out   # sbatch only; run `mkdir -p slurm_out` first
 
-echo "===== BEGIN SLURM SCRIPT: $0 ====="
+echo "===== BEGIN SCRIPT: $0 ====="
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
-echo "===== END   SLURM SCRIPT: $0 ====="
+echo "===== END   SCRIPT: $0 ====="
 echo; echo
 
 set -euo pipefail
@@ -22,7 +22,8 @@ set -euo pipefail
 # whole-sequence IDRs (no flanks), so train the unprompted form (data.prompted_prob=0.0).
 ###
 
-REPO="$SLURM_SUBMIT_DIR"                          # submit from the repo root
+# Repo root: where sbatch was submitted from, or this script's own location under bash.
+REPO="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 OUT="${IDIOM_OUT:-$HOME/idiom-runs}/sft"          # EDIT: keep runs on scratch, not in the repo
 
 unset PYTHONPATH PYTHONHOME

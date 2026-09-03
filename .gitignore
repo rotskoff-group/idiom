@@ -24,11 +24,13 @@ htmlcov/
 .DS_Store
 
 # Run outputs & logs (results live in scratch / the overleaf repo, not here)
+# enr/ is where 03_feature_enrichment.ipynb writes its feature datasets and signature.
 slurm_out/
 *.out
 lightning_logs/
 output/
 runs/
+enr/
 
 
 # Record-store sidecars (auto-built next to a FASTA on first train/SFT/enrichment)

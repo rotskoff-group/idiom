@@ -11,6 +11,8 @@ from idiom.sae.features.enrichment import (
     enrich,
     enriched_mask,
     feature_counts,
+    length_match,
+    load_sequences,
     top_features,
     write_signature,
 )
@@ -121,3 +123,47 @@ def test_write_signature_roundtrip(tmp_path):
     assert blob["top30"]["my_set"] == [3, 1, 2]      # order preserved (rank order matters)
     assert blob["private30"]["my_set"] == [3]
     assert blob["_provenance"]["sae"] == "test"
+
+
+def test_load_sequences_reads_spans_and_falls_back_to_whole_sequence(tmp_path):
+    # a curated record carries its IDR span; a plain FASTA of sequences does not, and both have to
+    # load, since the set a user wants to test is usually the second kind
+    fa = tmp_path / "in.fasta"
+    fa.write_text(">P1_IDR_2-5\nACDEFGHI\n>plain some description here\nMKVGSDEQ\n")
+    recs = load_sequences(fa)
+    # the header's 1-based inclusive span becomes a 0-based half-open one
+    assert [(r.accession, r.idr_start, r.idr_end) for r in recs] == [("P1", 1, 5), ("plain", 0, 8)]
+
+
+def test_load_sequences_ignores_an_out_of_range_span(tmp_path):
+    fa = tmp_path / "bad.fasta"
+    fa.write_text(">P2_IDR_0-999\nACDE\n")
+    (rec,) = load_sequences(fa)
+    assert (rec.idr_start, rec.idr_end) == (0, 4)
+
+
+def _rec(acc, length, start=0):
+    from idiom.data.io import Record
+    return Record(acc, "A" * (start + length), start, start + length)
+
+
+def test_length_match_follows_the_positive_length_distribution():
+    # every positive is ~10 residues, so a background pool split between short and long must come
+    # back short -- otherwise length-tracking features look enriched
+    rng = np.random.default_rng(0)
+    positives = [_rec(f"p{i}", 10) for i in range(20)]
+    background = [_rec(f"s{i}", 10) for i in range(100)] + [_rec(f"l{i}", 300) for i in range(100)]
+    picked = length_match(positives, background, n=40, rng=rng)
+    assert len(picked) == 40
+    assert all(r.accession.startswith("s") for r in picked)
+
+
+def test_length_match_tops_up_when_a_bin_cannot_be_filled():
+    # the pool has only 5 sequences at the positives' length; the rest is made up elsewhere rather
+    # than returning a short background
+    rng = np.random.default_rng(0)
+    positives = [_rec(f"p{i}", 10) for i in range(20)]
+    background = [_rec(f"s{i}", 10) for i in range(5)] + [_rec(f"l{i}", 300) for i in range(100)]
+    picked = length_match(positives, background, n=40, rng=rng)
+    assert len(picked) == 40
+    assert sum(r.accession.startswith("s") for r in picked) == 5

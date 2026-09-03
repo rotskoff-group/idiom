@@ -3,23 +3,23 @@
 #   idiom_train --config-name sft init_from=jxliu2/idiom-20M data.train_fasta=/path/sft.fasta
 seed: 0
 device: auto
-init_from: ???               # required: base to fine-tune (a .ckpt, a released dir, or a HF repo id e.g. jxliu2/idiom-20M); weights-only warm start
-resume_from: null            # true mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
-wandb_project: idiom         # wandb project (needs `wandb login` / WANDB_API_KEY; WANDB_MODE=offline to disable)
-run_name: null               # optional wandb run name
+init_from: ??? # required: base to fine-tune (a .ckpt, a released dir, or a HF repo id)
+resume_from: null # mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
+wandb_project: idiom # needs `wandb login` or WANDB_API_KEY; WANDB_MODE=offline to disable
+run_name: null # optional wandb run name
 
 data:
-  train_fasta: ???           # required: the (usually small, curated) SFT record FASTA
+  train_fasta: ??? # required: the (usually small, curated) SFT record FASTA
   val_fasta: null
-  prompted_prob: 1.0         # SFT is typically prompted (context) in-filling
-  completion_only: true      # train loss on the IDR completion only
+  prompted_prob: 1.0 # SFT is typically prompted (context) in-filling
+  completion_only: true # loss on the IDR completion only
   batch_size: 32
   num_workers: 8
 
-# (no `model:` block — SFT warm-starts from init_from, whose architecture is read from the checkpoint)
+# No model block: SFT reads the architecture from init_from's checkpoint.
 
 optim:
-  lr: 1.0e-5                 # gentle, to not wash out pretraining
+  lr: 1.0e-5 # gentle, to not wash out pretraining
   warmup_steps: 100
   weight_decay: 0.1
   min_lr_ratio: 0.1
@@ -33,7 +33,7 @@ trainer:
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/sft
 
-# Hydra run/sweep dir -> experiment dir (keeps the repo clean); override via IDIOM_OUT.
+# Run and sweep dirs go to the experiment dir, not the repo; override with IDIOM_OUT.
 hydra:
   run:
     dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

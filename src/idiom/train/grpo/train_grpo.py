@@ -18,9 +18,9 @@ from torch.utils.data import DataLoader
 from idiom.data.fim import UNPROMPTED, normalize_mode
 from idiom.train.grpo.data import collate_prompts, prompted_prompts, unprompted_prompts
 from idiom.train.grpo.lit_grpo import LitGRPO
-from idiom.train.grpo.reward import build_reward_terms
+from idiom.train.grpo.reward import build_reward
 
-__all__ = ["build", "build_reward_terms", "run"]
+__all__ = ["build", "build_reward", "run"]
 
 
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
@@ -41,8 +41,9 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
         ValueError: If cfg.prompts.mode is neither "unprompted" nor "prompted".
     """
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
-    # One composite reward: a weighted sum of the enabled terms, scored a whole batch per step.
-    reward_terms = build_reward_terms(cfg.reward)
+    # One composite reward: a weighted sum of the configured terms, scored a whole batch per
+    # step. Built before the model loads, so a bad reward config fails in seconds.
+    reward_terms = build_reward(cfg.reward)
     lit = LitGRPO.init_from_checkpoint(cfg.init_from, reward_terms=reward_terms, **grpo_kw)
 
     # prompts.mode takes the same two values as every other prompting-mode field, so it goes

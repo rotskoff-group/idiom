@@ -145,8 +145,8 @@ class LitGRPO(L.LightningModule):
         """Roll out completions, score them, and return the GRPO loss for one batch.
 
         Logs the loss, mean and standard deviation of the reward, KL to the reference, mean
-        completion length and composition entropy, and one mean per reward term when a breakdown
-        is available.
+        completion length and composition entropy, and, when a breakdown is available, two means
+        per reward term: what it contributed to the objective and its raw reward.
 
         Args:
             batch (torch.Tensor): Equal-length prompts of shape [B, P].
@@ -204,7 +204,9 @@ class LitGRPO(L.LightningModule):
             "train/seq_len": seq_len.mean(),
             "train/seq_entropy": seq_ent.mean(),
         }
-        if breakdown:  # per-term reward means: train/reward_raw, _length, _entropy
+        # Per-term means, two per term: train/reward_length is the contribution to the objective,
+        # train/reward_length_raw the raw reward (98 residues, 3.6 bits) in its own units.
+        if breakdown:
             for key in breakdown[0]:
                 if key == "total":
                     continue

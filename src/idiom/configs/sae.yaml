@@ -2,25 +2,25 @@
 #   idiom_sae model_ckpt=jxliu2/idiom-300M data.fasta=/path/records.fasta layer=18
 seed: 0
 device: auto
-model_ckpt: ???              # frozen base: a .ckpt, a released dir, or a HF repo id (e.g. jxliu2/idiom-300M); arch read from it
-resume_from: null            # mid-run resume (optimizer/step/RNG) from a .ckpt
+model_ckpt: ??? # required: frozen base (a .ckpt, a released dir, or a HF repo id); arch read from it
+resume_from: null # mid-run resume (optimizer/step/RNG) from a .ckpt
 
-layer: 8                     # residual-stream block to train the SAE on (must be < n_layers)
-region: all                  # residues feeding the SAE: all | idr | non_idr (split at the '2' marker)
+layer: 8 # residual-stream block to train the SAE on (must be < n_layers)
+region: all # residues feeding the SAE: all | idr | non_idr (split at the '2' marker)
 
 data:
-  fasta: ???                 # record FASTA whose activations feed the SAE
-  prompted_prob: 0.5         # prompted (context) vs unprompted (de novo); 0.0 = a pure de novo SAE
-  record_batch_size: 16      # sequences per model forward (re-batched into sae_batch_size)
+  fasta: ??? # required: record FASTA whose activations feed the SAE
+  prompted_prob: 0.5 # prompted (context) vs unprompted (de novo); 0.0 = a pure de novo SAE
+  record_batch_size: 16 # sequences per model forward, re-batched into sae_batch_size
 
-sae_batch_size: 4096         # activation rows per SAE step
-buffer_size: 262144          # shuffling-buffer rows before draining
+sae_batch_size: 4096 # activation rows per SAE step
+buffer_size: 262144 # shuffling-buffer rows before draining
 init_b_dec_from_mean: true
 
 sae:
   k: 32
   expansion_factor: 32
-  activation: topk           # topk | groupmax
+  activation: topk # topk | groupmax
   multi_topk: false
   auxk_alpha: 0.03125
   dead_feature_tokens: 10000000
@@ -33,7 +33,7 @@ trainer:
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/sae
 
-# Hydra run/sweep dir -> experiment dir (keeps the repo clean); override via IDIOM_OUT.
+# Run and sweep dirs go to the experiment dir, not the repo; override with IDIOM_OUT.
 hydra:
   run:
     dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

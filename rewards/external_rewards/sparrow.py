@@ -1,14 +1,19 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["sparrow @ git+https://github.com/idptools/sparrow.git"]
+# ///
 """Score IDRs with sparrow (https://github.com/idptools/sparrow) as an external GRPO reward.
 
 The worked example of an external reward: it runs in its own environment and imports nothing from
-IDiom. The config's cmd lets uv build sparrow on demand (no install step); see the reward section of
-the top-level README for cache and pinning guidance. In configs/grpo.yaml:
+IDiom. Its dependencies live in the script header above, so uv builds and caches the environment on
+demand and the config only names the script (see the reward section of the top-level README for
+cache and pinning guidance). In configs/grpo.yaml:
 
-    reward.external:
-      - {enabled: true, weight: 0.5, target: 25, width: 0.2,
-         cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
+    reward.terms:
+      - {cmd: "uv run --script rewards/external_rewards/sparrow.py --property radius_of_gyration",
+         label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}
 
-It returns the raw property value (the term's target/width shape it into a reward — a quadratic penalty toward the target). --property is any
+It returns the raw property value; the term's shaping turns that into a reward. --property is any
 ALBATROSS predictor (radius_of_gyration, end_to_end_distance, asphericity, scaling_exponent,
 prefactor) or a sequence parameter (FCR, NCPR, kappa, SCD, complexity). Note kappa returns -1.0 for a
 sequence with no charged residues (a sentinel a policy can reach by removing all charge), so target

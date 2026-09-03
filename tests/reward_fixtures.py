@@ -1,8 +1,8 @@
 """Trivial registered rewards used only by the test suite.
 
 These are deliberately kept out of the shipped library (the real user-facing examples live in
-rewards/example_rewards.py). conftest imports this module so the names resolve for config-driven
-tests (e.g. reward.external name: fraction_proline); tests that call the functions directly import
+rewards/custom_rewards.py). conftest imports this module so the names resolve for config-driven
+tests (e.g. a term with reward: fraction_proline); tests that call the functions directly import
 them from here.
 """
 

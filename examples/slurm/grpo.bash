@@ -7,26 +7,25 @@
 #SBATCH --mem-per-cpu=8GB
 #SBATCH --partition=gpu             # EDIT: your GPU partition
 # #SBATCH --account=your_account    # EDIT: uncomment if your site requires an account
-#SBATCH --output=./slurm_out/slurm-%j.out   # run `mkdir -p slurm_out` once before submitting
+#SBATCH --output=./slurm_out/slurm-%j.out   # sbatch only; run `mkdir -p slurm_out` first
 
-echo "===== BEGIN SLURM SCRIPT: $0 ====="
+echo "===== BEGIN SCRIPT: $0 ====="
 sed -e 's/^/    /' "${BASH_SOURCE[0]}"
-echo "===== END   SLURM SCRIPT: $0 ====="
+echo "===== END   SCRIPT: $0 ====="
 echo; echo
 
 set -euo pipefail
 
 ###
 # GRPO / RL post-training on 1 GPU toward an SAE feature signature (RL-SAE). The reward is a weighted
-# sum of terms (entropy + length guardrails + the rl_sae feature-code reward). No third-party reward
-# model; runs straight after `uv sync`. init_from takes a HF repo id, a released dir, or a .ckpt.
-# For an EXTERNAL reward model (sparrow) instead, set UV_CACHE_DIR and replace the reward.* overrides
-# below with a reward.external list (see examples/python/09_sparrow_reward.py and the top-level README).
+# sum of terms: the entropy and length guardrails plus the SAE feature-code reward. No third-party
+# reward model; runs straight after `uv sync`. init_from takes a HF repo id, a released dir, or a
+# .ckpt. For a reward model that runs in its OWN environment, use grpo_external.bash instead.
 ###
 
-REPO="$SLURM_SUBMIT_DIR"                          # submit from the repo root
+# Repo root: where sbatch was submitted from, or this script's own location under bash.
+REPO="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 OUT="${IDIOM_OUT:-$HOME/idiom-runs}/grpo"         # EDIT: keep runs on scratch, not in the repo
-# export UV_CACHE_DIR=/scratch/$USER/uv-cache     # uncomment for an on-demand external reward env
 
 unset PYTHONPATH PYTHONHOME
 source "$REPO/.venv/bin/activate"
@@ -65,18 +64,7 @@ idiom_grpo \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
     reward.module=null \
-    reward.entropy.enabled=true \
-    reward.entropy.weight=1.0 \
-    reward.entropy.target_entropy=3.65 \
-    reward.entropy.width=0.2 \
-    reward.length.enabled=true \
-    reward.length.weight=1.0 \
-    reward.length.target_length=100 \
-    reward.length.width=1.0 \
-    reward.rl_sae.enabled=true \
-    reward.rl_sae.weight=1.0 \
-    reward.rl_sae.signature=nucleolus \
-    reward.external='[]' \
+    reward.terms='[{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}, {reward: length, weight: 1.0, shaping: {type: quadratic, target: 100, width: 1.0}}, {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.rl_sae, weight: 1.0}]' \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \
     trainer.devices=1 \

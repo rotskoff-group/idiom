@@ -1,45 +1,66 @@
 """GRPO reward subsystem.
 
-Modules:
-    base: the reward registry and the entropy and length terms.
-    external_reward: subprocess scorers that run a reward model in its own environment.
-    rl_sae_reward: rewards for reproducing a target's SAE feature code, imported on demand.
-    compose_reward: the weighted-sum composition that LitGRPO calls.
+A reward term is a reward and its shaping: the reward reports a raw value in natural units, shaping
+says what a good value is, and the term's weight sets how much it matters. The total reward is the
+weighted sum of the shaped rewards over the configured terms.
 
-User-editable reward content — copyable in-process rewards, external scorer programs, and SAE
-signature files — lives in the repository's top-level rewards/ directory.
+Modules:
+    registry: the reward registry and the per-batch context rewards receive.
+    rewards: the built-in rewards (composition entropy, length).
+    shaping: the shaping rules a term can apply to a raw reward, and their registry.
+    external: subprocess scorers that run a reward model in its own environment.
+    rl_sae: rewards for reproducing a target's SAE feature code, imported on demand.
+    compose: config validation and the weighted-sum composition that LitGRPO calls.
+
+User-editable reward content -- copyable in-process rewards, external scorer programs, and SAE
+signature files -- lives in the repository's top-level rewards/ directory.
 """
 
-from idiom.train.grpo.reward.base import (
-    REWARD_REGISTRY,
-    entropy_reward,
-    get_reward,
-    length_reward,
-    quadratic_penalty,
-    register_reward,
-    resolve_reward,
-    sequence_entropy,
+from idiom.train.grpo.reward.compose import (
+    TermSpec,
+    build_reward,
+    import_module_spec,
+    parse_terms,
 )
-from idiom.train.grpo.reward.compose_reward import build_reward_terms
-from idiom.train.grpo.reward.external_reward import (
+from idiom.train.grpo.reward.external import (
     Scorer,
     make_external_reward,
     parse_response,
-    target_penalty,
+)
+from idiom.train.grpo.reward.rewards import sequence_entropy, sequence_length
+from idiom.train.grpo.reward.registry import (
+    REWARD_REGISTRY,
+    Batch,
+    get_reward,
+    register_reward,
+)
+from idiom.train.grpo.reward.shaping import (
+    SHAPING_REGISTRY,
+    build_shaping,
+    gaussian_score,
+    quadratic_penalty,
+    register_shaping,
+    tolerance,
 )
 
 __all__ = [
     "REWARD_REGISTRY",
+    "SHAPING_REGISTRY",
+    "Batch",
     "Scorer",
-    "build_reward_terms",
-    "entropy_reward",
+    "TermSpec",
+    "build_reward",
+    "build_shaping",
+    "gaussian_score",
     "get_reward",
-    "length_reward",
+    "import_module_spec",
     "make_external_reward",
     "parse_response",
+    "parse_terms",
     "quadratic_penalty",
     "register_reward",
-    "resolve_reward",
+    "register_shaping",
     "sequence_entropy",
-    "target_penalty",
+    "sequence_length",
+    "tolerance",
 ]

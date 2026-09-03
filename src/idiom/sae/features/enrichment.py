@@ -10,6 +10,10 @@ top_features keeps the strongest as a signature.
 Features whose strongest firings sit at an IDR's first or last residues detect the excision
 boundary rather than a motif; boundary_features identifies them and top_features drops them by
 default.
+
+load_sequences and length_match prepare the two sets: the first reads a FASTA whether or not its
+headers carry an IDR span, the second samples a background whose length distribution follows the
+positive set's, without which length-tracking features dominate the result.
 """
 
 from __future__ import annotations
@@ -19,6 +23,8 @@ import math
 from pathlib import Path
 
 import numpy as np
+
+from idiom.data.io import Record, parse_idr_header, read_fasta
 
 # Enrichment thresholds (the published signatures were built with exactly these).
 MIN_TOTAL_FIRE = 5      # a feature must fire in >= this many sequences overall to be tested
@@ -278,3 +284,72 @@ def write_signature(path, signatures: dict[str, list[int]], *, case: str = "top3
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(blob, indent=1))
     return out
+
+
+def load_sequences(path) -> list[Record]:
+    """Read a FASTA into Records, tolerating headers with no _IDR_x-y span.
+
+    A set you want to test is often just a list of sequences rather than IDiom-curated records, so
+    a header without a usable span is read as a record whose whole sequence is the IDR.
+
+    Args:
+        path (str | Path): FASTA file.
+
+    Returns:
+        list[Record]: One record per sequence, in file order.
+    """
+    out = []
+    for header, seq in read_fasta(path):
+        try:
+            acc, start, end = parse_idr_header(header)
+            if not 0 <= start < end <= len(seq):
+                raise ValueError
+        except ValueError:
+            acc, start, end = header.split()[0], 0, len(seq)  # no span: the whole sequence is the IDR
+        out.append(Record(acc, seq, start, end))
+    return out
+
+
+def length_match(positives, background, *, n, rng, bin_width=20):
+    """Sample a background whose IDR-length distribution follows the positive set's.
+
+    Features that merely track length look enriched when the two sets have different length
+    distributions, which they usually do. Matching removes most of that artifact. Length bins the
+    background cannot fill are topped up from the rest of it, so the result is always as close to n
+    as the pool allows.
+
+    Args:
+        positives (list[Record]): Positive records.
+        background (list[Record]): Candidate background records.
+        n (int): Target background size.
+        rng (np.random.Generator): Random source.
+        bin_width (int): Length-bin width in residues.
+
+    Returns:
+        list[Record]: The sampled background.
+    """
+    def _bin(r):
+        return (r.idr_end - r.idr_start) // bin_width
+
+    pools: dict[int, list] = {}
+    for r in background:
+        pools.setdefault(_bin(r), []).append(r)
+
+    pos_bins, counts = np.unique([_bin(r) for r in positives], return_counts=True)
+    weights = counts / counts.sum()
+    picked, shortfall = [], 0
+    for b, w in zip(pos_bins.tolist(), weights.tolist()):
+        want = int(round(w * n))
+        pool = pools.get(b, [])
+        take = min(want, len(pool))
+        if take:
+            idx = rng.choice(len(pool), size=take, replace=False)
+            picked.extend(pool[i] for i in idx)
+        shortfall += want - take
+    if shortfall > 0:  # bins the background could not fill: top up from anywhere
+        chosen = {id(r) for r in picked}
+        rest = [r for r in background if id(r) not in chosen]
+        if rest:
+            idx = rng.choice(len(rest), size=min(shortfall, len(rest)), replace=False)
+            picked.extend(rest[i] for i in idx)
+    return picked

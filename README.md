@@ -137,76 +137,98 @@ idiom_train data.train_fasta=corpus.fasta model.n_layers=24 model.d_model=1024
 idiom_train --config-name sft init_from=jxliu2/idiom-300M data.train_fasta=sft.fasta   # init_from: HF repo id, released dir, or .ckpt
 ```
 
-**GRPO post-training** optimizes a reward over generated IDRs. The reward is a **weighted sum of
-terms** — entropy and length guardrails, an RL-SAE feature-code reward, and any number of external
-reward models — configured in `src/idiom/configs/grpo.yaml`:
+**GRPO post-training** optimizes a reward over generated IDRs. A reward term is a **reward** and its
+**shaping**: the reward reports one raw value in its own units — bits, residues, angstroms, a
+fraction — and the shaping says what a good value is. The total is the weighted sum of the shaped
+rewards, configured in `src/idiom/configs/grpo.yaml`:
 
 ```yaml
 reward:
-  entropy: {enabled: true,  weight: 1.0, target_entropy: 3.65, width: 0.2}   # naturalness guardrail
-  length:  {enabled: true,  weight: 1.0, target_length: 100, width: 1.0}
-  rl_sae:  {enabled: false, weight: 1.0, signature: nucleolus}
-  external: []
+  terms:
+    - {reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}  # bits
+    - {reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}  # residues
 ```
 
-`total = Σ weightᵢ · termᵢ`, and that total drives the GRPO advantages. Toggle a term with
-`enabled`, scale it with `weight`.
+`total = Σ weightᵢ · shapingᵢ(rewardᵢ)`, and that total drives the GRPO advantages. The split is what
+keeps the config small: any reward can be aimed at a target or used raw without being rewritten,
+and the same one can appear twice under different labels. Shaping types are
+`quadratic` (0 at the target, −1 one `width` out, unbounded below), `gaussian` (the bounded version,
+for when several targets have to coexist), `zscore` (standardized within each rollout group), or
+omitted, which uses the raw value.
 
-**RL toward SAE features (RL-SAE).** The `rl_sae` term rewards a model for reproducing a target's
-interpretable SAE feature code, scored through a frozen IDiom base + SAE as a fixed lens — so a
-reward gain requires encoding the real code, not merely satisfying a classifier. The reward model is
-IDiom itself, so it needs no third-party dependency and runs straight after `uv sync`:
+Two ways to take a term out, and they differ: `weight: 0` keeps it running and logged (watch a
+quantity without optimizing it), while `enabled: false` skips it entirely — nothing imported, no
+subprocess, no per-step cost. The shipped `grpo.yaml` uses the latter to carry a menu of ready-made
+terms (RL-SAE, an in-process reward, an external scorer) that cost nothing until you switch one on:
 
 ```bash
-idiom_grpo init_from=jxliu2/idiom-300M reward.rl_sae.enabled=true reward.rl_sae.signature=nucleolus
+idiom_grpo init_from=jxliu2/idiom-300M reward.terms.2.enabled=true   # term 2 is the RL-SAE one
+```
+
+Every enabled term is logged twice — `<label>` is what it contributed to the objective,
+`<label>_raw` its raw reward — so a length term reads 98 residues alongside its penalty. A
+malformed term fails when the config is parsed, before the model loads; a disabled one is not
+validated at all, which is what lets the menu name things this environment cannot import.
+
+**RL toward SAE features (RL-SAE).** The `sae_only_<signature>` rewards score a model on
+reproducing a target's interpretable SAE feature code, scored through a frozen IDiom base + SAE as a
+fixed lens — so a reward gain requires encoding the real code, not merely satisfying a classifier.
+The reward model is IDiom itself, so it needs no third-party dependency and runs straight after
+`uv sync`. The raw reward is already a fraction in [0, 1] and needs no shaping; `module` imports the
+lens on demand, which is what keeps it out of runs that leave the term off. It ships as term 2 of
+the default config, switched off:
+
+```bash
+idiom_grpo init_from=jxliu2/idiom-300M \
+  reward.terms.2.enabled=true reward.terms.2.reward=sae_only_nucleolus
 ```
 
 Signatures ship in `rewards/rl_sae_targets/` for the released SAE (cases `top30` and `private30`, select
 with `IDIOM_SAEREWARD_CASE`). **Build a signature from your own sequences** with
-`examples/python/05_feature_enrichment.py` and point `IDIOM_SAEREWARD_FEATURES` at it.
+`examples/notebooks/feature_enrichment.ipynb` and point `IDIOM_SAEREWARD_FEATURES` at it.
 
-**Bring your own reward model.** Each `external` term is either a simple in-process Python function
-or a command that runs a reward model in its own environment (for one whose dependencies conflict
-with IDiom's — a different python, torch, or CUDA). The editable reward content lives in `rewards/`:
-`example_rewards.py` (copy-me in-process rewards), `external_scorers/` (external programs), and
+**Bring your own reward model.** A term names either a registered in-process reward or a command
+that runs a reward model in its own environment (for one whose dependencies conflict with IDiom's —
+a different python, torch, or CUDA). The editable reward content lives in `rewards/`:
+`custom_rewards.py` (copy-me in-process rewards), `external_rewards/` (external programs), and
 `rl_sae_targets/` (SAE signatures).
 
-*In-process* — register an `f(idr) -> float` in a module and name it (copy `rewards/example_rewards.py`):
+*In-process* — register an `f(idr) -> float` in a module and name it (copy `rewards/custom_rewards.py`):
 
 ```yaml
-reward.external:
-  - {enabled: true, weight: 1.0, name: aromatic_fraction, module: rewards/example_rewards.py}
+reward.terms:
+  - {reward: aromatic_fraction, module: rewards/custom_rewards.py, weight: 1.0,
+     shaping: {type: gaussian, target: 0.15, width: 0.5}}
 ```
 
-*A command in its own environment* — no install step; let uv build and cache the environment on
-demand, so the config is all you write:
+*A command in its own environment* — no install step. The scorer declares its own dependencies in a
+[PEP 723](https://peps.python.org/pep-0723/) header, so uv builds and caches that environment on
+demand and the config only names the script:
 
 ```yaml
 # design IDRs with a radius of gyration near 25 A, scored by sparrow in its own environment
-reward.external:
-  - {enabled: true, weight: 0.5, target: 25, width: 0.2,
-     cmd: "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration"}
+reward.terms:
+  - {cmd: "uv run --script rewards/external_rewards/sparrow.py --property radius_of_gyration",
+     label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}
 ```
 
-The scorer returns a **raw value**; the term's `target`/`width` shape it with a quadratic penalty
-toward the target — the same form as the entropy/length guardrails (0 at the target, negative away,
-`width` a fractional tolerance, so `0.2` reaches −1 at a 20% deviation) — kept on the IDiom side so
-you retune the objective without touching that environment. `monitor: true` logs a term without
-adding it to the total, and because each command lives in the config, several external rewards — each
-its own environment and target — combine in one run. Point uv's cache at scratch and verify a command
-before spending a GPU allocation:
+`cmd` also takes a list of arguments (`[python, /path/my scorer.py, --flag, value]`) when shell
+quoting gets in the way. The scorer returns a **raw reward** and stops there; shaping it stays on the
+IDiom side, so the objective is retuned without touching that environment. Because each command
+lives in the config, several external rewards — each its own environment and target — combine in one
+run. Point uv's cache at scratch and verify a command before spending a GPU allocation:
 
 ```bash
 export UV_CACHE_DIR=/scratch/you/uv-cache   # several GB; keep it off your home directory
-uv run python -m idiom.train.grpo.reward.external_reward \
-  --cmd "uv run --isolated --no-project --with 'sparrow @ git+https://github.com/idptools/sparrow.git' python rewards/external_scorers/sparrow.py --property radius_of_gyration" \
-  --target 25 --width 0.2
+uv run python -m idiom.train.grpo.reward.external \
+  --cmd "uv run --script rewards/external_rewards/sparrow.py --property radius_of_gyration" \
+  --shaping quadratic --target 25 --width 0.2
 ```
 
 uv builds the environment once at the startup handshake (~30s for sparrow, which needs a C compiler;
-every run after is a cache hit); pin `@<commit>` for a reproducible build.
+every run after is a cache hit); pin `@<commit>` in the script's header for a reproducible build.
 
-**Writing a scorer.** A scorer is a standalone program — copy `rewards/external_scorers/example.py` — that
+**Writing a scorer.** A scorer is a standalone program — copy `rewards/external_rewards/sparrow.py` — that
 speaks newline-delimited JSON on stdin/stdout, one exchange per GRPO step, importing nothing from
 IDiom:
 
@@ -220,9 +242,11 @@ can't silently corrupt training); flush after each response; keep stdout for the
 logs to stderr; and load the model once at import (the process is reused for the whole run). Since it
 imports nothing from IDiom, the same `cmd` form covers an on-demand uv env, a pre-built venv
 (`/path/venv/bin/python …`), a conda env (`conda run -n env python …`), or a container
-(`docker run -i …`). The worked example is [sparrow](https://github.com/idptools/sparrow) (biophysics:
-radius of gyration, asphericity, scaling exponent, charge patterning); `rewards/external_scorers/example.py` is
-the bare template.
+(`docker run -i …`). The worked example is
+[`rewards/external_rewards/sparrow.py`](rewards/external_rewards/sparrow.py), which wraps
+[sparrow](https://github.com/idptools/sparrow) for biophysics (radius of gyration, asphericity,
+scaling exponent, charge patterning); strip its `value()` down to your own model and the rest of the
+file is the protocol boilerplate you keep.
 
 ## Command-line reference
 
@@ -281,8 +305,8 @@ under CC BY 4.0, inherited from AlphaFold DB / UniProt; the code in this reposit
 | Path | Role |
 |------|------|
 | `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train` (pretrain/SFT/GRPO), `sae` (SAEs + steering + features + eval), `utils`, public `IDiom`/`IDiomSAE` API |
-| `rewards/` | user-editable GRPO reward content: `rl_sae_targets/` (SAE signatures), a copy-me in-process reward, and `external_scorers/` (external models) |
-| `examples/` | runnable examples: `python/` scripts (generation, embeddings, SAE features + steering, enrichment + logos, SFT, RL), `slurm/` sbatch templates, and small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
+| `rewards/` | user-editable GRPO reward content: `rl_sae_targets/` (SAE signatures), a copy-me in-process reward, and `external_rewards/` (external models) |
+| `examples/` | `notebooks/` (generation and embeddings, SAE features + steering, enrichment + logos, reward terms), `slurm/` training scripts (pretrain, SFT, GRPO, SAE), and small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
 | `assets/` | static assets (figures for docs) |
 | `tests/` | unit/integration tests for the library |
 

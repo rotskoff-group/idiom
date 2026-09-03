@@ -8,7 +8,7 @@ os.environ.setdefault("IDIOM_DEVICE", "cpu")
 import pytest
 import torch
 
-import reward_fixtures  # registers fraction_proline/fraction_alanine for tests
+import reward_fixtures  # registers the fraction_proline/fraction_alanine rewards
 
 
 @pytest.fixture(autouse=True)
