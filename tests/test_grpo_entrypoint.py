@@ -51,7 +51,7 @@ def test_build_reward_composes():
 def test_shipped_example_rewards_register():
     # the shipped example file registers via the reward.module mechanism, from wherever it is
     # installed (it lives inside the package now, so this holds for a wheel too)
-    from idiom.rewards import rewards_path
+    from idiom.configs import rewards_path
     from idiom.train.grpo.reward import Batch, get_reward, import_module_spec
 
     import_module_spec(str(rewards_path("custom_rewards.py")))
@@ -98,7 +98,7 @@ def test_shipped_config_reward_paths_resolve():
     from omegaconf import OmegaConf
 
     import idiom.configs  # noqa: F401 - registers the resolver
-    from idiom.rewards import rewards_path
+    from idiom.configs import rewards_path
 
     cfg = OmegaConf.load(Path(idiom.configs.__file__).parent / "grpo.yaml")
     resolved = OmegaConf.to_container(cfg.reward, resolve=True)

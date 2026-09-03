@@ -11,9 +11,9 @@ Modules:
     compose: config validation and the weighted-sum composition that LitGRPO calls.
 
 The rewards themselves are not here: every one that ships -- the entropy and length guardrails, the
-charge and motif examples, the SAE feature reward, and the external scorer programs -- lives in
-idiom.rewards, so that all reward content sits in one editable place. This package is the machinery
-that registers, shapes, and composes them.
+charge and motif examples, the SAE feature reward, and the external scorer programs -- lives in the
+repository's top-level rewards/ directory, as material you edit rather than library code. This
+package is the machinery that registers, shapes, and composes them, and it imports none of it.
 """
 
 from idiom.train.grpo.reward.compose import (

@@ -651,7 +651,8 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Generate IDRs with IDiom (writes a FASTA).")
     p.add_argument("mode", choices=["unprompted", "prompted"],
                    help="unprompted = de novo (no flanks); prompted = in-filled in flanking context")
-    p.add_argument("--model", required=True, help="HF repo id (e.g. jxliu2/idiom-300M) or local dir")
+    p.add_argument("--model", required=True,
+                   help="HF repo id (e.g. jxliu2/idiom-300M), a released dir, or a training .ckpt")
     p.add_argument("--out", required=True, help="output FASTA")
     p.add_argument("--n", type=int, default=1000, help="sequences (unprompted) or per protein (prompted)")
     p.add_argument("--fasta", help="prompted mode: input proteins with _IDR_x-y headers")
@@ -670,7 +671,7 @@ def main(argv: list[str] | None = None) -> None:
                    help="max sequences per model forward (chunks each draw to bound memory)")
     args = p.parse_args(argv)
 
-    model = IDiom.from_pretrained(args.model)
+    model = IDiom.load(args.model)  # a .ckpt from a training run, a released dir, or a Hub id
     kw = dict(max_new_tokens=args.max_new_tokens, temperature=args.temperature,
               top_k=args.top_k, top_p=args.top_p, batch_size=args.batch_size)
     if args.seed is not None:

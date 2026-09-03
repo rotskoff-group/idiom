@@ -15,7 +15,15 @@ import pytest
 from omegaconf import OmegaConf
 
 from idiom.train.grpo.reward import build_reward, quadratic_penalty, register_reward
-from idiom.rewards.custom_rewards import sequence_entropy as entropy
+from idiom.configs import rewards_path
+from idiom.train.grpo.reward import Batch, get_reward, import_module_spec
+
+import_module_spec(str(rewards_path("custom_rewards.py")))  # registers entropy and length
+
+
+def entropy(idr: str) -> float:
+    """The shipped entropy reward, as a scalar, for the explicit-arithmetic expectation below."""
+    return get_reward("entropy")([idr], Batch())[0]
 
 GUARDRAILS = [
     {"reward": "entropy", "weight": 0.1, "shaping": {"type": "quadratic", "target": 3.68, "width": 0.2}},

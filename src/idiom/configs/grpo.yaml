@@ -78,13 +78,15 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
     # The other shipped scorers, each self-contained: the PEP 723 header is the environment and any
     # weights are fetched on first use. See the reward section of the top-level README.md.
 
-    # Interaction chemistry: epsilon < 0 is attractive (FUS-LC-like is about -8.5, IDiom's base
-    # generations +3.3), so a negative target designs self-attractive, condensate-prone IDRs.
+    # Interaction chemistry: epsilon < 0 is attractive, so a negative target designs
+    # self-attractive, condensate-prone IDRs. Base generations average +3.6 (sd 7.0) and an
+    # FUS-LC-like tract is about -8.5; the width keeps a starting sequence about one unit under,
+    # comparable to the guardrails, rather than swamping them.
     - enabled: false
       cmd: "uv run --script ${idiom_rewards:external_rewards/finches.py} --mode homotypic"
       label: eps
       weight: 1.0
-      shaping: {type: quadratic, target: -6.0, width: 0.3}
+      shaping: {type: quadratic, target: -6.0, width: 1.0}
 
     # Condensate compartment probability from ProtGPS (ESM-2). Already in [0, 1], so no shaping.
     - enabled: false
@@ -93,22 +95,24 @@ reward: # total = sum over enabled terms of weight * shaping(reward(idr))
       weight: 1.0
 
     # Transcriptional activation strength (PADDLE, max Z over 53-residue windows). Natural
-    # activation domains score about 3-8, IDiom's base generations near 0; the Z-scale needs no
-    # shaping if you simply want it as high as possible.
+    # activation domains score about 3-8 and base generations +0.9 (sd 1.7); the Z-scale needs no
+    # shaping if you simply want it as high as possible, and the weight keeps a strong domain from
+    # dwarfing the guardrails.
     - enabled: false
       cmd: "uv run --script ${idiom_rewards:external_rewards/paddle.py}"
       label: paddle
-      weight: 1.0
+      weight: 0.5
       timeout: 600.0
 
     # Phase-separation thermodynamics (PSpred): transfer free energy in kT, trained on CALVADOS
-    # simulations. LAF1 scores about -6 kT and poly-GS about +0.3, so a negative target designs
-    # sequences that phase-separate readily. --target logcdil_mgml gives saturation concentration.
+    # simulations. More negative phase-separates more readily: base generations average -0.1
+    # (sd 0.8), and LAF1 -- a 170-residue LLPS driver -- reaches -6.1, so -3 is a demanding but
+    # reachable target at the default length. --target logcdil_mgml gives saturation concentration.
     - enabled: false
       cmd: "uv run --script ${idiom_rewards:external_rewards/pspred.py} --target dG"
       label: dG
       weight: 1.0
-      shaping: {type: quadratic, target: -6.0, width: 0.3}
+      shaping: {type: quadratic, target: -3.0, width: 1.0}
 
     # Ensemble dimensions from a STARLING-generated conformational ensemble: the same quantity
     # sparrow regresses, sampled instead. About 9 s per step on a GPU, so give it a long timeout.

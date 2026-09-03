@@ -16,7 +16,7 @@ from idiom.train.grpo.reward.external import (
     make_external_reward,
     parse_response,
 )
-from idiom.rewards import rewards_path
+from idiom.configs import rewards_path
 from idiom.train.grpo.reward.registry import Batch
 
 

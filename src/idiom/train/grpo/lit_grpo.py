@@ -8,7 +8,9 @@ Prompts within a batch must be equal length.
 from __future__ import annotations
 
 import copy
+import math
 import random
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict
 
@@ -20,8 +22,26 @@ from idiom.model.config import ModelConfig
 from idiom.model.io import load_model
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
-from idiom.rewards.custom_rewards import sequence_entropy
 from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs
+
+
+def _composition_entropy(idr: str) -> float:
+    """Return the Shannon entropy of an IDR's composition in bits, for logging.
+
+    The same quantity the entropy reward reports, computed here so the metric is logged whether or
+    not a run configures that term. The rewards themselves live in the repository's rewards/
+    directory, which the library does not import.
+
+    Args:
+        idr (str): The decoded IDR residue string.
+
+    Returns:
+        float: Composition entropy in bits, or 0.0 for an empty string.
+    """
+    if not idr:
+        return 0.0
+    n = len(idr)
+    return -sum((c / n) * math.log2(c / n) for c in Counter(idr).values()) or 0.0
 
 
 class LitGRPO(L.LightningModule):
@@ -194,7 +214,7 @@ class LitGRPO(L.LightningModule):
         )
 
         seq_len = torch.tensor([float(len(idr)) for idr in idrs], device=rep.device)
-        seq_ent = torch.tensor([sequence_entropy(idr) for idr in idrs], device=rep.device)
+        seq_ent = torch.tensor([_composition_entropy(idr) for idr in idrs], device=rep.device)
         metrics = {
             "trainer/global_step": float(self.global_step),  # real step -> W&B x-axis (see run())
             "train/loss": loss,

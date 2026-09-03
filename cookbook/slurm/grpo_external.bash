@@ -32,7 +32,7 @@ export UV_CACHE_DIR="${UV_CACHE_DIR:-/scratch/$USER/uv-cache}"  # EDIT: an on-de
 PROPERTY=radius_of_gyration                       # EDIT: any sparrow property
 TARGET=25                                         # EDIT: in the property's units
 WIDTH=0.2                                         # EDIT: tolerance as a fraction of the target
-SCORER="uv run --script $(python -c 'from idiom.rewards import rewards_path; print(rewards_path("external_rewards/sparrow.py"))') --property $PROPERTY"
+SCORER="uv run --script $(python -c 'from idiom.configs import rewards_path; print(rewards_path("external_rewards/sparrow.py"))') --property $PROPERTY"
 
 unset PYTHONPATH PYTHONHOME
 source "$REPO/.venv/bin/activate"
