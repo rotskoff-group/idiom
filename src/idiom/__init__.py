@@ -15,7 +15,7 @@ Example:
     sae.encode("proteins.fasta")
 """
 
-from idiom.utils.api import IDiom, IDiomSAE
+from idiom.api import IDiom, IDiomSAE
 from idiom.data import fim
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.config import ModelConfig

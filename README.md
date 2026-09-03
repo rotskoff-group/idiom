@@ -403,7 +403,7 @@ under CC BY 4.0, inherited from AlphaFold DB / UniProt; the code in this reposit
 
 | Path | Role |
 |------|------|
-| `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train/` one package per training method (`autoreg` = pretraining and SFT, `grpo` = RL post-training), `sae/` (`model`, `train`, `steer`, `features`, `eval`), `rewards/` (shipped reward content), `rewards/` (shipped reward content), `utils/` (helpers plus the public `IDiom`/`IDiomSAE` API in `api.py`) |
+| `src/idiom/` | the library: `data` (tokenizer/FIM/dataset), `model` (transformer + KV cache + sampling), `train/` one package per training method (`autoreg` = pretraining and SFT, `grpo` = RL post-training), `sae/` (`model`, `train`, `steer`, `features`, `eval`), `rewards/` (shipped reward content), `rewards/` (shipped reward content), `utils`, public `IDiom`/`IDiomSAE` API in `api.py` |
 
 | `cookbook/` | `scripts/` (generation and embeddings, SAE features + steering, enrichment + logos), `slurm/` training scripts (pretrain, SFT, GRPO, SAE), and small input sets in `example_data/` (ProtGPS + AD/RD IDRs) |
 | `assets/` | static assets (figures for docs) |

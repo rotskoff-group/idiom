@@ -48,7 +48,7 @@ def test_generate_prompted_and_fasta(tmp_path):
 
 
 def test_generate_cli(tmp_path):
-    from idiom.utils.api import main
+    from idiom.api import main
 
     _idiom().save_pretrained(tmp_path / "rel")
     out = tmp_path / "idps.fasta"
