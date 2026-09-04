@@ -1,31 +1,23 @@
 #!/bin/bash
-#SBATCH --job-name=idiom-sae
-#SBATCH --time=24:00:00
-#SBATCH --nodes=1
-#SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
-#SBATCH --partition=gpu
-#SBATCH --output=./slurm_out/slurm-%j.out
 
 set -euo pipefail
 
 ###
 # Train a top-k SAE, streaming activations from a frozen IDiom (no activation cache on disk).
-# layer must be < n_layers (18 matches the released idiomsae-300M-L18-k32); expansion_factor=32
-# gives 32 x d_model latents. Resume by hand with resume_from=<ckpt>.
+# layer must be < n_layers; expansion_factor=32 gives 32 x d_model latents.
+# Needs: 1 GPU, ~24 h.
 ###
 
-REPO=/path/to/idiom                     # EDIT
-OUT=/path/to/runs/sae                   # EDIT: keep runs out of the repo
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+cd "$REPO"
+if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+
+OUT="${IDIOM_OUT:-$REPO/runs}/sae"
 FASTA=/path/to/records.fasta            # EDIT
 
-source /path/to/venv/bin/activate       # EDIT
-cd "$REPO"
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then mkdir -p slurm_out; fi   # #SBATCH --output writes here
-export WANDB_MODE=offline               # `wandb login` and set online for live logging
+export WANDB_MODE=offline
 
-idiom_sae \
+idiom_train_sae \
     seed=0 \
     device=auto \
     model_ckpt=jxliu2/idiom-300M \

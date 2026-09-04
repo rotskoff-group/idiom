@@ -176,15 +176,15 @@ print(f"wrote {out / 'logos.png'}")
 # at it and append the term to the guardrails grpo.yaml already carries:
 #
 #     IDIOM_SAEREWARD_FEATURES=<signature> IDIOM_SAEREWARD_CASE=top30 \
-#       idiom_grpo init_from=jxliu2/idiom-300M \
+#       idiom_train_grpo init_from=jxliu2/idiom-300M \
 #         reward.add='[{reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature,
 #                       weight: 1.0}]'
 #
-# For a real run use the Slurm template, which sets the same thing:
-# sbatch cookbook/scripts/bash/grpo/sae_features.bash.
+# For a real run use the training script, which sets the same thing:
+# bash cookbook/scripts/bash/grpo/sae_features.bash.
 
 term = f"{{reward: sae_only_{NAME}, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}}"
 print(f"\nnext: IDIOM_SAEREWARD_FEATURES={sig_path} IDIOM_SAEREWARD_CASE={CASE} \\")
-print("        idiom_grpo init_from=jxliu2/idiom-300M \\")
+print("        idiom_train_grpo init_from=jxliu2/idiom-300M \\")
 print(f"          reward.add='[{term}]'")
-print(f"\nor: sbatch cookbook/scripts/bash/grpo/sae_features.bash   # SIGNATURE={NAME}")
+print(f"\nor: bash cookbook/scripts/bash/grpo/sae_features.bash   # SIGNATURE={NAME}")

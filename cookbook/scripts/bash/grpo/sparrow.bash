@@ -1,46 +1,33 @@
 #!/bin/bash
-#SBATCH --job-name=idiom-grpo-sparrow
-#SBATCH --time=12:00:00
-#SBATCH --nodes=1
-#SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
-#SBATCH --partition=gpu
-#SBATCH --output=./slurm_out/slurm-%j.out
 
 set -euo pipefail
 
 ###
-# GRPO toward a single-chain dimension predicted by sparrow (ALBATROSS) -- the worked external-reward
-# example: the scorer runs in its own uv environment and imports nothing from IDiom.
-#
-# Base generations sit at 26.9 +/- 15.7 A, so a target of 25 with width 0.2 (+/- 5 A) is about one
-# width out, comparable to the guardrails.
+# GRPO toward a single-chain dimension predicted by sparrow (ALBATROSS); the scorer runs in its own
+# uv environment and imports nothing from IDiom. Base generations sit at 26.9 +/- 15.7 A.
+# Needs: 1 GPU, ~12 h.
 ###
 
-REPO=/path/to/idiom                     # EDIT
-OUT=/path/to/runs/grpo-sparrow          # EDIT: keep runs out of the repo
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+cd "$REPO"
+if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-sparrow"
 
 PROPERTY=radius_of_gyration             # EDIT: any ALBATROSS predictor or sequence parameter
 TARGET=25                               # EDIT: in the property's units
 WIDTH=0.2                               # EDIT: tolerance as a fraction of the target
-WEIGHT=0.5                              # EDIT: keep the step-0 contribution near the guardrails'
+WEIGHT=0.5                              # EDIT: keep the step-0 contribution near the guardrails
 SCORER="uv run --script cookbook/rewards/scorers/sparrow.py --property $PROPERTY"
 
-source /path/to/venv/bin/activate       # EDIT
-cd "$REPO"
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then mkdir -p slurm_out; fi   # #SBATCH --output writes here
-export WANDB_MODE=offline               # `wandb login` and set online for live logging
-export UV_CACHE_DIR=/path/to/uv-cache   # EDIT: an on-demand env is several GB
+export WANDB_MODE=offline
 
-# Build the scorer's environment and check it answers, before taking the GPU. The first build
-# downloads and compiles; every run after is a uv cache hit.
+# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, appended to the entropy and length guardrails the config already carries.
 TERM="{cmd: \"$SCORER\", label: $PROPERTY, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
-idiom_grpo \
+idiom_train_grpo \
     seed=0 \
     device=auto \
     init_from=jxliu2/idiom-300M \

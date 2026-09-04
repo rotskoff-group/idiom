@@ -1,45 +1,31 @@
 #!/bin/bash
-#SBATCH --job-name=idiom-grpo-paddle
-#SBATCH --time=16:00:00
-#SBATCH --nodes=1
-#SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
-#SBATCH --partition=gpu
-#SBATCH --output=./slurm_out/slurm-%j.out
 
 set -euo pipefail
 
 ###
 # GRPO toward transcriptional activation strength, scored by PADDLE (max Z over 53-residue windows).
-# PADDLE-noSS runs from sequence alone; uv builds its TensorFlow environment from the script header.
-#
-# The raw reward is a Z-score against PADDLE's background, so it is already on a usable scale: base
-# generations sit at +0.9 (sd 1.7), strong natural activation domains at 3-8. Left unshaped to
-# maximize; the weight is what keeps it from dwarfing the guardrails. ~3 s per step.
+# Already a Z-score, so unshaped: base +0.9 (sd 1.7), strong natural ADs 3-8. ~3 s per step.
+# Needs: 1 GPU, ~16 h.
 ###
 
-REPO=/path/to/idiom                     # EDIT
-OUT=/path/to/runs/grpo-paddle           # EDIT: keep runs out of the repo
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+cd "$REPO"
+if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-paddle"
 
 WEIGHT=0.5                              # EDIT: Z-scale is unbounded above; keep this modest
 TIMEOUT=600.0
 SCORER="uv run --script cookbook/rewards/scorers/paddle.py"
 
-source /path/to/venv/bin/activate       # EDIT
-cd "$REPO"
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then mkdir -p slurm_out; fi   # #SBATCH --output writes here
-export WANDB_MODE=offline               # `wandb login` and set online for live logging
-export UV_CACHE_DIR=/path/to/uv-cache   # EDIT: an on-demand env is several GB
+export WANDB_MODE=offline
 
-# Build the scorer's environment and check it answers, before taking the GPU. The first build
-# downloads and compiles; every run after is a uv cache hit.
+# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, appended to the entropy and length guardrails the config already carries.
 TERM="{cmd: \"$SCORER\", label: paddle, weight: $WEIGHT, timeout: $TIMEOUT}"
 
-idiom_grpo \
+idiom_train_grpo \
     seed=0 \
     device=auto \
     init_from=jxliu2/idiom-300M \

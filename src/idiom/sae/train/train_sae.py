@@ -1,4 +1,4 @@
-"""The idiom_sae entrypoint.
+"""The idiom_train_sae entrypoint.
 
 build(cfg) wires the frozen host model, the record source, the streaming ActivationStore, and the
 LitSAE module; run(cfg) fits and writes the release directory.

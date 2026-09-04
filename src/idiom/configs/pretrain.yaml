@@ -1,5 +1,5 @@
 # Pretraining config. Every key is overridable on the CLI, e.g.:
-#   idiom_train data.train_fasta=/path/train.fasta model.n_layers=12 model.d_model=768
+#   idiom_train_autoreg data.train_fasta=/path/train.fasta model.n_layers=12 model.d_model=768
 seed: 0
 device: auto # auto | cpu | cuda
 init_from: null # weights-only warm start from a .ckpt (see sft.yaml)

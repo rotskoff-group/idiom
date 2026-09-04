@@ -134,7 +134,7 @@ Steering modes are `add_direction` (default), `clamp`, and `ablate`; `normalize`
 ```bash
 idiom_feature_dataset --sae jxliu2/idiomsae-300M-L18-k32 --fasta records.fasta --out features/
 streamlit run src/idiom/sae/features/feature_viewer.py -- --features features/
-idiom_sae model_ckpt=/path/model.ckpt data.fasta=/path/records.fasta layer=18 sae.k=32
+idiom_train_sae model_ckpt=/path/model.ckpt data.fasta=/path/records.fasta layer=18 sae.k=32
 ```
 
 The same dataset reads from Python — rank features by how often they fire, then pull the sequences
@@ -158,8 +158,8 @@ Hydra CLIs over flat YAMLs in `src/idiom/configs/`. For real runs start from the
 
 ```bash
 idiom_build_store --fasta corpus.fasta          # memory-mapped record store, recommended at scale
-idiom_train data.train_fasta=corpus.fasta model.n_layers=24 model.d_model=1024
-idiom_train --config-name sft init_from=jxliu2/idiom-300M data.train_fasta=sft.fasta
+idiom_train_autoreg data.train_fasta=corpus.fasta model.n_layers=24 model.d_model=1024
+idiom_train_autoreg --config-name sft init_from=jxliu2/idiom-300M data.train_fasta=sft.fasta
 ```
 
 The `model:` block above is the released 300M architecture; 85M is 12L/768/12 and 20M is 6L/512/8
@@ -171,20 +171,20 @@ length guardrails; **what a run optimizes is chosen at launch**, by name, from a
 tuned terms — SAE feature codes, six external reward models, and the built-in composition rewards:
 
 ```bash
-idiom_grpo init_from=jxliu2/idiom-300M reward.add=[sae]
+idiom_train_grpo init_from=jxliu2/idiom-300M reward.add=[sae]
 ```
 
 Names compose and stay addressable as the menu grows, which list positions do not:
 
 ```bash
-idiom_grpo init_from=jxliu2/idiom-300M reward.add=[sae,rg] \
+idiom_train_grpo init_from=jxliu2/idiom-300M reward.add=[sae,rg] \
   reward.presets.rg.shaping.target=30
 ```
 
 Your own reward needs no entry in the menu — pass the whole term:
 
 ```bash
-idiom_grpo init_from=jxliu2/idiom-300M \
+idiom_train_grpo init_from=jxliu2/idiom-300M \
   reward.add='[{reward: "mypackage.scoring:score_idr", weight: 1.0}]'
 ```
 
@@ -225,7 +225,7 @@ reloads in one call. Anywhere a model is named — `init_from`, `idiom_generate 
 Keep your own configs in your own project rather than forking the shipped one:
 
 ```yaml
-# my_grpo.yaml — idiom_grpo --config-dir . --config-name my_grpo
+# my_grpo.yaml — idiom_train_grpo --config-dir . --config-name my_grpo
 defaults: [grpo, _self_]
 init_from: jxliu2/idiom-300M
 reward:
@@ -242,9 +242,9 @@ reward:
 |---------|------|
 | `idiom_generate` | generate unprompted/prompted IDRs to a FASTA |
 | `idiom_extract` | export residual-stream embeddings from a FASTA |
-| `idiom_train` | pretrain (and SFT via `--config-name sft`) |
-| `idiom_grpo` | GRPO / RL post-training against a reward |
-| `idiom_sae` | train a top-k SAE on a layer |
+| `idiom_train_autoreg` | pretrain (and SFT via `--config-name sft`) |
+| `idiom_train_grpo` | GRPO / RL post-training against a reward |
+| `idiom_train_sae` | train a top-k SAE on a layer |
 | `idiom_feature_dataset` | build the per-residue SAE feature dataset |
 | `idiom_build_store` | build a memory-mapped record store from a record FASTA |
 

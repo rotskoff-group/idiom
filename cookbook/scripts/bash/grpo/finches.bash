@@ -1,47 +1,33 @@
 #!/bin/bash
-#SBATCH --job-name=idiom-grpo-finches
-#SBATCH --time=12:00:00
-#SBATCH --nodes=1
-#SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
-#SBATCH --partition=gpu
-#SBATCH --output=./slurm_out/slurm-%j.out
 
 set -euo pipefail
 
 ###
-# GRPO toward attractive interaction chemistry, scored by FINCHES (epsilon, from a coarse-grained
-# force field). Negative epsilon is attractive, so a negative target designs self-attractive,
-# condensate-prone IDRs.
-#
-# Base generations average +3.6 (sd 7.0); an FUS-LC-like aromatic tract is about -8.5. The width
-# below keeps a starting sequence about one unit under rather than swamping the guardrails.
+# GRPO toward attractive interaction chemistry, scored by FINCHES. Negative epsilon is attractive.
+# Base generations average +3.6 (sd 7.0); an FUS-LC-like aromatic tract is about -8.5.
+# Needs: 1 GPU, ~12 h.
 ###
 
-REPO=/path/to/idiom                     # EDIT
-OUT=/path/to/runs/grpo-finches          # EDIT: keep runs out of the repo
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+cd "$REPO"
+if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-finches"
 
 MODE=homotypic                          # EDIT: homotypic, or heterotypic with --partner
 TARGET=-6.0                             # EDIT: epsilon; negative is attractive
-WIDTH=1.0                               # EDIT: absolute here, since epsilon crosses zero
+WIDTH=1.0                               # EDIT: absolute, since epsilon crosses zero
 WEIGHT=1.0
 SCORER="uv run --script cookbook/rewards/scorers/finches.py --mode $MODE"
 
-source /path/to/venv/bin/activate       # EDIT
-cd "$REPO"
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then mkdir -p slurm_out; fi   # #SBATCH --output writes here
-export WANDB_MODE=offline               # `wandb login` and set online for live logging
-export UV_CACHE_DIR=/path/to/uv-cache   # EDIT: an on-demand env is several GB
+export WANDB_MODE=offline
 
-# Build the scorer's environment and check it answers, before taking the GPU. The first build
-# downloads and compiles; every run after is a uv cache hit.
+# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, appended to the entropy and length guardrails the config already carries.
 TERM="{cmd: \"$SCORER\", label: eps, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
-idiom_grpo \
+idiom_train_grpo \
     seed=0 \
     device=auto \
     init_from=jxliu2/idiom-300M \

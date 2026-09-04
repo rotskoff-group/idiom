@@ -1,35 +1,27 @@
 #!/bin/bash
-#SBATCH --job-name=idiom-pretrain
-#SBATCH --time=7-00:00:00
-#SBATCH --nodes=1
-#SBATCH --gpus-per-node=8
-#SBATCH --cpus-per-task=32          # data.num_workers x trainer.devices
-#SBATCH --mem-per-cpu=16GB
-#SBATCH --partition=gpu
-#SBATCH --output=./slurm_out/slurm-%j.out
 
 set -euo pipefail
 
 ###
 # Pretrain IDiom 24L (~345M params) on 1024-token FIM. Global batch = 32 x 8 GPUs x 4 accum = 1024.
-# No srun: one task owns the node and Lightning launches one process per GPU (trainer.devices=8).
+# Lightning launches one process per GPU itself; do not wrap this in a launcher.
+# Needs: 8 GPUs, ~7 days.
 ###
 
-REPO=/path/to/idiom                     # EDIT
-OUT=/path/to/runs/pretrain              # EDIT: keep runs out of the repo
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+cd "$REPO"
+if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+
+OUT="${IDIOM_OUT:-$REPO/runs}/pretrain"
 TRAIN_FASTA=/path/to/train.fasta        # EDIT
 VAL_FASTA=/path/to/validation.fasta     # EDIT
 
-source /path/to/venv/bin/activate       # EDIT
-cd "$REPO"
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then mkdir -p slurm_out; fi   # #SBATCH --output writes here
-export WANDB_MODE=offline               # `wandb login` and set online for live logging
+export WANDB_MODE=offline
 
-# Resume from the rolling checkpoint if one is there; otherwise start fresh.
 RESUME=""
 if [[ -f "$OUT/checkpoints/last.ckpt" ]]; then RESUME="resume_from=$OUT/checkpoints/last.ckpt"; fi
 
-idiom_train \
+idiom_train_autoreg \
     ${RESUME} \
     seed=0 \
     device=auto \

@@ -1,34 +1,26 @@
 #!/bin/bash
-#SBATCH --job-name=idiom-sft
-#SBATCH --time=08:00:00
-#SBATCH --nodes=1
-#SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
-#SBATCH --partition=gpu
-#SBATCH --output=./slurm_out/slurm-%j.out
 
 set -euo pipefail
 
 ###
 # Warm-start a released model and specialize it on one curated set (completion-only loss).
-# init_from takes a HF repo id, a released dir, or a .ckpt. The example set is whole-sequence
-# IDRs with no flanks, so train the unprompted form (data.prompted_prob=0.0).
+# The example set is whole-sequence IDRs with no flanks, so train unprompted (data.prompted_prob=0.0).
+# Needs: 1 GPU, ~8 h.
 ###
 
-REPO=/path/to/idiom                     # EDIT
-OUT=/path/to/runs/sft                   # EDIT: keep runs out of the repo
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+cd "$REPO"
+if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+
+OUT="${IDIOM_OUT:-$REPO/runs}/sft"
 TRAIN_FASTA=cookbook/example_data/protgps/nucleolus.fasta   # EDIT
 
-source /path/to/venv/bin/activate       # EDIT
-cd "$REPO"
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then mkdir -p slurm_out; fi   # #SBATCH --output writes here
-export WANDB_MODE=offline               # `wandb login` and set online for live logging
+export WANDB_MODE=offline
 
 RESUME=""
 if [[ -f "$OUT/checkpoints/last.ckpt" ]]; then RESUME="resume_from=$OUT/checkpoints/last.ckpt"; fi
 
-idiom_train --config-name sft \
+idiom_train_autoreg --config-name sft \
     ${RESUME} \
     seed=0 \
     device=auto \

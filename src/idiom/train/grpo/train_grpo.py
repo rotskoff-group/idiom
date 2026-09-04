@@ -1,4 +1,4 @@
-"""The idiom_grpo entrypoint.
+"""The idiom_train_grpo entrypoint.
 
 build(cfg) wires the GRPO module and its prompt dataset; run(cfg) configures the trainer and fits.
 The reward is a weighted sum of the terms enabled in cfg.reward; see configs/grpo.yaml.

@@ -1,6 +1,6 @@
 # SFT config. Same LightningModule as pretraining; differs only by the completion-only loss mask
 # and the warm start from init_from.
-#   idiom_train --config-name sft init_from=jxliu2/idiom-20M data.train_fasta=/path/sft.fasta
+#   idiom_train_autoreg --config-name sft init_from=jxliu2/idiom-20M data.train_fasta=/path/sft.fasta
 seed: 0
 device: auto
 init_from: ??? # required: base to fine-tune (a .ckpt, a released dir, or a HF repo id)

@@ -1,46 +1,33 @@
 #!/bin/bash
-#SBATCH --job-name=idiom-grpo-pspred
-#SBATCH --time=12:00:00
-#SBATCH --nodes=1
-#SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
-#SBATCH --partition=gpu
-#SBATCH --output=./slurm_out/slurm-%j.out
 
 set -euo pipefail
 
 ###
-# GRPO toward phase-separation thermodynamics, scored by PSpred (trained on CALVADOS simulations).
-#
-# The raw reward is a physical quantity, so a target means something: dG is transfer free energy in
-# kT, more negative phase-separating more readily. Base generations average -0.1 (sd 0.8) and LAF1,
-# a 170-residue LLPS driver, reaches -6.1 -- so -3 is demanding but reachable at the default length.
+# GRPO toward phase-separation thermodynamics, scored by PSpred. dG is transfer free energy in kT.
+# Base generations average -0.1 (sd 0.8); LAF1, a 170-residue LLPS driver, reaches -6.1.
+# Needs: 1 GPU, ~12 h.
 ###
 
-REPO=/path/to/idiom                     # EDIT
-OUT=/path/to/runs/grpo-pspred           # EDIT: keep runs out of the repo
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+cd "$REPO"
+if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-pspred"
 
 TARGET_KIND=dG                          # EDIT: dG | logcdil_mgml | cdil_mgml
 TARGET=-3.0                             # EDIT: in kT for dG
-WIDTH=1.0                               # EDIT: absolute here, since dG crosses zero
+WIDTH=1.0                               # EDIT: absolute, since dG crosses zero
 WEIGHT=1.0
 SCORER="uv run --script cookbook/rewards/scorers/pspred.py --target $TARGET_KIND"
 
-source /path/to/venv/bin/activate       # EDIT
-cd "$REPO"
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then mkdir -p slurm_out; fi   # #SBATCH --output writes here
-export WANDB_MODE=offline               # `wandb login` and set online for live logging
-export UV_CACHE_DIR=/path/to/uv-cache   # EDIT: an on-demand env is several GB
+export WANDB_MODE=offline
 
-# Build the scorer's environment and check it answers, before taking the GPU. The first build
-# downloads and compiles; every run after is a uv cache hit.
+# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, appended to the entropy and length guardrails the config already carries.
 TERM="{cmd: \"$SCORER\", label: $TARGET_KIND, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
-idiom_grpo \
+idiom_train_grpo \
     seed=0 \
     device=auto \
     init_from=jxliu2/idiom-300M \

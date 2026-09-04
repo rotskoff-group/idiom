@@ -7,7 +7,7 @@ method (DPO, say) is added as a sibling rather than by editing what is here.
 Modules:
     lit_autoreg: the LightningModule shared by pretraining and SFT.
     schedulers: the warmup-cosine learning-rate schedule.
-    train_autoreg: the idiom_train entrypoint.
+    train_autoreg: the idiom_train_autoreg entrypoint.
 """
 
 from idiom.train.autoreg.lit_autoreg import LitAutoregressive

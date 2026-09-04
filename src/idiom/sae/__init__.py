@@ -6,7 +6,7 @@ reapplied by the downstream tools.
 
 Subpackages:
     model: the top-k SparseCoder and the release format (sae_config.json + sae.safetensors).
-    train: the streaming ActivationStore, LitSAE, and the idiom_sae entrypoint.
+    train: the streaming ActivationStore, LitSAE, and the idiom_train_sae entrypoint.
     features: the per-residue feature-activation dataset, its reader, enrichment, and the viewer.
     steer: residual-stream hooks and feature-steered generation.
 """

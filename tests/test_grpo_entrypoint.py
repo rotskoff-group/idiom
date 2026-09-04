@@ -157,7 +157,7 @@ def test_shipped_config_enabled_terms_need_no_repository(tmp_path, monkeypatch):
     """The terms that are ON by default must build from the package alone.
 
     A disabled term may name anything, but an enabled one runs on step 1, so if the guardrails
-    needed a file outside the wheel, idiom_grpo would be dead on arrival for a pip install. Running
+    needed a file outside the wheel, idiom_train_grpo would be dead on arrival for a pip install. Running
     from an unrelated working directory is the check: nothing may resolve relative to the cwd.
     """
     import idiom.configs

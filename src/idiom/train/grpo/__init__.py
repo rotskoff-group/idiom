@@ -4,7 +4,7 @@ Modules:
     core: the GRPO objective as pure tensor functions.
     data: prompt datasets and their collate function.
     lit_grpo: the LightningModule running rollout, reward, and the GRPO step.
-    train_grpo: the idiom_grpo entrypoint.
+    train_grpo: the idiom_train_grpo entrypoint.
     reward: the reward and shaping registries and the total-reward composition.
 """
 

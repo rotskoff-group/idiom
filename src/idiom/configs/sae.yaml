@@ -1,5 +1,5 @@
 # SAE training config. Activations stream from a frozen IDiom; none are cached to disk.
-#   idiom_sae model_ckpt=jxliu2/idiom-300M data.fasta=/path/records.fasta layer=18
+#   idiom_train_sae model_ckpt=jxliu2/idiom-300M data.fasta=/path/records.fasta layer=18
 seed: 0
 device: auto
 model_ckpt: ??? # required: frozen base (a .ckpt, a released dir, or a HF repo id); arch read from it

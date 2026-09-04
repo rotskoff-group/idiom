@@ -1,4 +1,4 @@
-"""The idiom_train entrypoint, covering pretraining and SFT.
+"""The idiom_train_autoreg entrypoint, covering pretraining and SFT.
 
 build(cfg) wires the module and datamodule; run(cfg) configures the trainer and fits. SFT is
 selected by config alone (--config-name sft), which sets init_from for the warm start and
@@ -104,7 +104,7 @@ def run(cfg: DictConfig) -> None:
             filename="epoch_{epoch}_step_{step}", auto_insert_metric_name=False,
         ))
     # Force Lightning's own subprocess launcher even under SLURM: trainer.devices=N then spawns N
-    # local ranks itself (one per GPU on this node), matching the project's direct idiom_train
+    # local ranks itself (one per GPU on this node), matching the project's direct idiom_train_autoreg
     # invocation. Otherwise Lightning auto-detects SLURM_* and expects srun --ntasks=N to launch the
     # ranks -> with --ntasks=1 it runs a single rank on 1 GPU. (Also disables SLURM auto-requeue.)
     trainer = L.Trainer(

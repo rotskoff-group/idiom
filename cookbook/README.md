@@ -40,7 +40,7 @@ post-trains a model to reproduce that feature code.
 
 ```bash
 uv run cookbook/scripts/python/feature_enrichment.py   # -> example_data/sae_features/signature.json
-sbatch cookbook/scripts/bash/grpo/sae_features.bash    # set SIGNATURE=<name> at the top
+bash cookbook/scripts/bash/grpo/sae_features.bash      # set SIGNATURE=<name> at the top
 ```
 
 The training script reads the signature the walkthrough wrote, and refuses to start if it is not
@@ -48,29 +48,38 @@ there, so the two stay in step without either one hard-coding a path you have to
 
 ## `scripts/bash/` — training scripts
 
-Examples, not turnkey jobs: each spells out every config value as a Hydra override, so a run is
-reproducible from the script alone, and every path in them is a placeholder. They work either way —
-with a scheduler or without:
+Plain bash, no scheduler. Each spells out every config value as a Hydra override, so a run is
+reproducible from the script alone:
 
 ```bash
-sbatch cookbook/scripts/bash/pretrain.bash   # #SBATCH header applies
-bash cookbook/scripts/bash/sft.bash          # no scheduler; #SBATCH lines are comments
+bash cookbook/scripts/bash/sft.bash
 ```
 
-**Edit before running:** the `#SBATCH` header for your cluster; `REPO`, `OUT`, the venv passed to
-`source`, and the data paths — all `/path/to/...` placeholders; `UV_CACHE_DIR` if you use an
-external reward. W&B is offline by default — `wandb login` and set `WANDB_MODE=online` for live
-logging.
+They locate the repository from their own path and `cd` there, so they run from any directory and
+activate `.venv/` if it is there. Output goes to `runs/<name>/`, or `$IDIOM_OUT/<name>` if that is
+set. Nothing else is required — the remaining `# EDIT` markers are the *choices* a run makes
+(target, width, weight, which property or compartment), not plumbing.
 
-**Multi-GPU: no `srun`.** One Slurm task owns the node and Lightning launches one process per GPU
-from `trainer.devices`, so `--gpus-per-node == trainer.devices` and `--cpus-per-task` covers all
-DataLoader workers. `data.batch_size` is per GPU; global batch is
+`pretrain.bash` and `train_sae.bash` are the exception: they need a corpus, so `TRAIN_FASTA` and
+`VAL_FASTA` stay placeholders. Each script opens with what it needs — `# Needs: 1 GPU, ~12 h`.
+W&B is offline by default; `wandb login` and set `WANDB_MODE=online` for live logging.
+
+**To submit to a scheduler**, wrap rather than edit — the scripts take no arguments and read no
+scheduler variables:
+
+```bash
+sbatch --gpus-per-node=1 --cpus-per-task=8 --time=12:00:00 \
+    --wrap "bash $PWD/cookbook/scripts/bash/grpo/sparrow.bash"
+```
+
+**Multi-GPU.** Lightning launches one process per GPU from `trainer.devices`, so do not put a
+launcher in front of these. `data.batch_size` is per GPU; global batch is
 `batch_size × devices × accumulate_grad_batches`. For multi-node, launch with `srun`,
-`--ntasks-per-node = gpus-per-node`, and `+trainer.num_nodes=$SLURM_NNODES`.
+one task per GPU, and `+trainer.num_nodes=<N>`.
 
 **Resuming.** `pretrain.bash` and `sft.bash` pick up `$OUT/checkpoints/last.ckpt` automatically, so
-re-submitting after a timeout continues (optimizer, step, schedule, RNG). GRPO and SAE keep only a
-final checkpoint — pass `resume_from=<ckpt>` by hand, or set `trainer.checkpoint_every=<N>`.
+re-running after an interruption continues (optimizer, step, schedule, RNG). GRPO and SAE keep only
+a final checkpoint — pass `resume_from=<ckpt>` by hand, or set `trainer.checkpoint_every=<N>`.
 
 Every script warm-starts from anything `model/io.load_model` accepts: a HF repo id, a released
 directory, or a `.ckpt`. Training on a FASTA builds a memory-mapped `<fasta>.idiomstore/` sidecar
@@ -133,14 +142,14 @@ without optimizing it; `enabled: false` skips it entirely (nothing imported, no 
 command line, appended with `reward.add`, and several compose in the order you name them:
 
 ```bash
-idiom_grpo init_from=jxliu2/idiom-300M \
+idiom_train_grpo init_from=jxliu2/idiom-300M \
   reward.add='[{reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}]'
 
-idiom_grpo init_from=jxliu2/idiom-300M \
+idiom_train_grpo init_from=jxliu2/idiom-300M \
   reward.add='[{cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
                 label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}]'
 
-idiom_grpo init_from=jxliu2/idiom-300M reward.add="[$SAE_TERM, $RG_TERM]"
+idiom_train_grpo init_from=jxliu2/idiom-300M reward.add="[$SAE_TERM, $RG_TERM]"
 ```
 
 An entry may also be a **name** from `reward.presets`, which is how you keep a tuned term without
@@ -313,7 +322,7 @@ also covers a pre-built venv, a conda env, or `docker run -i`.
 ## `example_data/`
 
 Demo-sized subsets (≤150 records) of curated IDR sets, with `_IDR_x-y` headers, so each drops
-straight into `sae.encode`, `idiom_train`, and the enrichment pipeline. Not the full datasets used
+straight into `sae.encode`, `idiom_train_autoreg`, and the enrichment pipeline. Not the full datasets used
 in the paper.
 
 ```
