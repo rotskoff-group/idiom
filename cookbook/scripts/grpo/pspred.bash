@@ -3,32 +3,29 @@
 set -euo pipefail
 
 ###
-# GRPO toward an ensemble dimension sampled by STARLING -- what sparrow regresses, generated from a
-# conformational ensemble instead. Needs its own GPU; with one card, drop SCORER_CUDA_DEVICE.
-# Needs: 2 GPUs, ~24 h.
+# GRPO toward phase-separation thermodynamics, scored by PSpred. dG is transfer free energy in kT.
+# Base generations average -0.1 (sd 0.8); LAF1, a 170-residue LLPS driver, reaches -6.1.
+# Needs: 1 GPU, ~12 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-starling"
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-pspred"
 
-PROPERTY=radius_of_gyration             # EDIT: radius_of_gyration | end_to_end_distance
-TARGET=25                               # EDIT: in angstroms
-WIDTH=0.2                               # EDIT: tolerance as a fraction of the target
+TARGET_KIND=dG                          # EDIT: dG | logcdil_mgml | cdil_mgml
+TARGET=-3.0                             # EDIT: in kT for dG
+WIDTH=1.0                               # EDIT: absolute, since dG crosses zero
 WEIGHT=1.0
-TIMEOUT=900.0                           # ~9 s per step
-SCORER_CUDA_DEVICE=1                    # EDIT: the scorer's GPU
-SCORER="env CUDA_VISIBLE_DEVICES=$SCORER_CUDA_DEVICE uv run --script cookbook/rewards/scorers/starling.py --property $PROPERTY"
+SCORER="uv run --script cookbook/rewards/scorers/pspred.py --target $TARGET_KIND"
 
 export WANDB_MODE=offline
-export CUDA_VISIBLE_DEVICES=0           # the policy keeps GPU 0
 
 # Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-TERM="{cmd: \"$SCORER\", label: rg_ens, weight: $WEIGHT, timeout: $TIMEOUT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
+TERM="{cmd: \"$SCORER\", label: $TARGET_KIND, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \
     seed=0 \

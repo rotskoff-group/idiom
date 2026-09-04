@@ -143,7 +143,7 @@ def test_the_shipped_objective_is_the_guardrails_and_nothing_else():
     """Out of the box a run optimizes only entropy and length, and `add` is the extension point.
 
     The config ships inert on purpose: what a run designs for is named at launch (see
-    cookbook/scripts/bash/), so nothing is silently optimizing on somebody's behalf.
+    cookbook/scripts/), so nothing is silently optimizing on somebody's behalf.
     """
     import idiom.configs
 

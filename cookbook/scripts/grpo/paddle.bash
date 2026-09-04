@@ -3,23 +3,27 @@
 set -euo pipefail
 
 ###
-# GRPO toward a reward you wrote, running in this interpreter. Three ways to name it below; keep one.
-# If it needs its own python or torch, use my_scorer.bash instead.
-# Needs: 1 GPU, ~12 h.
+# GRPO toward transcriptional activation strength, scored by PADDLE (max Z over 53-residue windows).
+# Already a Z-score, so unshaped: base +0.9 (sd 1.7), strong natural ADs 3-8. ~3 s per step.
+# Needs: 1 GPU, ~16 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-my-reward"
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-paddle"
 
-# EDIT: pick ONE.
-TERM="{reward: fraction_charged, module: cookbook/rewards/my_rewards.py, weight: 1.0, shaping: {type: gaussian, target: 0.25, width: 0.5}}"
-# TERM="{reward: \"mypackage.scoring:score_idr\", label: mine, weight: 1.0}"                    # any importable callable
-# TERM="{reward: \"mypackage.scoring:score_batch\", label: mine, batched: true, weight: 1.0}"   # f(idrs, batch), scored a step at a time
+WEIGHT=0.5                              # EDIT: Z-scale is unbounded above; keep this modest
+TIMEOUT=600.0
+SCORER="uv run --script cookbook/rewards/scorers/paddle.py"
 
 export WANDB_MODE=offline
+
+# Check the scorer answers before taking the GPU.
+python -m idiom.train.grpo.reward.external --cmd "$SCORER"
+
+TERM="{cmd: \"$SCORER\", label: paddle, weight: $WEIGHT, timeout: $TIMEOUT}"
 
 idiom_train_grpo \
     seed=0 \

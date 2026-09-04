@@ -4,25 +4,29 @@ set -euo pipefail
 
 ###
 # GRPO toward an SAE feature signature (RL-SAE). Scores the fraction of a signature firing in an
-# IDR; already in [0, 1], so no shaping. Run feature_enrichment.py first to write the signature.
+# IDR; already in [0, 1], so no shaping. Run the feature_enrichment notebook first to write the signature.
 # Needs: 1 GPU, ~12 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
 OUT="${IDIOM_OUT:-$REPO/runs}/grpo-sae"
 
-SIGNATURE=nucleolus                     # EDIT: the NAME feature_enrichment.py wrote
-FEATURES="$REPO/cookbook/example_data/sae_features/signature.json"
+SIGNATURE=nucleolus                     # EDIT: the NAME the feature_enrichment notebook wrote
+
+# The signature JSON the feature_enrichment notebook writes. Set IDIOM_SIGNATURE to point at it,
+# or drop it at $REPO/signature.json (which is where you'd save it out of Colab).
+FEATURES="${IDIOM_SIGNATURE:-$REPO/signature.json}"
 export IDIOM_SAEREWARD_FEATURES="$FEATURES"
-export IDIOM_SAEREWARD_CASE=top30       # the CASE feature_enrichment.py wrote
+export IDIOM_SAEREWARD_CASE=top30       # the CASE the feature_enrichment notebook wrote
 
 export WANDB_MODE=offline
 
 if [[ ! -f "$FEATURES" ]]; then
-    echo "no signature at $FEATURES -- run cookbook/scripts/python/feature_enrichment.py first" >&2
+    echo "no signature at $FEATURES -- run the cookbook/notebooks/feature_enrichment.ipynb" >&2
+    echo "notebook first, then save its signature.json there (or set IDIOM_SIGNATURE)." >&2
     exit 1
 fi
 

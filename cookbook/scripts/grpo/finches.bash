@@ -3,29 +3,29 @@
 set -euo pipefail
 
 ###
-# GRPO toward a single-chain dimension predicted by sparrow (ALBATROSS); the scorer runs in its own
-# uv environment and imports nothing from IDiom. Base generations sit at 26.9 +/- 15.7 A.
+# GRPO toward attractive interaction chemistry, scored by FINCHES. Negative epsilon is attractive.
+# Base generations average +3.6 (sd 7.0); an FUS-LC-like aromatic tract is about -8.5.
 # Needs: 1 GPU, ~12 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-sparrow"
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-finches"
 
-PROPERTY=radius_of_gyration             # EDIT: any ALBATROSS predictor or sequence parameter
-TARGET=25                               # EDIT: in the property's units
-WIDTH=0.2                               # EDIT: tolerance as a fraction of the target
-WEIGHT=0.5                              # EDIT: keep the step-0 contribution near the guardrails
-SCORER="uv run --script cookbook/rewards/scorers/sparrow.py --property $PROPERTY"
+MODE=homotypic                          # EDIT: homotypic, or heterotypic with --partner
+TARGET=-6.0                             # EDIT: epsilon; negative is attractive
+WIDTH=1.0                               # EDIT: absolute, since epsilon crosses zero
+WEIGHT=1.0
+SCORER="uv run --script cookbook/rewards/scorers/finches.py --mode $MODE"
 
 export WANDB_MODE=offline
 
 # Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-TERM="{cmd: \"$SCORER\", label: $PROPERTY, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
+TERM="{cmd: \"$SCORER\", label: eps, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \
     seed=0 \

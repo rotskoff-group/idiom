@@ -5,7 +5,7 @@
 """Template for a reward model in its own environment. Copy this file and edit it.
 
 **Use this only when the scorer cannot be imported into IDiom's environment.** If it can, a term
-naming an in-process function is simpler and much faster -- see my_rewards.py. A subprocess to call
+naming an in-process function is simpler and much faster -- see custom_rewards.py. A subprocess to call
 something you could have imported is pure overhead. The reason this mechanism exists is that some
 predictors pin dependencies IDiom cannot hold: ProtGPS wants python 3.8 with torch 2.0, PADDLE wants
 TensorFlow. This script pins `numpy<2` to stand in for that -- a real and common source of conflict.
@@ -15,7 +15,7 @@ a conda environment, or `docker run -i`. Its dependencies live in the PEP 723 he
 run --script` builds and caches the environment on first use and there is no install step.
 
     reward.terms:
-      - {cmd: "uv run --script /path/to/my_scorer.py --property isoelectric_point",
+      - {cmd: "uv run --script /path/to/custom_scorer.py --property isoelectric_point",
          label: pI, weight: 1.0, shaping: {type: gaussian, target: 4.5, width: 0.3}}
 
 The protocol is newline-delimited JSON, one exchange per GRPO step:
@@ -30,7 +30,7 @@ Check it before it ever takes a GPU -- this builds the environment, runs the han
 what the shaping does to the raw value:
 
     uv run python -m idiom.train.grpo.reward.external \
-        --cmd "uv run --script cookbook/rewards/my_scorer.py --property isoelectric_point" \
+        --cmd "uv run --script cookbook/rewards/scorers/custom_scorer.py --property isoelectric_point" \
         --shaping gaussian --target 4.5 --width 0.3
 
 What this one computes: isoelectric point and molecular weight, from Biopython. pI is a real handle
@@ -45,7 +45,7 @@ import os
 import sys
 
 # TRAP 1: this file's own directory is sys.path[0], so a script named after the package it wraps
-# shadows it ("my_scorer.py" is safe; "sparrow.py" importing sparrow is not). Dropping it is free
+# shadows it ("custom_scorer.py" is safe; "sparrow.py" importing sparrow is not). Dropping it is free
 # insurance, and you will need it as soon as you rename this file after your predictor.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _HERE]

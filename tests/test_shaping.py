@@ -9,8 +9,10 @@ whole point of validating there is that a typo must not survive until the first 
 import math
 
 import pytest
+from omegaconf import OmegaConf
 
 from idiom.train.grpo.reward import (
+    build_reward,
     build_shaping,
     gaussian_score,
     quadratic_penalty,
@@ -61,3 +63,20 @@ def test_build_shaping_rejects_a_bad_spec():
         build_shaping({"type": "quadratic"})               # quadratic without a target
     with pytest.raises(ValueError, match="bad parameters"):
         build_shaping({"type": "quadratic", "target": 1, "min": 2})  # a parameter it does not take
+
+
+def test_a_user_module_can_register_a_shaping_type(tmp_path):
+    # reward.module is imported before any shaping is built (cookbook/rewards/custom_shaping.py)
+    mod = tmp_path / "my_shaping.py"
+    mod.write_text(
+        "from idiom.train.grpo.reward import register_shaping, tolerance\n"
+        "@register_shaping('_one_sided')\n"
+        "def _one_sided(*, target, width=1.0):\n"
+        "    scale = tolerance(target, width)\n"
+        "    return lambda v: -(((target - v) / scale) ** 2) if v < target else 0.0\n"
+    )
+    cfg = OmegaConf.create({"module": str(mod), "terms": [
+        {"reward": "length", "weight": 1.0, "shaping": {"type": "_one_sided", "target": 10, "width": 0.5}},
+    ]})
+    totals, _ = build_reward(cfg)(["A" * 20, "A" * 10, "A" * 5], 1)
+    assert totals == [0.0, 0.0, pytest.approx(-1.0)]  # flat above the threshold, penalized below

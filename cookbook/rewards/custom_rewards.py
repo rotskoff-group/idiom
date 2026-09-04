@@ -13,7 +13,7 @@ whether you are writing new code or reaching for code you already have.
 
 1. A file (or module) that registers names, named by the term's `module`:
 
-       reward.add='[{reward: fraction_charged, module: /path/to/my_rewards.py, weight: 1.0,
+       reward.add='[{reward: fraction_charged, module: /path/to/custom_rewards.py, weight: 1.0,
                      shaping: {type: gaussian, target: 0.25, width: 0.5}}]'
 
    `module` takes a *.py path (as here) or a dotted module name. It is imported before the reward
@@ -26,14 +26,16 @@ whether you are writing new code or reaching for code you already have.
 
    This is the one to reach for when IDiom is pip-installed into an environment that already holds
    your scoring code: the term is the only thing you write. It works on this file too, because
-   @register_reward returns the function unchanged -- `my_rewards.py:fraction_charged` and
-   `{reward: fraction_charged, module: my_rewards.py}` reach the same code by different routes.
+   @register_reward returns the function unchanged -- `custom_rewards.py:fraction_charged` and
+   `{reward: fraction_charged, module: custom_rewards.py}` reach the same code by different routes.
 
 Either way nothing is imported until the term is used, and a name that cannot be resolved fails
 while the config is parsed rather than on the first training step.
 
 If your scorer's dependencies cannot coexist with IDiom's, it belongs in its own environment
 instead: see scorers/ beside this file.
+
+Shaping -- what a good value is -- registers the same way, in custom_shaping.py beside this file.
 
 Choose what you optimize with care: a reward whose optimum sits off the IDR distribution will be
 reached, and the entropy and length guardrails will not stop it. Rewarding hydrophobic composition,

@@ -8,7 +8,7 @@ set -euo pipefail
 # Needs: 1 GPU, ~8 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 

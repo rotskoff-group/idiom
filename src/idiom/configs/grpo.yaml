@@ -37,17 +37,17 @@ trainer:
 reward: # total = sum over enabled terms of weight * shaping(reward(idr))
   # The guardrails, and the only rewards the library defines. Both are built in, so they need no
   # module and no clone: together they contribute about -1.8 to a starting sequence, and every term
-  # you add should be sized against that (see the rewards section of cookbook/README.md).
+  # you add should be sized against that (see cookbook/rewards/README.md).
   terms:
     - {reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}} # bits
     - {reward: length, weight: 1.0, shaping: {type: quadratic, target: 100, width: 1.0}} # residues
 
   # What this run optimizes, appended to the guardrails. Empty here on purpose: the library takes no
   # view on what you should design for, so the objective is named at launch rather than edited in.
-  # An entry is a whole term -- see cookbook/scripts/bash/ for a ready-to-submit script per reward:
+  # An entry is a whole term -- see cookbook/scripts/ for a ready-to-submit script per reward:
   #
   #   reward.add='[{reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}]'
-  #   reward.add='[{reward: fraction_charged, module: cookbook/rewards/my_rewards.py, weight: 1.0,
+  #   reward.add='[{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0,
   #                 shaping: {type: gaussian, target: 0.25, width: 0.5}}]'
   #   reward.add='[{reward: "mypackage.scoring:score_idr", weight: 1.0}]'
   #   reward.add='[{cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",

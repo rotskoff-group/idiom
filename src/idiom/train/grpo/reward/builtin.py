@@ -7,7 +7,7 @@ so the shipped config names them with no module and nothing on disk beside it.
 
 Nothing else is built in. A reward that expresses what *you* want to design is yours to write, and
 the library should not pretend to have opinions about which ones matter: see
-cookbook/rewards/my_rewards.py, which carries worked examples (charge, motif density) as a template
+cookbook/rewards/custom_rewards.py, which carries worked examples (charge, motif density) as a template
 to copy, and cookbook/rewards/scorers/ for reward models that run in their own environment.
 
 Importing idiom.train.grpo.reward registers both, so a term names one directly:

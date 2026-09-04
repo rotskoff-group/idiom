@@ -10,7 +10,7 @@ which is what keeps torch and the SAE out of a run that does not use one:
       - {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}
 
 The targets file maps a case name to a mapping of signature name to feature ids, and can be built
-with cookbook/scripts/python/feature_enrichment.py.
+with cookbook/notebooks/feature_enrichment.ipynb.
 
 Environment variables:
     IDIOM_SAEREWARD_SAE: SAE to use as the lens, as a Hub repo id or local directory.
@@ -36,7 +36,7 @@ from idiom.train.grpo.reward.registry import register_reward
 
 # The signatures for the released SAE ship next to this module, so the default works in any install
 # and from any working directory; point IDIOM_SAEREWARD_FEATURES at your own JSON of the same shape
-# (cookbook/scripts/python/feature_enrichment.py writes one) to override.
+# (cookbook/notebooks/feature_enrichment.ipynb writes one) to override.
 _SAE_DIR = os.environ.get("IDIOM_SAEREWARD_SAE", "jxliu2/idiomsae-300M-L18-k32")
 _FEATURES = os.environ.get(
     "IDIOM_SAEREWARD_FEATURES", str(Path(__file__).resolve().parent / "sae_signatures.json"))
@@ -135,7 +135,7 @@ def _signature_names() -> list[str]:
             f"sae_feature: no signatures registered from {_FEATURES} "
             f"({type(e).__name__}: {e}). Any sae_only_* reward will now look unknown. Check "
             f"IDIOM_SAEREWARD_FEATURES (the signature JSON) and IDIOM_SAEREWARD_CASE (currently "
-            f"{_CASE!r}); build a signature with cookbook/scripts/python/feature_enrichment.py."
+            f"{_CASE!r}); build a signature with cookbook/notebooks/feature_enrichment.ipynb."
         )
         return []
 

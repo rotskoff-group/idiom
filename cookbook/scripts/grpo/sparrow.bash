@@ -3,29 +3,29 @@
 set -euo pipefail
 
 ###
-# GRPO toward phase-separation thermodynamics, scored by PSpred. dG is transfer free energy in kT.
-# Base generations average -0.1 (sd 0.8); LAF1, a 170-residue LLPS driver, reaches -6.1.
+# GRPO toward a single-chain dimension predicted by sparrow (ALBATROSS); the scorer runs in its own
+# uv environment and imports nothing from IDiom. Base generations sit at 26.9 +/- 15.7 A.
 # Needs: 1 GPU, ~12 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-pspred"
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-sparrow"
 
-TARGET_KIND=dG                          # EDIT: dG | logcdil_mgml | cdil_mgml
-TARGET=-3.0                             # EDIT: in kT for dG
-WIDTH=1.0                               # EDIT: absolute, since dG crosses zero
-WEIGHT=1.0
-SCORER="uv run --script cookbook/rewards/scorers/pspred.py --target $TARGET_KIND"
+PROPERTY=radius_of_gyration             # EDIT: any ALBATROSS predictor or sequence parameter
+TARGET=25                               # EDIT: in the property's units
+WIDTH=0.2                               # EDIT: tolerance as a fraction of the target
+WEIGHT=0.5                              # EDIT: keep the step-0 contribution near the guardrails
+SCORER="uv run --script cookbook/rewards/scorers/sparrow.py --property $PROPERTY"
 
 export WANDB_MODE=offline
 
 # Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-TERM="{cmd: \"$SCORER\", label: $TARGET_KIND, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
+TERM="{cmd: \"$SCORER\", label: $PROPERTY, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \
     seed=0 \

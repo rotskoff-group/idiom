@@ -3,29 +3,27 @@
 set -euo pipefail
 
 ###
-# GRPO toward a reward model you wrote, running in its own environment. Copy the template at
-# cookbook/rewards/scorers/my_scorer.py. Use this only when its deps cannot coexist with IDiom's.
-# Needs: 1 GPU, ~8 h.
+# GRPO toward a condensate compartment, scored by ProtGPS. Its environment pins python 3.8 and
+# torch 2.0, which is why it runs out of process. Already a probability, so no shaping.
+# Needs: 1 GPU, ~12 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-my-scorer"
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-protgps"
 
-PROPERTY=isoelectric_point              # EDIT: isoelectric_point | molecular_weight
-TARGET=4.5                              # EDIT: acidic
-WIDTH=0.3                               # EDIT: fraction of the target
+COMPARTMENT=nucleolus                   # EDIT: any of the 12, or max / mean
 WEIGHT=1.0
-SCORER="uv run --script cookbook/rewards/scorers/my_scorer.py --property $PROPERTY"
+SCORER="uv run --script cookbook/rewards/scorers/protgps.py --compartment $COMPARTMENT"
 
 export WANDB_MODE=offline
 
 # Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-TERM="{cmd: \"$SCORER\", label: $PROPERTY, weight: $WEIGHT, shaping: {type: gaussian, target: $TARGET, width: $WIDTH}}"
+TERM="{cmd: \"$SCORER\", label: protgps, weight: $WEIGHT}"
 
 idiom_train_grpo \
     seed=0 \

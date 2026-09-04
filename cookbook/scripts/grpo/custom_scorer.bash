@@ -3,29 +3,29 @@
 set -euo pipefail
 
 ###
-# GRPO toward attractive interaction chemistry, scored by FINCHES. Negative epsilon is attractive.
-# Base generations average +3.6 (sd 7.0); an FUS-LC-like aromatic tract is about -8.5.
-# Needs: 1 GPU, ~12 h.
+# GRPO toward a reward model you wrote, running in its own environment. Copy the template at
+# cookbook/rewards/scorers/custom_scorer.py. Use this only when its deps cannot coexist with IDiom's.
+# Needs: 1 GPU, ~8 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-finches"
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-my-scorer"
 
-MODE=homotypic                          # EDIT: homotypic, or heterotypic with --partner
-TARGET=-6.0                             # EDIT: epsilon; negative is attractive
-WIDTH=1.0                               # EDIT: absolute, since epsilon crosses zero
+PROPERTY=isoelectric_point              # EDIT: isoelectric_point | molecular_weight
+TARGET=4.5                              # EDIT: acidic
+WIDTH=0.3                               # EDIT: fraction of the target
 WEIGHT=1.0
-SCORER="uv run --script cookbook/rewards/scorers/finches.py --mode $MODE"
+SCORER="uv run --script cookbook/rewards/scorers/custom_scorer.py --property $PROPERTY"
 
 export WANDB_MODE=offline
 
 # Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-TERM="{cmd: \"$SCORER\", label: eps, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
+TERM="{cmd: \"$SCORER\", label: $PROPERTY, weight: $WEIGHT, shaping: {type: gaussian, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \
     seed=0 \

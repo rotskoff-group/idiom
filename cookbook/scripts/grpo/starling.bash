@@ -3,27 +3,32 @@
 set -euo pipefail
 
 ###
-# GRPO toward a condensate compartment, scored by ProtGPS. Its environment pins python 3.8 and
-# torch 2.0, which is why it runs out of process. Already a probability, so no shaping.
-# Needs: 1 GPU, ~12 h.
+# GRPO toward an ensemble dimension sampled by STARLING -- what sparrow regresses, generated from a
+# conformational ensemble instead. Needs its own GPU; with one card, drop SCORER_CUDA_DEVICE.
+# Needs: 2 GPUs, ~24 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO"
 if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-protgps"
+OUT="${IDIOM_OUT:-$REPO/runs}/grpo-starling"
 
-COMPARTMENT=nucleolus                   # EDIT: any of the 12, or max / mean
+PROPERTY=radius_of_gyration             # EDIT: radius_of_gyration | end_to_end_distance
+TARGET=25                               # EDIT: in angstroms
+WIDTH=0.2                               # EDIT: tolerance as a fraction of the target
 WEIGHT=1.0
-SCORER="uv run --script cookbook/rewards/scorers/protgps.py --compartment $COMPARTMENT"
+TIMEOUT=900.0                           # ~9 s per step
+SCORER_CUDA_DEVICE=1                    # EDIT: the scorer's GPU
+SCORER="env CUDA_VISIBLE_DEVICES=$SCORER_CUDA_DEVICE uv run --script cookbook/rewards/scorers/starling.py --property $PROPERTY"
 
 export WANDB_MODE=offline
+export CUDA_VISIBLE_DEVICES=0           # the policy keeps GPU 0
 
 # Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-TERM="{cmd: \"$SCORER\", label: protgps, weight: $WEIGHT}"
+TERM="{cmd: \"$SCORER\", label: rg_ens, weight: $WEIGHT, timeout: $TIMEOUT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \
     seed=0 \
