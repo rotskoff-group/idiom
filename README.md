@@ -107,7 +107,7 @@ from idiom.utils.perplexity import perplexity
 perplexity(model.model, "heldout.fasta", device=model.device)   # {"nll", "perplexity", "n_tokens"}
 ```
 
-Walkthrough: [`cookbook/scripts/generate_and_embed.py`](cookbook/scripts/generate_and_embed.py).
+Walkthrough: [`cookbook/scripts/python/generate_and_embed.py`](cookbook/scripts/python/generate_and_embed.py).
 
 ## Interpretability and steering
 
@@ -148,13 +148,13 @@ ids, freq, mean_act = fd.feature_ranking()
 seq_ids, scores = fd.top_sequences(ids[0], n=20)
 ```
 
-Walkthroughs: [`sae_features.py`](cookbook/scripts/sae_features.py) (read and steer),
-[`feature_enrichment.py`](cookbook/scripts/feature_enrichment.py) (what your own set shares).
+Walkthroughs: [`sae_features.py`](cookbook/scripts/python/sae_features.py) (read and steer),
+[`feature_enrichment.py`](cookbook/scripts/python/feature_enrichment.py) (what your own set shares).
 
 ## Training and RL post-training
 
 Hydra CLIs over flat YAMLs in `src/idiom/configs/`. For real runs start from the
-[cookbook's training scripts](cookbook/slurm/), which spell out every config value.
+[cookbook's training scripts](cookbook/scripts/bash/), which spell out every config value.
 
 ```bash
 idiom_build_store --fasta corpus.fasta          # memory-mapped record store, recommended at scale
@@ -203,7 +203,7 @@ reward model whose dependencies cannot coexist with IDiom's — six such scorers
 its own environment in a [PEP 723](https://peps.python.org/pep-0723/) header.
 
 **Everything about rewards — the scorers, picking targets and weights, adding your own — is in
-[`cookbook/rewards/README.md`](cookbook/rewards/README.md).**
+the `rewards/` section of [`cookbook/README.md`](cookbook/README.md).**
 
 ### After training
 

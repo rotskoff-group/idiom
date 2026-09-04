@@ -4,7 +4,7 @@ IDiom generates intrinsically disordered regions two ways -- unprompted (de novo
 prompted (in-filling an IDR between its flanks) -- and exposes the residual stream as embeddings
 for downstream models. This script covers both.
 
-    uv run cookbook/scripts/generate_and_embed.py
+    uv run cookbook/scripts/python/generate_and_embed.py
 
 A GPU is recommended; DEVICE = "auto" falls back to CPU. Edit the parameters below to point at
 another model or layer.
@@ -95,4 +95,4 @@ print("first row:", {k: index[0][k] for k in ("accession", "source_pos", "residu
 # ----
 # - sae_features.py -- read and steer the features behind these embeddings with a sparse
 #   autoencoder.
-# - cookbook/slurm/ -- pretraining, SFT, and RL templates for real runs.
+# - cookbook/scripts/bash/ -- pretraining, SFT, and RL templates for real runs.

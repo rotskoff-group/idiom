@@ -4,7 +4,7 @@ Give this script a set of sequences you care about -- a compartment, a functiona
 a screen -- and it finds which SAE features fire in them far more often than in a background,
 writes the strongest as a signature, and shows the residue grammar behind each one.
 
-    uv run cookbook/scripts/feature_enrichment.py
+    uv run cookbook/scripts/python/feature_enrichment.py
 
 The signature is directly consumable by the sae_only_<name> reward, so the end of this script is
 the command that designs new sequences carrying the same feature code.
@@ -172,7 +172,7 @@ print(f"wrote {out / 'logos.png'}")
 #         reward.add=[sae] reward.presets.sae.reward=sae_only_nucleolus
 #
 # For a real run use the Slurm template, which sets the same thing:
-# sbatch cookbook/slurm/grpo.bash.
+# sbatch cookbook/scripts/bash/grpo/sae_features.bash.
 
 print(f"\nnext: IDIOM_SAEREWARD_FEATURES={sig_path} IDIOM_SAEREWARD_CASE={CASE} \\")
 print(f"        idiom_grpo init_from=jxliu2/idiom-300M \\")

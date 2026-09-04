@@ -5,7 +5,7 @@ set of features, most of them off at any given residue. This script reads which 
 sequence, then steers generation along one of them -- pushing the model's own representation and
 watching the sequences change.
 
-    uv run cookbook/scripts/sae_features.py
+    uv run cookbook/scripts/python/sae_features.py
 
 The SAE records its host model and layer, so from_pretrained loads the pair in one call. A GPU is
 recommended; DEVICE = "auto" falls back to CPU.
