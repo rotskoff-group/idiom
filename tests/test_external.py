@@ -17,8 +17,9 @@ from idiom.train.grpo.reward.external import (
     make_external_reward,
     parse_response,
 )
-REPO = Path(__file__).resolve().parents[1]  # the scorers are repository material
 from idiom.train.grpo.reward.registry import Batch
+
+REPO = Path(__file__).resolve().parents[1]  # the scorers are repository material
 
 
 def _scorer(tmp_path, body, name="fake_scorer.py", **kw):

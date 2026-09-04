@@ -3,8 +3,8 @@
 import torch
 
 from idiom import IDiom, IDiomSAE, ModelConfig
-from idiom.model import IDiomTransformer
 from idiom.data.tokenizer import RESIDUES
+from idiom.model import IDiomTransformer
 
 TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=64)
 

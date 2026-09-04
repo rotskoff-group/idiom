@@ -23,8 +23,15 @@ from huggingface_hub import hf_hub_download
 from idiom import IDiomSAE
 from idiom.sae.features import per_sequence_activations, top_windows
 from idiom.sae.features.enrichment import (
-    FDR_ALPHA, LOG2OR_FLOOR, enrich, enriched_mask, feature_counts,
-    length_match, load_sequences, top_features, write_signature,
+    FDR_ALPHA,
+    LOG2OR_FLOOR,
+    enrich,
+    enriched_mask,
+    feature_counts,
+    length_match,
+    load_sequences,
+    top_features,
+    write_signature,
 )
 
 matplotlib.use("Agg")  # the figures are written to files, not displayed
@@ -175,5 +182,5 @@ print(f"wrote {out / 'logos.png'}")
 # sbatch cookbook/scripts/bash/grpo/sae_features.bash.
 
 print(f"\nnext: IDIOM_SAEREWARD_FEATURES={sig_path} IDIOM_SAEREWARD_CASE={CASE} \\")
-print(f"        idiom_grpo init_from=jxliu2/idiom-300M \\")
+print("        idiom_grpo init_from=jxliu2/idiom-300M \\")
 print(f"          reward.add=[sae] reward.presets.sae.reward=sae_only_{NAME}")

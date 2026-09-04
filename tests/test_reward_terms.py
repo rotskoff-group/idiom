@@ -14,8 +14,14 @@ import math
 import pytest
 from omegaconf import OmegaConf
 
-from idiom.train.grpo.reward import build_reward, quadratic_penalty, register_reward
-from idiom.train.grpo.reward import Batch, get_reward, parse_terms
+from idiom.train.grpo.reward import (
+    Batch,
+    build_reward,
+    get_reward,
+    parse_terms,
+    quadratic_penalty,
+    register_reward,
+)
 
 
 def entropy(idr: str) -> float:

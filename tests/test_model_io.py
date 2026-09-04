@@ -59,8 +59,8 @@ def test_load_model_dispatches_ckpt_and_dir(tmp_path):
 
 
 def test_lit_modules_persist_model_cfg():
-    from idiom.train.grpo.lit_grpo import LitGRPO
     from idiom.train.autoreg.lit_autoreg import LitAutoregressive
+    from idiom.train.grpo.lit_grpo import LitGRPO
 
     assert LitAutoregressive(CFG).hparams["model_cfg"] == asdict(CFG)
     assert LitGRPO(CFG, reward_fn=lambda s: 0.0).hparams["model_cfg"] == asdict(CFG)

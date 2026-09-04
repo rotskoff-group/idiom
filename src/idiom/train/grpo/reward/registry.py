@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-REWARD_REGISTRY: dict[str, Callable[[list[str], "Batch"], list[float]]] = {}
+REWARD_REGISTRY: dict[str, Callable[[list[str], Batch], list[float]]] = {}
 
 
 @dataclass(frozen=True)

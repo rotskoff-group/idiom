@@ -17,6 +17,7 @@ from pathlib import Path
 
 import torch
 from huggingface_hub import snapshot_download
+
 # aliased: this module defines its own load_model below
 from safetensors.torch import load_model as _safetensors_load_model
 

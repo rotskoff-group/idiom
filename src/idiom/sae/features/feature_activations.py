@@ -186,7 +186,8 @@ class FeatureDataset:
         if rows.size == 0:
             return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.float32)
         pos = np.asarray(self.pos_idx[rows], dtype=np.int64)
-        acts = (np.asarray(self.top_values[rows]) * (np.asarray(self.top_indices[rows]) == int(feature_id))).sum(axis=1)
+        hit = np.asarray(self.top_indices[rows]) == int(feature_id)
+        acts = (np.asarray(self.top_values[rows]) * hit).sum(axis=1)
         order_p = np.argsort(pos)
         return pos[order_p], acts[order_p].astype(np.float32)
 

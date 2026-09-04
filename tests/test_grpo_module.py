@@ -5,7 +5,7 @@ import torch
 from idiom.data.tokenizer import Tokenizer
 from idiom.model import ModelConfig
 from idiom.train.grpo import LitGRPO
-from reward_fixtures import fraction_proline
+from tests.reward_fixtures import fraction_proline
 
 TOK = Tokenizer()
 TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len=64)

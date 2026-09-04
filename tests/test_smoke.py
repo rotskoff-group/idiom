@@ -9,6 +9,8 @@ def test_package_skeleton_imports():
     import idiom.sae
     import idiom.train
 
+    assert all(m is not None for m in (idiom.data, idiom.model, idiom.sae, idiom.train))
+
 
 def test_explicit_cpu():
     assert resolve_device("cpu").type == "cpu"

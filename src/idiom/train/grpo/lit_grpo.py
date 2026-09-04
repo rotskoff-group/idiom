@@ -20,7 +20,8 @@ from idiom.model.config import ModelConfig
 from idiom.model.io import load_model
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
-from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs
+from idiom.train.grpo.core import group_advantages, grpo_loss, sequence_kl, sequence_logprobs
+
 # The entropy reward itself, so the metric is logged whether or not a run configures that term and
 # cannot drift from what the term optimizes.
 from idiom.train.grpo.reward.builtin import sequence_entropy as _composition_entropy
@@ -112,7 +113,7 @@ class LitGRPO(L.LightningModule):
         self.n_log_samples = n_log_samples
 
     @classmethod
-    def init_from_checkpoint(cls, init_from, reward_fn=None, **kwargs) -> "LitGRPO":
+    def init_from_checkpoint(cls, init_from, reward_fn=None, **kwargs) -> LitGRPO:
         """Build a module whose policy and reference both hold a pretrained model's weights.
 
         The architecture is read from the artifact rather than supplied by the caller.

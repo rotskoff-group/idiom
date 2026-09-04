@@ -1,11 +1,11 @@
 """P5 feature-dataset tests (CPU-only): build -> read -> reduce, with residue alignment."""
 
-from idiom.sae.features.build_feature_dataset import build_feature_dataset
-from idiom.sae.features.feature_activations import FeatureDataset
 from idiom.data.io import Record
 from idiom.data.tokenizer import RESIDUES, Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.sae import SparseCoder
+from idiom.sae.features.build_feature_dataset import build_feature_dataset
+from idiom.sae.features.feature_activations import FeatureDataset
 
 TOK = Tokenizer()
 TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=64)

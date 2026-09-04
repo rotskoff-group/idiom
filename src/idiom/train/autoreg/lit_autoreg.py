@@ -67,7 +67,7 @@ class LitAutoregressive(L.LightningModule):
         self.min_lr_ratio = min_lr_ratio
 
     @classmethod
-    def init_from_checkpoint(cls, init_from: str, **kwargs) -> "LitAutoregressive":
+    def init_from_checkpoint(cls, init_from: str, **kwargs) -> LitAutoregressive:
         """Build a module whose weights are warm-started from a pretrained model.
 
         The architecture is read from the artifact rather than supplied by the caller.

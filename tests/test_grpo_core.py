@@ -5,13 +5,13 @@ import math
 import torch
 
 from idiom.model import IDiomTransformer, ModelConfig
-from idiom.train.grpo import grpo_loss, group_advantages, sequence_logprobs
+from idiom.train.grpo import group_advantages, grpo_loss, sequence_logprobs
 from idiom.train.grpo.reward import (
     Batch,
     get_reward,
     quadratic_penalty,
 )
-from reward_fixtures import fraction_proline
+from tests.reward_fixtures import fraction_proline
 
 sequence_entropy = get_reward("entropy")
 sequence_length = get_reward("length")

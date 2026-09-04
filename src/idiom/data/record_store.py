@@ -47,7 +47,8 @@ def store_path_for(fasta: str | Path) -> Path:
 
 def _source_sig(fasta: str | Path) -> dict:
     st = Path(fasta).stat()
-    return {"source": str(Path(fasta).resolve()), "source_size": st.st_size, "source_mtime_ns": st.st_mtime_ns}
+    return {"source": str(Path(fasta).resolve()), "source_size": st.st_size,
+            "source_mtime_ns": st.st_mtime_ns}
 
 
 def build_record_store(
@@ -174,7 +175,8 @@ def _valid(store_dir: Path, fasta: Path) -> bool:
     if meta.get("version") != _VERSION:
         return False
     sig = _source_sig(fasta)  # rebuild if the source FASTA changed
-    return meta.get("source_size") == sig["source_size"] and meta.get("source_mtime_ns") == sig["source_mtime_ns"]
+    return (meta.get("source_size") == sig["source_size"]
+            and meta.get("source_mtime_ns") == sig["source_mtime_ns"])
 
 
 def open_or_build(

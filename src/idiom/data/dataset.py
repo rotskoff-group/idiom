@@ -117,7 +117,8 @@ class RecordDataset(Dataset):
             n_total = len(records)
             n_kept = len(self.records)
         if n_total - n_kept:
-            log.info(f"RecordDataset: dropped {n_total - n_kept} record(s) longer than max_len={self.max_len}")
+            log.info(f"RecordDataset: dropped {n_total - n_kept} record(s) longer than "
+                     f"max_len={self.max_len}")
 
     def __len__(self) -> int:
         return len(self._keep) if self.store is not None else len(self.records)

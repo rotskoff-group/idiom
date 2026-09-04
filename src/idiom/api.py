@@ -26,9 +26,7 @@ import numpy as np
 import torch
 from huggingface_hub import HfApi, snapshot_download
 from safetensors.torch import load_model, save_model
-from torch.utils.data import DataLoader
 
-from idiom.data.dataset import RecordDataset, make_collate
 from idiom.data.fim import UNPROMPTED, fim_prompt, normalize_mode
 from idiom.data.io import read_records, to_records
 from idiom.data.tokenizer import Tokenizer
@@ -119,7 +117,7 @@ class IDiom:
 
     # --- load / save (HF-style) ---
     @classmethod
-    def load(cls, name_or_path: str | Path, *, device="auto") -> "IDiom":
+    def load(cls, name_or_path: str | Path, *, device="auto") -> IDiom:
         """Load from a Lightning checkpoint, a released directory, or a Hub repo id.
 
         A path naming an existing file is read as a checkpoint; anything else is passed to
@@ -137,7 +135,7 @@ class IDiom:
         return cls.from_pretrained(name_or_path, device=device)
 
     @classmethod
-    def from_pretrained(cls, name_or_path: str | Path, *, device="auto") -> "IDiom":
+    def from_pretrained(cls, name_or_path: str | Path, *, device="auto") -> IDiom:
         """Load a released directory holding config.json and model.safetensors, or a Hub repo id.
 
         Args:
@@ -197,7 +195,7 @@ class IDiom:
         return f"https://huggingface.co/{repo_id}"
 
     @classmethod
-    def from_lightning_checkpoint(cls, ckpt_path, *, device="auto") -> "IDiom":
+    def from_lightning_checkpoint(cls, ckpt_path, *, device="auto") -> IDiom:
         """Load a Lightning checkpoint, reading the architecture from it.
 
         Args:
@@ -308,7 +306,8 @@ class IDiom:
         seqs = self.generate_unprompted(n, **kw)
         # the whole generated sequence is the IDR -> header carries the span _IDR_1-len so the
         # output is a valid record FASTA (read_records-parseable). See _idr_header.
-        return _write_fasta([(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s], out_fasta)
+        records = [(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s]
+        return _write_fasta(records, out_fasta)
 
     def generate_prompted_fasta(self, in_fasta, out_fasta, n: int = 100, *, return_full: bool = False,
                                 marker: str = "idiom_prompted", **kw) -> Path:
@@ -434,7 +433,7 @@ class IDiomSAE:
 
     # --- load / save (HF-style, mirrors IDiom) ---
     @classmethod
-    def from_pretrained(cls, name_or_path, *, model: IDiom | None = None, device="auto") -> "IDiomSAE":
+    def from_pretrained(cls, name_or_path, *, model: IDiom | None = None, device="auto") -> IDiomSAE:
         """Load a released SAE directory holding sae_config.json and sae.safetensors.
 
         Args:
