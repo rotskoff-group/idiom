@@ -1,9 +1,7 @@
 """Tests for the external-scorer adapter, driven by fake scorer subprocesses.
 
-No reward model is involved: each test writes a small script that speaks the protocol (or misbehaves
-in a specific way) and checks that the adapter handles it. The failure modes matter more than the
-happy path -- a scorer that returns the wrong number of scores would silently misalign rewards with
-completions.
+No reward model is involved: each test writes a small script that speaks the protocol, or misbehaves
+in a specific way, and checks that the adapter handles it.
 """
 
 import sys
@@ -220,12 +218,10 @@ def _scorer_path(tmp_path, name="len_scorer.py"):
 
 
 def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
-    """The shipped scorer must work, since users copy it as their starting template.
+    """The shipped sparrow scorer speaks the protocol against a stub sparrow package.
 
-    sparrow itself is a heavy build, so a stub package standing in for it is put on the child's
-    import path. That leaves the real script's argument parsing, protocol loop, and error handling
-    under test without a network round trip -- and the script strips its own directory from
-    sys.path precisely so the stub is what "import sparrow" finds.
+    sparrow itself is a heavy build, so a stub standing in for it is put on the child's import
+    path, leaving the real script's argument parsing, protocol loop, and error handling under test.
     """
     (tmp_path / "sparrow.py").write_text(textwrap.dedent("""
         class _Predictor:

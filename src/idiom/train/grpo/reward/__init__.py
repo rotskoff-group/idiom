@@ -1,29 +1,23 @@
 """GRPO reward subsystem.
 
-A reward term is a reward and its shaping: the reward reports a raw value in natural units, shaping
-says what a good value is, and the term's weight sets how much it matters. The total reward is the
-weighted sum of the shaped rewards over the configured terms.
+A reward term is a raw reward, a shaping rule, and a weight. The total reward is the weighted sum
+of the shaped rewards over the configured terms.
 
 Modules:
     registry: the reward registry and the per-batch context rewards receive.
-    builtin: the pure-python rewards that ship, registered by importing this package.
+    builtin: the entropy and length rewards, registered by importing this package.
     shaping: the shaping rules a term can apply to a raw reward, and their registry.
     external: subprocess scorers that run a reward model in its own environment.
     compose: config validation and the weighted-sum composition that LitGRPO calls.
 
-A reward reaches a run one of three ways, and they differ only in where the raw value comes from:
+A term names its raw reward in one of three ways:
 
-- builtin -- entropy and length, the guardrails, and nothing else; registered here, so the
-  shipped config names them with no module and no clone;
-- yours, in-process -- a term names an importable module (which registers it) or a callable
-  directly as "package.module:function", so code already installed alongside IDiom is used as is;
-- yours, out-of-process -- a term names a cmd, and external.py speaks JSON to it over a pipe, for a
-  reward model whose dependencies cannot coexist with IDiom's.
+- a registered name, such as the built-in entropy and length;
+- "package.module:function", any importable callable, with no decorator;
+- a cmd, an external scorer spoken to in JSON over a pipe (see external).
 
-Only the first two are library code. A scorer for the third is a standalone program with its own
-dependencies, so none ship inside the package: the worked ones live in the repository at
-cookbook/rewards/scorers/ and a term names one with an explicit cmd. The SAE feature reward is an
-ordinary module, sae_feature, imported on demand because it pulls in the SAE.
+Worked external scorers live in the repository at cookbook/rewards/scorers/. The SAE feature
+reward, sae_feature, is imported on demand, since it pulls in the SAE.
 """
 
 from idiom.train.grpo.reward import builtin  # noqa: F401 - registers the shipped rewards

@@ -1,8 +1,7 @@
 """Multi-head self-attention with RoPE, QK-norm, and a KV cache.
 
-Masking follows one rule: a square attention block (q_len == kv_len, i.e. training or prefill) is
-masked causally, and any other shape (a cached decode step, one query against the cached keys)
-attends to everything. Inputs are right-padded, so no explicit padding mask is used.
+A square attention block (q_len == kv_len, i.e. training or prefill) is masked causally; any other
+shape, such as a cached decode step, attends to everything. No explicit padding mask is used.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ class KVCache:
     Attributes:
         k (list[Tensor | None]): Cached keys per layer, each [B, H, L, head_dim].
         v (list[Tensor | None]): Cached values per layer, same shape.
-        length (int): Number of positions cached so far, advanced once per transformer forward.
+        length (int): Number of positions cached so far.
     """
 
     def __init__(self, n_layers: int) -> None:

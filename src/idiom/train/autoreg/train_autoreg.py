@@ -1,7 +1,7 @@
 """The idiom_train_autoreg entrypoint, covering pretraining and SFT.
 
 build(cfg) wires the module and datamodule; run(cfg) configures the trainer and fits. SFT is
-selected by config alone (--config-name sft), which sets init_from for the warm start and
+selected with --config-name sft, which sets init_from for the warm start and
 data.completion_only for the loss mask.
 """
 
@@ -25,9 +25,9 @@ from idiom.train.autoreg.lit_autoreg import LitAutoregressive
 def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
     """Wire the training module and datamodule from a resolved config.
 
-    With cfg.init_from set, the module is warm-started and its architecture comes from that
-    artifact; otherwise the architecture is built from cfg.model. The scheduler horizon is taken
-    from cfg.trainer.max_steps.
+    With cfg.init_from set the module is warm-started and its architecture comes from that
+    artifact; otherwise the architecture is built from cfg.model. The scheduler horizon is
+    cfg.trainer.max_steps.
 
     Args:
         cfg (DictConfig): Resolved training config, with optim, trainer, data, seed, and either

@@ -4,10 +4,9 @@
 # ///
 """Score IDRs with STARLING (https://github.com/idptools/starling) as an external GRPO reward.
 
-STARLING is a diffusion model that generates coarse-grained conformational ensembles for an IDR,
-so the reward is an ensemble average rather than a regression: the same dimensions sparrow's
-ALBATROSS predictors estimate directly, but sampled from a generated ensemble, plus anything else
-an ensemble exposes.
+STARLING is a diffusion model that generates coarse-grained conformational ensembles for an IDR, so
+the reward is an ensemble average of the same dimensions sparrow's ALBATROSS predictors estimate
+directly.
 
     --property radius_of_gyration | end_to_end_distance
     --conformations N             ensemble size per sequence (default 20)
@@ -17,9 +16,9 @@ an ensemble exposes.
          label: rg_ens, weight: 1.0, shaping: {type: quadratic, target: 25, width: 0.2},
          timeout: 900}
 
-Cost: about 9 s per 32 sequences at 20 conformations on an H100, which roughly doubles GRPO step
-time -- worth it for an ensemble-level objective, but give the term a generous timeout. On CPU it
-is about 6 s per sequence, too slow to train against.
+Cost is about 9 s per 32 sequences at 20 conformations on an H100, roughly doubling GRPO step time,
+so give the term a generous timeout. On CPU it is about 6 s per sequence, too slow to train
+against.
 
 The torch pin matters: the wheel idptools-starling resolves by default can be newer than the host
 CUDA driver, which fails at model load with "The NVIDIA driver on your system is too old". Pin the

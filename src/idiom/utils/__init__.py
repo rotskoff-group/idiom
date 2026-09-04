@@ -1,6 +1,6 @@
 """Shared helpers.
 
 Modules:
-    device: device selection honouring IDIOM_DEVICE.
+    device: device selection.
     perplexity: sequence perplexity under a model.
 """

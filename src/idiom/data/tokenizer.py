@@ -1,7 +1,5 @@
 """Fixed-alphabet character tokenizer.
 
-The alphabet is fixed rather than data-derived, and tokenization is a per-character lookup.
-
 Id map (vocab size 27):
 
     0..19     amino acids, in the order of RESIDUES
@@ -67,8 +65,7 @@ class Tokenizer:
     def is_canonical(self, seq: str) -> bool:
         """Return whether seq contains only the 20 canonical amino acids.
 
-        FIM markers and control characters are not canonical, so a FIM-formatted string fails
-        this check.
+        FIM markers and control characters are not canonical.
 
         Args:
             seq (str): The sequence to check.
@@ -123,7 +120,7 @@ class Tokenizer:
     def residue_mask(self, ids: torch.Tensor) -> torch.Tensor:
         """Return a boolean mask that is True at real-residue positions.
 
-        FIM markers and control tokens are masked out. Equivalent to region_mask with region="all".
+        Equivalent to region_mask with region="all".
 
         Args:
             ids (torch.Tensor): Token ids, shape [B, L].
@@ -138,8 +135,8 @@ class Tokenizer:
     ) -> torch.Tensor:
         """Return a boolean [B, L] mask of positions selected by token class and region.
 
-        Control tokens (START/STOP/PAD/MASK) are always dropped. region then restricts by position
-        relative to the FIM MIDDLE ("2") marker that opens the IDR in "1{prefix}3{suffix}2{IDR}".
+        Control tokens are always dropped. region then restricts by position relative to the FIM
+        "2" marker that opens the IDR.
 
         Args:
             ids (torch.Tensor): Token ids, shape [B, L].

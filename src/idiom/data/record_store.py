@@ -2,10 +2,10 @@
 
 A store is a directory of flat binary files — contiguous sequence and accession byte buffers, CSR
 offset arrays, and IDR coordinate arrays — read back with numpy.memmap and indexed to a Record on
-demand. The record set is identical to idiom.data.io.read_records, which the builder consumes.
+demand. It holds the same records as idiom.data.io.read_records.
 
-By default a store is a sidecar named "<fasta>.idiomstore", built on first use by open_or_build or
-ahead of time with the idiom_build_store CLI:
+A store is a sidecar named "<fasta>.idiomstore", built on first use by open_or_build or ahead of
+time with the idiom_build_store CLI:
 
     idiom_build_store --fasta /path/train.fasta            # -> /path/train.fasta.idiomstore
 """
@@ -56,9 +56,7 @@ def build_record_store(
 ) -> Path:
     """Parse a record FASTA into a columnar store and return its directory.
 
-    The store is built into a temporary directory and atomically renamed into place. Peak memory is
-    dominated by read_records, which materializes the whole FASTA; the index arrays add about 24
-    bytes per record and the byte buffers are streamed to disk.
+    The store is built into a temporary directory and atomically renamed into place.
 
     Args:
         fasta (str | Path): Path to the record FASTA to convert.
@@ -186,8 +184,7 @@ def open_or_build(
 
     A store is stale when its recorded version, source size, or source mtime no longer match the
     FASTA. Concurrent callers coordinate through an O_EXCL lock file: one builds while the others
-    poll and then open the result. A lock older than lock_timeout is treated as abandoned and
-    removed.
+    poll and then open the result. A lock older than lock_timeout is removed as abandoned.
 
     Args:
         fasta (str | Path): Path to the record FASTA.
@@ -232,7 +229,7 @@ def open_or_build(
 
 
 def main() -> None:
-    """Run the idiom_build_store CLI, building a record store from a FASTA and printing its size."""
+    """Run the idiom_build_store CLI: build a record store from a FASTA and print its size."""
     ap = argparse.ArgumentParser(description="Build a memory-mapped record store from a record FASTA.")
     ap.add_argument("--fasta", required=True)
     ap.add_argument("--out", help="store directory (default: <fasta>.idiomstore)")

@@ -2,7 +2,7 @@
 
 ModelConfig is a flat dataclass describing the architecture: RMSNorm, SwiGLU, QK-norm, no bias,
 tied embeddings, and RoPE positions. It is stored inside every checkpoint and released directory,
-so idiom.model.io recovers it from the artifact rather than requiring it to be re-declared.
+and read back by idiom.model.io.
 
 The factory functions at the bottom return the architectures of the three released models.
 """
@@ -68,5 +68,5 @@ def idiom_85m() -> ModelConfig:
 
 
 def idiom_300m() -> ModelConfig:
-    """Architecture of jxliu2/idiom-300M (302M params), the primary released model."""
+    """Architecture of jxliu2/idiom-300M (302M params)."""
     return ModelConfig(n_layers=24, d_model=1024, n_heads=16)

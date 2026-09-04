@@ -1,13 +1,11 @@
 """Load an IDiomTransformer from either on-disk form.
 
-Two forms exist and this module reads both:
-
 - a Lightning .ckpt: a state_dict whose policy weights are prefixed "model.", plus a
   hyper_parameters["model_cfg"] dict holding the ModelConfig.
 - a released directory: config.json plus model.safetensors.
 
-Both carry their own ModelConfig, so the architecture is recovered from the artifact rather than
-supplied by the caller. load_model accepts either form, or a Hub repo id.
+Both carry their own ModelConfig, so the architecture comes from the artifact. load_model accepts
+either form, or a Hub repo id.
 """
 
 from __future__ import annotations
@@ -70,8 +68,8 @@ def load_pretrained(
 ) -> tuple[IDiomTransformer, ModelConfig]:
     """Load an IDiomTransformer from a Lightning checkpoint.
 
-    Only keys prefixed "model." are loaded, so any other module stored in the checkpoint (such as
-    GRPO's frozen reference policy) is ignored.
+    Only keys prefixed "model." are loaded; any other module in the checkpoint, such as GRPO's
+    frozen reference policy, is ignored.
 
     Args:
         ckpt_path (str | Path): Path to the Lightning checkpoint.
@@ -122,9 +120,8 @@ def load_model(
 ) -> tuple[IDiomTransformer, ModelConfig]:
     """Load a model from a checkpoint, a released directory, or a Hub repo id.
 
-    A path that does not exist locally is treated as a Hub repo id and downloaded first. A
-    directory containing config.json is read as a released model; any other path is read as a
-    Lightning checkpoint.
+    A path that does not exist locally is downloaded as a Hub repo id. A directory holding
+    config.json is read as a released model; any other path is read as a Lightning checkpoint.
 
     Args:
         path (str | Path): A Lightning checkpoint, a released model directory, or a Hub repo id.

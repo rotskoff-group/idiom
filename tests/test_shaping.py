@@ -1,9 +1,7 @@
 """Tests for the shaping rules that turn a raw reward into a shaped one.
 
-A shaping rule encodes the objective's intent -- hit this value or take the number as it comes --
-so each type is checked against the arithmetic it promises rather than against itself.
-build_shaping is checked for rejecting a malformed spec at build time, because the
-whole point of validating there is that a typo must not survive until the first training step.
+Each type is checked against the arithmetic it promises, and build_shaping against the malformed
+specs it must reject at build time.
 """
 
 import math

@@ -1,8 +1,7 @@
 """Autoregressive training: pretraining from scratch and supervised fine-tuning.
 
-Pretraining and SFT share one LightningModule; the only difference is the loss mask, so SFT is a
-config, not a separate code path. This package sits alongside grpo so a further post-training
-method (DPO, say) is added as a sibling rather than by editing what is here.
+Pretraining and SFT share one LightningModule and differ only in the loss mask, which is set by
+config.
 
 Modules:
     lit_autoreg: the LightningModule shared by pretraining and SFT.

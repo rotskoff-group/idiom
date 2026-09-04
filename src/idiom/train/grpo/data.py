@@ -1,9 +1,8 @@
 """Prompt datasets for GRPO.
 
-Prompts are FIM generation prefixes ("1{prefix}3{suffix}2"), with one builder per prompting mode:
-unprompted_prompts repeats the bare "132" prompt, and prompted_prompts draws one flank prompt per
-record in a FASTA. collate_prompts stacks prompts without padding, so a batch must be
-equal-length.
+Prompts are FIM generation prefixes ("1{prefix}3{suffix}2"): unprompted_prompts repeats the bare
+"132" prompt, and prompted_prompts draws one flank prompt per record in a FASTA. collate_prompts
+stacks prompts without padding, so a batch must be equal-length.
 """
 
 from __future__ import annotations
@@ -52,8 +51,7 @@ def unprompted_prompts(n: int, tokenizer: Tokenizer | None = None) -> PromptData
 def prompted_prompts(fasta: str, n_per: int, tokenizer: Tokenizer | None = None) -> PromptDataset:
     """Return a dataset holding n_per copies of each record's flank prompt.
 
-    Flank prompts differ in length between records, so batches drawn from this dataset are
-    equal-length only when they do not mix records.
+    Flank prompts differ in length between records, so a batch must not mix records.
 
     Args:
         fasta (str): Path to the record FASTA to draw flank prompts from.

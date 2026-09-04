@@ -1,21 +1,17 @@
 """The reward registry.
 
 A reward is a function of a decoded IDR residue string returning one raw value, in whatever unit
-suits it -- bits, residues, angstroms, a fraction. Deciding what a good value is happens separately
-(see shaping) and is chosen by config, so one reward serves as a target, a guardrail, or a
-logged-only diagnostic without being rewritten.
+suits it -- bits, residues, angstroms, a fraction. What counts as a good value is the term's
+shaping, set in the config.
 
-Three qualified names run through this package, because the bare word is ambiguous once a term is
-assembled: the *raw reward* is what a registered function returns, the *shaped reward* is that value
-after shaping, and the *total reward* is the weighted sum over terms that GRPO optimizes.
+Three names run through this package: the *raw reward* is what a registered function returns, the
+*shaped reward* is that value after shaping, and the *total reward* is the weighted sum over terms
+that GRPO optimizes.
 
 register_reward accepts either form:
 
     @register_reward("net_charge_fraction")               # f(idr) -> float, lifted to a batch
     @register_reward("sae_only_nucleolus", batched=True)  # f(idrs, batch) -> list[float]
-
-The batched form is for rewards that cost less per batch than per sequence, such as a GPU forward
-pass or a subprocess round trip.
 """
 
 from __future__ import annotations
@@ -32,17 +28,14 @@ class Batch:
 
     Attributes:
         group_size (int): Number of completions sampled per prompt. Consecutive runs of this many
-            IDRs form one GRPO group, which is what a batched reward needs to score a completion
-            against the others it was sampled with.
+            IDRs form one GRPO group.
     """
 
     group_size: int = 1
 
 
 def register_reward(name: str, *, batched: bool = False):
-    """Return a decorator that registers a reward under name.
-
-    An existing entry with the same name is replaced.
+    """Return a decorator that registers a reward under name, replacing any existing entry.
 
     Args:
         name (str): Registry key for the decorated function.

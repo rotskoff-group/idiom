@@ -1,9 +1,7 @@
 """Feature-steered generation.
 
 Runs the KV-cached sampler inside a steering context, so the chosen layer's residual stream is
-modified at every forward pass of generation.
-
-SteeringSpec selects the mode:
+modified at every forward pass of generation. SteeringSpec selects the mode:
 
 - "add_direction": add the selected features' decoder rows, scaled absolutely, relative to the
   local residual norm, or relative with the norm preserved;
@@ -44,9 +42,9 @@ class SteeringSpec:
         clamp_value (float | Sequence[float] | None): Target activation for "clamp"; strength is
             used when None.
         normalize (bool): For "add_direction", scale the summed decoder rows to unit norm before
-            applying strength, so strength sets the push magnitude directly.
+            applying strength, so strength is the push magnitude.
         relative (bool): For "add_direction", scale the push by each position's residual norm, so
-            strength is a fraction of it. Takes precedence over normalize.
+            strength is a fraction of it. Overrides normalize.
         preserve_norm (bool): With relative, restore each position's original residual norm after
             the push.
     """
@@ -87,10 +85,10 @@ def _broadcast(values: list, n: int, name: str) -> list:
 def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
     """Build the forward hook described by a SteeringSpec.
 
-    "add_direction" adds the sum of the selected decoder rows, scaled according to the spec's
-    normalize, relative, and preserve_norm flags. "clamp" pins the selected latents to their target
-    values in one SAE round trip. "ablate" subtracts the selected features' decoder contribution,
-    using strength as the subtraction factor.
+    "add_direction" adds the sum of the selected decoder rows, scaled by the spec's normalize,
+    relative, and preserve_norm flags. "clamp" pins the selected latents to their target values in
+    one SAE round trip. "ablate" subtracts the selected features' decoder contribution, with
+    strength as the subtraction factor.
 
     Args:
         sae: The trained SAE providing W_dec, encode_dense, and decode_dense.

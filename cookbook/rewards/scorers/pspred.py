@@ -12,11 +12,10 @@
 # ///
 """Score IDRs with PSpred (https://github.com/KULL-Centre/_2024_buelow_PSpred) as an external reward.
 
-PSpred predicts the thermodynamics of homotypic phase separation directly from sequence -- the
-transfer free energy dG in kT, and the saturation concentration c_sat in mg/mL -- from models
-trained on CALVADOS coarse-grained simulations (von Bulow et al., PNAS 2025). Unlike a classifier
-score, the raw reward is a physical quantity, so a target means something: LAF1 scores dG = -6.1 kT
-with c_sat = 1.2 mg/mL, while poly-GS scores dG = +0.3 kT with c_sat = 80 mg/mL.
+PSpred predicts the thermodynamics of homotypic phase separation from sequence -- the transfer free
+energy dG in kT, and the saturation concentration c_sat in mg/mL -- with models trained on CALVADOS
+coarse-grained simulations (von Bulow et al., PNAS 2025). For scale: LAF1 scores dG = -6.1 kT with
+c_sat = 1.2 mg/mL, poly-GS scores dG = +0.3 kT with c_sat = 80 mg/mL.
 
     --target dG              transfer free energy in kT; more negative phase-separates more readily
     --target logcdil_mgml    log saturation concentration; lower phase-separates more readily
@@ -27,8 +26,8 @@ with c_sat = 1.2 mg/mL, while poly-GS scores dG = +0.3 kT with c_sat = 80 mg/mL.
          label: dG, weight: 1.0, shaping: {type: quadratic, target: -6.0, width: 0.3}}
 
 The predictor's own files (3.7 MB: two scripts, a residue table and three joblib models) are fetched
-once from the project's GitHub into IDIOM_PSPRED_DIR, so a clean checkout needs no setup step. The
-scikit-learn pin matters: the models are pickles and will not load against a different version.
+once from the project's GitHub into IDIOM_PSPRED_DIR. The scikit-learn pin matters: the models are
+pickles and will not load against a different version.
 
 Environment variables:
     IDIOM_PSPRED_DIR   where the predictor files live (default ~/.cache/idiom/pspred).

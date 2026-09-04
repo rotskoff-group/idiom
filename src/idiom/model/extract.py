@@ -1,8 +1,7 @@
 """Sequence and FASTA embedding, and the idiom_extract CLI.
 
 Each record is FIM-formatted, the residual stream is taken at the requested layers, and the
-residue rows are paired with their source positions in the original sequence. pool="mean" returns
-one vector per sequence, averaged over its IDR residues; pool="none" returns one row per residue.
+residue rows are paired with their source positions in the original sequence.
 """
 
 from __future__ import annotations
@@ -105,7 +104,7 @@ def write_embeddings(embeddings: dict, out_dir: str | Path) -> None:
 
 
 def main() -> None:
-    """Run the idiom_extract CLI, writing residual-stream embeddings from a FASTA to a directory."""
+    """Run the idiom_extract CLI: write residual-stream embeddings from a FASTA to a directory."""
     p = argparse.ArgumentParser(description="Export IDiom residual-stream embeddings from a FASTA.")
     p.add_argument("--fasta", required=True)
     p.add_argument("--ckpt", required=True, help="lightning .ckpt (arch read from it)")

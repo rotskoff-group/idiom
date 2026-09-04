@@ -1,9 +1,7 @@
 """Cutting the residue windows a sequence logo is built from.
 
-A feature's meaning is easiest to read as a logo over the windows where it fires hardest. Both
-functions here work on the in-memory output of IDiomSAE.encode(pool="none") -- a [N_res, latents]
-activation matrix plus its per-row index -- rather than on a feature dataset directory, because a
-logo is drawn over one set of sequences small enough to hold at once.
+Both functions work on the in-memory output of IDiomSAE.encode(pool="none"): a [N_res, latents]
+activation matrix plus its per-row index.
 """
 
 from __future__ import annotations
@@ -14,12 +12,8 @@ import numpy as np
 def per_sequence_activations(feats, index) -> list[tuple[str, np.ndarray]]:
     """Group per-residue rows back into per-sequence residues and row indices.
 
-    encode(pool="none") returns residue rows in order across the whole set; regrouping them lets a
-    window be cut from a single sequence's residue string.
-
     Args:
-        feats (np.ndarray): [N_res, num_latents] per-residue activations. Unused except to fix the
-            row convention shared with index.
+        feats (np.ndarray): [N_res, num_latents] per-residue activations; unused.
         index (list[dict]): Per-row metadata carrying accession, source_pos, and residue.
 
     Returns:
@@ -45,8 +39,7 @@ def per_sequence_activations(feats, index) -> list[tuple[str, np.ndarray]]:
 def top_windows(feature_id, feats, per_seq, *, n_windows=60, half_width=7) -> list[str]:
     """Return the top-activating fixed-width residue windows for one feature.
 
-    One window per sequence, centred on that sequence's peak activation and clamped to fit, so the
-    stack is equal-length and no sequence dominates it.
+    One window per sequence, centred on that sequence's peak activation and clamped to fit.
 
     Args:
         feature_id (int): The SAE latent to profile.

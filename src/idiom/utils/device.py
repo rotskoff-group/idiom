@@ -1,10 +1,7 @@
 """Device resolution.
 
-Resolution order, highest priority first:
-
-1. an explicit device argument (anything other than None or "auto");
-2. the IDIOM_DEVICE environment variable;
-3. "cuda" if a GPU is visible, else "cpu".
+A device is taken from an explicit argument, then the IDIOM_DEVICE environment variable, then
+"cuda" if a GPU is visible, else "cpu".
 """
 
 from __future__ import annotations
@@ -15,7 +12,7 @@ import torch
 
 
 def resolve_device(device: str | torch.device | None = None) -> torch.device:
-    """Resolve a device following the module's resolution order.
+    """Resolve a device.
 
     Args:
         device (str | torch.device | None): An explicit device, or None or "auto" to fall back to

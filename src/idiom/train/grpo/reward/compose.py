@@ -5,16 +5,10 @@ to per-idr totals and a matching per-term breakdown. Every term follows one rule
 
     total reward = sum over terms of weight * shaping(reward(idrs))
 
-so there is nothing special about a built-in term, a user's registered reward, or an external scorer
-subprocess: they differ only in where the raw reward comes from.
+There are two ways to take a term out of the objective: weight 0 keeps it running and logged but
+gives it no influence, while enabled false skips it entirely -- nothing imported, no subprocess.
 
-Two ways to take a term out of the objective, and they are not the same one. weight 0 keeps the term
-running and logged, which is how a diagnostic is watched without letting it steer training. enabled
-false skips it entirely -- nothing imported, no subprocess, no per-step cost -- which is what lets
-the shipped config carry a menu of ready-to-use terms that cost nothing until switched on.
-
-The config is validated here, before the model is loaded, so a typo fails in seconds rather than
-after a queue wait.
+The config is validated here, before the model is loaded.
 """
 
 from __future__ import annotations
@@ -98,9 +92,7 @@ def is_callable_spec(reward: str | None) -> bool:
 def load_callable(reward: str):
     """Import and return the callable a "module:function" reward names.
 
-    The module part accepts everything import_module_spec does -- a dotted name for something
-    already installed, or a path to a .py file -- so a reward that exists in the environment
-    alongside IDiom is used as it is, with no decorator and no edit to the code defining it.
+    The module part is either a dotted name or a path to a .py file, as in import_module_spec.
 
     Args:
         reward (str): A reward of the form "package.module:function" or "path/to/file.py:function".
@@ -132,9 +124,8 @@ def resolve_add(cfg: dict) -> list[dict]:
     """Expand the reward config's `add` selector into terms, appended after `terms`.
 
     An entry is either a name from the `presets` menu or a whole term written out, so a run picks
-    what it optimizes at launch instead of editing the config. Names are addressable and stay
-    addressable as the menu grows, which list positions do not: `reward.add=[rg]` keeps working
-    when a preset is inserted above it, and `reward.presets.rg.shaping.target=30` tunes it.
+    what it optimizes at launch: `reward.add=[rg]` selects a preset and
+    `reward.presets.rg.shaping.target=30` tunes it.
 
     Args:
         cfg (dict): The reward config, holding an optional `add` list and `presets` mapping.
@@ -164,11 +155,9 @@ def resolve_add(cfg: dict) -> list[dict]:
 def parse_terms(rcfg: DictConfig) -> list[RewardTermSpec]:
     """Validate a reward config and return its terms.
 
-    Any module named by the config, or by a term, is imported first so that reward names resolve.
-
-    A term with enabled false is dropped before anything else happens to it, so a disabled term
-    costs nothing and is not validated: it may name a reward this environment cannot import, which
-    is what makes a config full of switched-off examples usable.
+    Any module named by the config, or by a term, is imported first so reward names resolve. A term
+    with enabled false is dropped before validation, so it may name a reward this environment
+    cannot import.
 
     Args:
         rcfg (DictConfig): The reward config: an optional module, a terms list, and an optional
@@ -255,7 +244,7 @@ def build_reward(rcfg: DictConfig):
             "<label>_raw", and the total.
 
     Raises:
-        ValueError: If the config does not validate (see parse_terms and build_shaping).
+        ValueError: If the config does not validate; see parse_terms and build_shaping.
     """
     terms = [(s.label, s.weight, _source(s), build_shaping(s.shaping)) for s in parse_terms(rcfg)]
 

@@ -5,23 +5,22 @@
 """Score IDRs with PADDLE (https://github.com/asanborn/PADDLE) as an external GRPO reward.
 
 PADDLE is a convolutional network that predicts acidic transcriptional activation domains from
-sequence (Sanborn et al., eLife 2021). This scorer uses PADDLE-noSS, the variant that needs no
-PSIPRED/IUPred structure input, so it runs from sequence alone.
+sequence (Sanborn et al., eLife 2021). This scorer uses PADDLE-noSS, the variant that runs from
+sequence alone with no PSIPRED/IUPred structure input.
 
-PADDLE scores a fixed 53-residue window, so a variable-length IDR is tiled into windows and the
-reward is the strongest window's Z-score -- the "max-Z" summary used in the manuscript. A sequence
-shorter than 53 residues is padded on both flanks with the background residue.
+PADDLE scores a fixed 53-residue window, so an IDR is tiled into windows and the reward is the
+strongest window's Z-score. A sequence shorter than 53 residues is padded on both flanks with the
+background residue.
 
     reward.terms:
       - {cmd: "uv run --script cookbook/rewards/scorers/paddle.py",
          label: paddle, weight: 1.0, timeout: 600}
 
-The raw reward is a Z-score against PADDLE's background, so it is already on a usable scale: strong
-natural activation domains sit well above 5. Leave it unshaped to maximize activation strength, or
-give it a quadratic target to design for a particular strength.
+The raw reward is a Z-score against PADDLE's background; strong natural activation domains sit well
+above 5. Leave it unshaped to maximize activation strength, or give it a quadratic target for a
+particular strength.
 
-The model files (36 MB, Apache-2.0) are cloned once from GitHub into IDIOM_PADDLE_DIR, so a clean
-checkout needs no manual setup.
+The model files (36 MB, Apache-2.0) are cloned once from GitHub into IDIOM_PADDLE_DIR.
 
 Environment variables:
     IDIOM_PADDLE_DIR   where the PADDLE checkout lives (default ~/.cache/idiom/paddle).

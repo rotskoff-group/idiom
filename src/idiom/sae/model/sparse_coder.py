@@ -1,6 +1,4 @@
-"""The top-k / group-max sparse autoencoder.
-
-The formulation follows EleutherAI sparsify and OpenAI sparse_autoencoder:
+"""The top-k / group-max sparse autoencoder, following EleutherAI sparsify.
 
 - the encoder applies ReLU then top-k selection;
 - b_dec is subtracted before the encoder and added back after the decoder;
@@ -148,8 +146,8 @@ class SparseCoder(nn.Module):
             x (Tensor): Input activations of shape [..., d_in].
 
         Returns:
-            EncoderOutput: The selected activations and indices, and the pre-selection activations.
-                The selected latents are not sorted by activation.
+            EncoderOutput: The selected activations and indices, unsorted, and the pre-selection
+                activations.
         """
         pre_acts = F.relu(self.encoder(x - self.b_dec))
         k = int(self.k)

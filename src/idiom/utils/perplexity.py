@@ -1,7 +1,7 @@
 """Held-out perplexity under the FIM next-token objective.
 
-Scores a record FASTA through the same RecordDataset pipeline training uses, so the reported NLL
-is the masked next-token loss evaluated on held-out data.
+Scores a record FASTA through the RecordDataset pipeline training uses, and reports the masked
+next-token loss.
 """
 
 from __future__ import annotations

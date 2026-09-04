@@ -1,12 +1,9 @@
 """Tests for the composite (weighted-sum) reward.
 
-The reward is the whole GRPO objective, so the arithmetic is checked against an explicit
-from-scratch expectation rather than against itself: every term contributes weight * shaping(reward)
-and nothing else does. The cases below cover each way a term can enter or leave the total --
-weighted, shaped or raw, zero-weighted, in-process or named by a user module -- because a term that
-silently drops out (or is double-counted) changes what the policy optimizes without failing
-anywhere. The validation cases matter for the same reason: a term that never runs is a silent
-change to the objective, so a malformed one has to fail loudly at build time.
+The arithmetic is checked against an explicit from-scratch expectation: every term contributes
+weight * shaping(reward) and nothing else does. The cases cover each way a term can enter or leave
+the total -- weighted, shaped or raw, zero-weighted, in-process or named by a user module -- plus
+the validation that rejects a malformed term at build time.
 """
 
 import math

@@ -5,9 +5,7 @@
 """Score IDRs with FINCHES (https://github.com/idptools/finches) as an external GRPO reward.
 
 FINCHES computes epsilon, a mean-field interaction parameter derived from a coarse-grained force
-field (Mpipi-GG or CALVADOS). Negative epsilon means attractive, positive means repulsive, so
-epsilon is a direct handle on the chemistry that drives phase separation -- a different physics
-from sparrow's single-chain dimensions.
+field (Mpipi-GG or CALVADOS). Negative epsilon means attractive, positive means repulsive.
 
 Two modes:
 
@@ -17,7 +15,7 @@ Two modes:
                                      which is how you design a co-condensate or binding partner
                                      for a protein you already have.
 
-Reference values from this scale (Mpipi, homotypic): an FUS-LC-like aromatic tract is about -8.5,
+Reference values on this scale (Mpipi, homotypic): an FUS-LC-like aromatic tract is about -8.5,
 IDiom's base generations average +3.6 (sd 7.0), and natural ProtGPS nucleolus IDRs average +7.7.
 Aim at a negative target to design self-attractive sequences:
 
@@ -25,8 +23,7 @@ Aim at a negative target to design self-attractive sequences:
       - {cmd: "uv run --script cookbook/rewards/scorers/finches.py --mode homotypic",
          label: eps, weight: 1.0, shaping: {type: quadratic, target: -6.0, width: 1.0}}
 
-Epsilon is unbounded, so keep the entropy and length guardrails on: the cheapest route to a very
-negative epsilon is a low-complexity hydrophobic or aromatic tract, which is no longer an IDR.
+Epsilon is unbounded, so keep the entropy and length guardrails on.
 
 Environment variables:
     FINCHES_MODEL   forcefield frontend: "mpipi" (default) or "calvados".
@@ -67,7 +64,7 @@ def main():
     frontend = build_frontend()
 
     def score(seq):
-        """Epsilon for one sequence; 0.0 for an empty string."""
+        """Return epsilon for one sequence, or 0.0 for an empty string."""
         if not seq:
             return 0.0
         other = args.partner if args.mode == "heterotypic" else seq

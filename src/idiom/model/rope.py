@@ -43,8 +43,7 @@ class Rope(nn.Module):
             positions (Tensor): Absolute position index for each element of the L axis.
 
         Returns:
-            tuple[Tensor, Tensor]: The rotated q and k, with the same shapes and norms as the
-                inputs.
+            tuple[Tensor, Tensor]: The rotated q and k, with the same shapes as the inputs.
         """
         cos = self.cos[positions].to(q.dtype)[None, None]  # [1, 1, L, head_dim] -> broadcasts over B, H
         sin = self.sin[positions].to(q.dtype)[None, None]

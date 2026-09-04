@@ -1,8 +1,8 @@
 """Streamlit viewer for a feature-activation dataset.
 
 Shows, for a chosen feature, its top activating sequences with each residue shaded in proportion
-to that feature's activation there. Features can be ordered by maximum activation, total
-activation, or firing count, and reached either by rank or by index.
+to that feature's activation there. Features are ordered by maximum activation, total activation,
+or firing count, and reached by rank or by index.
 
 Run:
     streamlit run src/idiom/sae/features/feature_viewer.py -- \\
@@ -64,7 +64,7 @@ def _shade(seq: str, acts: np.ndarray, gmax: float) -> str:
 
 
 def main() -> None:
-    """Render the viewer: read the arguments, load the dataset, and draw the controls and results."""
+    """Read the arguments, load the dataset, and draw the controls and results."""
     args = _parse_args()
     fd = _load(args.features, args.in_memory)
     n_seqs = fd.n_seqs

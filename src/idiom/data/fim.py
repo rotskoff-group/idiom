@@ -1,12 +1,11 @@
 """Fill-in-the-middle (FIM) string formatting.
 
-A record is (full_seq, idr_start, idr_end) with 0-indexed, half-open IDR coordinates
-(idr = full_seq[idr_start:idr_end]). This module builds the FIM forms of a record:
+A record is (full_seq, idr_start, idr_end) with 0-indexed, half-open IDR coordinates, so
+idr = full_seq[idr_start:idr_end]. The FIM forms of a record are:
 
-- fim_prompted(seq, start, end): "1{prefix}3{suffix}2{IDR}", the IDR with its flanking context.
-- fim_unprompted(seq, start, end): "132{IDR}", the IDR with empty flanks.
-- fim_prompt(seq, start, end): "1{prefix}3{suffix}2", the generation prompt.
-- residue_source_positions(...): the index in full_seq of each residue of a FIM string.
+- fim_prompted: "1{prefix}3{suffix}2{IDR}", the IDR with its flanking context.
+- fim_unprompted: "132{IDR}", the IDR with empty flanks.
+- fim_prompt: "1{prefix}3{suffix}2", the generation prompt.
 """
 
 from __future__ import annotations
@@ -87,8 +86,7 @@ def residue_source_positions(seq_len: int, start: int, end: int, variant: str = 
     """Return the index in full_seq of each residue of the FIM string, in FIM order.
 
     FIM order is the order residues appear once the 1/3/2 markers are dropped: prefix, suffix, IDR
-    for "prompted", and the IDR alone for "unprompted". IDR residues are those with
-    start <= position < end.
+    for "prompted", and the IDR alone for "unprompted".
 
     Args:
         seq_len (int): Length of the full sequence.

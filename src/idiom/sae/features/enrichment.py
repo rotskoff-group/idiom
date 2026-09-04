@@ -1,19 +1,17 @@
 """Testing which SAE features are over-represented in a set of sequences against a background.
 
-A feature fires in a sequence if it is selected by the SAE at any of that sequence's residues,
-counted once per sequence. From the positive and background firing counts, enrich computes a
+A feature fires in a sequence if the SAE selects it at any of that sequence's residues, counted
+once per sequence. From the positive and background firing counts, enrich computes a
 Haldane-Anscombe log2 odds ratio, standardizes it against a hypergeometric null, converts that to a
 two-sided p-value, and controls the false discovery rate with Benjamini-Hochberg. A feature is
 enriched when its FDR, log2 odds ratio, and prevalence all pass the module's thresholds, and
 top_features keeps the strongest as a signature.
 
-Features whose strongest firings sit at an IDR's first or last residues detect the excision
-boundary rather than a motif; boundary_features identifies them and top_features drops them by
-default.
+boundary_features identifies features whose strongest firings sit at an IDR's first or last
+residues, detecting the excision boundary rather than a motif; top_features drops them by default.
 
-load_sequences and length_match prepare the two sets: the first reads a FASTA whether or not its
-headers carry an IDR span, the second samples a background whose length distribution follows the
-positive set's, without which length-tracking features dominate the result.
+load_sequences reads a FASTA whether or not its headers carry an IDR span, and length_match samples
+a background whose length distribution follows the positive set's.
 """
 
 from __future__ import annotations
@@ -190,7 +188,7 @@ def boundary_features(feature_dir, feature_ids, *, edge: int = BOUNDARY_EDGE,
     cache: dict[int, tuple[int, int]] = {}
 
     def residue_bounds(seq_index: int) -> tuple[int, int]:
-        """First and last residue index within the stored FIM string (skips the FIM markers)."""
+        """Return the first and last residue index within the stored FIM string."""
         if seq_index not in cache:
             s = strings[seq_index]
             aa = [j for j, ch in enumerate(s) if ch in _AA]
@@ -262,10 +260,9 @@ def top_features(result: dict, *, n: int = 30, prev_min: float = PREV_POS_FLOOR,
 
 def write_signature(path, signatures: dict[str, list[int]], *, case: str = "top30",
                     provenance: dict | None = None) -> Path:
-    """Write signatures to a JSON file in the format the RL-SAE reward reads.
+    """Write signatures to a JSON file in the format the SAE feature reward reads.
 
-    An existing file is read and updated, so several cases can be written to one file. The named
-    case is replaced.
+    An existing file is read and updated, and the named case is replaced.
 
     Args:
         path (str | Path): Output JSON path.
@@ -289,8 +286,7 @@ def write_signature(path, signatures: dict[str, list[int]], *, case: str = "top3
 def load_sequences(path) -> list[Record]:
     """Read a FASTA into Records, tolerating headers with no _IDR_x-y span.
 
-    A set you want to test is often just a list of sequences rather than IDiom-curated records, so
-    a header without a usable span is read as a record whose whole sequence is the IDR.
+    A header without a usable span becomes a record whose whole sequence is the IDR.
 
     Args:
         path (str | Path): FASTA file.
@@ -313,10 +309,8 @@ def load_sequences(path) -> list[Record]:
 def length_match(positives, background, *, n, rng, bin_width=20):
     """Sample a background whose IDR-length distribution follows the positive set's.
 
-    Features that merely track length look enriched when the two sets have different length
-    distributions, which they usually do. Matching removes most of that artifact. Length bins the
-    background cannot fill are topped up from the rest of it, so the result is always as close to n
-    as the pool allows.
+    Length bins the background cannot fill are topped up from the rest of it, so the result is as
+    close to n as the pool allows.
 
     Args:
         positives (list[Record]): Positive records.

@@ -1,16 +1,12 @@
 """Reward shaping: how a raw reward becomes a shaped one.
 
-A shaping rule is chosen per term in the config, so the same reward can be pushed toward a target or
-passed through untouched:
+A shaping rule is chosen per term in the config:
 
     shaping: {type: quadratic, target: 100, width: 1.0}
     (omitted)                                          # identity
 
-quadratic is what the shipped guardrails use: 0 at the target and unbounded below, so a term far
-from its target can swamp the rest of the sum. gaussian is the bounded alternative when several
-targets have to coexist, at the cost of flattening far from the target, where it stops
-distinguishing bad from worse. A reward already on a sensible scale -- a fraction in [0, 1], say --
-takes no shaping at all.
+quadratic is 0 at the target and unbounded below; gaussian is 1 at the target and bounded in
+[0, 1]; identity passes the raw reward through.
 """
 
 from __future__ import annotations
@@ -25,8 +21,7 @@ SHAPING_REGISTRY: dict[str, Callable[..., Callable[[float], float]]] = {}
 def register_shaping(shaping_type: str):
     """Return a decorator that registers a shaping factory under type.
 
-    A factory takes the shaping spec's parameters and returns the rule itself, f(value) -> float,
-    which is applied to each raw reward in the batch.
+    A factory takes the shaping spec's parameters and returns the rule itself, f(value) -> float.
 
     Args:
         shaping_type (str): The name used in a term's shaping.type.
@@ -45,8 +40,8 @@ def register_shaping(shaping_type: str):
 def tolerance(target: float, width: float) -> float:
     """Return the deviation that counts as one width away from a target.
 
-    The tolerance is relative to the target, so width=0.2 means 20%. When the target is 0 there is
-    nothing to be relative to, and width is used as an absolute tolerance instead.
+    The tolerance is relative to the target, so width=0.2 means 20%; when the target is 0, width is
+    used as an absolute tolerance.
 
     Args:
         target (float): The value being aimed at.

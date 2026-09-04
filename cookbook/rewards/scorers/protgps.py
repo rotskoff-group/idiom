@@ -13,13 +13,12 @@
 """Score IDRs with ProtGPS (https://github.com/pgmikhael/protgps) as an external GRPO reward.
 
 ProtGPS is a condensate-localization classifier over a small ESM-2, mapping a residue string to 12
-compartment probabilities. It is the second worked example of an external reward, and the one that
-shows why the mechanism exists: its environment pins python 3.8, torch 2.0 and
-pytorch-lightning 1.6.4, none of which can coexist with IDiom (python >= 3.10, torch >= 2.4). The
-PEP 723 header above is that whole environment, built and cached by uv on first use.
+compartment probabilities. Its environment pins python 3.8, torch 2.0 and pytorch-lightning 1.6.4,
+which cannot coexist with IDiom's; the PEP 723 header above is that whole environment, built and
+cached by uv on first use.
 
 The checkpoints (166 MB, CC BY 4.0) are downloaded once from the paper's Zenodo record into
-IDIOM_PROTGPS_DIR, so a clean checkout needs no manual setup:
+IDIOM_PROTGPS_DIR:
 
     uv run python -m idiom.train.grpo.reward.external \
         --cmd "uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus"
@@ -30,12 +29,9 @@ In configs/grpo.yaml:
       - {cmd: "uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus",
          label: protgps, weight: 1.0}
 
-The raw reward is already a probability in [0, 1], so a term usually leaves it unshaped.
---compartment is one of the 12 compartments below, or "max" / "mean" over them.
-
-Caveat: ProtGPS rewards compositional extremity, and high scores are reachable with low-complexity
-tracts, so keep the entropy and length guardrails on. Optimizing a classifier is not the same as
-reproducing what it detects -- that gap is what the SAE feature reward (sae_feature) addresses.
+The raw reward is a probability in [0, 1], so a term usually leaves it unshaped. --compartment is
+one of the 12 compartments below, or "max" / "mean" over them. High scores are reachable with
+low-complexity tracts, so keep the entropy and length guardrails on.
 
 Environment variables:
     IDIOM_PROTGPS_DIR     where the checkpoints live; downloaded here on first use
@@ -121,7 +117,7 @@ def _checkpoint_dir() -> Path:
 
 
 def _load_model():
-    """Load the ProtGPS classifier once, downloading its checkpoints if needed.
+    """Load the ProtGPS classifier, downloading its checkpoints if needed.
 
     Returns:
         The ProtGPS lightning module, in eval mode on the chosen device.

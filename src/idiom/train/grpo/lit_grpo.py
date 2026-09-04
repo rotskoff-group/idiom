@@ -1,8 +1,8 @@
 """The GRPO post-training LightningModule.
 
 Each step expands every prompt in the batch into group_size completions, rewards each decoded IDR,
-computes group-normalized advantages, and applies the GRPO loss against a frozen reference policy.
-Prompts within a batch must be equal length.
+computes group-normalized advantages, and applies the GRPO loss with a KL penalty against a
+frozen reference policy. Prompts within a batch must be equal length.
 """
 
 from __future__ import annotations
@@ -22,8 +22,7 @@ from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
 from idiom.train.grpo.core import group_advantages, grpo_loss, sequence_kl, sequence_logprobs
 
-# The entropy reward itself, so the metric is logged whether or not a run configures that term and
-# cannot drift from what the term optimizes.
+# For logging entropy
 from idiom.train.grpo.reward.builtin import sequence_entropy as _composition_entropy
 
 
@@ -57,9 +56,9 @@ class LitGRPO(L.LightningModule):
     ) -> None:
         """Build the policy and its frozen reference, and record the GRPO settings.
 
-        Exactly one of reward_fn or reward_terms must be given. reward_terms scores a whole batch
-        at once and supplies the per-term breakdown that is logged; reward_fn scores one IDR at a
-        time and produces no breakdown.
+        At least one of reward_fn or reward_terms must be given. reward_terms scores a whole batch
+        at once, supplies the per-term breakdown that is logged, and takes precedence; reward_fn
+        scores one IDR at a time and produces no breakdown.
 
         Args:
             cfg (ModelConfig): Transformer architecture configuration.
@@ -85,16 +84,12 @@ class LitGRPO(L.LightningModule):
         """
         super().__init__()
         self.cfg = cfg
-        # Architecture travels with the checkpoint (read back by model/io.load_pretrained).
-        # Only the config — reward_fn/tokenizer are not serializable hyperparameters.
         self.save_hyperparameters({"model_cfg": asdict(cfg)})
         self.model = IDiomTransformer(cfg)
-        # Frozen reference = the initial policy; the KL penalty keeps the policy near it.
+        # Frozen reference = the initial policy
         self.reference = copy.deepcopy(self.model).eval()
         self.reference.requires_grad_(False)
 
-        # The composite reward: f(idrs, group_size) -> (totals, per-term breakdown). When set it is
-        # the source of the scalar reward (so reward_fn is not called) and drives per-term logging.
         # reward_fn is the simple fallback used when no term breakdown is wired (e.g. unit tests).
         assert reward_fn is not None or reward_terms is not None, "pass reward_fn or reward_terms"
         self.reward_fn = reward_fn
@@ -116,7 +111,7 @@ class LitGRPO(L.LightningModule):
     def init_from_checkpoint(cls, init_from, reward_fn=None, **kwargs) -> LitGRPO:
         """Build a module whose policy and reference both hold a pretrained model's weights.
 
-        The architecture is read from the artifact rather than supplied by the caller.
+        The architecture is read from the artifact.
 
         Args:
             init_from: A Lightning .ckpt, a released model directory, or a Hub repo id; any form
@@ -147,13 +142,13 @@ class LitGRPO(L.LightningModule):
     def training_step(self, batch: torch.Tensor, batch_idx: int):
         """Roll out completions, score them, and return the GRPO loss for one batch.
 
-        Logs the loss, mean and standard deviation of the reward, KL to the reference, mean
-        completion length and composition entropy, and, when a breakdown is available, two means
-        per reward term: what it contributed to the objective and its raw reward.
+        Logs the loss, the mean and standard deviation of the reward, the KL to the reference, the
+        mean completion length and composition entropy, and, when a breakdown is available, each
+        term's contribution to the objective and its raw reward.
 
         Args:
             batch (torch.Tensor): Equal-length prompts of shape [B, P].
-            batch_idx (int): Index of the batch within the epoch (unused).
+            batch_idx (int): Index of the batch within the epoch; unused.
 
         Returns:
             torch.Tensor: The scalar GRPO loss.
@@ -192,6 +187,7 @@ class LitGRPO(L.LightningModule):
         policy_logp = sequence_logprobs(self.model, full)
         with torch.no_grad():
             ref_logp = sequence_logprobs(self.reference, full)
+
         loss = grpo_loss(
             policy_logp, ref_logp, advantages, mask, beta_kl=self.beta_kl, eps_clip=self.eps_clip
         )
@@ -235,9 +231,9 @@ class LitGRPO(L.LightningModule):
         print("=" * 70, flush=True)
 
     def configure_optimizers(self):
-        """Build AdamW over the policy parameters.
+        """Build AdamW over the policy parameters, excluding the reference.
 
         Returns:
-            torch.optim.Optimizer: The optimizer; the reference policy is excluded.
+            torch.optim.Optimizer: The optimizer.
         """
         return torch.optim.AdamW(self.model.parameters(), lr=self.lr)

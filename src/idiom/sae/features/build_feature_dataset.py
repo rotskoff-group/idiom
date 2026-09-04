@@ -2,8 +2,7 @@
 
 Records are run through the host model in batches, the residual stream at one layer is encoded by
 the SAE, and the per-residue top-k features are written as a directory of .npy and .json files.
-Positions index the FIM string with its markers present, so each row can be mapped back to a
-character of the stored sequence.
+Positions index the FIM string with its markers present.
 """
 
 from __future__ import annotations
@@ -101,7 +100,7 @@ def build_feature_dataset(
 
 
 def main() -> None:
-    """Run the idiom_feature_dataset CLI, building a feature dataset from a FASTA and an SAE."""
+    """Run the idiom_feature_dataset CLI: build a feature dataset from a FASTA and an SAE."""
     from idiom import IDiomSAE  # deferred: idiom/__init__ imports this module's package
 
     p = argparse.ArgumentParser(description="Build an SAE feature-activation dataset from a FASTA.")

@@ -2,7 +2,7 @@
 
 sequence_logprobs returns per-token log-probs under a model, group_advantages normalizes rewards
 within each prompt's group, and grpo_loss combines a PPO-clipped policy-gradient term with a
-Schulman KL penalty to a reference policy, aggregated token-level over the batch.
+Schulman KL penalty to a reference policy, averaged token-level over the batch.
 """
 
 from __future__ import annotations
@@ -83,8 +83,8 @@ def grpo_loss(
 ) -> Tensor:
     """Compute the GRPO loss over completion tokens.
 
-    The loss is the PPO-clipped policy-gradient term, optionally minus beta_kl times the Schulman
-    KL to the reference, summed over the masked tokens and divided by their count.
+    The loss is the PPO-clipped policy-gradient term, minus beta_kl times the Schulman KL to the
+    reference, averaged over the masked tokens.
 
     Args:
         policy_logp (Tensor): Policy per-token log-probs of shape [B, T].

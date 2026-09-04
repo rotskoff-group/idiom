@@ -1,10 +1,9 @@
 """Rewards for reproducing a target's SAE feature code.
 
 Importing this module registers one reward per signature in the targets file, named
-"sae_only_<signature>". Each scores an IDR by the fraction of that signature's features that fire,
-meaning they appear in the SAE top-k at any of the IDR's residues. The raw value is already a
-fraction in [0, 1], so a term usually leaves it unshaped. Naming the module on the term imports it,
-which is what keeps torch and the SAE out of a run that does not use one:
+"sae_only_<signature>". Each scores an IDR by the fraction of that signature's features that appear
+in the SAE top-k at any of the IDR's residues, a value in [0, 1]. Naming the module on the term is
+what imports it:
 
     reward.terms:
       - {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}
@@ -82,8 +81,8 @@ def _target_ids(name: str):
 def feature_match(idr: str, name: str) -> float:
     """Return the fraction of a signature's features that fire on an IDR.
 
-    The IDR is encoded through the SAE in the unprompted FIM format, and a feature fires if it is
-    in the SAE top-k at any of the IDR's residues.
+    The IDR is encoded through the SAE in the unprompted FIM format; a feature fires if it is in
+    the SAE top-k at any of the IDR's residues.
 
     Args:
         idr (str): The decoded IDR residue string.
@@ -118,12 +117,9 @@ def _sae_only_reward(name: str):
 
 
 def _signature_names() -> list[str]:
-    """Return the sorted signature names in the configured targets file, or [] if it is unreadable.
+    """Return the sorted signature names in the configured targets file.
 
-    A bad or missing targets file must not break import -- this module is imported whenever a term
-    names it, including from a config that lists it but does not enable it. But it must not fail
-    silently either: registering nothing here surfaces later as "unknown reward sae_only_<name>",
-    which names the wrong problem. So the reason is logged, with the file it came from.
+    An unreadable targets file is logged and reported as no signatures, rather than raising.
 
     Returns:
         list[str]: The signature names, or [] if the targets file could not be read.

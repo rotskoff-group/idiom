@@ -2,7 +2,7 @@
 
 forward serves both a full-sequence pass (no cache) and autoregressive decoding (pass a KVCache,
 and positions continue from cache.length). With return_hidden_states it also returns each block's
-residual-stream output, which is what the SAE and the activation extractor consume.
+residual-stream output.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ class IDiomTransformer(nn.Module):
 
         Returns:
             Tensor | tuple[Tensor, list[Tensor]]: Logits [B, L, vocab_size], or (logits, hidden)
-                where hidden[i] is the residual stream after block i (what the SAE consumes).
+                where hidden[i] is the residual stream after block i.
         """
         B, L = tokens.shape
         past = cache.length if cache is not None else 0

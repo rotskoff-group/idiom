@@ -68,7 +68,7 @@ def record_to_example(
 class RecordDataset(Dataset):
     """Map-style dataset over Records, yielding (input_ids, target_ids, loss_mask) triples.
 
-    Backed either by an in-memory sequence of Records or by a memory-mapped RecordStore.
+    Backed by either an in-memory sequence of Records or a memory-mapped RecordStore.
     """
 
     def __init__(
@@ -86,8 +86,7 @@ class RecordDataset(Dataset):
         Args:
             records (Iterable[Record] | RecordStore): Records to serve, or a memory-mapped store.
             tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
-            max_len (int): Maximum model positions; longer records are dropped and the number
-                dropped is logged.
+            max_len (int): Maximum model positions; longer records are dropped.
             prompted_prob (float): Probability that a sample uses the prompted variant.
             completion_only (bool): If True, mask the loss to the IDR completion; if False, to
                 every token.

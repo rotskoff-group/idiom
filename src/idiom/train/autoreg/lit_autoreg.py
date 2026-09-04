@@ -1,7 +1,7 @@
 """The autoregressive LightningModule used for both pretraining and SFT.
 
-Which positions contribute to the loss is decided by the data, not by this module: the mask in
-each batch selects every token for pretraining, or only the IDR completion for SFT.
+The loss mask comes with each batch: every token for pretraining, or only the IDR completion for
+SFT.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ class LitAutoregressive(L.LightningModule):
     """Next-token trainer wrapping an IDiomTransformer with a masked cross-entropy loss.
 
     Uses AdamW with a warmup-cosine learning-rate schedule, and stores the ModelConfig in its
-    hyperparameters so the checkpoint describes its own architecture.
+    hyperparameters.
 
     Attributes:
         cfg (ModelConfig): The architecture being trained.
@@ -70,7 +70,7 @@ class LitAutoregressive(L.LightningModule):
     def init_from_checkpoint(cls, init_from: str, **kwargs) -> LitAutoregressive:
         """Build a module whose weights are warm-started from a pretrained model.
 
-        The architecture is read from the artifact rather than supplied by the caller.
+        The architecture is read from the artifact.
 
         Args:
             init_from (str): A Lightning .ckpt, a released model directory, or a Hub repo id; any
@@ -128,7 +128,7 @@ class LitAutoregressive(L.LightningModule):
         """Log per-parameter and total L2 gradient norms.
 
         Args:
-            optimizer (torch.optim.Optimizer): The optimizer about to step (unused).
+            optimizer (torch.optim.Optimizer): The optimizer about to step; unused.
         """
         # grad_2.0_norm/* keys, matching the earlier IDiom pretrain logging.
         self.log_dict(grad_norm(self, norm_type=2))

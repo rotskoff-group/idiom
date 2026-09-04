@@ -1,9 +1,9 @@
 """KV-cached autoregressive generation.
 
-START is prepended to the prompt, the prompt is prefilled in one forward pass that populates the
-cache, and tokens are then decoded one at a time. Each sequence in a batch stops independently at
-its first STOP token and is padded thereafter. Sampling is controlled by temperature (0 for
-greedy), top_k, and top_p.
+START is prepended to the prompt, the prompt is prefilled in one forward pass that fills the
+cache, and tokens are then decoded one at a time. Each sequence in a batch stops at its first STOP
+token and is padded thereafter. Sampling is controlled by temperature (0 for greedy), top_k, and
+top_p.
 """
 
 from __future__ import annotations

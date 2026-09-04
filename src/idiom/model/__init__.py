@@ -8,7 +8,7 @@ Modules:
     transformer: the IDiomTransformer and its blocks.
     sampling: KV-cached autoregressive generation.
     activations: residual-stream activation extraction.
-    extract: sequence and FASTA embedding, plus the idiom_extract CLI.
+    extract: sequence and FASTA embedding, and the idiom_extract CLI.
     io: loading a model from a checkpoint, a released directory, or the Hub.
 """
 

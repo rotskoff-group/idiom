@@ -6,11 +6,10 @@ GRPO step:
     ->  {"sequences": ["ACDEF...", "GHIKL..."]}
     <-  {"scores": [24.8, 31.2]}          # or {"error": "..."}
 
-It imports nothing from IDiom, so it can run in any virtualenv, conda environment, or container.
-The scorer returns a raw reward in its own units; the term's shaping turns that into a shaped one, so
-the objective is retuned on the IDiom side without touching the scorer's environment.
+It imports nothing from IDiom, so it runs in its own virtualenv, conda environment, or container,
+and returns a raw reward in its own units; the term's shaping is applied on the IDiom side.
 
-A command can be checked from the command line before it is used in a run:
+A command can be checked before it is used in a run:
 
     python -m idiom.train.grpo.reward.external --cmd "<scorer command>" \
         --shaping quadratic --target 25 --width 0.2
@@ -38,11 +37,7 @@ _PROBE = "MKVGSDEQ"  # handshake sequence: a valid IDR every scorer should be ab
 
 
 def _argv(cmd) -> list[str]:
-    """Return a command as argv, accepting a list, a JSON list, or a shell-quoted string.
-
-    The list form is the escape hatch from quoting: an argument holding spaces or quotes of its
-    own survives it unchanged.
-    """
+    """Return a command as argv, accepting a list, a JSON list, or a shell-quoted string."""
     if isinstance(cmd, (list, tuple)):
         return [str(a) for a in cmd]
     cmd = cmd.strip()
@@ -239,10 +234,9 @@ def make_external_reward(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: s
                           cache_max: int = 100_000, label: str = "external"):
     """Build a batched reward backed by one external scorer subprocess.
 
-    Each call creates an independent scorer with its own process and score cache, so several
-    external terms can run side by side. Within a batch, empty strings score 0.0 without a round
-    trip and duplicate sequences are sent once; scores are cached across batches until the cache
-    exceeds cache_max entries, at which point it is cleared.
+    Each call creates an independent scorer with its own process and score cache. Empty strings
+    score 0.0 without a round trip and duplicate sequences are sent once; scores are cached across
+    batches until the cache exceeds cache_max entries, at which point it is cleared.
 
     Args:
         cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
@@ -253,8 +247,8 @@ def make_external_reward(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: s
         label (str): Short tag for the term, used to prefix the child's stderr.
 
     Returns:
-        Callable[[list[str], Batch], list[float]]: Maps a batch of IDRs to the scorer's raw rewards,
-            in order. Shaping them is the term's job, not the scorer's.
+        Callable[[list[str], Batch], list[float]]: Maps a batch of IDRs to the scorer's raw
+            rewards, in order.
     """
     scorer = Scorer(cmd, cwd=cwd, timeout=timeout, label=label)
     cache: dict[str, float] = {}

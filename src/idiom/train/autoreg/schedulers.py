@@ -16,8 +16,8 @@ def warmup_cosine(
 ) -> torch.optim.lr_scheduler.LambdaLR:
     """Build a schedule that warms up linearly, then decays on a cosine curve.
 
-    The multiplier rises linearly to 1.0 over warmup_steps, then follows a cosine from 1.0 down to
-    min_lr_ratio at max_steps, and stays at min_lr_ratio thereafter.
+    The multiplier rises to 1.0 over warmup_steps, follows a cosine down to min_lr_ratio at
+    max_steps, and stays there.
 
     Args:
         optimizer (torch.optim.Optimizer): Optimizer whose learning rate is scheduled.

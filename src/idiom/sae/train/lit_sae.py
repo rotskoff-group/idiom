@@ -1,6 +1,4 @@
-"""The LightningModule that trains a SparseCoder.
-
-The recipe follows EleutherAI sparsify:
+"""The LightningModule that trains a SparseCoder, following EleutherAI sparsify.
 
 - loss = fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8;
 - decoder rows are renormalized to unit norm before every forward;
@@ -122,7 +120,7 @@ class LitSAE(L.LightningModule):
 
         Args:
             batch (t.Tensor): Activation rows of shape [n_tokens, d_in].
-            batch_idx (int): Index of the batch within the epoch (unused).
+            batch_idx (int): Index of the batch within the epoch; unused.
 
         Returns:
             t.Tensor: The scalar loss, fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8.
@@ -166,8 +164,8 @@ class LitSAE(L.LightningModule):
 
         Args:
             optimizer: The optimizer about to step.
-            gradient_clip_val: Lightning's clip value; ignored in favour of grad_clip_norm.
-            gradient_clip_algorithm: Lightning's clip algorithm; ignored, the norm is always used.
+            gradient_clip_val: Lightning's clip value; ignored, grad_clip_norm is used.
+            gradient_clip_algorithm: Lightning's clip algorithm; ignored, the norm is used.
         """
         if self.sae.normalize_decoder and self.sae.W_dec.grad is not None:
             self.sae.remove_gradient_parallel_to_decoder_directions()
@@ -180,11 +178,11 @@ class LitSAE(L.LightningModule):
 
     @t.no_grad()
     def validation_step(self, batch: t.Tensor, batch_idx: int):
-        """Log held-out FVU / explained variance / L0 (no AuxK: dead-latent revival is training-only).
+        """Log held-out FVU, explained variance, and L0; the AuxK loss is training-only.
 
         Args:
             batch (t.Tensor): Activation rows of shape [n_tokens, d_in].
-            batch_idx (int): Index of the batch within the epoch (unused).
+            batch_idx (int): Index of the batch within the epoch; unused.
         """
         out = self.sae(batch)
         l0 = (out.latent_acts > 0).float().sum(-1).mean()

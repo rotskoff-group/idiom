@@ -2,9 +2,7 @@
 
 Every FASTA entry is a full protein whose header ends "_IDR_{x}-{y}" (1-indexed, inclusive)
 marking the IDR span. A Record is the parsed form, with 0-indexed half-open coordinates.
-
-Sequences containing a residue outside the 20 canonical amino acids are dropped on read, with a
-logged count.
+Sequences holding a residue outside the 20 canonical amino acids are dropped on read.
 """
 
 from __future__ import annotations
@@ -83,9 +81,8 @@ def read_fasta(path: str | Path, *, drop_noncanonical: bool = True) -> list[tupl
 def parse_idr_header(header: str) -> tuple[str, int, int]:
     """Parse an "_IDR_x-y" header into an accession and 0-indexed half-open IDR coordinates.
 
-    The header span is 1-indexed inclusive and is converted to 0-indexed half-open. Any free text
-    after the first whitespace is ignored, and the split is on the last "_IDR_", so an accession
-    may itself contain underscores.
+    Free text after the first whitespace is ignored, and the split is on the last "_IDR_", so an
+    accession may itself contain underscores.
 
     Args:
         header (str): The FASTA header, whose first token ends in "_IDR_x-y".
@@ -111,8 +108,7 @@ def parse_idr_header(header: str) -> tuple[str, int, int]:
 def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterator[Record]:
     """Parse a FASTA into Records.
 
-    Entries with a missing, malformed, or out-of-range "_IDR_x-y" span are skipped, and the number
-    skipped is logged.
+    Entries with a missing, malformed, or out-of-range "_IDR_x-y" span are skipped.
 
     Args:
         path (str | Path): Path to the FASTA file.
@@ -169,8 +165,7 @@ def to_records(inputs, *, drop_noncanonical: bool = True) -> Iterator[Record]:
     - an iterable of Records and/or bare sequence strings.
 
     A bare sequence becomes a Record spanning the whole sequence, with a synthetic accession
-    "seq_0", "seq_1", and so on. A non-canonical bare sequence raises, whereas non-canonical
-    entries in a FASTA file are dropped.
+    "seq_0", "seq_1", and so on.
 
     Args:
         inputs (str | Path | Record | Iterable[str | Record]): The inputs to normalize.

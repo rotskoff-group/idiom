@@ -1,16 +1,8 @@
 """The public IDiom and IDiomSAE wrappers.
 
-IDiom wraps an IDiomTransformer and its Tokenizer, and provides loading and saving in the released
-format, generation of unprompted and prompted IDRs to strings or FASTA, and residual-stream
-embeddings. IDiomSAE bundles a trained SAE with its host model and layer, and provides feature
-activations, and feature-steered generation.
-
-Example:
-    from idiom import IDiom
-
-    model = IDiom.from_pretrained("jxliu2/idiom-300M")
-    idrs = model.generate_unprompted(n=100)
-    idrs = model.generate_prompted(protein_seq, start, end, n=100)
+IDiom wraps an IDiomTransformer and its Tokenizer: loading and saving in the released format,
+unprompted and prompted IDR generation, and residual-stream embeddings. IDiomSAE bundles a trained
+SAE with its host model and layer: feature activations and feature-steered generation.
 """
 
 from __future__ import annotations
@@ -45,13 +37,13 @@ WEIGHTS_FILE = "model.safetensors"
 
 
 def _resolve(name_or_path: str | Path) -> Path:
-    """Return a local directory unchanged, or download a Hub repo snapshot and return its path.
+    """Return a local directory unchanged, or download a Hub repo snapshot.
 
     Args:
-        name_or_path (str | Path): A local directory, or a Hub repo id to download.
+        name_or_path (str | Path): A local directory, or a Hub repo id.
 
     Returns:
-        Path: The local path to the directory.
+        Path: The local directory.
     """
     p = Path(name_or_path)
     if p.exists():
@@ -61,11 +53,10 @@ def _resolve(name_or_path: str | Path) -> Path:
 
 def _oversample(batch_fn, n: int, *, length_range: tuple[int, int] | None = None,
                 max_oversample: int = 20, seed: int | None = None) -> list[str]:
-    """Draw sequences until n of them fall within a length range.
+    """Draw batches of sequences until n of them fall within a length range.
 
-    With length_range None this makes a single draw. Otherwise it draws batches of n, varying the
-    seed per batch, and keeps those within the range, stopping once n are collected or n *
-    max_oversample sequences have been drawn. Hitting the cap emits a warning and returns fewer.
+    With length_range None a single batch is drawn. Reaching the draw cap warns and returns fewer
+    than n.
 
     Args:
         batch_fn (Callable): Draws a batch of sequences given (k, seed).
@@ -94,7 +85,7 @@ def _oversample(batch_fn, n: int, *, length_range: tuple[int, int] | None = None
 
 
 class IDiom:
-    """Wrapper around a trained IDiom transformer and its tokenizer.
+    """A trained IDiom transformer and its tokenizer.
 
     Attributes:
         model (IDiomTransformer): The wrapped transformer, in eval mode.
@@ -120,7 +111,7 @@ class IDiom:
     def load(cls, name_or_path: str | Path, *, device="auto") -> IDiom:
         """Load from a Lightning checkpoint, a released directory, or a Hub repo id.
 
-        A path naming an existing file is read as a checkpoint; anything else is passed to
+        A path naming an existing file is read as a checkpoint; anything else goes to
         from_pretrained.
 
         Args:
@@ -173,8 +164,8 @@ class IDiom:
                     commit_message: str | None = None, token: str | None = None) -> str:
         """Save in released form and upload to the Hub.
 
-        The repo is created if it does not exist, and config.json, model.safetensors, and any model
-        card are uploaded to its root, so the result loads with from_pretrained.
+        The repo is created if it does not exist; config.json, model.safetensors, and any model
+        card are uploaded to its root.
 
         Args:
             repo_id (str): Target Hub repo id.
@@ -259,8 +250,7 @@ class IDiom:
             length_range (tuple[int, int] | None): Inclusive (lo, hi) length filter; sequences are
                 redrawn until n fall in range or the oversampling cap is reached.
             max_oversample (int): Cap on total draws, as a multiple of n, when length_range is set.
-            batch_size (int | None): Maximum sequences per model forward; None generates each draw
-                in one batch.
+            batch_size (int | None): Maximum sequences per model forward; None uses one batch.
 
         Returns:
             list[str]: The generated IDR residue strings, at most n of them.
@@ -291,8 +281,8 @@ class IDiom:
                                   **kw) -> Path:
         """Generate unprompted IDRs and write them to a record FASTA.
 
-        Each record is headed "{prefix}_{i}_IDR_1-{len}", since the whole generated sequence is the
-        IDR. Empty generations are skipped, so the file may hold fewer than n records.
+        Each record is headed "{prefix}_{i}_IDR_1-{len}". Empty generations are skipped, so the
+        file may hold fewer than n records.
 
         Args:
             out_fasta (str | Path): Output FASTA path.
@@ -314,9 +304,8 @@ class IDiom:
         """Generate IDRs for each record of a FASTA and write them to another FASTA.
 
         Each output record is headed "{source_accession}_{marker}_gen{i}" followed by an IDR span.
-        With return_full False the generated IDR is written alone, spanning the whole record; with
-        return_full True it is spliced back between its flanks and the whole protein is written,
-        with the span pointing at the spliced region. Empty generations are skipped.
+        With return_full False the IDR is written alone; with return_full True it is spliced back
+        between its flanks and the whole protein is written. Empty generations are skipped.
 
         Args:
             in_fasta (str | Path): Input proteins with "_IDR_x-y" headers.
@@ -363,8 +352,8 @@ class IDiom:
 class IDiomSAE:
     """A sparse autoencoder bundled with its host model, layer, and training distribution.
 
-    The recorded region and fim_mode are applied automatically by encode, build_feature_dataset,
-    and steer_generate.
+    The recorded region and fim_mode are reapplied by encode, build_feature_dataset, and
+    steer_generate.
 
     Attributes:
         sae (SparseCoder): The trained autoencoder, in eval mode on the host's device.
@@ -410,7 +399,7 @@ class IDiomSAE:
         self.fim_mode = normalize_mode(fim_mode)
 
     def __repr__(self) -> str:
-        """Show the training distribution, so the regime is visible without reading the card."""
+        """Return the host, layer, training distribution, and SAE shape."""
         return (f"IDiomSAE(host={self.host_model!r}, layer={self.layer}, region={self.region!r}, "
                 f"fim_mode={self.fim_mode!r}, latents={self.sae.num_latents}, "
                 f"k={getattr(self.sae, 'k', '?')})")
@@ -515,13 +504,15 @@ class IDiomSAE:
             pool (str): "none" for per-residue rows, or "mean" to average over each record's
                 residues within region.
             region (str | None): "all", "idr", or "non_idr"; the SAE's training region if None.
-                Only meaningful for a prompted-mode SAE: under fim_mode "unprompted" the record is
-                encoded as "132{IDR}", so no flanking residues exist and only "idr" is available.
+                An unprompted-mode SAE encodes "132{IDR}", so only "idr" is available.
 
         Returns:
             tuple: With pool="none", an [N_res, num_latents] array and a list of per-row metadata
                 dicts carrying accession, source_pos, residue, and is_idr. With pool="mean", an
                 [N_seq, num_latents] array and the list of accessions it corresponds to.
+
+        Raises:
+            ValueError: If region is not "idr" for an unprompted-mode SAE.
         """
         region = region or self.region
         # An unprompted-mode SAE only ever sees "132{IDR}", so there are no non-IDR residues to
@@ -576,11 +567,9 @@ class IDiomSAE:
                        length_range: tuple[int, int] | None = None, max_oversample: int = 20) -> list[str]:
         """Generate IDRs with one or more features steered on the SAE's layer.
 
-        For mode "add_direction", the flags set how strength is interpreted: by default it scales
-        each feature's decoder row directly; with normalize it is the magnitude of the summed unit
-        direction; with relative it is a fraction of each position's residual norm, which takes
-        precedence over normalize; and with preserve_norm, which applies only alongside relative,
-        each position is rescaled back to its original norm after the push.
+        For mode "add_direction", the flags set how strength is read: by default it scales each
+        feature's decoder row; with normalize it is the magnitude of the summed unit direction;
+        with relative it is a fraction of each position's residual norm, which overrides normalize.
 
         Args:
             feature (int | list[int]): Feature index or indices to steer.
@@ -620,11 +609,11 @@ class IDiomSAE:
 
 
 def _idr_header(accession: str, seq: str) -> str:
-    """Build a header spanning the whole sequence, as "{accession}_IDR_1-{len(seq)}".
+    """Return the header "{accession}_IDR_1-{len(seq)}", spanning the whole sequence.
 
     Args:
         accession (str): The record accession to prefix.
-        seq (str): The generated sequence, whose length sets the span.
+        seq (str): The sequence whose length sets the span.
 
     Returns:
         str: The FASTA header.
@@ -642,7 +631,7 @@ def _write_fasta(records: list[tuple[str, str]], path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Run the idiom_generate CLI, generating IDRs and writing them to a FASTA.
+    """Run the idiom_generate CLI: generate IDRs and write them to a FASTA.
 
     Args:
         argv (list[str] | None): Argument list; sys.argv[1:] if None.

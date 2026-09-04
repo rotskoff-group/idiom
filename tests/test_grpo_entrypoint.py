@@ -52,13 +52,7 @@ def test_build_reward_composes():
 
 
 def test_the_library_defines_only_the_guardrails():
-    """entropy and length register on import; nothing else is built in.
-
-    Two things ride on this. `pip install git+...` is usable because the shipped config names the
-    guardrails directly and needs nothing on disk beside it. And the library takes no view on what
-    you should design for: every other reward is repository material a run points a term at, so
-    adding one here is a deliberate statement that it belongs to everybody.
-    """
+    """entropy and length register on import; nothing else is built in."""
     from idiom.train.grpo.reward import REWARD_REGISTRY, Batch, get_reward
 
     assert get_reward("entropy")(["AAAA"], Batch()) == [0.0]
@@ -97,13 +91,7 @@ def test_build_rejects_unknown_prompt_mode(tmp_path):
 
 
 def test_nothing_shipped_names_a_path_outside_the_package():
-    """The shipped configs must name only library code -- no filesystem paths at all.
-
-    This is what makes every install equivalent. A reward model that runs in its own environment is
-    a standalone program in the repository (cookbook/rewards/scorers/), named by an explicit cmd in
-    the run that wants it; if one ever leaked into the shipped menu, a pip install would carry a
-    config pointing at a file it does not have.
-    """
+    """The shipped configs name only library code -- no filesystem paths at all."""
     import idiom.configs
 
     cfgdir = Path(idiom.configs.__file__).parent
@@ -140,11 +128,7 @@ def test_the_sae_reward_ships_with_its_signatures():
 
 
 def test_the_shipped_objective_is_the_guardrails_and_nothing_else():
-    """Out of the box a run optimizes only entropy and length, and `add` is the extension point.
-
-    The config ships inert on purpose: what a run designs for is named at launch (see
-    cookbook/scripts/), so nothing is silently optimizing on somebody's behalf.
-    """
+    """Out of the box a run optimizes only entropy and length; `add` is the extension point."""
     import idiom.configs
 
     cfg = OmegaConf.load(Path(idiom.configs.__file__).parent / "grpo.yaml")
@@ -154,11 +138,10 @@ def test_the_shipped_objective_is_the_guardrails_and_nothing_else():
 
 
 def test_shipped_config_enabled_terms_need_no_repository(tmp_path, monkeypatch):
-    """The terms that are ON by default must build from the package alone.
+    """The terms enabled by default build from the package alone.
 
-    A disabled term may name anything, but an enabled one runs on step 1, so if the guardrails
-    needed a file outside the wheel, idiom_train_grpo would be dead on arrival for a pip install. Running
-    from an unrelated working directory is the check: nothing may resolve relative to the cwd.
+    Running from an unrelated working directory is the check: nothing may resolve relative to the
+    cwd.
     """
     import idiom.configs
 

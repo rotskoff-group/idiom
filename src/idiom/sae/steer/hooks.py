@@ -1,8 +1,7 @@
 """Forward hooks that modify the residual stream, and the context manager that installs them.
 
-Each transformer block returns its residual-stream output of shape [B, L, d_model]. A forward hook
-registered on model.blocks[layer] returns a modified tensor, which becomes the input to the next
-block. The hooks here cover four kinds of edit:
+A hook registered on model.blocks[layer] returns a modified [B, L, d_model] tensor, which becomes
+the input to the next block. The hooks here cover four kinds of edit:
 
 - add_direction_hook, add_relative_direction_hook, add_relative_renorm_direction_hook: add a
   vector, sized absolutely, relative to the local residual norm, or relative with the norm
@@ -12,7 +11,7 @@ block. The hooks here cover four kinds of edit:
 - substitute_hook: replace the residual with a fixed vector.
 
 The steering context manager installs a hook and, given a tokenizer, confines its effect to the
-positions selected by the tokenizer's region mask.
+positions the tokenizer's region mask selects.
 """
 
 from __future__ import annotations
@@ -44,7 +43,7 @@ def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callab
 def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> Callable:
     """Build a hook that adds alpha * ||x|| * unit(direction) at each position.
 
-    The added vector is scaled by that position's own residual norm, so alpha is dimensionless.
+    alpha is a dimensionless fraction of the position's own residual norm.
 
     Args:
         direction (torch.Tensor): The steering direction, normalized internally, shape [d_model].
@@ -66,7 +65,7 @@ def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> 
 def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> Callable:
     """Build a hook that adds a relative direction, then restores each position's original norm.
 
-    The output has the same per-position norm as the input, so the edit changes direction only.
+    The output has the same per-position norm as the input.
 
     Args:
         direction (torch.Tensor): The steering direction, normalized internally, shape [d_model].
@@ -89,10 +88,8 @@ def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1
 def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 1.0) -> Callable:
     """Build a hook computing x - scale * sum_f act_f(x) * W_dec[f] over the chosen features.
 
-    Only the selected features' decoder contribution is removed; every other feature and the
-    reconstruction residual are left untouched, and nothing is removed at positions where the
-    feature did not fire. scale of 1 erases the features exactly, above 1 over-subtracts, and below
-    0 amplifies them.
+    Other features and the reconstruction residual are left untouched. scale of 1 erases the
+    features exactly, above 1 over-subtracts, and below 0 amplifies them.
 
     Args:
         sae: The SAE providing encode_dense and W_dec.
@@ -133,7 +130,7 @@ def substitute_hook(vector: torch.Tensor) -> Callable:
 def sae_edit_hook(sae, edit_fn: Callable[[torch.Tensor], torch.Tensor]) -> Callable:
     """Build a hook computing decode_dense(edit_fn(encode_dense(x))).
 
-    The residual is replaced by the SAE reconstruction, so the output also carries the SAE's
+    The residual is replaced by the SAE reconstruction, so the output carries the SAE's
     reconstruction error.
 
     Args:
@@ -185,10 +182,9 @@ def clamp_features_edit(
 def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str = "all"):
     """Register a forward hook on one transformer block for the duration of the context.
 
-    With a tokenizer given, the edit is confined to the positions the tokenizer's region mask
-    selects, recomputed on every forward pass. A pre-hook accumulates the running token sequence
-    across forwards, so the mask is correct during KV-cached decoding, when each forward sees only
-    the newest token. With tokenizer None the hook applies at every position.
+    With a tokenizer given, the edit is confined to the positions its region mask selects,
+    recomputed on every forward pass; a pre-hook accumulates the running token sequence so the mask
+    is correct during KV-cached decoding. With tokenizer None the hook applies at every position.
 
     Args:
         model: An IDiomTransformer.

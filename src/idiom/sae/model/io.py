@@ -1,7 +1,7 @@
 """The SAE release format: sae_config.json plus sae.safetensors.
 
 The config records the host model, the layer, the residue region, the prompt format, and the
-SparseCoder shape, so a release can be loaded without any of them being supplied by the caller.
+SparseCoder shape, so a release loads with nothing supplied by the caller.
 """
 
 from __future__ import annotations

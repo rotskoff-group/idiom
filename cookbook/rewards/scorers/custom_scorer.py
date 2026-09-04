@@ -4,15 +4,14 @@
 # ///
 """Template for a reward model in its own environment. Copy this file and edit it.
 
-**Use this only when the scorer cannot be imported into IDiom's environment.** If it can, a term
-naming an in-process function is simpler and much faster -- see custom_rewards.py. A subprocess to call
-something you could have imported is pure overhead. The reason this mechanism exists is that some
-predictors pin dependencies IDiom cannot hold: ProtGPS wants python 3.8 with torch 2.0, PADDLE wants
-TensorFlow. This script pins `numpy<2` to stand in for that -- a real and common source of conflict.
+Use this only when the scorer cannot be imported into IDiom's environment; when it can, a term
+naming an in-process function is simpler and faster -- see custom_rewards.py. This one computes
+isoelectric point and molecular weight from Biopython, and pins `numpy<2` to stand in for a real
+dependency conflict.
 
-A scorer is a standalone program. It imports nothing from IDiom, so it can be a uv script (as here),
+A scorer is a standalone program importing nothing from IDiom, so it can be a uv script (as here),
 a conda environment, or `docker run -i`. Its dependencies live in the PEP 723 header above, so `uv
-run --script` builds and caches the environment on first use and there is no install step.
+run --script` builds and caches the environment on first use.
 
     reward.terms:
       - {cmd: "uv run --script /path/to/custom_scorer.py --property isoelectric_point",
@@ -23,20 +22,15 @@ The protocol is newline-delimited JSON, one exchange per GRPO step:
     ->  {"sequences": ["ACDEF...", "GHIKL..."]}
     <-  {"scores": [4.21, 9.87]}          # or {"error": "..."}
 
-One finite score per sequence, in the order they were sent (a count mismatch is rejected), flushed
-after each response. Load the model once at import, not per batch.
+One finite score per sequence, in the order they were sent, flushed after each response. Load the
+model once at import, not per batch.
 
-Check it before it ever takes a GPU -- this builds the environment, runs the handshake, and prints
+Check a command before running it -- this builds the environment, runs the handshake, and prints
 what the shaping does to the raw value:
 
     uv run python -m idiom.train.grpo.reward.external \
         --cmd "uv run --script cookbook/rewards/scorers/custom_scorer.py --property isoelectric_point" \
         --shaping gaussian --target 4.5 --width 0.3
-
-What this one computes: isoelectric point and molecular weight, from Biopython. pI is a real handle
-on IDR behaviour -- most nuclear IDRs are acidic, and pI tracks the charge balance that drives
-complex coacervation -- and it is not one line of python, which is why it makes a better example
-than something you would have written in-process.
 """
 
 import argparse

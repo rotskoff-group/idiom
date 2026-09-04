@@ -1,8 +1,7 @@
 """Residual-stream activation extraction.
 
 Runs the model with return_hidden_states, selects positions with the tokenizer's region mask, and
-returns the kept activation rows together with the metadata needed to map each row back to the
-sequence, position, and residue it came from.
+returns the kept activation rows with the sequence, position, and token id of each.
 """
 
 from __future__ import annotations
@@ -46,8 +45,7 @@ def extract_activations(
 ) -> dict[int, LayerActivations]:
     """Extract residual-stream activations at the given layers for the selected positions.
 
-    Positions are selected with Tokenizer.region_mask: control tokens are always dropped, and
-    region restricts by position relative to the FIM "2" marker that opens the IDR.
+    Positions are selected with Tokenizer.region_mask.
 
     Args:
         model: The transformer to run.

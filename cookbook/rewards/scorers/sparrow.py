@@ -4,10 +4,8 @@
 # ///
 """Score IDRs with sparrow (https://github.com/idptools/sparrow) as an external GRPO reward.
 
-The worked example of an external reward: it runs in its own environment and imports nothing from
-IDiom. Its dependencies live in the script header above, so uv builds and caches the environment on
-demand and the config only names the script (see the reward section of the top-level README for
-cache and pinning guidance). In configs/grpo.yaml:
+Its dependencies live in the script header above, so uv builds and caches the environment on demand
+and the config only names the script. In configs/grpo.yaml:
 
     reward.terms:
       - {cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
@@ -15,9 +13,8 @@ cache and pinning guidance). In configs/grpo.yaml:
 
 It returns the raw property value; the term's shaping turns that into a reward. --property is any
 ALBATROSS predictor (radius_of_gyration, end_to_end_distance, asphericity, scaling_exponent,
-prefactor) or a sequence parameter (FCR, NCPR, kappa, SCD, complexity). Note kappa returns -1.0 for a
-sequence with no charged residues (a sentinel a policy can reach by removing all charge), so target
-it only alongside an FCR constraint.
+prefactor) or a sequence parameter (FCR, NCPR, kappa, SCD, complexity). kappa returns -1.0 for a
+sequence with no charged residues, so target it only alongside an FCR constraint.
 """
 
 import argparse
@@ -36,9 +33,8 @@ from sparrow import Protein
 def value(sequence, prop):
     """Return the requested sparrow property for one sequence.
 
-    ALBATROSS predictions are methods on Protein.predictor, while sequence parameters such as FCR
-    and kappa are attributes on Protein itself. Checking the predictor first lets one flag select
-    either kind.
+    ALBATROSS predictions are methods on Protein.predictor; sequence parameters such as FCR and
+    kappa are attributes on Protein itself.
 
     Args:
         sequence (str): An IDR residue string.

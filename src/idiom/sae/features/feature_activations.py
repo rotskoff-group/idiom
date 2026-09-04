@@ -116,7 +116,7 @@ class FeatureDataset:
     def feature_ranking(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return per-feature maximum, total, and firing count over the whole dataset.
 
-        Zero-valued selections are ignored. The result is computed once and cached.
+        Zero-valued selections are ignored, and the result is cached.
 
         Returns:
             tuple[np.ndarray, np.ndarray, np.ndarray]: The per-latent maximum activation, total
@@ -144,7 +144,7 @@ class FeatureDataset:
         return self._ranking
 
     def feature_stats(self, feature_id: int) -> tuple[float, np.ndarray, np.ndarray]:
-        """Return one feature's global maximum and its per-sequence peak and firing fraction.
+        """Return one feature's global maximum, per-sequence peak, and per-sequence firing fraction.
 
         Args:
             feature_id (int): The latent to summarize.

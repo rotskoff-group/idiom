@@ -84,7 +84,7 @@ class RecordDataModule(L.LightningDataModule):
         """Build each configured split once.
 
         Args:
-            stage (str | None): Lightning stage name; ignored, every configured split is built.
+            stage (str | None): Lightning stage name; ignored.
         """
         # Idempotent: Lightning may call setup() more than once; only build each split once.
         if self.train_set is None:

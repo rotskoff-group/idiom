@@ -26,10 +26,10 @@ __all__ = ["build", "build_reward", "run"]
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     """Wire the GRPO module and prompt dataset from a resolved config.
 
-    The policy is always warm-started from cfg.init_from, and its architecture is read from that
-    artifact. cfg.prompts.mode selects the prompt dataset: "unprompted" repeats the bare "132"
-    prompt cfg.prompts.n times, and "prompted" takes cfg.prompts.n_per flank prompts from each
-    record in cfg.prompts.fasta.
+    The policy is warm-started from cfg.init_from, and its architecture is read from that artifact.
+    cfg.prompts.mode selects the prompt dataset: "unprompted" repeats the bare "132" prompt
+    cfg.prompts.n times, "prompted" takes cfg.prompts.n_per flank prompts from each record in
+    cfg.prompts.fasta.
 
     Args:
         cfg (DictConfig): Resolved GRPO config, with grpo, reward, prompts, and init_from.
@@ -41,8 +41,6 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
         ValueError: If cfg.prompts.mode is neither "unprompted" nor "prompted".
     """
     grpo_kw = OmegaConf.to_container(cfg.grpo, resolve=True)
-    # One composite reward: a weighted sum of the configured terms, scored a whole batch per
-    # step. Built before the model loads, so a bad reward config fails in seconds.
     reward_terms = build_reward(cfg.reward)
     lit = LitGRPO.init_from_checkpoint(cfg.init_from, reward_terms=reward_terms, **grpo_kw)
 
@@ -59,8 +57,8 @@ def run(cfg: DictConfig) -> None:
     """Build the module and prompts, configure the trainer and logger, and fit.
 
     Writes the resolved config to cfg.out_dir and logs to Weights & Biases against the training
-    step. With cfg.trainer.checkpoint_every greater than 0, a checkpoint is kept every that many
-    steps alongside last.ckpt; otherwise only the final step is saved.
+    step. With cfg.trainer.checkpoint_every above 0, a checkpoint is kept every that many steps
+    alongside last.ckpt; otherwise only the final step is saved.
 
     Args:
         cfg (DictConfig): Resolved GRPO config.
