@@ -15,10 +15,7 @@ import pytest
 from omegaconf import OmegaConf
 
 from idiom.train.grpo.reward import build_reward, quadratic_penalty, register_reward
-from idiom.configs import rewards_path
-from idiom.train.grpo.reward import Batch, get_reward, import_module_spec
-
-import_module_spec(str(rewards_path("custom_rewards.py")))  # registers entropy and length
+from idiom.train.grpo.reward import Batch, get_reward, parse_terms
 
 
 def entropy(idr: str) -> float:
@@ -179,3 +176,122 @@ def test_config_errors_are_raised_at_build_time():
         build_reward(_cfg([{"reward": "length", "weight": 1.0, "target": 100}]))
     with pytest.raises(ValueError, match="unknown shaping type"):
         build_reward(_cfg([{"reward": "length", "shaping": {"type": "quadratik", "target": 1}}]))
+
+
+# --- reward: "module:function" -------------------------------------------------------------
+# The path for code that already exists in the environment IDiom was installed into: a term names
+# an importable callable, so nothing has to be decorated, registered, or copied into this repo.
+
+
+@pytest.fixture
+def lab_package(tmp_path, monkeypatch):
+    """A stand-in for a package installed beside IDiom, importing nothing from it."""
+    pkg = tmp_path / "labpkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "scoring.py").write_text(
+        "def score_idr(seq):\n"
+        "    return seq.count('W') / len(seq) if seq else 0.0\n"
+        "\n"
+        "def score_batch(seqs, batch):\n"
+        "    return [float(len(s)) for s in seqs]\n"
+        "\n"
+        "NOT_CALLABLE = 3\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    return pkg
+
+
+def test_callable_reward_needs_no_decorator(lab_package):
+    totals, breakdown = build_reward(_cfg([{"reward": "labpkg.scoring:score_idr", "weight": 2.0}]))(
+        ["WWAA", "AAAA"], 1)
+    assert totals == [1.0, 0.0]  # 2/4 aromatic * weight 2, and 0
+    # logged under the function's own name, not the whole dotted spec
+    assert set(breakdown[0]) == {"score_idr", "score_idr_raw", "total"}
+
+
+def test_callable_reward_accepts_a_file_path(lab_package):
+    spec = f"{lab_package / 'scoring.py'}:score_idr"
+    assert build_reward(_cfg([{"reward": spec, "weight": 1.0}]))(["WWAA"], 1)[0] == [0.5]
+
+
+def test_callable_reward_batched_form(lab_package):
+    cfg = _cfg([{"reward": "labpkg.scoring:score_batch", "batched": True, "weight": 1.0}])
+    assert build_reward(cfg)(["WWAA", "AAA"], 1)[0] == [4.0, 3.0]
+
+
+def test_callable_reward_label_can_be_overridden(lab_package):
+    cfg = _cfg([{"reward": "labpkg.scoring:score_idr", "label": "aromatic", "weight": 1.0}])
+    _, breakdown = build_reward(cfg)(["WWAA"], 1)
+    assert set(breakdown[0]) == {"aromatic", "aromatic_raw", "total"}
+
+
+@pytest.mark.parametrize("spec, match", [
+    ("labpkg.nope:score_idr", "cannot import"),
+    ("labpkg.scoring:nope", "has no attribute"),
+    ("labpkg.scoring:NOT_CALLABLE", "not callable"),
+])
+def test_bad_callable_reward_fails_at_build_time(lab_package, spec, match):
+    # a term that cannot run must fail while the config is parsed, not on the first training step
+    with pytest.raises(ValueError, match=match):
+        build_reward(_cfg([{"reward": spec, "weight": 1.0}]))
+
+
+def test_batched_is_rejected_on_a_registered_reward():
+    with pytest.raises(ValueError, match="batched applies only"):
+        build_reward(_cfg([{"reward": "entropy", "batched": True, "weight": 1.0}]))
+
+
+# --- reward.add: choosing the objective at launch --------------------------------------------
+# The config carries the guardrails and a named menu; a run says what it optimizes on the command
+# line. Names, not list positions, because positions shift whenever the menu grows.
+
+MENU = {"rg": {"cmd": "true", "label": "rg", "weight": 0.5,
+               "shaping": {"type": "quadratic", "target": 25, "width": 0.2}},
+        "prol": {"reward": "fraction_proline", "weight": 1.0}}
+
+
+def _addcfg(add):
+    return OmegaConf.create({"module": None, "terms": GUARDRAILS, "presets": MENU, "add": add})
+
+
+def test_add_is_empty_by_default():
+    assert [s.label for s in parse_terms(_addcfg([]))] == ["entropy", "length"]
+
+
+def test_add_appends_a_named_preset_after_the_guardrails():
+    assert [s.label for s in parse_terms(_addcfg(["prol"]))] == ["entropy", "length",
+                                                                 "fraction_proline"]
+
+
+def test_add_preserves_the_order_it_was_named_in():
+    assert [s.label for s in parse_terms(_addcfg(["rg", "prol"]))][2:] == ["rg", "fraction_proline"]
+
+
+def test_add_accepts_a_whole_term_inline():
+    term = {"reward": "fraction_proline", "label": "mine", "weight": 3.0}
+    specs = parse_terms(_addcfg([term]))
+    assert specs[-1].label == "mine" and specs[-1].weight == 3.0
+
+
+def test_add_carries_the_presets_shaping_and_weight():
+    spec = parse_terms(_addcfg(["rg"]))[-1]
+    assert spec.weight == 0.5 and spec.shaping["target"] == 25
+
+
+def test_unknown_preset_names_the_menu():
+    with pytest.raises(ValueError, match=r"unknown preset 'nope'.*\['prol', 'rg'\]"):
+        parse_terms(_addcfg(["nope"]))
+
+
+def test_add_rejects_a_non_name_non_mapping():
+    with pytest.raises(ValueError, match="expected a preset name or a term mapping"):
+        parse_terms(_addcfg([3]))
+
+
+def test_an_unused_preset_is_never_validated():
+    # the menu may name a reward this environment cannot import; that is what makes it free
+    cfg = OmegaConf.create({"module": None, "terms": GUARDRAILS,
+                            "presets": {"bad": {"reward": "no.such.module:f", "weight": 1.0}},
+                            "add": []})
+    assert [s.label for s in parse_terms(cfg)] == ["entropy", "length"]

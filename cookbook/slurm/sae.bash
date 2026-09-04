@@ -28,7 +28,9 @@ REPO="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 OUT="${IDIOM_OUT:-$HOME/idiom-runs}/sae"          # EDIT: keep runs on scratch, not in the repo
 
 unset PYTHONPATH PYTHONHOME
-source "$REPO/.venv/bin/activate"
+# The clone's own venv if `uv sync` made one; otherwise whatever environment idiom is installed in
+# (a `pip install git+...` into your own env needs no activation here).
+if [[ -f "$REPO/.venv/bin/activate" ]]; then source "$REPO/.venv/bin/activate"; fi
 cd "$REPO"
 export PYTHONUNBUFFERED=1
 export WANDB_MODE=${WANDB_MODE:-offline}           # EDIT: `wandb login` and set online for live logging

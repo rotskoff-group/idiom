@@ -8,9 +8,7 @@ Prompts within a batch must be equal length.
 from __future__ import annotations
 
 import copy
-import math
 import random
-from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict
 
@@ -23,25 +21,9 @@ from idiom.model.io import load_model
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
 from idiom.train.grpo.core import grpo_loss, group_advantages, sequence_kl, sequence_logprobs
-
-
-def _composition_entropy(idr: str) -> float:
-    """Return the Shannon entropy of an IDR's composition in bits, for logging.
-
-    The same quantity the entropy reward reports, computed here so the metric is logged whether or
-    not a run configures that term. The rewards themselves live in the repository's rewards/
-    directory, which the library does not import.
-
-    Args:
-        idr (str): The decoded IDR residue string.
-
-    Returns:
-        float: Composition entropy in bits, or 0.0 for an empty string.
-    """
-    if not idr:
-        return 0.0
-    n = len(idr)
-    return -sum((c / n) * math.log2(c / n) for c in Counter(idr).values()) or 0.0
+# The entropy reward itself, so the metric is logged whether or not a run configures that term and
+# cannot drift from what the term optimizes.
+from idiom.train.grpo.reward.builtin import sequence_entropy as _composition_entropy
 
 
 class LitGRPO(L.LightningModule):

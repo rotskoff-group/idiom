@@ -7,7 +7,7 @@ fraction in [0, 1], so a term usually leaves it unshaped. Naming the module on t
 which is what keeps torch and the SAE out of a run that does not use one:
 
     reward.terms:
-      - {reward: sae_only_nucleolus, module: ${idiom_rewards:rl_sae_reward/rl_sae_reward.py}, weight: 1.0}
+      - {reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}
 
 The targets file maps a case name to a mapping of signature name to feature ids, and can be built
 with cookbook/scripts/feature_enrichment.py.
@@ -27,17 +27,19 @@ from functools import lru_cache
 from pathlib import Path
 
 import torch
+from loguru import logger as log
 
 from idiom import IDiomSAE
 from idiom.data.fim import fim_unprompted
 from idiom.model.activations import extract_activations
 from idiom.train.grpo.reward.registry import register_reward
 
-# The signature ships next to this file, so the default resolves from any working directory; point
-# IDIOM_SAEREWARD_FEATURES at your own JSON of the same shape to override.
+# The signatures for the released SAE ship next to this module, so the default works in any install
+# and from any working directory; point IDIOM_SAEREWARD_FEATURES at your own JSON of the same shape
+# (cookbook/scripts/feature_enrichment.py writes one) to override.
 _SAE_DIR = os.environ.get("IDIOM_SAEREWARD_SAE", "jxliu2/idiomsae-300M-L18-k32")
 _FEATURES = os.environ.get(
-    "IDIOM_SAEREWARD_FEATURES", str(Path(__file__).resolve().parent / "idiomsae-300M-L18-k32.json"))
+    "IDIOM_SAEREWARD_FEATURES", str(Path(__file__).resolve().parent / "sae_signatures.json"))
 _CASE = os.environ.get("IDIOM_SAEREWARD_CASE", "top30")
 
 
@@ -116,10 +118,25 @@ def _sae_only_reward(name: str):
 
 
 def _signature_names() -> list[str]:
-    """Return the sorted signature names in the configured targets file, or [] if it is unreadable."""
+    """Return the sorted signature names in the configured targets file, or [] if it is unreadable.
+
+    A bad or missing targets file must not break import -- this module is imported whenever a term
+    names it, including from a config that lists it but does not enable it. But it must not fail
+    silently either: registering nothing here surfaces later as "unknown reward sae_only_<name>",
+    which names the wrong problem. So the reason is logged, with the file it came from.
+
+    Returns:
+        list[str]: The signature names, or [] if the targets file could not be read.
+    """
     try:
         return sorted(_featuresets())
-    except Exception:  # a bad/missing targets file must not break import
+    except Exception as e:
+        log.warning(
+            f"sae_feature: no signatures registered from {_FEATURES} "
+            f"({type(e).__name__}: {e}). Any sae_only_* reward will now look unknown. Check "
+            f"IDIOM_SAEREWARD_FEATURES (the signature JSON) and IDIOM_SAEREWARD_CASE (currently "
+            f"{_CASE!r}); build a signature with cookbook/scripts/feature_enrichment.py."
+        )
         return []
 
 

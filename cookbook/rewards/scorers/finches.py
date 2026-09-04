@@ -18,12 +18,12 @@ Two modes:
                                      for a protein you already have.
 
 Reference values from this scale (Mpipi, homotypic): an FUS-LC-like aromatic tract is about -8.5,
-IDiom's base generations average +3.3, and natural ProtGPS nucleolus IDRs average +7.7. Aim at a
-negative target to design self-attractive sequences:
+IDiom's base generations average +3.6 (sd 7.0), and natural ProtGPS nucleolus IDRs average +7.7.
+Aim at a negative target to design self-attractive sequences:
 
     reward.terms:
-      - {cmd: "uv run --script ${idiom_rewards:external_rewards/finches.py} --mode homotypic",
-         label: eps, weight: 1.0, shaping: {type: quadratic, target: -6.0, width: 0.3}}
+      - {cmd: "uv run --script cookbook/rewards/scorers/finches.py --mode homotypic",
+         label: eps, weight: 1.0, shaping: {type: quadratic, target: -6.0, width: 1.0}}
 
 Epsilon is unbounded, so keep the entropy and length guardrails on: the cheapest route to a very
 negative epsilon is a low-complexity hydrophobic or aromatic tract, which is no longer an IDR.

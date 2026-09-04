@@ -10,7 +10,7 @@ demand and the config only names the script (see the reward section of the top-l
 cache and pinning guidance). In configs/grpo.yaml:
 
     reward.terms:
-      - {cmd: "uv run --script ${idiom_rewards:external_rewards/sparrow.py} --property radius_of_gyration",
+      - {cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
          label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}
 
 It returns the raw property value; the term's shaping turns that into a reward. --property is any

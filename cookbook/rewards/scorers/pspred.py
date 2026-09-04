@@ -23,7 +23,7 @@ with c_sat = 1.2 mg/mL, while poly-GS scores dG = +0.3 kT with c_sat = 80 mg/mL.
     --target cdil_mgml       the same, exponentiated to mg/mL
 
     reward.terms:
-      - {cmd: "uv run --script ${idiom_rewards:external_rewards/pspred.py} --target dG",
+      - {cmd: "uv run --script cookbook/rewards/scorers/pspred.py --target dG",
          label: dG, weight: 1.0, shaping: {type: quadratic, target: -6.0, width: 0.3}}
 
 The predictor's own files (3.7 MB: two scripts, a residue table and three joblib models) are fetched

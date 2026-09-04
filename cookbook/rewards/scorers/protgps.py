@@ -22,12 +22,12 @@ The checkpoints (166 MB, CC BY 4.0) are downloaded once from the paper's Zenodo 
 IDIOM_PROTGPS_DIR, so a clean checkout needs no manual setup:
 
     uv run python -m idiom.train.grpo.reward.external \
-        --cmd "uv run --script ${idiom_rewards:external_rewards/protgps.py} --compartment nucleolus"
+        --cmd "uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus"
 
 In configs/grpo.yaml:
 
     reward.terms:
-      - {cmd: "uv run --script ${idiom_rewards:external_rewards/protgps.py} --compartment nucleolus",
+      - {cmd: "uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus",
          label: protgps, weight: 1.0}
 
 The raw reward is already a probability in [0, 1], so a term usually leaves it unshaped.
@@ -35,7 +35,7 @@ The raw reward is already a probability in [0, 1], so a term usually leaves it u
 
 Caveat: ProtGPS rewards compositional extremity, and high scores are reachable with low-complexity
 tracts, so keep the entropy and length guardrails on. Optimizing a classifier is not the same as
-reproducing what it detects -- that gap is what the SAE feature reward (rl_sae_reward) addresses.
+reproducing what it detects -- that gap is what the SAE feature reward (sae_feature) addresses.
 
 Environment variables:
     IDIOM_PROTGPS_DIR     where the checkpoints live; downloaded here on first use

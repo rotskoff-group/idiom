@@ -13,7 +13,7 @@ an ensemble exposes.
     --conformations N             ensemble size per sequence (default 20)
 
     reward.terms:
-      - {cmd: "uv run --script ${idiom_rewards:external_rewards/starling.py} --property radius_of_gyration",
+      - {cmd: "uv run --script cookbook/rewards/scorers/starling.py --property radius_of_gyration",
          label: rg_ens, weight: 1.0, shaping: {type: quadratic, target: 25, width: 0.2},
          timeout: 900}
 

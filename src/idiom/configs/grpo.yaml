@@ -35,93 +35,32 @@ trainer:
   checkpoint_every: 0 # periodic checkpoint every N steps (0 = last only)
 
 reward: # total = sum over enabled terms of weight * shaping(reward(idr))
-  module: null # optional *.py or module with @register_reward, imported first
-
+  # The guardrails, and the only rewards the library defines. Both are built in, so they need no
+  # module and no clone: together they contribute about -1.8 to a starting sequence, and every term
+  # you add should be sized against that (see cookbook/rewards/README.md).
   terms:
-    - enabled: true
-      reward: entropy
-      weight: 1.0
-      module: ${idiom_rewards:custom_rewards.py}
-      shaping: {type: quadratic, target: 3.65, width: 0.2} # bits
+    - {reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}} # bits
+    - {reward: length, weight: 1.0, shaping: {type: quadratic, target: 100, width: 1.0}} # residues
 
-    - enabled: true
-      reward: length
-      weight: 1.0
-      module: ${idiom_rewards:custom_rewards.py}
-      shaping: {type: quadratic, target: 100, width: 1.0} # residues
+  # What this run optimizes, appended to the guardrails. Empty here on purpose: the library takes no
+  # view on what you should design for, so the objective is named at launch rather than edited in.
+  # An entry is a whole term -- see cookbook/slurm/ for a ready-to-submit script per reward:
+  #
+  #   reward.add='[{reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}]'
+  #   reward.add='[{reward: fraction_charged, module: cookbook/rewards/my_rewards.py, weight: 1.0,
+  #                 shaping: {type: gaussian, target: 0.25, width: 0.5}}]'
+  #   reward.add='[{reward: "mypackage.scoring:score_idr", weight: 1.0}]'
+  #   reward.add='[{cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
+  #                 label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}]'
+  #
+  # An entry may also be a NAME from `presets` below, which is how you keep a tuned term in a config
+  # of your own instead of retyping it: put a presets block in your YAML and launch with
+  # `--config-dir . --config-name my_grpo`, then `reward.add=[my_term]`.
+  add: []
+  presets: {}
 
-    # Reproduce a target's SAE feature code; the signature ships beside the reward.
-    - enabled: false
-      reward: sae_only_nucleolus
-      weight: 1.0
-      module: ${idiom_rewards:rl_sae_reward/rl_sae_reward.py}
-      shaping: null
-
-    # Your own in-process reward: register f(idr) -> float and name it here.
-    - enabled: false
-      reward: net_charge_fraction
-      weight: 1.0
-      module: ${idiom_rewards:custom_rewards.py}
-      shaping: {type: gaussian, target: 0.25, width: 0.5}
-
-    # Your own reward model in its own environment; its deps live in the scorer script (PEP 723).
-    # Point UV_CACHE_DIR at scratch -- an on-demand env is several GB.
-    - enabled: false
-      cmd: "uv run --script ${idiom_rewards:external_rewards/sparrow.py} --property radius_of_gyration"
-      label: rg
-      weight: 0.5
-      shaping: {type: quadratic, target: 25, width: 0.2}
-      timeout: 300.0 # seconds to wait for one response
-      maxlen: 0 # truncate sequences to this length before sending; 0 sends them whole
-      cwd: null # working directory for the child; the current directory if null
-
-    # The other shipped scorers, each self-contained: the PEP 723 header is the environment and any
-    # weights are fetched on first use. See the reward section of the top-level README.md.
-
-    # Interaction chemistry: epsilon < 0 is attractive, so a negative target designs
-    # self-attractive, condensate-prone IDRs. Base generations average +3.6 (sd 7.0) and an
-    # FUS-LC-like tract is about -8.5; the width keeps a starting sequence about one unit under,
-    # comparable to the guardrails, rather than swamping them.
-    - enabled: false
-      cmd: "uv run --script ${idiom_rewards:external_rewards/finches.py} --mode homotypic"
-      label: eps
-      weight: 1.0
-      shaping: {type: quadratic, target: -6.0, width: 1.0}
-
-    # Condensate compartment probability from ProtGPS (ESM-2). Already in [0, 1], so no shaping.
-    - enabled: false
-      cmd: "uv run --script ${idiom_rewards:external_rewards/protgps.py} --compartment nucleolus"
-      label: protgps
-      weight: 1.0
-
-    # Transcriptional activation strength (PADDLE, max Z over 53-residue windows). Natural
-    # activation domains score about 3-8 and base generations +0.9 (sd 1.7); the Z-scale needs no
-    # shaping if you simply want it as high as possible, and the weight keeps a strong domain from
-    # dwarfing the guardrails.
-    - enabled: false
-      cmd: "uv run --script ${idiom_rewards:external_rewards/paddle.py}"
-      label: paddle
-      weight: 0.5
-      timeout: 600.0
-
-    # Phase-separation thermodynamics (PSpred): transfer free energy in kT, trained on CALVADOS
-    # simulations. More negative phase-separates more readily: base generations average -0.1
-    # (sd 0.8), and LAF1 -- a 170-residue LLPS driver -- reaches -6.1, so -3 is a demanding but
-    # reachable target at the default length. --target logcdil_mgml gives saturation concentration.
-    - enabled: false
-      cmd: "uv run --script ${idiom_rewards:external_rewards/pspred.py} --target dG"
-      label: dG
-      weight: 1.0
-      shaping: {type: quadratic, target: -3.0, width: 1.0}
-
-    # Ensemble dimensions from a STARLING-generated conformational ensemble: the same quantity
-    # sparrow regresses, sampled instead. About 9 s per step on a GPU, so give it a long timeout.
-    - enabled: false
-      cmd: "uv run --script ${idiom_rewards:external_rewards/starling.py} --property radius_of_gyration"
-      label: rg_ens
-      weight: 1.0
-      shaping: {type: quadratic, target: 25, width: 0.2}
-      timeout: 900.0
+  # Imported before any reward name is looked up; a *.py path or a dotted module.
+  module: null
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo
 

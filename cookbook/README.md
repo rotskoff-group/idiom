@@ -1,15 +1,21 @@
 # Cookbook
 
-Runnable material, indexed by what you want to do. Assumes the clone is installed (`uv sync` at the
-repo root); inputs live in [`example_data/`](example_data/), so nothing needs arguments to start.
+Runnable material, indexed by what you want to do. Inputs live in [`example_data/`](example_data/),
+so nothing needs arguments to start.
+
+This directory is **not** shipped in the wheel — clone the repository to get it. It runs against
+either install: the clone's own `uv sync` venv, or an environment you ran
+`pip install git+https://github.com/rotskoff-group/idiom.git` into.
 
 | I want to... | run | needs |
 |---|---|---|
 | **generate IDRs** de novo or between flanks, and pull out embeddings | [`scripts/generate_and_embed.py`](scripts/generate_and_embed.py) | GPU |
 | **see what an SAE feature is**, and steer generation along it | [`scripts/sae_features.py`](scripts/sae_features.py) | GPU |
 | **find what my sequences share** — enriched features and their residue grammar | [`scripts/feature_enrichment.py`](scripts/feature_enrichment.py) | GPU |
-| **design toward an SAE feature code** (the RL-SAE result) | [`slurm/grpo.bash`](slurm/grpo.bash) | 1 GPU, hours |
-| **design toward an external reward model** | [`slurm/grpo_external.bash`](slurm/grpo_external.bash) | 1 GPU, hours |
+| **write my own reward** | [`rewards/`](rewards/) | CPU |
+| **design toward an SAE feature code** (the RL-SAE result) | [`slurm/grpo/sae_features.bash`](slurm/grpo/sae_features.bash) | 1 GPU, hours |
+| **design toward my own reward** (in this interpreter) | [`slurm/grpo/my_reward.bash`](slurm/grpo/my_reward.bash) | 1 GPU, hours |
+| **design toward a published reward model** (its own environment) | [`slurm/grpo/`](slurm/grpo/) — one script each | 1 GPU, hours |
 | **specialize a model on my own set** | [`slurm/sft.bash`](slurm/sft.bash) | 1 GPU |
 | **train an SAE on another layer** | [`slurm/sae.bash`](slurm/sae.bash) | 1 GPU |
 | **pretrain from scratch** | [`slurm/pretrain.bash`](slurm/pretrain.bash) | 8 GPUs, days |
@@ -32,9 +38,41 @@ post-trains a model to reproduce that feature code.
 
 ```bash
 IDIOM_SAEREWARD_FEATURES=enr/signature.json IDIOM_SAEREWARD_CASE=top30 \
-  idiom_grpo init_from=jxliu2/idiom-300M \
-    reward.terms.2.enabled=true reward.terms.2.reward=sae_only_<name>
+  sbatch cookbook/slurm/grpo/sae_features.bash    # set SIGNATURE=<name> at the top
 ```
+
+## `rewards/`
+
+What GRPO optimizes, and how to point it at your own — the full guide is
+[`rewards/README.md`](rewards/README.md).
+
+| file | what it is |
+|---|---|
+| [`rewards/my_rewards.py`](rewards/my_rewards.py) | template: rewards that run in this process — copy it and edit it |
+| [`rewards/scorers/`](rewards/scorers/) | seven reward models in their own environments, `my_scorer.py` being the minimal template |
+
+The config carries only the guardrails (`entropy`, `length`); a run says what it optimizes at
+launch, by name from the shipped menu:
+
+```bash
+idiom_grpo init_from=jxliu2/idiom-300M reward.add=[rg]                    # one
+idiom_grpo init_from=jxliu2/idiom-300M reward.add=[sae,rg]      # several
+idiom_grpo init_from=jxliu2/idiom-300M reward.add=[rg] reward.presets.rg.shaping.target=30
+```
+
+Yours needs no menu entry — pass the whole term to `reward.add`, in one of three forms:
+
+```yaml
+- {reward: fraction_charged, module: cookbook/rewards/my_rewards.py, weight: 1.0}  # registered by name
+- {reward: "mypackage.scoring:score_idr", weight: 1.0}                             # any importable callable
+- {cmd: "uv run --script cookbook/rewards/scorers/sparrow.py ...", label: rg, weight: 0.5}  # own environment
+```
+
+Each has a ready-to-submit script in [`slurm/grpo/`](slurm/grpo/) that passes it as `reward.add`.
+
+Reach for the third only when the scorer's dependencies cannot coexist with IDiom's. Size any new
+term against the guardrails first — one that starts ten times larger has made them invisible, and
+the run will converge on something that is no longer an IDR.
 
 ## Training scripts
 
@@ -46,13 +84,15 @@ mkdir -p slurm_out && sbatch cookbook/slurm/pretrain.bash   # #SBATCH --output w
 bash cookbook/slurm/sft.bash                                # no scheduler; #SBATCH lines are comments
 ```
 
-Submit from the repo root (under `sbatch` the repo is `$SLURM_SUBMIT_DIR`). Either way the script
-activates the `.venv` that `uv sync` created.
+Submit from the repo root (under `sbatch` the repo is `$SLURM_SUBMIT_DIR`).
 
 **Edit before submitting:** the `#SBATCH` header for your cluster; `OUT` (keep it on scratch — the
 scripts pin `out_dir`/`hydra.run.dir` there so nothing lands in the repo); the data paths, which
 default to `example_data`; `UV_CACHE_DIR` if you use an external reward. W&B is offline by default —
 `wandb login` and submit with `WANDB_MODE=online` for live logging.
+
+Each script activates the clone's `.venv` if `uv sync` created one, and otherwise runs in whatever
+environment is already active — so a `pip install git+...` into your own env needs no change.
 
 **Multi-GPU: no `srun`.** One Slurm task owns the node and Lightning launches one process per GPU
 from `trainer.devices`, so `--gpus-per-node == trainer.devices` and `--cpus-per-task` covers all

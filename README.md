@@ -29,6 +29,16 @@ distribution while the objective moves.
 
 ## Install
 
+Into an environment you already have — the library, the CLIs, the configs, and the shipped reward
+scorers, with torch resolved against whatever is already there:
+
+```bash
+pip install git+https://github.com/rotskoff-group/idiom.git
+```
+
+Or as a clone, which additionally gives you [`cookbook/`](cookbook/) and a locked, reproducible
+torch build:
+
 ```bash
 git clone https://github.com/rotskoff-group/idiom.git
 cd idiom
@@ -37,10 +47,10 @@ uv sync      # .venv with the locked torch build, the package, and its CLIs
 
 Then `source .venv/bin/activate`, or prefix commands with `uv run`. Python >= 3.10.
 
-**IDiom is used from a clone** — [`rewards/`](rewards/) and [`cookbook/`](cookbook/) are repository
-material a run points at, not library code. `uv add --editable /path/to/idiom` (your own uv project)
-and `pip install -e .` (conda/venv) also work, but resolve torch themselves; only `uv sync` is
-reproducible. A non-editable `pip install git+...` has no `rewards/` for the config to find.
+Both installs are complete for training, generation, interpretability and RL — nothing in the
+package reaches outside itself. The clone adds the runnable examples and example data, and pins
+torch; `pip install` leaves your existing torch alone, which is what you want when IDiom is going in
+beside code you already have.
 
 ## Sequence conventions (read this first)
 
@@ -78,11 +88,23 @@ idrs = model.generate_prompted(protein_seq, idr_start, idr_end, n=100)
 values, index = model.embed(["MKKLVA...", "GSGSQP..."], layers=[18], pool="none")[18]
 ```
 
-`generate_unprompted_fasta` / `generate_prompted_fasta` write record FASTAs directly, as do the CLIs:
+`generate_unprompted_fasta` / `generate_prompted_fasta` write record FASTAs directly. Passing
+`return_full=True` to the prompted one splices each generated IDR back between its flanks and writes
+the **whole protein** with a corrected span — how you redesign the IDR of an existing protein, rather
+than collecting IDRs on their own. The same is available from the command line:
 
 ```bash
 idiom_generate unprompted --model jxliu2/idiom-300M --n 1000 --out idrs.fasta
 idiom_extract --ckpt model.ckpt --fasta proteins.fasta --layers 18 --out embeddings/
+```
+
+Score sequences under the model's own fill-in-the-middle objective — to check a fine-tune against
+held-out data, or to rank designs by how IDR-like the model finds them:
+
+```python
+from idiom.utils.perplexity import perplexity
+
+perplexity(model.model, "heldout.fasta", device=model.device)   # {"nll", "perplexity", "n_tokens"}
 ```
 
 Walkthrough: [`cookbook/scripts/generate_and_embed.py`](cookbook/scripts/generate_and_embed.py).
@@ -101,6 +123,11 @@ feats, accessions = sae.encode("proteins.fasta", pool="mean")    # pool="none" f
 seqs = sae.steer_generate(feature=1234, strength=0.5, n=100)
 ```
 
+`encode` also takes `region=` to select which residues are read (`all`, `idr`, `non_idr`), defaulting
+to what the SAE was trained on. The released SAE was trained **unprompted on IDR residues**, so
+`region="idr"` is its only valid value; asking for another raises rather than returning something
+meaningless.
+
 Steering modes are `add_direction` (default), `clamp`, and `ablate`; `normalize`, `relative` and
 `preserve_norm` control how `strength` is interpreted.
 
@@ -108,6 +135,17 @@ Steering modes are `add_direction` (default), `clamp`, and `ablate`; `normalize`
 idiom_feature_dataset --sae jxliu2/idiomsae-300M-L18-k32 --fasta records.fasta --out features/
 streamlit run src/idiom/sae/features/feature_viewer.py -- --features features/
 idiom_sae model_ckpt=/path/model.ckpt data.fasta=/path/records.fasta layer=18 sae.k=32
+```
+
+The same dataset reads from Python — rank features by how often they fire, then pull the sequences
+that drive one:
+
+```python
+from idiom.sae.features import FeatureDataset
+
+fd = FeatureDataset("features/")
+ids, freq, mean_act = fd.feature_ranking()
+seq_ids, scores = fd.top_sequences(ids[0], n=20)
 ```
 
 Walkthroughs: [`sae_features.py`](cookbook/scripts/sae_features.py) (read and steer),
@@ -124,18 +162,65 @@ idiom_train data.train_fasta=corpus.fasta model.n_layers=24 model.d_model=1024
 idiom_train --config-name sft init_from=jxliu2/idiom-300M data.train_fasta=sft.fasta
 ```
 
+The `model:` block above is the released 300M architecture; 85M is 12L/768/12 and 20M is 6L/512/8
+(`idiom_20m()`, `idiom_85m()`, `idiom_300m()` in `idiom.model` return the same as `ModelConfig`s).
+
 GRPO optimizes a list of reward **terms**, each pairing a reward with the shaping that says what a
-good value is: `total = Σ weightᵢ · shapingᵢ(rewardᵢ)`. The shipped config carries the entropy and
-length guardrails plus a menu of further terms — SAE feature codes, in-process rewards, six external
-reward models — switched off until you want one:
+good value is: `total = Σ weightᵢ · shapingᵢ(rewardᵢ)`. The config carries only the entropy and
+length guardrails; **what a run optimizes is chosen at launch**, by name, from a shipped menu of
+tuned terms — SAE feature codes, six external reward models, and the built-in composition rewards:
+
+```bash
+idiom_grpo init_from=jxliu2/idiom-300M reward.add=[sae]
+```
+
+Names compose and stay addressable as the menu grows, which list positions do not:
+
+```bash
+idiom_grpo init_from=jxliu2/idiom-300M reward.add=[sae,rg] \
+  reward.presets.rg.shaping.target=30
+```
+
+Your own reward needs no entry in the menu — pass the whole term:
 
 ```bash
 idiom_grpo init_from=jxliu2/idiom-300M \
-  reward.terms.2.enabled=true reward.terms.2.reward=sae_only_nucleolus
+  reward.add='[{reward: "mypackage.scoring:score_idr", weight: 1.0}]'
 ```
 
-**Everything about rewards — the menu, picking targets and weights, adding your own — is in
-[`rewards/README.md`](rewards/README.md).**
+The guardrails and the other shipped rewards are built into the library, so a term names one and
+needs nothing else. Your own reaches a run one of three ways:
+
+```yaml
+- {reward: fraction_aromatic, module: /path/to/my_rewards.py, weight: 1.0}  # registered by name
+- {reward: "mypackage.scoring:score_idr", weight: 1.0}                      # any importable callable
+- {cmd: "uv run --script /path/to/my_scorer.py", label: mine, weight: 1.0}  # its own environment
+```
+
+The second is the one to reach for when IDiom is installed beside code that can already score a
+sequence: no decorator, no edit to that code, nothing copied into this repo. The third is for a
+reward model whose dependencies cannot coexist with IDiom's — six such scorers ship, each carrying
+its own environment in a [PEP 723](https://peps.python.org/pep-0723/) header.
+
+**Everything about rewards — the scorers, picking targets and weights, adding your own — is in
+[`cookbook/rewards/README.md`](cookbook/rewards/README.md).**
+
+### After training
+
+Training writes a Lightning `.ckpt`, which `from_pretrained` cannot read — use `IDiom.load`, which
+takes a `.ckpt`, a released directory, or a Hub repo id. `save_pretrained` converts one into the
+released `config.json` + `model.safetensors` pair, and `push_to_hub` uploads it with a model card:
+
+```python
+model = IDiom.load("runs/grpo/checkpoints/last.ckpt")
+model.generate_unprompted(n=100)
+model.save_pretrained("my-idiom-nucleolus")
+model.push_to_hub("me/my-idiom-nucleolus", private=True)
+```
+
+`IDiomSAE` has the same `save_pretrained` and `push_to_hub`, recording its host model so the pair
+reloads in one call. Anywhere a model is named — `init_from`, `idiom_generate --model`, `IDiom.load`
+— all three forms are accepted.
 
 Keep your own configs in your own project rather than forking the shipped one:
 
@@ -189,9 +274,11 @@ inherited from AlphaFold DB / UniProt. The code here is MIT.
 | Path | Role |
 |------|------|
 | `src/idiom/` | the library: `data`, `model`, `train/` (`autoreg`, `grpo`), `sae/` (`model`, `train`, `steer`, `features`), `configs/`, `utils`, and the `IDiom`/`IDiomSAE` API in `api.py` |
-| `rewards/` | reward content you edit ([README](rewards/README.md)) |
-| `cookbook/` | walkthrough scripts, training scripts, example data ([README](cookbook/README.md)) |
+
+| `cookbook/` | walkthroughs, training scripts, reward templates, example data ([README](cookbook/README.md)) — clone only |
 | `tests/`, `assets/` | tests; figures for docs |
+
+Everything under `src/` ships in the wheel; `cookbook/` does not.
 
 ## Citation
 

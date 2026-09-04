@@ -169,11 +169,11 @@ print(f"wrote {out / 'logos.png'}")
 #
 #     IDIOM_SAEREWARD_FEATURES=enr/signature.json IDIOM_SAEREWARD_CASE=top30 \
 #       idiom_grpo init_from=jxliu2/idiom-300M \
-#         reward.terms.2.enabled=true reward.terms.2.reward=sae_only_nucleolus
+#         reward.add=[sae] reward.presets.sae.reward=sae_only_nucleolus
 #
 # For a real run use the Slurm template, which sets the same thing:
 # sbatch cookbook/slurm/grpo.bash.
 
 print(f"\nnext: IDIOM_SAEREWARD_FEATURES={sig_path} IDIOM_SAEREWARD_CASE={CASE} \\")
 print(f"        idiom_grpo init_from=jxliu2/idiom-300M \\")
-print(f"          reward.terms.2.enabled=true reward.terms.2.reward=sae_only_{NAME}")
+print(f"          reward.add=[sae] reward.presets.sae.reward=sae_only_{NAME}")

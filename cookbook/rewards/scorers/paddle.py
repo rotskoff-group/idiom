@@ -13,7 +13,7 @@ reward is the strongest window's Z-score -- the "max-Z" summary used in the manu
 shorter than 53 residues is padded on both flanks with the background residue.
 
     reward.terms:
-      - {cmd: "uv run --script ${idiom_rewards:external_rewards/paddle.py}",
+      - {cmd: "uv run --script cookbook/rewards/scorers/paddle.py",
          label: paddle, weight: 1.0, timeout: 600}
 
 The raw reward is a Z-score against PADDLE's background, so it is already on a usable scale: strong

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=idiom-grpo-ext
+#SBATCH --job-name=idiom-grpo-sparrow
 #SBATCH --time=12:00:00
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
@@ -17,35 +17,41 @@ echo; echo
 set -euo pipefail
 
 ###
-# GRPO / RL post-training on 1 GPU toward an EXTERNAL reward model, run in its own environment.
-# The scorer here is sparrow (biophysics: radius of gyration, asphericity, kappa, ...); it imports
-# nothing from IDiom and declares its own dependencies in its script header, so uv builds and
-# caches that environment on demand. Swap the cmd for any program speaking the scorer protocol --
-# a pre-built venv, a conda env, a container. For the built-in SAE reward instead, use grpo.bash.
+# GRPO toward a single-chain dimension predicted by sparrow (ALBATROSS). The worked external-reward
+# example: the scorer runs in its own uv environment and imports nothing from IDiom.
+#
+# --property is any ALBATROSS predictor (radius_of_gyration, end_to_end_distance, asphericity,
+# scaling_exponent) or sequence parameter (FCR, NCPR, kappa). Base generations sit at 26.9 +/- 15.7 A,
+# so a target of 25 with width 0.2 (+/- 5 A) is about one width out -- comparable to the guardrails.
 ###
 
 # Repo root: where sbatch was submitted from, or this script's own location under bash.
-REPO="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-OUT="${IDIOM_OUT:-$HOME/idiom-runs}/grpo-external"  # EDIT: keep runs on scratch, not in the repo
-export UV_CACHE_DIR="${UV_CACHE_DIR:-/scratch/$USER/uv-cache}"  # EDIT: an on-demand env is several GB
+REPO="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+OUT="${IDIOM_OUT:-$HOME/idiom-runs}/grpo-sparrow"   # EDIT: keep runs on scratch, not in the repo
 
 PROPERTY=radius_of_gyration                       # EDIT: any sparrow property
 TARGET=25                                         # EDIT: in the property's units
 WIDTH=0.2                                         # EDIT: tolerance as a fraction of the target
-SCORER="uv run --script $(python -c 'from idiom.configs import rewards_path; print(rewards_path("external_rewards/sparrow.py"))') --property $PROPERTY"
+WEIGHT=0.5                                        # EDIT: keep the step-0 contribution near the guardrails'
+SCORER="uv run --script $REPO/cookbook/rewards/scorers/sparrow.py --property $PROPERTY"
 
 unset PYTHONPATH PYTHONHOME
-source "$REPO/.venv/bin/activate"
+# The clone's own venv if `uv sync` made one; otherwise whatever environment idiom is installed in
+# (a `pip install git+...` into your own env needs no activation here).
+if [[ -f "$REPO/.venv/bin/activate" ]]; then source "$REPO/.venv/bin/activate"; fi
 cd "$REPO"
 export PYTHONUNBUFFERED=1
 export WANDB_MODE=${WANDB_MODE:-offline}           # EDIT: `wandb login` and set online for live logging
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/scratch/$USER/uv-cache}"   # EDIT: an on-demand env is several GB
 echo "host=$(hostname)  CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
 
-# ---- pre-flight: build the scorer environment and check it answers, before taking the GPU ----
-# The first build is slow (sparrow needs a C compiler); every run after is a uv cache hit. A broken
-# command fails here in seconds instead of after the policy has warm-started.
-python -m idiom.train.grpo.reward.external \
-    --cmd "$SCORER" --shaping quadratic --target "$TARGET" --width "$WIDTH"
+# ---- pre-flight: build the scorer's environment and check it answers, before taking the GPU ----
+# The first build downloads and compiles; every run after is a uv cache hit. A broken command fails
+# here in seconds instead of after the policy has warm-started.
+python -m idiom.train.grpo.reward.external --cmd "$SCORER"
+
+# The whole objective, appended to the entropy and length guardrails the config already carries.
+TERM="{cmd: \"$SCORER\", label: $PROPERTY, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_grpo \
     seed=0 \
@@ -68,7 +74,7 @@ idiom_grpo \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
     reward.module=null \
-    reward.terms="[{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}, {reward: length, weight: 1.0, shaping: {type: quadratic, target: 100, width: 1.0}}, {label: $PROPERTY, weight: 1.0, cmd: '$SCORER', shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}]" \
+    reward.add="[$TERM]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \
     trainer.devices=1 \

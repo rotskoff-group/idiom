@@ -12,10 +12,7 @@ from idiom.train.grpo.reward import (
     quadratic_penalty,
 )
 from reward_fixtures import fraction_proline
-from idiom.configs import rewards_path
-from idiom.train.grpo.reward import import_module_spec
 
-import_module_spec(str(rewards_path("custom_rewards.py")))  # registers entropy and length
 sequence_entropy = get_reward("entropy")
 sequence_length = get_reward("length")
 

@@ -37,7 +37,6 @@ include = [
     "/src",
     "/tests",
     "/cookbook",
-    "/rewards",
     "/README.md",
     "/LICENSE",
 ]
@@ -53,7 +52,10 @@ addopts = "-q"
 pythonpath = ["src"]  # the idiom library
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/idiom"]  # ship only the library
+# The library, its configs, and idiom/rewards/ (the external scorer programs and the SAE feature
+# signatures). Those are data, not modules -- a scorer runs in its own environment -- but they ship
+# so that ${idiom_rewards:...} resolves in a non-editable install. The cookbook is not shipped.
+packages = ["src/idiom"]
 
 [project.scripts]
 idiom_generate = "idiom.api:main"

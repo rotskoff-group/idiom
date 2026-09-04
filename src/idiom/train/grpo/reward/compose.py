@@ -26,13 +26,12 @@ from dataclasses import dataclass
 
 from omegaconf import DictConfig, OmegaConf
 
-import idiom.configs  # noqa: F401 - registers the ${idiom_rewards:...} path resolver
 from idiom.train.grpo.reward.external import make_external_reward
 from idiom.train.grpo.reward.registry import Batch, get_reward
 from idiom.train.grpo.reward.shaping import build_shaping
 
 TERM_KEYS = {"enabled", "reward", "cmd", "label", "weight", "shaping", "module", "timeout",
-             "maxlen", "cwd"}
+             "maxlen", "cwd", "batched"}
 
 
 @dataclass(frozen=True)
@@ -49,6 +48,8 @@ class RewardTermSpec:
         maxlen (int): Truncate sequences to this length before sending them to a scorer; 0 sends
             them whole.
         cwd (str | None): Working directory for an external scorer.
+        batched (bool): For a "module:function" reward, True if the callable already takes
+            (idrs, batch) and returns one value per idr, rather than one idr at a time.
     """
 
     label: str
@@ -59,23 +60,105 @@ class RewardTermSpec:
     timeout: float = 300.0
     maxlen: int = 0
     cwd: str | None = None
+    batched: bool = False
 
 
-def import_module_spec(spec: str | None) -> None:
+def import_module_spec(spec: str | None):
     """Import a user module so its register_reward decorators run.
 
     Args:
         spec (str | None): A dotted module path or a path ending in ".py"; None or empty is a
             no-op.
+
+    Returns:
+        ModuleType | None: The imported module, or None if spec was empty.
     """
     if not spec:
-        return
+        return None
     if spec.endswith(".py"):
         mod_spec = importlib.util.spec_from_file_location("idiom_custom_rewards", spec)
         module = importlib.util.module_from_spec(mod_spec)
         mod_spec.loader.exec_module(module)
-    else:
-        importlib.import_module(spec)
+        return module
+    return importlib.import_module(spec)
+
+
+def is_callable_spec(reward: str | None) -> bool:
+    """Return whether a term's reward names a callable directly rather than a registry key.
+
+    Args:
+        reward (str | None): The term's reward field.
+
+    Returns:
+        bool: True for the "module:function" form, which carries a ":".
+    """
+    return bool(reward) and ":" in reward
+
+
+def load_callable(reward: str):
+    """Import and return the callable a "module:function" reward names.
+
+    The module part accepts everything import_module_spec does -- a dotted name for something
+    already installed, or a path to a .py file -- so a reward that exists in the environment
+    alongside IDiom is used as it is, with no decorator and no edit to the code defining it.
+
+    Args:
+        reward (str): A reward of the form "package.module:function" or "path/to/file.py:function".
+
+    Returns:
+        tuple[str, Callable]: The attribute name, and the callable itself.
+
+    Raises:
+        ValueError: If the module or the attribute cannot be imported, or the attribute is not
+            callable.
+    """
+    mod_name, _, attr = reward.rpartition(":")
+    if not mod_name or not attr:
+        raise ValueError(f"reward {reward!r} is not of the form 'module:function'")
+    try:
+        module = import_module_spec(mod_name)
+    except Exception as e:  # ImportError, FileNotFoundError, or anything the module raises
+        raise ValueError(f"reward {reward!r}: cannot import {mod_name!r} ({e})") from e
+    try:
+        fn = getattr(module, attr)
+    except AttributeError:
+        raise ValueError(f"reward {reward!r}: {mod_name!r} has no attribute {attr!r}") from None
+    if not callable(fn):
+        raise ValueError(f"reward {reward!r}: {attr!r} is not callable (got {type(fn).__name__})")
+    return attr, fn
+
+
+def resolve_add(cfg: dict) -> list[dict]:
+    """Expand the reward config's `add` selector into terms, appended after `terms`.
+
+    An entry is either a name from the `presets` menu or a whole term written out, so a run picks
+    what it optimizes at launch instead of editing the config. Names are addressable and stay
+    addressable as the menu grows, which list positions do not: `reward.add=[rg]` keeps working
+    when a preset is inserted above it, and `reward.presets.rg.shaping.target=30` tunes it.
+
+    Args:
+        cfg (dict): The reward config, holding an optional `add` list and `presets` mapping.
+
+    Returns:
+        list[dict]: The selected terms, in the order they were named.
+
+    Raises:
+        ValueError: If a name is not in the menu, or an entry is neither a name nor a mapping.
+    """
+    presets = cfg.get("presets") or {}
+    out: list[dict] = []
+    for i, entry in enumerate(cfg.get("add") or []):
+        if isinstance(entry, dict):
+            out.append(entry)  # a whole term, written out at the command line
+            continue
+        if not isinstance(entry, str):
+            raise ValueError(f"reward.add[{i}]: expected a preset name or a term mapping, got "
+                             f"{type(entry).__name__}")
+        if entry not in presets:
+            raise ValueError(f"reward.add[{i}]: unknown preset {entry!r}; the menu is "
+                             f"{sorted(presets)}. Pass a whole term instead to use your own.")
+        out.append(dict(presets[entry]))
+    return out
 
 
 def parse_terms(rcfg: DictConfig) -> list[RewardTermSpec]:
@@ -88,21 +171,26 @@ def parse_terms(rcfg: DictConfig) -> list[RewardTermSpec]:
     is what makes a config full of switched-off examples usable.
 
     Args:
-        rcfg (DictConfig): The reward config: an optional module plus a terms list.
+        rcfg (DictConfig): The reward config: an optional module, a terms list, and an optional
+            `add` selector naming presets to append (see resolve_add).
 
     Returns:
         list[RewardTermSpec]: One validated spec per term, in config order.
 
     Raises:
         ValueError: If an enabled term carries an unknown key, names neither or both of reward and
-            cmd, gives a cmd no label, repeats a label, or names an unregistered reward.
+            cmd, gives a cmd no label, repeats a label, names an unregistered reward, or names a
+            "module:function" callable that cannot be imported.
     """
     cfg = OmegaConf.to_container(rcfg, resolve=True) if isinstance(rcfg, DictConfig) else dict(rcfg)
     import_module_spec(cfg.get("module"))
 
+    # The guardrails in `terms`, then whatever this run asked for by name in `add`.
+    terms = list(cfg.get("terms") or []) + resolve_add(cfg)
+
     specs: list[RewardTermSpec] = []
     seen: set[str] = set()
-    for i, raw in enumerate(cfg.get("terms") or []):
+    for i, raw in enumerate(terms):
         where = f"reward.terms[{i}]"
         term = dict(raw)
         if not term.pop("enabled", True):
@@ -117,14 +205,23 @@ def parse_terms(rcfg: DictConfig) -> list[RewardTermSpec]:
         if (reward is None) == (cmd is None):
             raise ValueError(f"{where}: give exactly one of reward (a registered name) or cmd "
                              f"(an external scorer command)")
-        label = term.pop("label", None) or reward
+        # A "module:function" reward is logged under the function's own name, since the whole
+        # dotted spec makes an unreadable metric key.
+        default_label = reward.rpartition(":")[2] if is_callable_spec(reward) else reward
+        label = term.pop("label", None) or default_label
         if not label:
             raise ValueError(f"{where}: a cmd term needs a label to log it under")
         if label in seen:
             raise ValueError(f"{where}: duplicate label {label!r}; give one term its own label")
         seen.add(label)
-        if reward is not None:
+        if is_callable_spec(reward):
+            load_callable(reward)  # import now, so a bad path fails here, not mid-run
+        elif reward is not None:
             get_reward(reward)  # fail here, by name, rather than on the first training step
+        if term.get("batched") and not is_callable_spec(reward):
+            raise ValueError(f"{where}: batched applies only to a 'module:function' reward; a "
+                             f"registered reward declares it at register_reward(batched=True), and "
+                             f"a cmd scorer is always sent the whole batch")
 
         specs.append(RewardTermSpec(label=label, weight=float(term.pop("weight", 1.0)),
                                     reward=reward, cmd=cmd, **term))
@@ -133,6 +230,11 @@ def parse_terms(rcfg: DictConfig) -> list[RewardTermSpec]:
 
 def _source(spec: RewardTermSpec) -> Callable[[list[str], Batch], list[float]]:
     """Return the batched function producing a term's raw rewards."""
+    if is_callable_spec(spec.reward):
+        fn = load_callable(spec.reward)[1]
+        if spec.batched:
+            return lambda idrs, batch: [float(v) for v in fn(idrs, batch)]
+        return lambda idrs, batch: [float(fn(idr)) for idr in idrs]
     if spec.reward is not None:
         return get_reward(spec.reward)
     return make_external_reward(spec.cmd, timeout=spec.timeout, maxlen=spec.maxlen,

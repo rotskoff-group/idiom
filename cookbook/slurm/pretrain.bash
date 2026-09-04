@@ -30,8 +30,9 @@ OUT="${IDIOM_OUT:-$HOME/idiom-runs}/pretrain"     # EDIT: keep runs on scratch, 
 TRAIN_FASTA=/path/to/train.fasta                  # EDIT
 VAL_FASTA=/path/to/validation.fasta               # EDIT
 
-unset PYTHONPATH PYTHONHOME                        # use ONLY the uv venv (no module-system leakage)
-source "$REPO/.venv/bin/activate"
+unset PYTHONPATH PYTHONHOME                        # no module-system leakage into the env
+# The clone's own venv if `uv sync` made one; otherwise whatever environment idiom is installed in.
+if [[ -f "$REPO/.venv/bin/activate" ]]; then source "$REPO/.venv/bin/activate"; fi
 cd "$REPO"
 export PYTHONUNBUFFERED=1
 export WANDB_MODE=${WANDB_MODE:-offline}           # EDIT: `wandb login` and set online for live logging
