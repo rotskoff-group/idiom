@@ -39,9 +39,12 @@ the walkthrough writes a signature of the features enriched in a set, and the tr
 post-trains a model to reproduce that feature code.
 
 ```bash
-IDIOM_SAEREWARD_FEATURES=enr/signature.json IDIOM_SAEREWARD_CASE=top30 \
-  sbatch cookbook/scripts/bash/grpo/sae_features.bash    # set SIGNATURE=<name> at the top
+uv run cookbook/scripts/python/feature_enrichment.py   # -> example_data/sae_features/signature.json
+sbatch cookbook/scripts/bash/grpo/sae_features.bash    # set SIGNATURE=<name> at the top
 ```
+
+The training script reads the signature the walkthrough wrote, and refuses to start if it is not
+there, so the two stay in step without either one hard-coding a path you have to keep in sync.
 
 ## `scripts/bash/` — training scripts
 
@@ -263,9 +266,11 @@ both VRAM and time per step. Give the child its own device (`CUDA_VISIBLE_DEVICE
 `sae_only_<signature>` scores an IDR by the fraction of a target's SAE feature signature firing in
 it, read through a frozen IDiom + SAE lens — so a gain requires encoding the real code, not just
 satisfying a classifier. Already a fraction in [0, 1], so no shaping, and no third-party dependency.
-`idiomsae-300M-L18-k32.json` ships beside the reward and holds signatures for the released SAE
-(`IDIOM_SAEREWARD_CASE` selects `top30` or `private30`). Build your own with
-[`feature_enrichment.py`](scripts/python/feature_enrichment.py) and point `IDIOM_SAEREWARD_FEATURES` at it.
+`sae_signatures.json` ships beside the reward and holds the signatures for the released SAE
+(`IDIOM_SAEREWARD_CASE` selects `top30` or `private30`); a copy sits in
+[`example_data/sae_features/`](example_data/sae_features/) as a reference for the format. The
+workflow to follow is your own: [`feature_enrichment.py`](scripts/python/feature_enrichment.py)
+writes a signature from your sequences, and `IDIOM_SAEREWARD_FEATURES` points the reward at it.
 
 ### Writing your own
 
@@ -317,6 +322,8 @@ protgps/    6 subcellular-condensate IDR sets (stress_granule, p-body, nuclear_s
 effector/   activation (ad) and repression (rd) domain IDRs
 disprot/    DisProt proteins with annotated IDR spans, held out of pretraining -- these
             carry real flanks, so they are the reference set for prompted generation
+sae_features/  SAE feature signatures. sae_signatures.json is the released SAE's, copied from
+            the package as a format reference; feature_enrichment.py writes signature.json here
 ```
 
 `protgps/` and `effector/` records are fully disordered (the whole record is the span). `effector/`

@@ -42,7 +42,8 @@ POSITIVE = str(REPO / "cookbook/example_data/protgps/nucleolus.fasta")  # the se
 NAME = "nucleolus"          # signature name; the reward becomes sae_only_<name>
 SAE = "jxliu2/idiomsae-300M-L18-k32"
 DEVICE = "auto"
-OUT = "enr"                 # working directory for the feature datasets and signature
+OUT = "enr"                 # working directory for the feature datasets and figures (gitignored)
+SIGNATURE = "cookbook/example_data/sae_features/signature.json"  # what the RL script reads
 MAX_BACKGROUND = 10000      # background sequences to encode -- this dominates runtime
 TOP_N = 30                  # features kept in the signature
 CASE = "top30"              # case name to store the signature under
@@ -132,7 +133,7 @@ print(f"wrote {out / 'volcano.png'}")
 
 ids = top_features(result, n=TOP_N, drop_boundary=True, feature_dir=bg_fd)
 sig_path = write_signature(
-    out / "signature.json", {NAME: ids}, case=CASE,
+    REPO / SIGNATURE, {NAME: ids}, case=CASE,
     provenance={"sae": SAE, "positive": POSITIVE, "background": str(bg_path),
                 "n_pos": int(n_pos), "n_background": int(n_neg),
                 "length_matched": True, "boundary_dropped": True,
@@ -172,15 +173,18 @@ print(f"wrote {out / 'logos.png'}")
 # Design new sequences carrying this code
 # ---------------------------------------
 # The signature file is what the sae_only_<name> reward reads. Point the two environment variables
-# at it and switch on the RL-SAE term, which ships in configs/grpo.yaml as term 2:
+# at it and append the term to the guardrails grpo.yaml already carries:
 #
-#     IDIOM_SAEREWARD_FEATURES=enr/signature.json IDIOM_SAEREWARD_CASE=top30 \
+#     IDIOM_SAEREWARD_FEATURES=<signature> IDIOM_SAEREWARD_CASE=top30 \
 #       idiom_grpo init_from=jxliu2/idiom-300M \
-#         reward.add=[sae] reward.presets.sae.reward=sae_only_nucleolus
+#         reward.add='[{reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature,
+#                       weight: 1.0}]'
 #
 # For a real run use the Slurm template, which sets the same thing:
 # sbatch cookbook/scripts/bash/grpo/sae_features.bash.
 
+term = f"{{reward: sae_only_{NAME}, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}}"
 print(f"\nnext: IDIOM_SAEREWARD_FEATURES={sig_path} IDIOM_SAEREWARD_CASE={CASE} \\")
 print("        idiom_grpo init_from=jxliu2/idiom-300M \\")
-print(f"          reward.add=[sae] reward.presets.sae.reward=sae_only_{NAME}")
+print(f"          reward.add='[{term}]'")
+print(f"\nor: sbatch cookbook/scripts/bash/grpo/sae_features.bash   # SIGNATURE={NAME}")
