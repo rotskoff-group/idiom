@@ -24,7 +24,7 @@ reward, sae_feature.sae_signature, is imported on demand, since it pulls in the 
 
 from idiom.train.grpo.reward.builtin import composition_entropy, entropy, length
 from idiom.train.grpo.reward.compose import TERM_KEYS, Term, build_reward, build_terms
-from idiom.train.grpo.reward.external import Scorer, parse_response, scorer
+from idiom.train.grpo.reward.external import ScorerProcess, parse_response, scorer
 from idiom.train.grpo.reward.resolve import (
     REWARD_ALIASES,
     SHAPING_ALIASES,
@@ -49,7 +49,7 @@ __all__ = [
     "REWARD_ALIASES",
     "SHAPING_ALIASES",
     "Reward",
-    "Scorer",
+    "ScorerProcess",
     "Shaping",
     "TERM_KEYS",
     "Term",

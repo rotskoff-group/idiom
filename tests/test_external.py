@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from idiom.train.grpo.reward.external import (
-    Scorer,
+    ScorerProcess,
     parse_response,
     scorer,
 )
@@ -20,10 +20,10 @@ REPO = Path(__file__).resolve().parents[1]  # the scorers are repository materia
 
 
 def _scorer(tmp_path, body, name="fake_scorer.py", **kw):
-    """Write a fake scorer script and return a Scorer that runs it."""
+    """Write a fake scorer script and return a ScorerProcess that runs it."""
     path = tmp_path / name
     path.write_text(textwrap.dedent(body))
-    return Scorer(f"{sys.executable} {path}", cwd=str(tmp_path), **kw)
+    return ScorerProcess(f"{sys.executable} {path}", cwd=str(tmp_path), **kw)
 
 
 ECHO_LENGTHS = """
@@ -74,7 +74,7 @@ def test_parse_response_rejects_missing_scores():
         parse_response('{"result": [1]}', 1)
 
 
-# ---------------------------------------------------------------- Scorer process
+# ---------------------------------------------------------------- ScorerProcess
 
 
 def test_scorer_roundtrip(tmp_path):
@@ -87,7 +87,7 @@ def test_scorer_roundtrip(tmp_path):
 
 
 def test_scorer_handshake_fails_on_bad_command(tmp_path):
-    s = Scorer(f"{sys.executable} {tmp_path / 'does_not_exist.py'}", cwd=str(tmp_path), timeout=30)
+    s = ScorerProcess(f"{sys.executable} {tmp_path / 'does_not_exist.py'}", cwd=str(tmp_path), timeout=30)
     with pytest.raises(RuntimeError, match="handshake failed"):
         s.score(["AAA"])
 
@@ -238,9 +238,47 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
                 return 0.25
     """))
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))  # inherited by the scorer subprocess
-    scorer = Scorer([sys.executable, str(REPO / "cookbook/rewards/scorers/sparrow.py"),
+    scorer = ScorerProcess([sys.executable, str(REPO / "cookbook/rewards/scorers/sparrow.py"),
                      "--property", "radius_of_gyration"], timeout=30)
     try:
         assert scorer.score(["FWY", "AAAAA", ""]) == [6.0, 10.0, 0.0]
     finally:
         scorer.stop()
+
+
+# ---------------------------------------------------------------- the pasted serve() block
+
+
+SERVE = (REPO / "cookbook/rewards/scorers/finches.py").read_text()
+SERVE = SERVE[SERVE.index("def serve(build):"):]  # the block every scorer pastes verbatim
+
+
+def test_serve_scores_a_batch_and_zeros_empties(tmp_path):
+    """The shared serve() block: build() returns score_batch, empties score 0.0, order preserved."""
+    (tmp_path / "s.py").write_text(
+        "import json, os, sys\n"
+        "def build():\n"
+        "    return lambda seqs: [len(s) for s in seqs]\n"
+        + SERVE
+    )
+    sc = ScorerProcess(f"{sys.executable} {tmp_path / 's.py'}", cwd=str(tmp_path), timeout=30)
+    try:
+        assert sc.score(["FWY", "", "AAAAA"]) == [3.0, 0.0, 5.0]
+    finally:
+        sc.stop()
+
+
+def test_serve_turns_a_scorer_exception_into_an_error_response(tmp_path):
+    """A raise inside score_batch becomes an {"error": ...} the parent surfaces, not a crash."""
+    (tmp_path / "s.py").write_text(
+        "import json, os, sys\n"
+        "def build():\n"
+        "    def score_batch(seqs):\n"
+        "        raise ValueError('bad seq')\n"
+        "    return score_batch\n"
+        + SERVE
+    )
+    sc = ScorerProcess(f"{sys.executable} {tmp_path / 's.py'}", cwd=str(tmp_path), timeout=30)
+    with pytest.raises(RuntimeError, match="bad seq"):
+        sc.score(["ACDE"])
+    sc.stop()

@@ -40,11 +40,6 @@ import sys
 import urllib.request
 from pathlib import Path
 
-# Keep the real stdout for the protocol: the scientific stack prints warnings on import, and a
-# stray line there is read as a malformed response.
-_PROTOCOL_STDOUT = sys.stdout
-sys.stdout = sys.stderr
-
 GITHUB_RAW = "https://raw.githubusercontent.com/KULL-Centre/_2024_buelow_PSpred/main"
 FILES = {
     "sequence.py": f"{GITHUB_RAW}/scripts_colab/sequence.py",
@@ -73,12 +68,12 @@ def _pspred_dir() -> Path:
     return d
 
 
-def main():
-    """Read batches from stdin and write phase-separation scores to stdout until the pipe closes."""
+def build():
+    """Parse arguments, fetch the predictor files if needed, and return the phase-separation scorer."""
     ap = argparse.ArgumentParser(description="PSpred phase-separation propensity as an IDiom reward.")
     ap.add_argument("--target", default="dG", choices=("dG", "logcdil_mgml", "cdil_mgml"),
                     help="transfer free energy (kT), log saturation concentration, or c_sat in mg/mL")
-    args = ap.parse_args()
+    target = ap.parse_args().target
 
     d = _pspred_dir()
     sys.path.insert(0, str(d))
@@ -98,33 +93,54 @@ def main():
             setattr(__main__, name, getattr(predictor, name))
 
     residues = pd.read_csv(d / "residues.csv").set_index("one")
-    model_key = "logcdil_mgml" if args.target in ("logcdil_mgml", "cdil_mgml") else "dG"
+    model_key = "logcdil_mgml" if target in ("logcdil_mgml", "cdil_mgml") else "dG"
     model = joblib.load(d / f"model_{model_key}.joblib")
 
     def score_batch(sequences):
-        """Return the predicted quantity per sequence, 0.0 for empty strings."""
-        scores = [0.0] * len(sequences)
-        keep = [(i, s) for i, s in enumerate(sequences) if s]
-        if not keep:
-            return scores
+        """Return the predicted quantity per sequence."""
         rows = [X_from_seq(s, FEATURES, residues=residues, charge_termini=True,
-                           nu_file=str(d / "svr_model_nu.joblib")) for _, s in keep]
+                           nu_file=str(d / "svr_model_nu.joblib")) for s in sequences]
         # the model is an ensemble of cross-validation folds; its prediction is their mean
         preds = [float(np.mean(model.predict(row))) for row in rows]
-        for (i, _), value in zip(keep, preds):
-            scores[i] = float(np.exp(value)) if args.target == "cdil_mgml" else value
-        return scores
+        return [float(np.exp(v)) if target == "cdil_mgml" else v for v in preds]
 
+    return score_batch
+
+
+def serve(build):
+    """Drive the newline-JSON scorer protocol until stdin closes.
+
+    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
+    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
+    and model loading inside build() keeps any chatter they print off the protocol stream.
+
+    Args:
+        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    """
+    # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
+    # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.
+    here = os.path.dirname(os.path.abspath(__file__))
+    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
+    # stdout is the protocol. A library that prints on import (TensorFlow, ProtGPS, STARLING) would
+    # corrupt the first response, so keep the real stdout for responses and send chatter to stderr.
+    out, sys.stdout = sys.stdout, sys.stderr
+    score_batch = build()
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
         try:
-            response = {"scores": score_batch(json.loads(line)["sequences"])}
+            seqs = json.loads(line)["sequences"]
+            keep = [(i, s) for i, s in enumerate(seqs) if s]  # empty completions score 0.0
+            values = score_batch([s for _, s in keep]) if keep else []
+            scores = [0.0] * len(seqs)
+            for (i, _), v in zip(keep, values):
+                scores[i] = float(v)
+            payload = {"scores": scores}
         except Exception as e:
-            response = {"error": f"{type(e).__name__}: {e}"}
-        print(json.dumps(response), file=_PROTOCOL_STDOUT, flush=True)
+            payload = {"error": f"{type(e).__name__}: {e}"}
+        print(json.dumps(payload), file=out, flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    serve(build)

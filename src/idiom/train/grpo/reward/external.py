@@ -86,7 +86,7 @@ def parse_response(line: str, n: int) -> list[float]:
     return out
 
 
-class Scorer:
+class ScorerProcess:
     """A persistent scorer subprocess spoken to in newline-delimited JSON.
 
     The child is started on first use and reused across batches. Its stderr is forwarded to this
@@ -103,7 +103,7 @@ class Scorer:
     """
 
     def __init__(self, cmd, *, cwd: str | None = None, timeout: float = 300.0,
-                 env: dict | None = None, label: str = "external") -> None:
+                 env: dict | None = None, label: str = "scorer") -> None:
         """Record the command and settings without starting the child process.
 
         Args:
@@ -258,7 +258,7 @@ def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = No
     Returns:
         Reward: Maps a step's IDRs to the scorer's raw rewards, in order.
     """
-    child = Scorer(cmd, cwd=cwd, timeout=timeout, env=env, label=label)
+    child = ScorerProcess(cmd, cwd=cwd, timeout=timeout, env=env, label=label)
     cache: dict[str, float] = {}
 
     def reward(idrs: list[str]) -> list[float]:
@@ -291,7 +291,7 @@ def check(cmd, shaping_spec: dict | None = None, seqs: list[str] | None = None) 
     shaping = build_from_spec(shaping_spec or "identity", SHAPING_ALIASES, "shaping", "--shaping")
     print(f"command : {cmd}")
     print(f"shaping : {shaping_spec or 'none (the raw reward is used as-is)'}")
-    child = Scorer(cmd, timeout=300.0)
+    child = ScorerProcess(cmd, timeout=300.0)
     t0 = time.monotonic()
     try:
         values = child.score(seqs)

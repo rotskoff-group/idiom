@@ -63,21 +63,6 @@ _CKPT_STEM = "protgps/32bf44b16a4e770a674896b81dfb3729"
 _MAX_LEN = 1800  # ProtGPS sequence-length ceiling
 _BATCH = int(os.environ.get("PROTGPS_BATCH", "32"))
 
-_ap = argparse.ArgumentParser(description=__doc__)
-_ap.add_argument("--compartment", default="nucleolus",
-                 help="one of the 12 compartments, or max / mean over them")
-TARGET = _ap.parse_args().compartment
-if TARGET not in COMPARTMENTS and TARGET not in ("max", "mean"):
-    raise SystemExit(f"--compartment {TARGET!r} is not one of {COMPARTMENTS} (or max, mean)")
-
-
-# ProtGPS prints to stdout while loading ("Using ESM hidden layers 6"), and stdout is the protocol:
-# any stray line there is read as a malformed response. Keep the real stdout for responses only and
-# send everything else to stderr, which the parent forwards to its log. Any scorer wrapping a
-# library that prints needs this.
-_PROTOCOL_STDOUT = sys.stdout
-sys.stdout = sys.stderr
-
 
 def _device():
     """Return the torch device for the classifier."""
@@ -123,10 +108,6 @@ def _load_model():
     Returns:
         The ProtGPS lightning module, in eval mode on the chosen device.
     """
-    # This file is named protgps.py, and python puts a script's own directory on sys.path[0]; drop
-    # it so "import protgps" resolves to the installed package rather than back to this file.
-    here = os.path.dirname(os.path.abspath(__file__))
-    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
     from protgps.utils.loading import get_object
 
     parent = _checkpoint_dir()
@@ -144,46 +125,70 @@ def _load_model():
     return model.eval().to(_device())
 
 
-MODEL = _load_model()  # once per process, not once per batch
+def build():
+    """Parse --compartment, load the classifier, and return the compartment-probability scorer."""
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--compartment", default="nucleolus",
+                    help="one of the 12 compartments, or max / mean over them")
+    target = ap.parse_args().compartment
+    if target not in COMPARTMENTS and target not in ("max", "mean"):
+        raise SystemExit(f"--compartment {target!r} is not one of {COMPARTMENTS} (or max, mean)")
+
+    model = _load_model()
+
+    @torch.no_grad()
+    def score_batch(sequences):
+        """Return the compartment probability for each sequence."""
+        scores = [0.0] * len(sequences)
+        for start in range(0, len(sequences), _BATCH):
+            chunk = sequences[start:start + _BATCH]
+            probs = torch.sigmoid(model.model({"x": [s[:_MAX_LEN] for s in chunk]})["logit"]).cpu()
+            for j, row in enumerate(probs):
+                if target == "max":
+                    scores[start + j] = float(row.max())
+                elif target == "mean":
+                    scores[start + j] = float(row.mean())
+                else:
+                    scores[start + j] = float(row[COMPARTMENTS.index(target)])
+        return scores
+
+    return score_batch
 
 
-@torch.no_grad()
-def score_batch(sequences):
-    """Score a batch of sequences for the configured compartment.
+def serve(build):
+    """Drive the newline-JSON scorer protocol until stdin closes.
+
+    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
+    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
+    and model loading inside build() keeps any chatter they print off the protocol stream.
 
     Args:
-        sequences (list[str]): IDR residue strings.
-
-    Returns:
-        list[float]: The compartment probability for each sequence, 0.0 for empty strings.
+        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
     """
-    keep = [(i, s[:_MAX_LEN]) for i, s in enumerate(sequences) if s]
-    scores = [0.0] * len(sequences)
-    for start in range(0, len(keep), _BATCH):
-        chunk = keep[start:start + _BATCH]
-        probs = torch.sigmoid(MODEL.model({"x": [s for _, s in chunk]})["logit"]).cpu()
-        for (i, _), row in zip(chunk, probs):
-            if TARGET == "max":
-                scores[i] = float(row.max())
-            elif TARGET == "mean":
-                scores[i] = float(row.mean())
-            else:
-                scores[i] = float(row[COMPARTMENTS.index(TARGET)])
-    return scores
-
-
-def main():
-    """Read batches from stdin and write scores to stdout until the parent closes the pipe."""
+    # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
+    # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.
+    here = os.path.dirname(os.path.abspath(__file__))
+    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
+    # stdout is the protocol. A library that prints on import (TensorFlow, ProtGPS, STARLING) would
+    # corrupt the first response, so keep the real stdout for responses and send chatter to stderr.
+    out, sys.stdout = sys.stdout, sys.stderr
+    score_batch = build()
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
         try:
-            response = {"scores": score_batch(json.loads(line)["sequences"])}
+            seqs = json.loads(line)["sequences"]
+            keep = [(i, s) for i, s in enumerate(seqs) if s]  # empty completions score 0.0
+            values = score_batch([s for _, s in keep]) if keep else []
+            scores = [0.0] * len(seqs)
+            for (i, _), v in zip(keep, values):
+                scores[i] = float(v)
+            payload = {"scores": scores}
         except Exception as e:
-            response = {"error": f"{type(e).__name__}: {e}"}
-        print(json.dumps(response), file=_PROTOCOL_STDOUT, flush=True)
+            payload = {"error": f"{type(e).__name__}: {e}"}
+        print(json.dumps(payload), file=out, flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    serve(build)

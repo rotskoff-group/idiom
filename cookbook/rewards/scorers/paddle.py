@@ -33,13 +33,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# This file is named paddle.py; drop its own directory from sys.path so the cloned PADDLE module is
-# what "import paddle" finds, and keep stdout for the protocol since TensorFlow prints on import.
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _HERE]
-_PROTOCOL_STDOUT = sys.stdout
-sys.stdout = sys.stderr
-
 REPO_URL = "https://github.com/asanborn/PADDLE.git"
 WINDOW = 53          # PADDLE-noSS scores a fixed 53-residue window
 _STRIDE = int(os.environ.get("PADDLE_STRIDE", "5"))
@@ -75,8 +68,8 @@ def _windows(seq: str) -> list[str]:
     return [seq[s:s + WINDOW] for s in starts]
 
 
-def main():
-    """Read batches from stdin and write max-Z activation scores to stdout until the pipe closes."""
+def build():
+    """Clone PADDLE if needed, load the model, and return the max-Z window scorer."""
     d = _paddle_dir()
     sys.path.insert(0, str(d))
     os.chdir(d)  # paddle.load_models resolves models/ relative to the working directory
@@ -86,37 +79,57 @@ def main():
     model = paddle_module.PADDLE_noSS()
 
     def score_batch(sequences):
-        """Return the strongest 53-residue window Z-score per sequence, 0.0 for empty strings."""
-        scores = [0.0] * len(sequences)
+        """Return the strongest 53-residue window Z-score per sequence."""
         flat, owner = [], []
         for i, seq in enumerate(sequences):
-            if not seq:
-                continue
             for w in _windows(seq):
                 flat.append(w)
                 owner.append(i)
-        if not flat:
-            return scores
         # PADDLE returns a bare float for a single window and an array otherwise; normalize, or a
-        # one-sequence batch (the startup handshake, for one) would not be iterable.
+        # one-window batch (the startup handshake, for one) would not be iterable.
         preds = np.atleast_1d(model.predict(flat))  # one batched forward over every window
         best: dict[int, float] = {}
         for i, z in zip(owner, preds):
             best[i] = max(best.get(i, float("-inf")), float(z))
-        for i, z in best.items():
-            scores[i] = z
-        return scores
+        return [best.get(i, 0.0) for i in range(len(sequences))]
 
+    return score_batch
+
+
+def serve(build):
+    """Drive the newline-JSON scorer protocol until stdin closes.
+
+    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
+    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
+    and model loading inside build() keeps any chatter they print off the protocol stream.
+
+    Args:
+        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    """
+    # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
+    # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.
+    here = os.path.dirname(os.path.abspath(__file__))
+    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
+    # stdout is the protocol. A library that prints on import (TensorFlow, ProtGPS, STARLING) would
+    # corrupt the first response, so keep the real stdout for responses and send chatter to stderr.
+    out, sys.stdout = sys.stdout, sys.stderr
+    score_batch = build()
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
         try:
-            response = {"scores": score_batch(json.loads(line)["sequences"])}
+            seqs = json.loads(line)["sequences"]
+            keep = [(i, s) for i, s in enumerate(seqs) if s]  # empty completions score 0.0
+            values = score_batch([s for _, s in keep]) if keep else []
+            scores = [0.0] * len(seqs)
+            for (i, _), v in zip(keep, values):
+                scores[i] = float(v)
+            payload = {"scores": scores}
         except Exception as e:
-            response = {"error": f"{type(e).__name__}: {e}"}
-        print(json.dumps(response), file=_PROTOCOL_STDOUT, flush=True)
+            payload = {"error": f"{type(e).__name__}: {e}"}
+        print(json.dumps(payload), file=out, flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    serve(build)

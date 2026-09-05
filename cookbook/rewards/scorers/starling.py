@@ -33,20 +33,9 @@ import json
 import os
 import sys
 
-# This file is named starling.py, and Python puts a script's own directory on sys.path[0]; drop it
-# so "import starling" resolves to the installed package rather than back to this file.
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _HERE]
 
-# STARLING prints to stdout ("Using DDIM sampler"), and stdout is the protocol: any stray line
-# there is read as a malformed response. Keep the real stdout for responses and send everything
-# else to stderr, which the parent forwards to its log.
-_PROTOCOL_STDOUT = sys.stdout
-sys.stdout = sys.stderr
-
-
-def main():
-    """Read batches from stdin and write ensemble-average scores to stdout until the pipe closes."""
+def build():
+    """Parse arguments and return the STARLING ensemble-dimension scorer."""
     ap = argparse.ArgumentParser(description="STARLING ensemble dimensions as an IDiom reward.")
     ap.add_argument("--property", default="radius_of_gyration",
                     choices=("radius_of_gyration", "end_to_end_distance"))
@@ -59,28 +48,52 @@ def main():
     device = os.environ.get("STARLING_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
 
     def score_batch(sequences):
-        """Return the ensemble-average property per sequence, 0.0 for empty strings."""
-        keep = {f"s{i}": s for i, s in enumerate(sequences) if s}
-        scores = [0.0] * len(sequences)
-        if not keep:
-            return scores
-        ensembles = generate(keep, conformations=args.conformations, device=device,
+        """Return the ensemble-average property per sequence."""
+        keyed = {f"s{i}": s for i, s in enumerate(sequences)}
+        ensembles = generate(keyed, conformations=args.conformations, device=device,
                              show_progress_bar=False)
+        out = [0.0] * len(sequences)
         for key, ensemble in ensembles.items():
-            value = getattr(ensemble, args.property)(return_mean=True)
-            scores[int(key[1:])] = float(value)
-        return scores
+            out[int(key[1:])] = float(getattr(ensemble, args.property)(return_mean=True))
+        return out
 
+    return score_batch
+
+
+def serve(build):
+    """Drive the newline-JSON scorer protocol until stdin closes.
+
+    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
+    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
+    and model loading inside build() keeps any chatter they print off the protocol stream.
+
+    Args:
+        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    """
+    # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
+    # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.
+    here = os.path.dirname(os.path.abspath(__file__))
+    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
+    # stdout is the protocol. A library that prints on import (TensorFlow, ProtGPS, STARLING) would
+    # corrupt the first response, so keep the real stdout for responses and send chatter to stderr.
+    out, sys.stdout = sys.stdout, sys.stderr
+    score_batch = build()
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
         try:
-            response = {"scores": score_batch(json.loads(line)["sequences"])}
+            seqs = json.loads(line)["sequences"]
+            keep = [(i, s) for i, s in enumerate(seqs) if s]  # empty completions score 0.0
+            values = score_batch([s for _, s in keep]) if keep else []
+            scores = [0.0] * len(seqs)
+            for (i, _), v in zip(keep, values):
+                scores[i] = float(v)
+            payload = {"scores": scores}
         except Exception as e:
-            response = {"error": f"{type(e).__name__}: {e}"}
-        print(json.dumps(response), file=_PROTOCOL_STDOUT, flush=True)
+            payload = {"error": f"{type(e).__name__}: {e}"}
+        print(json.dumps(payload), file=out, flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    serve(build)

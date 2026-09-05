@@ -263,32 +263,38 @@ import and it is loaded on demand:
 - {reward: {name: scorer, cmd: "uv run --script /path/to/custom_scorer.py"}, label: mine, weight: 1.0}
 ```
 
-Start from [`custom_rewards.py`](custom_rewards.py) for the first two and
-[`custom_scorer.py`](scorers/custom_scorer.py) for the third — a working scorer in about 40 lines
-that computes isoelectric point from Biopython, runs without a GPU, and carries the traps below as
-comments. A scorer imports nothing from IDiom and speaks one exchange per GRPO step:
+Start from [`custom_scorer.py`](scorers/custom_scorer.py) — a working scorer in about 40 lines that
+computes isoelectric point from Biopython and runs without a GPU. A scorer imports nothing from
+IDiom and speaks one exchange per GRPO step:
 
 ```
 ->  {"sequences": ["ACDEF...", "GHIKL..."]}
 <-  {"scores": [24.8, 31.2]}          # or {"error": "..."}
 ```
 
-One finite score per sequence, in order (a count mismatch is rejected); flush after each response;
-load the model once at import.
-
-**stdout is the protocol.** Libraries that print on import (ProtGPS, STARLING, TensorFlow) make the
-run die at the handshake with `scorer wrote a non-JSON line`. Claim the real stdout:
+You write one function and paste one:
 
 ```python
-_PROTOCOL_STDOUT = sys.stdout
-sys.stdout = sys.stderr              # library chatter goes to the log, not the protocol
-print(json.dumps(response), file=_PROTOCOL_STDOUT, flush=True)
+def build():
+    from mypredictor import predict            # heavy imports live here, not at module top
+    return lambda seqs: [predict(s) for s in seqs]   # one finite score per sequence, in order
+
+serve(build)                                   # pasted verbatim from any shipped scorer
 ```
 
-Two more traps: a scorer named after the package it wraps shadows it (drop the script's own directory
-from `sys.path`), and its environment resolves its own torch, which can outrun your CUDA driver (pin
-the build in the PEP 723 header). Since nothing is imported from IDiom, the same `cmd` also covers a
-pre-built venv, a conda env, or `docker run -i`.
+`build()` returns `score_batch`, a function mapping a list of residue strings to one raw value each
+(raise on a bad one — `serve` turns it into an `{"error": ...}` the run surfaces). Copy `serve`
+unchanged: it drives the protocol and handles the two traps every scorer hits — **stdout is the
+protocol**, so a library that prints on import (TensorFlow, ProtGPS, STARLING) would corrupt the
+first response, and a scorer named after the package it wraps (`sparrow.py` importing `sparrow`)
+shadows it. `serve` claims stdout and drops the script's own directory from `sys.path` before
+calling `build()`, so neither can bite you. It cannot be a shared import — `uv run --script` runs
+one isolated file — so it is pasted, identical, into every scorer.
+
+One trap `serve` cannot take: a scorer's environment resolves its own torch, which can outrun your
+CUDA driver — pin the build in the PEP 723 header. Since nothing is imported from IDiom, the same
+`cmd` also covers a pre-built venv, a conda env, or `docker run -i` — even a program in another
+language, as long as it speaks the JSON lines above.
 
 ## Writing your own shaping
 

@@ -33,11 +33,6 @@ import json
 import os
 import sys
 
-# This file is named finches.py, and Python puts a script's own directory on sys.path[0]; drop it
-# so "import finches" resolves to the installed package rather than back to this file.
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _HERE]
-
 
 def build_frontend(forcefield):
     """Return the FINCHES frontend for a force field.
@@ -55,8 +50,8 @@ def build_frontend(forcefield):
     return Mpipi_frontend()
 
 
-def main():
-    """Read batches from stdin and write epsilon scores to stdout until the pipe closes."""
+def build():
+    """Parse arguments and return the epsilon scorer for the chosen mode and force field."""
     ap = argparse.ArgumentParser(description="FINCHES epsilon as an IDiom external reward.")
     ap.add_argument("--mode", default="homotypic", choices=("homotypic", "heterotypic"),
                     help="self-interaction, or interaction with --partner")
@@ -69,24 +64,49 @@ def main():
         raise SystemExit("--mode heterotypic needs --partner <sequence>")
 
     frontend = build_frontend(args.forcefield)
+    partner = args.partner if args.mode == "heterotypic" else None  # None -> self-interaction
 
-    def score(seq):
-        """Return epsilon for one sequence, or 0.0 for an empty string."""
-        if not seq:
-            return 0.0
-        other = args.partner if args.mode == "heterotypic" else seq
-        return float(frontend.epsilon(seq, other))
+    def score_batch(sequences):
+        """Return epsilon(seq, partner-or-self) for each sequence."""
+        return [float(frontend.epsilon(s, partner or s)) for s in sequences]
 
+    return score_batch
+
+
+def serve(build):
+    """Drive the newline-JSON scorer protocol until stdin closes.
+
+    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
+    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
+    and model loading inside build() keeps any chatter they print off the protocol stream.
+
+    Args:
+        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    """
+    # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
+    # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.
+    here = os.path.dirname(os.path.abspath(__file__))
+    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
+    # stdout is the protocol. A library that prints on import (TensorFlow, ProtGPS, STARLING) would
+    # corrupt the first response, so keep the real stdout for responses and send chatter to stderr.
+    out, sys.stdout = sys.stdout, sys.stderr
+    score_batch = build()
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
         try:
-            response = {"scores": [score(s) for s in json.loads(line)["sequences"]]}
+            seqs = json.loads(line)["sequences"]
+            keep = [(i, s) for i, s in enumerate(seqs) if s]  # empty completions score 0.0
+            values = score_batch([s for _, s in keep]) if keep else []
+            scores = [0.0] * len(seqs)
+            for (i, _), v in zip(keep, values):
+                scores[i] = float(v)
+            payload = {"scores": scores}
         except Exception as e:
-            response = {"error": f"{type(e).__name__}: {e}"}
-        print(json.dumps(response), flush=True)
+            payload = {"error": f"{type(e).__name__}: {e}"}
+        print(json.dumps(payload), file=out, flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    serve(build)
