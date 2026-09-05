@@ -1,12 +1,14 @@
 """Reward shaping: how a raw reward becomes a shaped one.
 
-A shaping rule is chosen per term in the config:
+A shaping rule is a factory returning f(raw) -> float, named in a term exactly as a reward is:
 
-    shaping: {type: quadratic, target: 100, width: 1.0}
-    (omitted)                                          # identity
+    shaping: {name: quadratic, target: 100, width: 1.0}
+    shaping: identity                                    # or omit shaping entirely
 
 quadratic is 0 at the target and unbounded below; gaussian is 1 at the target and bounded in
-[0, 1]; identity passes the raw reward through.
+[0, 1]; identity passes the raw reward through. All three say *be here*, so a threshold or a band
+is a rule of your own -- write a factory of the same shape and name it by its "module:function"
+path, as in cookbook/rewards/custom_rewards.py.
 """
 
 from __future__ import annotations
@@ -14,27 +16,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
-# type -> factory(**params) -> shaping(value) -> float
-SHAPING_REGISTRY: dict[str, Callable[..., Callable[[float], float]]] = {}
-
-
-def register_shaping(shaping_type: str):
-    """Return a decorator that registers a shaping factory under type.
-
-    A factory takes the shaping spec's parameters and returns the rule itself, f(value) -> float.
-
-    Args:
-        shaping_type (str): The name used in a term's shaping.type.
-
-    Returns:
-        Callable: A decorator that registers the factory and returns it unchanged.
-    """
-
-    def deco(factory):
-        SHAPING_REGISTRY[shaping_type] = factory
-        return factory
-
-    return deco
+Shaping = Callable[[float], float]
 
 
 def tolerance(target: float, width: float) -> float:
@@ -87,47 +69,44 @@ def gaussian_score(value: float, target: float, width: float = 1.0) -> float:
     return math.exp(-((value - target) / tolerance(target, width)) ** 2)
 
 
-@register_shaping("identity")
-def _identity():
-    """Build the shaping rule that passes the raw reward through unchanged."""
+def identity() -> Shaping:
+    """Build the shaping rule that passes the raw reward through unchanged.
+
+    Returns:
+        Shaping: The identity function.
+    """
     return lambda value: value
 
 
-@register_shaping("quadratic")
-def _quadratic(*, target: float, width: float = 1.0):
-    """Build a quadratic penalty toward target."""
+def quadratic(*, target: float, width: float = 1.0) -> Shaping:
+    """Build a quadratic penalty toward a target.
+
+    Args:
+        target (float): The value at which the penalty is 0.
+        width (float): Tolerance as a fraction of the target, absolute when the target is 0.
+
+    Returns:
+        Shaping: See quadratic_penalty.
+
+    Raises:
+        ValueError: If width is not positive.
+    """
+    tolerance(target, width)  # validate now, not on the first training step
     return lambda value: quadratic_penalty(value, target, width)
 
 
-@register_shaping("gaussian")
-def _gaussian(*, target: float, width: float = 1.0):
-    """Build a bounded bell curve peaked at target."""
-    return lambda value: gaussian_score(value, target, width)
-
-
-def build_shaping(spec) -> Callable[[float], float]:
-    """Build a shaping rule from a term's shaping spec.
+def gaussian(*, target: float, width: float = 1.0) -> Shaping:
+    """Build a bounded bell curve peaked at a target.
 
     Args:
-        spec: A mapping with a "type" plus that shaping type's parameters, or None for identity.
+        target (float): The value at which the score is 1.
+        width (float): Tolerance as a fraction of the target, absolute when the target is 0.
 
     Returns:
-        Callable[[float], float]: Maps one raw reward to its shaped value.
+        Shaping: See gaussian_score.
 
     Raises:
-        ValueError: If the shaping type is missing or unknown, or its parameters do not fit it.
+        ValueError: If width is not positive.
     """
-    if not spec:
-        return SHAPING_REGISTRY["identity"]()
-    params = dict(spec)
-    shaping_type = params.pop("type", None)
-    if shaping_type is None:
-        raise ValueError(f"shaping needs a type (one of {sorted(SHAPING_REGISTRY)})")
-    if shaping_type not in SHAPING_REGISTRY:
-        raise ValueError(
-            f"unknown shaping type {shaping_type!r}; known types: {sorted(SHAPING_REGISTRY)}"
-        )
-    try:
-        return SHAPING_REGISTRY[shaping_type](**params)
-    except TypeError as e:  # a missing target, or a parameter this type does not take
-        raise ValueError(f"bad parameters for shaping {shaping_type!r}: {e}") from e
+    tolerance(target, width)  # validate now, not on the first training step
+    return lambda value: gaussian_score(value, target, width)

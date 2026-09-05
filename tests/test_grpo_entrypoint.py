@@ -12,7 +12,7 @@ from omegaconf import OmegaConf
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.train.grpo import LitGRPO
 from idiom.train.grpo.data import PromptDataset
-from idiom.train.grpo.reward import parse_terms
+from idiom.train.grpo.reward import REWARD_ALIASES, build_terms
 from idiom.train.grpo.train_grpo import build, build_reward
 
 TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len=64)
@@ -31,13 +31,12 @@ def _ckpt(tmp_path):
 
 
 def _reward_cfg(**over):
-    """The configs/grpo.yaml reward structure, using the registered fraction_proline."""
+    """The configs/grpo.yaml reward structure, naming a fixture reward by its path."""
     base = {
-        "module": None,
         "terms": [
             {"reward": "length", "weight": 2.0,
-             "shaping": {"type": "quadratic", "target": 100, "width": 0.1}},
-            {"reward": "fraction_proline", "weight": 1.0},
+             "shaping": {"name": "quadratic", "target": 100, "width": 0.1}},
+            {"reward": "tests.reward_fixtures:fraction_proline", "weight": 1.0},
         ],
     }
     base.update(over)
@@ -52,24 +51,21 @@ def test_build_reward_composes():
     assert abs(totals[0] - 1.0) < 1e-6
 
 
-def test_the_library_registers_only_entropy_and_length():
-    """entropy and length register on import; nothing else is, and neither is in any objective."""
-    from idiom.train.grpo.reward import REWARD_REGISTRY, Batch, get_reward
+def test_the_shipped_aliases_are_the_whole_menu():
+    """Short names the library ships, and nothing more; anything else is a module:function path."""
+    from idiom.train.grpo.reward import REWARD_ALIASES, SHAPING_ALIASES, entropy, length
 
-    assert get_reward("entropy")(["AAAA"], Batch()) == [0.0]
-    assert get_reward("length")(["AAAA"], Batch()) == [4.0]
-    # the fixtures module registers two more, and other test modules register names of their own
-    # under a leading underscore; nothing else may creep in
-    registered = {k for k in REWARD_REGISTRY if not k.startswith("_")}
-    assert registered - {"fraction_proline", "fraction_alanine"} == {"entropy", "length"}
+    assert set(REWARD_ALIASES) == {"entropy", "length", "scorer", "sae_signature"}
+    assert set(SHAPING_ALIASES) == {"quadratic", "gaussian", "identity"}
+    assert entropy()(["AAAA"]) == [0.0] and length()(["AAAA"]) == [4.0]
 
 
-def test_the_sae_reward_registers_nothing_on_import():
-    """Its settings come from a term's params, so importing it adds no names to the registry."""
-    from idiom.train.grpo.reward import REWARD_REGISTRY, sae_feature
+def test_every_alias_resolves_to_a_factory():
+    """An alias is a string; nothing is imported until a term names it, and then it must build."""
+    from idiom.train.grpo.reward import REWARD_ALIASES, SHAPING_ALIASES, load_callable
 
-    assert callable(sae_feature.sae_signature)
-    assert not [k for k in REWARD_REGISTRY if k.startswith("sae")]
+    for name, path in {**REWARD_ALIASES, **SHAPING_ALIASES}.items():
+        assert callable(load_callable(path)), name
 
 
 def test_build_wires_module_and_prompts(tmp_path):
@@ -137,6 +133,7 @@ def test_the_sae_reward_ships_with_its_signatures():
     assert (Path(sae_feature.__file__).parent / "sae_signatures.json").is_file()
     assert sae_feature._featuresets(sae_feature.DEFAULT_FEATURES, sae_feature.DEFAULT_CASE), \
         "no signatures in the shipped file"
+    assert "sae_signature" in REWARD_ALIASES
 
 
 def test_the_shipped_objective_is_empty():
@@ -145,9 +142,9 @@ def test_the_shipped_objective_is_empty():
 
     cfg = OmegaConf.load(Path(idiom.configs.__file__).parent / "grpo.yaml")
     assert list(cfg.reward.terms) == []
-    assert set(cfg.reward) == {"terms", "module"}, "the reward config is terms plus module, nothing else"
+    assert set(cfg.reward) == {"terms"}, "the reward config is a terms list, nothing else"
     with pytest.raises(ValueError, match="reward.terms is empty"):
-        parse_terms(cfg.reward)
+        build_terms(cfg.reward)
 
 
 def test_the_rewards_the_library_registers_need_no_repository(tmp_path, monkeypatch):
@@ -158,9 +155,8 @@ def test_the_rewards_the_library_registers_need_no_repository(tmp_path, monkeypa
     """
     monkeypatch.chdir(tmp_path)
     terms = [{"reward": "entropy", "weight": 1.0,
-              "shaping": {"type": "quadratic", "target": 3.65, "width": 0.2}},
+              "shaping": {"name": "quadratic", "target": 3.65, "width": 0.2}},
              {"reward": "length", "weight": 1.0,
-              "shaping": {"type": "quadratic", "target": 100, "width": 1.0}}]
-    assert all(t.get("module") is None for t in terms), "neither term may need a module"
-    totals, _ = build_reward(OmegaConf.create({"module": None, "terms": terms}))(["P" * 100], 1)
+              "shaping": {"name": "quadratic", "target": 100, "width": 1.0}}]
+    totals, _ = build_reward(OmegaConf.create({"terms": terms}))(["P" * 100], 1)
     assert math.isfinite(totals[0])

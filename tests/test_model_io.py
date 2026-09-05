@@ -63,4 +63,5 @@ def test_lit_modules_persist_model_cfg():
     from idiom.train.grpo.lit_grpo import LitGRPO
 
     assert LitAutoregressive(CFG).hparams["model_cfg"] == asdict(CFG)
-    assert LitGRPO(CFG, reward_fn=lambda s: 0.0).hparams["model_cfg"] == asdict(CFG)
+    terms = lambda idrs, g: ([0.0] * len(idrs), [{}] * len(idrs))  # noqa: E731
+    assert LitGRPO(CFG, terms).hparams["model_cfg"] == asdict(CFG)

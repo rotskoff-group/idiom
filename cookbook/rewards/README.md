@@ -4,7 +4,7 @@
 the command line.
 
 ```
-custom_rewards.py   rewards that run in this process, and shaping — copy this and edit it
+custom_rewards.py   reward and shaping factories that run in this process — copy and edit
 scorers/            reward models that run in their OWN environment, one program each
 ```
 
@@ -35,19 +35,35 @@ with the **shaping** that says what a good value is, and a **weight** for how mu
 ```yaml
 reward:
   terms:
-    - {reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}  # bits
-    - {reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}  # residues
+    - {reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}, weight: 1.0}  # bits
+    - {reward: length,  shaping: {name: quadratic, target: 100,  width: 1.0}, weight: 1.0}  # residues
 ```
 
-Every term has that same shape — a `label`, a `weight`, a `shaping` — and then the keys belonging to
-its source: `module`, `params` and `batched` for a reward, `timeout`, `maxlen`, `cwd` and `env` for a
-`cmd` scorer. A key from the wrong group is an error, not a silent no-op.
+**A term is four keys** — `reward`, `shaping`, `weight`, `label` — and there are no others. The
+reward and the shaping are named the same way: a **name**, plus that thing's own arguments. A bare
+string when it takes none, a mapping when it does:
+
+```yaml
+- {reward: entropy, weight: 1.0}                                    # no arguments
+- {reward: {name: scorer, cmd: "uv run --script my_scorer.py", timeout: 600},
+   label: mine, weight: 1.0}                                        # scorer's arguments
+```
+
+The name is either one the library ships or a `module:function` path to a factory of your own:
+
+| | shipped names | your own |
+|---|---|---|
+| `reward` | `entropy`, `length`, `scorer`, `sae_signature` | `"mypkg.scoring:make_scorer"` |
+| `shaping` | `quadratic`, `gaussian`, `identity` | `"mypkg.shaping:one_sided"` |
+
+`label` defaults to the reward's name, and is what the term is logged under; give one explicitly
+when two terms would otherwise collide (two `scorer` terms, say).
 
 | shaping | shape | use when |
 |---|---|---|
 | `quadratic` | 0 at the target, −1 one `width` out, unbounded below | one target, hit hard |
 | `gaussian` | 1 at the target decaying to 0 — bounded | several targets must coexist |
-| omitted | raw value passes through | already on a sensible scale, e.g. a probability |
+| `identity` (or omit `shaping`) | raw value passes through | already on a sensible scale, e.g. a probability |
 
 Those three cover a value you want *hit*. For anything else — a floor, a ceiling, a flat band —
 register your own; see [writing your own shaping](#writing-your-own-shaping).
@@ -63,19 +79,20 @@ exactly that. Terms compose in the order you name them.
 
 ```bash
 idiom_train_grpo init_from=jxliu2/idiom-300M \
-  reward.terms='[{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}},
-                 {reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}},
-                 {cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
-                  label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}]'
+  reward.terms='[{reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}, weight: 1.0},
+                 {reward: length,  shaping: {name: quadratic, target: 100,  width: 1.0}, weight: 1.0},
+                 {reward: {name: scorer, cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration"},
+                  shaping: {name: quadratic, target: 25, width: 0.2}, label: rg, weight: 0.5}]'
 ```
 
 In a script that gets unreadable fast, so each one names its terms first and assembles them on one
-line — which is also how you keep a tuned term without retyping it:
+line. Written in a fixed key order — `label`, `weight`, `reward`, `shaping` — they line up as a
+table, and the objective is the one thing that differs between scripts:
 
 ```bash
-ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
-LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
-RG="{cmd: \"$SCORER\", label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}"
+ENTROPY='{label: entropy, weight: 1.0, reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}}'
+LENGTH='{label: length,  weight: 1.0, reward: length,  shaping: {name: quadratic, target: 100,  width: 1.0}}'
+RG="{label: rg, weight: 0.5, reward: {name: scorer, cmd: \"$SCORER\"}, shaping: {name: quadratic, target: 25, width: 0.2}}"
 
 idiom_train_grpo init_from=jxliu2/idiom-300M reward.terms="[$ENTROPY, $LENGTH, $RG]"
 ```
@@ -88,42 +105,41 @@ list is refused, since it would give every completion the same reward.
 Use this whenever the reward can be imported into the environment IDiom runs in, which is most of the
 time. A reward is one function, one raw value, no notion of "good".
 
-**Registered by the library.** Name it and it works — no `module`, nothing on disk: `entropy` and
-`length`, in `idiom/train/grpo/reward/builtin.py`. They are terms like any other; nothing puts them
-in an objective for you. The examples in [`custom_rewards.py`](custom_rewards.py)
-(`net_charge_fraction`, `fraction_charged`, `sumo_motif_count`, `ndsm_motif_count`) need that file in
-the term's `module`, like any reward of your own.
+**Shipped.** `entropy` and `length` (`idiom/train/grpo/reward/builtin.py`) need nothing on disk —
+name one and it works. They are terms like any other; nothing puts them in an objective for you.
 
-**Yours, registered by name.** Copy [`custom_rewards.py`](custom_rewards.py) into your project,
-decorate with `@register_reward("fraction_aromatic")`, and point a term at the file (a `*.py` path or
-a dotted module name):
+**Yours.** A reward is a **factory**: a function returning the thing that runs every step, which
+maps the step's IDRs to one raw value each. `lift` covers the usual case, a function that scores one
+IDR:
 
-```yaml
-- {reward: fraction_aromatic, module: /path/to/custom_rewards.py, weight: 1.0,
-   shaping: {type: gaussian, target: 0.10, width: 0.5}}
+```python
+from idiom.train.grpo.reward import lift
+
+def fraction_aromatic():
+    return lift(lambda idr: sum(idr.count(a) for a in "FWY") / len(idr) if idr else 0.0)
 ```
 
-**Yours, already written.** If IDiom is installed alongside code that can already score a sequence,
-name the callable directly — no decorator, no import of IDiom, no copy into this repo:
+Name it by its path — a dotted module or a `*.py` file — and nothing needs registering:
 
 ```yaml
-- {reward: "mypackage.scoring:score_idr", weight: 1.0}
-- {reward: "mypackage.scoring:score_batch", batched: true, weight: 1.0}   # f(idrs, batch)
+- {reward: "mypackage.scoring:fraction_aromatic", shaping: {name: gaussian, target: 0.10, width: 0.5},
+   weight: 1.0}
+- {reward: "/path/to/custom_rewards.py:fraction_aromatic", weight: 1.0}
 ```
 
-The term is logged under the function's own name unless you give it a `label`. A `module:function`
-that cannot be imported fails while the config is parsed, not on the first training step.
-
-**Yours, with settings.** Add `params` and the callable is a **factory**, called once with them to
-build the reward. This is how a reward that needs configuring takes it from the config, so the run's
-saved `config.yaml` records what it was actually optimizing:
+**With settings.** The factory's parameters are the term's arguments, so a reward that needs
+configuring takes it from the config and the run's saved `config.yaml` records what it was actually
+optimizing:
 
 ```yaml
-- {reward: "mypackage.scoring:make_scorer", label: mine, weight: 1.0, params: {cutoff: 0.3}}
+- {reward: {name: "mypackage.scoring:make_scorer", cutoff: 0.3}, label: mine, weight: 1.0}
 ```
 
-Validate in the factory: it runs at config time, so a bad setting fails in seconds rather than on the
-first step. `params` applies only to the `module:function` form.
+Validate in the factory: it runs once at config time, so a bad setting fails in seconds rather than
+on the first step. A path that cannot be imported fails there too.
+
+**Skip `lift`** when scoring the whole step at once is cheaper — a GPU forward pass, a vectorized
+model — and return a `list[str] -> list[float]` directly.
 
 ## Out-of-process scorers
 
@@ -136,9 +152,13 @@ Each shipped scorer is a standalone program speaking newline-delimited JSON on s
 environment declared in a [PEP 723](https://peps.python.org/pep-0723/) header. `uv` builds it on
 first use and weights are fetched automatically, so there is no install step:
 
+`scorer` is the reward factory that runs one: give it the command, and optionally `timeout`,
+`maxlen`, `cwd`, `env` and `label` (which prefixes the child's stderr).
+
 ```yaml
-- {cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
-   label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}
+- {reward: {name: scorer,
+            cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration"},
+   shaping: {name: quadratic, target: 25, width: 0.2}, label: rg, weight: 0.5}
 ```
 
 | scorer | rewards | environment and weights | per 32 seqs |
@@ -185,16 +205,15 @@ both VRAM and time per step. Give the child its own device (`CUDA_VISIBLE_DEVICE
 
 `sae_signature` scores an IDR by the fraction of a target's SAE feature signature firing in it, read
 through a frozen IDiom + SAE lens — so a gain requires encoding the real code, not just satisfying a
-classifier. Already a fraction in [0, 1], so no shaping, and no third-party dependency. It is a
-factory, so which signature a run chases and where it is read from are `params` on the term and are
-saved with the run:
+classifier. Already a fraction in [0, 1], so no shaping, and no third-party dependency. Which
+signature a run chases and where it is read from are the reward's arguments, saved with the run:
 
 ```yaml
-- {reward: "idiom.train.grpo.reward.sae_feature:sae_signature", label: sae, weight: 1.0,
-   params: {signature: nucleolus, features: signature.json, case: top30}}
+- {reward: {name: sae_signature, signature: nucleolus, features: signature.json, case: top30},
+   label: sae, weight: 1.0}
 ```
 
-`params` takes `signature` (required), `features` (path to the signature JSON), `case` (`top30` or
+It takes `signature` (required), `features` (path to the signature JSON), `case` (`top30` or
 `private30` in the shipped file), `sae` (the lens, a Hub repo id or directory) and `device`.
 `sae_signatures.json` ships beside the reward and holds the signatures for the released SAE; a copy
 sits in the Hub dataset under `example_data/sae_features/` as a format reference.
@@ -239,9 +258,9 @@ Put it in **your** project, not here. Nothing needs registering ahead of time �
 import and it is loaded on demand:
 
 ```yaml
-- {reward: my_reward, module: /path/to/custom_rewards.py, weight: 1.0}   # registered by name
-- {reward: "mypackage.scoring:score_idr", weight: 1.0}               # any importable callable
-- {cmd: "uv run --script /path/to/custom_scorer.py", label: mine, weight: 1.0}   # its own environment
+- {reward: "/path/to/custom_rewards.py:my_reward", weight: 1.0}          # a factory in a file
+- {reward: {name: "mypackage.scoring:make_scorer", cutoff: 0.3}, label: mine, weight: 1.0}
+- {reward: {name: scorer, cmd: "uv run --script /path/to/custom_scorer.py"}, label: mine, weight: 1.0}
 ```
 
 Start from [`custom_rewards.py`](custom_rewards.py) for the first two and
@@ -273,17 +292,16 @@ pre-built venv, a conda env, or `docker run -i`.
 
 ## Writing your own shaping
 
-Shaping extends the same way a reward does — a decorator, in a file you name at launch — and goes
-in the same file. The three shipped rules all say *be here*, which is wrong whenever the objective
+Shaping is written exactly as a reward is — a factory, named by its path — and goes in the same
+file. The three shipped rules all say *be here*, which is wrong whenever the objective
 is a threshold: an IDR that must stay expanded wants Rg ≥ 30 Å, not Rg = 30 Å, and pinning it to the
 target spends optimization pressure fighting improvements.
 
 The Shaping section of [`custom_rewards.py`](custom_rewards.py) is that rule, `one_sided`:
 
 ```python
-from idiom.train.grpo.reward import register_shaping, tolerance
+from idiom.train.grpo.reward import tolerance
 
-@register_shaping("one_sided")
 def one_sided(*, target: float, width: float = 1.0, direction: str = "above"):
     if direction not in ("above", "below"):
         raise ValueError(f"one_sided direction must be 'above' or 'below', got {direction!r}")
@@ -295,24 +313,23 @@ def one_sided(*, target: float, width: float = 1.0, direction: str = "above"):
     return shaping
 ```
 
-A factory takes the spec's parameters and returns the rule itself, `f(raw) -> float`. Two things to
+A factory takes the rule's arguments and returns the rule itself, `f(raw) -> float`. Two things to
 keep: use `tolerance` rather than dividing by `width` yourself, so `width` stays a fraction of a
 nonzero target and absolute at 0; and validate in the factory, which runs once at config time, so a
 bad `direction` fails in seconds instead of on the first step. A `TypeError` from a missing or
-misspelled parameter is already reported as `bad parameters for shaping ...`.
+misspelled argument is already reported as `bad arguments for shaping ...`.
 
-Name it in a term's `shaping.type`. Since the reward and the rule share a file, the term's own
-`module` brings in both:
+Name it in `shaping.name`, by the same kind of path a reward uses:
 
 ```bash
 idiom_train_grpo init_from=jxliu2/idiom-300M \
-  reward.terms='[{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0,
-                  shaping: {type: one_sided, target: 0.30, width: 0.5}}]'
+  reward.terms='[{reward: "cookbook/rewards/custom_rewards.py:fraction_charged", weight: 1.0,
+                  shaping: {name: "cookbook/rewards/custom_rewards.py:one_sided",
+                            target: 0.30, width: 0.5}}]'
 ```
 
-A term takes one `module`, so if your shaping lives somewhere else, name that file in the
-config-level `reward.module=` instead. Either way every module the config names is imported before
-any shaping is built, so a rule registered by one term's module is available to all of them.
+The reward and the shaping resolve independently, so they can live in different files or the same
+one; neither needs the other to have been imported first.
 
 **Flat means no gradient.** A one-sided term stops steering once a completion clears the threshold,
 so it cannot be the only thing driving a run — pair it with a term that has a preference, or the

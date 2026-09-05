@@ -32,9 +32,20 @@ fi
 # The whole objective, written out: nothing is added for you and reward.terms is empty by
 # default. entropy and length keep the target from being met by a low-complexity tract or a
 # degenerate length; drop either line and it is gone.
-ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
-LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
-SAE="{reward: \"idiom.train.grpo.reward.sae_feature:sae_signature\", label: sae, weight: 1.0, params: {signature: $SIGNATURE, features: \"$FEATURES\", case: $CASE}}"
+ENTROPY="{label: entropy, \
+    weight: 1.0, \
+    reward: entropy, \
+    shaping: {name: quadratic, target: 3.65, width: 0.2}}"
+
+LENGTH="{label: length, \
+    weight: 1.0, \
+    reward: length, \
+    shaping: {name: quadratic, target: 100, width: 1.0}}"
+
+SAE="{label: sae, \
+    weight: 1.0, \
+    reward: {name: sae_signature, signature: $SIGNATURE, features: \"$FEATURES\", case: $CASE}, \
+    shaping: identity}"
 
 idiom_train_grpo \
     seed=0 \
@@ -56,7 +67,6 @@ idiom_train_grpo \
     grpo.normalize_advantage=true \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
-    reward.module=null \
     reward.terms="[$ENTROPY, $LENGTH, $SAE]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \

@@ -13,8 +13,8 @@ strongest window's Z-score. A sequence shorter than 53 residues is padded on bot
 background residue.
 
     reward.terms:
-      - {cmd: "uv run --script cookbook/rewards/scorers/paddle.py",
-         label: paddle, weight: 1.0, timeout: 600}
+      - {reward: {name: scorer, cmd: "uv run --script cookbook/rewards/scorers/paddle.py",
+                  timeout: 600}, label: paddle, weight: 1.0}
 
 The raw reward is a Z-score against PADDLE's background; strong natural activation domains sit well
 above 5. Leave it unshaped to maximize activation strength, or give it a quadratic target for a

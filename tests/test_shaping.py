@@ -1,7 +1,7 @@
 """Tests for the shaping rules that turn a raw reward into a shaped one.
 
-Each type is checked against the arithmetic it promises, and build_shaping against the malformed
-specs it must reject at build time.
+Each rule is checked against the arithmetic it promises, and the spec resolver against the
+malformed specs it must reject at build time.
 """
 
 import math
@@ -10,12 +10,18 @@ import pytest
 from omegaconf import OmegaConf
 
 from idiom.train.grpo.reward import (
+    SHAPING_ALIASES,
+    build_from_spec,
     build_reward,
-    build_shaping,
     gaussian_score,
     quadratic_penalty,
     tolerance,
 )
+
+
+def build_shaping(spec):
+    """Resolve a term's shaping spec the way compose does."""
+    return build_from_spec(spec or "identity", SHAPING_ALIASES, "shaping", "shaping")
 
 
 def test_tolerance_is_relative_to_the_target_and_absolute_at_zero():
@@ -42,7 +48,7 @@ def test_gaussian_score_is_bounded():
 
 
 def test_build_shaping_applies_a_spec():
-    shaping = build_shaping({"type": "quadratic", "target": 100, "width": 1.0})
+    shaping = build_shaping({"name": "quadratic", "target": 100, "width": 1.0})
     assert [shaping(v) for v in (100.0, 200.0)] == [0.0, pytest.approx(-1.0)]
 
 
@@ -53,28 +59,30 @@ def test_build_shaping_without_a_spec_is_identity():
 
 
 def test_build_shaping_rejects_a_bad_spec():
-    with pytest.raises(ValueError, match="unknown shaping type"):
-        build_shaping({"type": "quadratik", "target": 1})
-    with pytest.raises(ValueError, match="needs a type"):
+    with pytest.raises(ValueError, match=r"unknown shaping 'quadratik'.*gaussian"):
+        build_shaping({"name": "quadratik", "target": 1})
+    with pytest.raises(ValueError, match="needs a name"):
         build_shaping({"target": 1})
-    with pytest.raises(ValueError, match="bad parameters"):
-        build_shaping({"type": "quadratic"})               # quadratic without a target
-    with pytest.raises(ValueError, match="bad parameters"):
-        build_shaping({"type": "quadratic", "target": 1, "min": 2})  # a parameter it does not take
+    with pytest.raises(ValueError, match="bad arguments"):
+        build_shaping({"name": "quadratic"})               # quadratic without a target
+    with pytest.raises(ValueError, match="bad arguments"):
+        build_shaping({"name": "quadratic", "target": 1, "min": 2})  # an argument it does not take
+    with pytest.raises(ValueError, match="width must be positive"):
+        build_shaping({"name": "quadratic", "target": 1, "width": 0})  # validated in the factory
 
 
-def test_a_user_module_can_register_a_shaping_type(tmp_path):
-    # reward.module is imported before any shaping is built (cookbook/rewards/custom_rewards.py)
+def test_a_term_can_name_a_shaping_rule_of_its_own(tmp_path):
+    # any importable factory works, named by its path (cookbook/rewards/custom_rewards.py:one_sided)
     mod = tmp_path / "my_shaping.py"
     mod.write_text(
-        "from idiom.train.grpo.reward import register_shaping, tolerance\n"
-        "@register_shaping('_one_sided')\n"
-        "def _one_sided(*, target, width=1.0):\n"
+        "from idiom.train.grpo.reward import tolerance\n"
+        "def one_sided(*, target, width=1.0):\n"
         "    scale = tolerance(target, width)\n"
         "    return lambda v: -(((target - v) / scale) ** 2) if v < target else 0.0\n"
     )
-    cfg = OmegaConf.create({"module": str(mod), "terms": [
-        {"reward": "length", "weight": 1.0, "shaping": {"type": "_one_sided", "target": 10, "width": 0.5}},
+    cfg = OmegaConf.create({"terms": [
+        {"reward": "length", "weight": 1.0,
+         "shaping": {"name": f"{mod}:one_sided", "target": 10, "width": 0.5}},
     ]})
     totals, _ = build_reward(cfg)(["A" * 20, "A" * 10, "A" * 5], 1)
     assert totals == [0.0, 0.0, pytest.approx(-1.0)]  # flat above the threshold, penalized below

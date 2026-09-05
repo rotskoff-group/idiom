@@ -22,8 +22,8 @@ c_sat = 1.2 mg/mL, poly-GS scores dG = +0.3 kT with c_sat = 80 mg/mL.
     --target cdil_mgml       the same, exponentiated to mg/mL
 
     reward.terms:
-      - {cmd: "uv run --script cookbook/rewards/scorers/pspred.py --target dG",
-         label: dG, weight: 1.0, shaping: {type: quadratic, target: -6.0, width: 0.3}}
+      - {reward: {name: scorer, cmd: "uv run --script cookbook/rewards/scorers/pspred.py --target dG"},
+         shaping: {name: quadratic, target: -6.0, width: 0.3}, label: dG, weight: 1.0}
 
 The predictor's own files (3.7 MB: two scripts, a residue table and three joblib models) are fetched
 once from the project's GitHub into IDIOM_PSPRED_DIR. The scikit-learn pin matters: the models are

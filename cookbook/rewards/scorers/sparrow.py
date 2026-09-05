@@ -8,8 +8,9 @@ Its dependencies live in the script header above, so uv builds and caches the en
 and the config only names the script. In configs/grpo.yaml:
 
     reward.terms:
-      - {cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
-         label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}
+      - {reward: {name: scorer,
+                  cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration"},
+         shaping: {name: quadratic, target: 25, width: 0.2}, label: rg, weight: 0.5}
 
 It returns the raw property value; the term's shaping turns that into a reward. --property is any
 ALBATROSS predictor (radius_of_gyration, end_to_end_distance, asphericity, scaling_exponent,

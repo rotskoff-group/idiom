@@ -12,10 +12,9 @@ import pytest
 
 from idiom.train.grpo.reward.external import (
     Scorer,
-    make_external_reward,
     parse_response,
+    scorer,
 )
-from idiom.train.grpo.reward.registry import Batch
 
 REPO = Path(__file__).resolve().parents[1]  # the scorers are repository material
 
@@ -174,13 +173,13 @@ def _batched_scorer_file(tmp_path, counter):
     return path
 
 
-def test_make_external_reward_batches_dedups_and_caches(tmp_path):
+def test_scorer_batches_dedups_and_caches(tmp_path):
     """Empty strings cost no round trip, duplicates are sent once, repeats hit the cache."""
     counter = tmp_path / "calls.txt"
     path = _batched_scorer_file(tmp_path, counter)
-    reward = make_external_reward(f"{sys.executable} {path}", cwd=str(tmp_path))
-    assert reward(["AAA", "", "AAA", "CCCCC"], Batch(4)) == [3.0, 0.0, 3.0, 5.0]
-    assert reward(["AAA", "GG"], Batch(2)) == [3.0, 2.0]
+    reward = scorer(f"{sys.executable} {path}", cwd=str(tmp_path))
+    assert reward(["AAA", "", "AAA", "CCCCC"]) == [3.0, 0.0, 3.0, 5.0]
+    assert reward(["AAA", "GG"]) == [3.0, 2.0]
 
     batches = [line for line in counter.read_text().splitlines() if line]
     assert batches[0] == '["MKVGSDEQ"]'      # the handshake
@@ -188,27 +187,27 @@ def test_make_external_reward_batches_dedups_and_caches(tmp_path):
     assert batches[2] == '["GG"]'            # only the uncached sequence
 
 
-def test_make_external_reward_returns_the_raw_value(tmp_path):
+def test_scorer_returns_the_raw_value(tmp_path):
     # the scorer reports its own units and stops there; shaping is the term's job, not the
     # subprocess's, so the objective is retuned without touching that environment
-    reward = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
-    assert reward(["AAA", "AAAAA"], Batch(2)) == [3.0, 5.0]
+    reward = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
+    assert reward(["AAA", "AAAAA"]) == [3.0, 5.0]
 
 
-def test_two_external_rewards_are_independent(tmp_path):
+def test_two_scorers_are_independent(tmp_path):
     # two scorers in one run get their own process and cache, and must not share global state
-    m1 = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
-    m2 = make_external_reward(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path),
+    m1 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
+    m2 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path),
                                maxlen=2)
-    assert m1(["AAAAA"], Batch(1))[0] == pytest.approx(5.0)
-    assert m2(["AAAAA"], Batch(1))[0] == pytest.approx(2.0)  # truncated before it was sent
+    assert m1(["AAAAA"])[0] == pytest.approx(5.0)
+    assert m2(["AAAAA"])[0] == pytest.approx(2.0)  # truncated before it was sent
 
 
 def test_a_command_can_be_given_as_an_argument_list(tmp_path):
     # the escape hatch from shell quoting: a path with a space in it survives unsplit
     path = _scorer_path(tmp_path, name="len scorer.py")
-    reward = make_external_reward([sys.executable, str(path)], cwd=str(tmp_path))
-    assert reward(["AAA"], Batch(1)) == [3.0]
+    reward = scorer([sys.executable, str(path)], cwd=str(tmp_path))
+    assert reward(["AAA"]) == [3.0]
 
 
 def _scorer_path(tmp_path, name="len_scorer.py"):

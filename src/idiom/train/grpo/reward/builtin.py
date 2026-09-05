@@ -1,13 +1,12 @@
-"""Two sequence-level rewards the library registers, entropy and length.
+"""Two sequence-level rewards the library ships, entropy and length.
 
-Neither is added to an objective for you: they are terms like any other, named by a run in
-reward.terms. Most objectives are worth carrying them, since a target is otherwise satisfiable by a
-low-complexity tract or by a degenerate length. Importing idiom.train.grpo.reward registers both,
-so a term names one with no module of its own:
+Neither is in an objective unless a run names it: reward.terms is empty by default and both are
+terms like any other. Most objectives are worth carrying them, since a target is otherwise
+satisfiable by a low-complexity tract or by a degenerate length.
 
     reward.terms:
-      - {reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}
-      - {reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}
+      - {reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}, weight: 1.0}
+      - {reward: length,  shaping: {name: quadratic, target: 100,  width: 1.0}, weight: 1.0}
 
 Write your own rewards and shaping from the template in cookbook/rewards/custom_rewards.py, or as
 external scorers in cookbook/rewards/scorers/.
@@ -18,11 +17,10 @@ from __future__ import annotations
 import math
 from collections import Counter
 
-from idiom.train.grpo.reward.registry import register_reward
+from idiom.train.grpo.reward.resolve import Reward, lift
 
 
-@register_reward("entropy")
-def sequence_entropy(idr: str) -> float:
+def composition_entropy(idr: str) -> float:
     """Return the Shannon entropy of an IDR's amino-acid composition, in bits.
 
     The value ranges from 0 for a single repeated residue to log2(20), about 4.32 bits, for a
@@ -41,14 +39,19 @@ def sequence_entropy(idr: str) -> float:
     return h or 0.0  # a single repeated residue gives -0.0; log it as 0.0
 
 
-@register_reward("length")
-def sequence_length(idr: str) -> float:
-    """Return an IDR's length in residues.
-
-    Args:
-        idr (str): The decoded IDR residue string.
+def entropy() -> Reward:
+    """Build the reward scoring an IDR's composition entropy in bits.
 
     Returns:
-        float: Number of residues.
+        Reward: Composition entropy per IDR; see composition_entropy.
     """
-    return float(len(idr))
+    return lift(composition_entropy)
+
+
+def length() -> Reward:
+    """Build the reward scoring an IDR's length in residues.
+
+    Returns:
+        Reward: Number of residues per IDR.
+    """
+    return lift(len)

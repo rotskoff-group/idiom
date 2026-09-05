@@ -34,8 +34,13 @@ trainer:
   checkpoint_every: 0 # periodic checkpoint every N steps (0 = last only)
 
 reward: # total = sum over terms of weight * shaping(reward(idr))
+  # Empty on purpose: a run names every term it optimizes. A term is a reward, a shaping, a weight
+  # and a label; reward and shaping are each a name plus that factory's arguments. Shipped reward
+  # names: entropy, length, scorer, sae_signature. Shipped shaping: quadratic, gaussian, identity.
+  # Anything else is a "module:function" path. See cookbook/scripts/grpo/ for a script per objective.
+  #
+  #   reward.terms='[{reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}, weight: 1.0}]'
   terms: []
-  module: null # module containing custom rewards and shaping
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo
 

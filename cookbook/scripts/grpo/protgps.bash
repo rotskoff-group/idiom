@@ -28,8 +28,15 @@ python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 # degenerate length; drop either line and it is gone.
 # A probability in [0, 1], and compartment prediction is length-sensitive on its own, so this
 # objective carries entropy and no length term.
-ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
-PROTGPS="{cmd: \"$SCORER\", label: protgps, weight: $WEIGHT}"
+ENTROPY="{label: entropy, \
+    weight: 1.0, \
+    reward: entropy, \
+    shaping: {name: quadratic, target: 3.65, width: 0.2}}"
+
+PROTGPS="{label: protgps, \
+    weight: $WEIGHT, \
+    reward: {name: scorer, cmd: \"$SCORER\"}, \
+    shaping: identity}"
 
 idiom_train_grpo \
     seed=0 \
@@ -51,7 +58,6 @@ idiom_train_grpo \
     grpo.normalize_advantage=true \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
-    reward.module=null \
     reward.terms="[$ENTROPY, $PROTGPS]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \

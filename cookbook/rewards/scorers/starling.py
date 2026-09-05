@@ -12,9 +12,9 @@ directly.
     --conformations N             ensemble size per sequence (default 20)
 
     reward.terms:
-      - {cmd: "uv run --script cookbook/rewards/scorers/starling.py --property radius_of_gyration",
-         label: rg_ens, weight: 1.0, shaping: {type: quadratic, target: 25, width: 0.2},
-         timeout: 900}
+      - {reward: {name: scorer, timeout: 900,
+                  cmd: "uv run --script cookbook/rewards/scorers/starling.py --property radius_of_gyration"},
+         shaping: {name: quadratic, target: 25, width: 0.2}, label: rg_ens, weight: 1.0}
 
 Cost is about 9 s per 32 sequences at 20 conformations on an H100, roughly doubling GRPO step time,
 so give the term a generous timeout. On CPU it is about 6 s per sequence, too slow to train

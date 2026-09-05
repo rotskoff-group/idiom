@@ -30,8 +30,7 @@ import sys
 import threading
 import time
 
-from idiom.train.grpo.reward.registry import Batch
-from idiom.train.grpo.reward.shaping import build_shaping
+from idiom.train.grpo.reward.resolve import SHAPING_ALIASES, Reward, build_from_spec
 
 _PROBE = "MKVGSDEQ"  # handshake sequence: a valid IDR every scorer should be able to score
 
@@ -234,14 +233,18 @@ class Scorer:
             return self.roundtrip(seqs)
 
 
-def make_external_reward(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
-                          env: dict | None = None, cache_max: int = 100_000,
-                          label: str = "external"):
-    """Build a batched reward backed by one external scorer subprocess.
+def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
+           env: dict | None = None, cache_max: int = 100_000, label: str = "scorer") -> Reward:
+    """Build a reward backed by one external scorer subprocess.
 
-    Each call creates an independent scorer with its own process and score cache. Empty strings
-    score 0.0 without a round trip and duplicate sequences are sent once; scores are cached across
-    batches until the cache exceeds cache_max entries, at which point it is cleared.
+    This is the reward factory a term names to run a reward model in its own environment:
+
+        reward: {name: scorer, cmd: "uv run --script my_scorer.py", timeout: 600}
+
+    Each call creates an independent scorer with its own process and score cache. The child is
+    started on the first step, not here. Empty strings score 0.0 without a round trip and duplicate
+    sequences are sent once; scores are cached across steps until the cache exceeds cache_max
+    entries, at which point it is cleared.
 
     Args:
         cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
@@ -250,19 +253,18 @@ def make_external_reward(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: s
         cwd (str | None): Working directory for the child; the current directory if None.
         env (dict | None): Environment variables set for the child, over this process's own.
         cache_max (int): Number of cached sequences above which the cache is cleared.
-        label (str): Short tag for the term, used to prefix the child's stderr.
+        label (str): Short tag used to prefix the child's forwarded stderr.
 
     Returns:
-        Callable[[list[str], Batch], list[float]]: Maps a batch of IDRs to the scorer's raw
-            rewards, in order.
+        Reward: Maps a step's IDRs to the scorer's raw rewards, in order.
     """
-    scorer = Scorer(cmd, cwd=cwd, timeout=timeout, env=env, label=label)
+    child = Scorer(cmd, cwd=cwd, timeout=timeout, env=env, label=label)
     cache: dict[str, float] = {}
 
-    def reward(idrs: list[str], batch: Batch) -> list[float]:
+    def reward(idrs: list[str]) -> list[float]:
         todo = list(dict.fromkeys(s for s in idrs if s and s not in cache))
         if todo:
-            values = scorer.score([s[:maxlen] if maxlen else s for s in todo])
+            values = child.score([s[:maxlen] if maxlen else s for s in todo])
             if len(cache) > cache_max:
                 cache.clear()
             cache.update(zip(todo, values))
@@ -276,7 +278,8 @@ def check(cmd, shaping_spec: dict | None = None, seqs: list[str] | None = None) 
 
     Args:
         cmd (str | list[str]): The scorer command to check.
-        shaping_spec (dict | None): A term's shaping spec, or None to show the raw reward unshaped.
+        shaping_spec (dict | None): A term's shaping spec -- a name plus that rule's arguments --
+            or None to show the raw reward unshaped.
         seqs (list[str] | None): Sequences to score; a small built-in set if None.
 
     Returns:
@@ -285,18 +288,18 @@ def check(cmd, shaping_spec: dict | None = None, seqs: list[str] | None = None) 
     seqs = seqs or ["MEEEKKKKSSSTTTDDDQQQQNNNN",
                     "GSGSGSGSGSGSGSGSGSGSGSGSGSGSGS",
                     "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ"]
-    shaping = build_shaping(shaping_spec)
+    shaping = build_from_spec(shaping_spec or "identity", SHAPING_ALIASES, "shaping", "--shaping")
     print(f"command : {cmd}")
     print(f"shaping : {shaping_spec or 'none (the raw reward is used as-is)'}")
-    scorer = Scorer(cmd, timeout=300.0)
+    child = Scorer(cmd, timeout=300.0)
     t0 = time.monotonic()
     try:
-        values = scorer.score(seqs)
+        values = child.score(seqs)
     except Exception as e:
         print(f"\nFAILED: {type(e).__name__}: {e}", file=sys.stderr)
         return 1
     finally:
-        scorer.stop()
+        child.stop()
     print(f"\nstartup + {len(seqs)} sequences in {time.monotonic() - t0:.1f}s\n")
     print(f"{'raw':>12}  {'shaped':>8}  sequence")
     for s, v in zip(seqs, values):
@@ -315,13 +318,14 @@ def main(argv: list[str] | None = None) -> int:
     """
     p = argparse.ArgumentParser(description="Check an external reward scorer command.")
     p.add_argument("--cmd", required=True, help="command that runs the scorer")
-    p.add_argument("--shaping", default="identity", help="shaping type applied to the raw reward")
+    p.add_argument("--shaping", default="identity",
+                   help="shaping rule applied to the raw reward: a shipped name, or module:function")
     p.add_argument("--target", type=float, default=None, help="target for the shaping")
     p.add_argument("--width", type=float, default=None, help="tolerance as a fraction of the target")
     p.add_argument("sequences", nargs="*", help="sequences to score instead of the built-in set")
     args = p.parse_args(argv)
 
-    spec = {"type": args.shaping}
+    spec = {"name": args.shaping}
     if args.target is not None:
         spec["target"] = args.target
     if args.width is not None:

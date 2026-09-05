@@ -26,7 +26,8 @@ IDIOM_PROTGPS_DIR:
 In configs/grpo.yaml:
 
     reward.terms:
-      - {cmd: "uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus",
+      - {reward: {name: scorer,
+                  cmd: "uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus"},
          label: protgps, weight: 1.0}
 
 The raw reward is a probability in [0, 1], so a term usually leaves it unshaped. --compartment is

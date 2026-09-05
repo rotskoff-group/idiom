@@ -14,8 +14,9 @@ a conda environment, or `docker run -i`. Its dependencies live in the PEP 723 he
 run --script` builds and caches the environment on first use.
 
     reward.terms:
-      - {cmd: "uv run --script /path/to/custom_scorer.py --property isoelectric_point",
-         label: pI, weight: 1.0, shaping: {type: gaussian, target: 4.5, width: 0.3}}
+      - {reward: {name: scorer,
+                  cmd: "uv run --script /path/to/custom_scorer.py --property isoelectric_point"},
+         shaping: {name: gaussian, target: 4.5, width: 0.3}, label: pI, weight: 1.0}
 
 The protocol is newline-delimited JSON, one exchange per GRPO step:
 

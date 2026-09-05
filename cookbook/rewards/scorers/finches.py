@@ -20,8 +20,8 @@ IDiom's base generations average +3.6 (sd 7.0), and natural ProtGPS nucleolus ID
 Aim at a negative target to design self-attractive sequences:
 
     reward.terms:
-      - {cmd: "uv run --script cookbook/rewards/scorers/finches.py --mode homotypic",
-         label: eps, weight: 1.0, shaping: {type: quadratic, target: -6.0, width: 1.0}}
+      - {reward: {name: scorer, cmd: "uv run --script cookbook/rewards/scorers/finches.py --mode homotypic"},
+         shaping: {name: quadratic, target: -6.0, width: 1.0}, label: eps, weight: 1.0}
 
 Epsilon is unbounded, so pair it with entropy and length terms.
 

@@ -26,9 +26,20 @@ python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 # The whole objective, written out: nothing is added for you and reward.terms is empty by
 # default. entropy and length keep the target from being met by a low-complexity tract or a
 # degenerate length; drop either line and it is gone.
-ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
-LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
-PADDLE="{cmd: \"$SCORER\", label: paddle, weight: $WEIGHT, timeout: $TIMEOUT}"
+ENTROPY="{label: entropy, \
+    weight: 1.0, \
+    reward: entropy, \
+    shaping: {name: quadratic, target: 3.65, width: 0.2}}"
+
+LENGTH="{label: length, \
+    weight: 1.0, \
+    reward: length, \
+    shaping: {name: quadratic, target: 100, width: 1.0}}"
+
+PADDLE="{label: paddle, \
+    weight: $WEIGHT, \
+    reward: {name: scorer, cmd: \"$SCORER\", timeout: $TIMEOUT}, \
+    shaping: identity}"
 
 idiom_train_grpo \
     seed=0 \
@@ -50,7 +61,6 @@ idiom_train_grpo \
     grpo.normalize_advantage=true \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
-    reward.module=null \
     reward.terms="[$ENTROPY, $LENGTH, $PADDLE]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \

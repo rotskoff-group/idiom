@@ -6,27 +6,19 @@ import torch
 
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.train.grpo import group_advantages, grpo_loss, sequence_logprobs
-from idiom.train.grpo.reward import (
-    Batch,
-    get_reward,
-    quadratic_penalty,
-)
-from tests.reward_fixtures import fraction_proline
-
-sequence_entropy = get_reward("entropy")
-sequence_length = get_reward("length")
+from idiom.train.grpo.reward import entropy, length, quadratic_penalty
+from tests.reward_fixtures import fraction_alanine, fraction_proline
 
 
 def test_rewards():
-    assert fraction_proline("PPAP") == 0.75
-    assert fraction_proline("") == 0.0
-    # a registered reward is batched: one raw value per IDR, in order
-    assert get_reward("fraction_alanine")(["AAAA", "AC"], Batch()) == [1.0, 0.5]
+    # a reward scores a whole step: one raw value per IDR, in order
+    assert fraction_proline()(["PPAP", ""]) == [0.75, 0.0]
+    assert fraction_alanine()(["AAAA", "AC"]) == [1.0, 0.5]
     # entropy is in bits (log2): single residue -> 0; uniform over k -> log2(k)
-    assert sequence_entropy(["AAAA"], Batch()) == [0.0]
-    assert abs(sequence_entropy(["ACDE"], Batch())[0] - math.log2(4)) < 1e-9
+    assert entropy()(["AAAA"]) == [0.0]
+    assert abs(entropy()(["ACDE"])[0] - math.log2(4)) < 1e-9
     # rewards report raw units; nothing here knows about a target
-    assert sequence_length(["A" * 100], Batch()) == [100.0]
+    assert length()(["A" * 100]) == [100.0]
     # a target is the shaping's business: 0 at the target, negative away from it
     assert abs(quadratic_penalty(100.0, 100.0)) < 1e-9
     assert quadratic_penalty(50.0, 100.0) < 0.0

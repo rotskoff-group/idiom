@@ -33,9 +33,20 @@ python -m idiom.train.grpo.reward.external --cmd "$PROTGPS"
 # The whole objective, written out: nothing is added for you and reward.terms is empty by default.
 # ProtGPS returns a probability and is length-sensitive on its own, so this run keeps entropy and
 # leaves length out; add a length term back if the generations drift long.
-ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
-EPS="{cmd: \"$FINCHES\", label: eps, weight: $EPS_WEIGHT, shaping: {type: quadratic, target: $EPS_TARGET, width: $EPS_WIDTH}}"
-COMPARTMENT_TERM="{cmd: \"$PROTGPS\", label: protgps, weight: $PROTGPS_WEIGHT}"
+ENTROPY="{label: entropy, \
+    weight: 1.0, \
+    reward: entropy, \
+    shaping: {name: quadratic, target: 3.65, width: 0.2}}"
+
+EPS="{label: eps, \
+    weight: $EPS_WEIGHT, \
+    reward: {name: scorer, cmd: \"$FINCHES\", label: eps}, \
+    shaping: {name: quadratic, target: $EPS_TARGET, width: $EPS_WIDTH}}"
+
+COMPARTMENT_TERM="{label: protgps, \
+    weight: $PROTGPS_WEIGHT, \
+    reward: {name: scorer, cmd: \"$PROTGPS\", label: protgps}, \
+    shaping: identity}"
 
 idiom_train_grpo \
     seed=0 \
@@ -57,7 +68,6 @@ idiom_train_grpo \
     grpo.normalize_advantage=true \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
-    reward.module=null \
     reward.terms="[$ENTROPY, $EPS, $COMPARTMENT_TERM]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \

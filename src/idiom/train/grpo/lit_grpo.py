@@ -23,7 +23,7 @@ from idiom.model.transformer import IDiomTransformer
 from idiom.train.grpo.core import group_advantages, grpo_loss, sequence_kl, sequence_logprobs
 
 # For logging entropy
-from idiom.train.grpo.reward.builtin import sequence_entropy as _composition_entropy
+from idiom.train.grpo.reward.builtin import composition_entropy
 
 
 class LitGRPO(L.LightningModule):
@@ -38,7 +38,7 @@ class LitGRPO(L.LightningModule):
     def __init__(
         self,
         cfg: ModelConfig,
-        reward_fn: Callable[[str], float] | None = None,
+        reward_terms: Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]],
         *,
         group_size: int = 8,
         max_new_tokens: int = 256,
@@ -51,18 +51,14 @@ class LitGRPO(L.LightningModule):
         normalize_advantage: bool = True,
         log_samples_every: int = 25,
         n_log_samples: int = 3,
-        reward_terms: Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]] | None = None,
         tokenizer: Tokenizer | None = None,
     ) -> None:
         """Build the policy and its frozen reference, and record the GRPO settings.
 
-        At least one of reward_fn or reward_terms must be given. reward_terms scores a whole batch
-        at once, supplies the per-term breakdown that is logged, and takes precedence; reward_fn
-        scores one IDR at a time and produces no breakdown.
-
         Args:
             cfg (ModelConfig): Transformer architecture configuration.
-            reward_fn (Callable[[str], float] | None): Scalar reward over one decoded IDR.
+            reward_terms (Callable): The composite reward, mapping (idrs, group_size) to per-idr
+                totals and a matching per-term breakdown; see reward.build_reward.
             group_size (int): Number of completions generated per prompt.
             max_new_tokens (int): Maximum completion length to generate.
             lr (float): AdamW learning rate.
@@ -75,12 +71,7 @@ class LitGRPO(L.LightningModule):
                 deviation.
             log_samples_every (int): Print example completions every this many steps; 0 disables.
             n_log_samples (int): Number of example completions to print.
-            reward_terms (Callable | None): Composite reward mapping (idrs, group_size) to per-idr
-                totals and a matching per-term breakdown.
             tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
-
-        Raises:
-            AssertionError: If neither reward_fn nor reward_terms is given.
         """
         super().__init__()
         self.cfg = cfg
@@ -90,9 +81,6 @@ class LitGRPO(L.LightningModule):
         self.reference = copy.deepcopy(self.model).eval()
         self.reference.requires_grad_(False)
 
-        # reward_fn is the simple fallback used when no term breakdown is wired (e.g. unit tests).
-        assert reward_fn is not None or reward_terms is not None, "pass reward_fn or reward_terms"
-        self.reward_fn = reward_fn
         self.reward_terms = reward_terms
         self.tok = tokenizer or Tokenizer()
         self.group_size = group_size
@@ -108,7 +96,7 @@ class LitGRPO(L.LightningModule):
         self.n_log_samples = n_log_samples
 
     @classmethod
-    def init_from_checkpoint(cls, init_from, reward_fn=None, **kwargs) -> LitGRPO:
+    def init_from_checkpoint(cls, init_from, reward_terms, **kwargs) -> LitGRPO:
         """Build a module whose policy and reference both hold a pretrained model's weights.
 
         The architecture is read from the artifact.
@@ -116,14 +104,14 @@ class LitGRPO(L.LightningModule):
         Args:
             init_from: A Lightning .ckpt, a released model directory, or a Hub repo id; any form
                 idiom.model.io.load_model accepts.
-            reward_fn: Scalar reward over one decoded IDR, if reward_terms is not passed.
+            reward_terms: The composite reward; see the constructor.
             **kwargs: GRPO arguments forwarded to the constructor.
 
         Returns:
             LitGRPO: A module holding the pretrained weights in both the policy and the reference.
         """
         model, cfg = load_model(init_from, eval_mode=False)
-        lit = cls(cfg, reward_fn, **kwargs)
+        lit = cls(cfg, reward_terms, **kwargs)
         sd = model.state_dict()
         lit.model.load_state_dict(sd)
         lit.reference.load_state_dict(sd)
@@ -172,12 +160,9 @@ class LitGRPO(L.LightningModule):
         mask[:, P:] = (completions != self.tok.pad_id).float()
 
         idrs = [self._decode_idr(completions[i]) for i in range(BG)]
-        # The composite reward scores the whole batch at once (so a batched/external term runs once
-        # per step) and returns a per-term breakdown for logging; reward_fn is the simple fallback.
-        if self.reward_terms is not None:
-            totals, breakdown = self.reward_terms(idrs, self.group_size)
-        else:
-            totals, breakdown = [self.reward_fn(idr) for idr in idrs], None
+        # The composite reward scores the whole step at once, so an external term makes one round
+        # trip per step, and returns the per-term breakdown that is logged below.
+        totals, breakdown = self.reward_terms(idrs, self.group_size)
         rewards = torch.tensor(totals, device=rep.device, dtype=torch.float)
         advantages = group_advantages(rewards, self.group_size, normalize=self.normalize_advantage)
 
@@ -193,7 +178,7 @@ class LitGRPO(L.LightningModule):
         )
 
         seq_len = torch.tensor([float(len(idr)) for idr in idrs], device=rep.device)
-        seq_ent = torch.tensor([_composition_entropy(idr) for idr in idrs], device=rep.device)
+        seq_ent = torch.tensor([composition_entropy(idr) for idr in idrs], device=rep.device)
         metrics = {
             "trainer/global_step": float(self.global_step),  # real step -> W&B x-axis (see run())
             "train/loss": loss,
