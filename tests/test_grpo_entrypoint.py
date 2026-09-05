@@ -5,6 +5,7 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 
+import pytest
 import torch
 from omegaconf import OmegaConf
 
@@ -51,14 +52,24 @@ def test_build_reward_composes():
     assert abs(totals[0] - 1.0) < 1e-6
 
 
-def test_the_library_defines_only_the_guardrails():
-    """entropy and length register on import; nothing else is built in."""
+def test_the_library_registers_only_entropy_and_length():
+    """entropy and length register on import; nothing else is, and neither is in any objective."""
     from idiom.train.grpo.reward import REWARD_REGISTRY, Batch, get_reward
 
     assert get_reward("entropy")(["AAAA"], Batch()) == [0.0]
     assert get_reward("length")(["AAAA"], Batch()) == [4.0]
-    # the fixtures module registers two more; nothing else may creep in
-    assert set(REWARD_REGISTRY) - {"fraction_proline", "fraction_alanine"} == {"entropy", "length"}
+    # the fixtures module registers two more, and other test modules register names of their own
+    # under a leading underscore; nothing else may creep in
+    registered = {k for k in REWARD_REGISTRY if not k.startswith("_")}
+    assert registered - {"fraction_proline", "fraction_alanine"} == {"entropy", "length"}
+
+
+def test_the_sae_reward_registers_nothing_on_import():
+    """Its settings come from a term's params, so importing it adds no names to the registry."""
+    from idiom.train.grpo.reward import REWARD_REGISTRY, sae_feature
+
+    assert callable(sae_feature.sae_signature)
+    assert not [k for k in REWARD_REGISTRY if k.startswith("sae")]
 
 
 def test_build_wires_module_and_prompts(tmp_path):
@@ -124,32 +135,32 @@ def test_the_sae_reward_ships_with_its_signatures():
     from idiom.train.grpo.reward import sae_feature
 
     assert (Path(sae_feature.__file__).parent / "sae_signatures.json").is_file()
-    assert sae_feature._signature_names(), "no signatures registered from the shipped file"
+    assert sae_feature._featuresets(sae_feature.DEFAULT_FEATURES, sae_feature.DEFAULT_CASE), \
+        "no signatures in the shipped file"
 
 
-def test_the_shipped_objective_is_the_guardrails_and_nothing_else():
-    """Out of the box a run optimizes only entropy and length; `add` is the extension point."""
+def test_the_shipped_objective_is_empty():
+    """The library takes no view on what a run optimizes: reward.terms is empty and there is no menu."""
     import idiom.configs
 
     cfg = OmegaConf.load(Path(idiom.configs.__file__).parent / "grpo.yaml")
-    assert [t["reward"] for t in cfg.reward.terms] == ["entropy", "length"]
-    assert list(cfg.reward.add) == [] and dict(cfg.reward.presets) == {}
-    assert [s.label for s in parse_terms(cfg.reward)] == ["entropy", "length"]
+    assert list(cfg.reward.terms) == []
+    assert set(cfg.reward) == {"terms", "module"}, "the reward config is terms plus module, nothing else"
+    with pytest.raises(ValueError, match="reward.terms is empty"):
+        parse_terms(cfg.reward)
 
 
-def test_shipped_config_enabled_terms_need_no_repository(tmp_path, monkeypatch):
-    """The terms enabled by default build from the package alone.
+def test_the_rewards_the_library_registers_need_no_repository(tmp_path, monkeypatch):
+    """entropy and length build from the package alone, so a run can name them anywhere.
 
     Running from an unrelated working directory is the check: nothing may resolve relative to the
     cwd.
     """
-    import idiom.configs
-
     monkeypatch.chdir(tmp_path)
-    cfg = OmegaConf.load(Path(idiom.configs.__file__).parent / "grpo.yaml")
-    enabled = [t for t in OmegaConf.to_container(cfg.reward, resolve=True)["terms"]
-               if t.get("enabled", True)]
-    assert [t["reward"] for t in enabled] == ["entropy", "length"]
-    assert all(t.get("module") is None for t in enabled), "an enabled term must need no module"
-    totals, _ = build_reward(OmegaConf.create({"module": None, "terms": enabled}))(["P" * 100], 1)
+    terms = [{"reward": "entropy", "weight": 1.0,
+              "shaping": {"type": "quadratic", "target": 3.65, "width": 0.2}},
+             {"reward": "length", "weight": 1.0,
+              "shaping": {"type": "quadratic", "target": 100, "width": 1.0}}]
+    assert all(t.get("module") is None for t in terms), "neither term may need a module"
+    totals, _ = build_reward(OmegaConf.create({"module": None, "terms": terms}))(["P" * 100], 1)
     assert math.isfinite(totals[0])

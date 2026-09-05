@@ -1,8 +1,7 @@
-# GRPO post-training config.
-#   idiom_train_grpo init_from=jxliu2/idiom-20M prompts.mode=unprompted
+# GRPO post-training config
 seed: 0
 device: auto
-init_from: ??? # required: base to optimize (a .ckpt, a released dir, or a HF repo id)
+init_from: ??? # required: model to optimize (a .ckpt, a released dir, or a HF repo id)
 resume_from: null # mid-run resume (optimizer/step/RNG) from a .ckpt
 
 prompts:
@@ -10,7 +9,7 @@ prompts:
   n: 1000 # unprompted mode: number of prompts
   fasta: null # prompted mode: FASTA of proteins (_IDR_x-y headers)
   n_per: 1000 # prompted mode: copies per protein
-  batch_size: 4 # prompts per micro-batch; each expands to group_size completions
+  batch_size: 4 # prompts per micro-batch, each prompt yields group_size completions
 
 grpo:
   group_size: 8
@@ -21,7 +20,7 @@ grpo:
   temperature: 1.0
   top_k: null
   top_p: null
-  normalize_advantage: true
+  normalize_advantage: true # normalize by std dev
   log_samples_every: 5 # print example generations every N steps (0 disables)
   n_log_samples: 3
 
@@ -30,41 +29,16 @@ trainer:
   accelerator: auto
   devices: 1
   gradient_clip_val: 1.0
-  accumulate_grad_batches: 2 # micro-batches per optimizer step; halves peak memory
+  accumulate_grad_batches: 2 # micro-batches per optimizer step
   log_every_n_steps: 1 # every step, so W&B's _step axis matches the training step
   checkpoint_every: 0 # periodic checkpoint every N steps (0 = last only)
 
-reward: # total = sum over enabled terms of weight * shaping(reward(idr))
-  # The guardrails, and the only rewards the library defines. Both are built in, so they need no
-  # module and no clone: together they contribute about -1.8 to a starting sequence, and every term
-  # you add should be sized against that (see cookbook/rewards/README.md).
-  terms:
-    - {reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}} # bits
-    - {reward: length, weight: 1.0, shaping: {type: quadratic, target: 100, width: 1.0}} # residues
-
-  # What this run optimizes, appended to the guardrails. Empty here on purpose: the library takes no
-  # view on what you should design for, so the objective is named at launch rather than edited in.
-  # An entry is a whole term -- see cookbook/scripts/ for a ready-to-submit script per reward:
-  #
-  #   reward.add='[{reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}]'
-  #   reward.add='[{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0,
-  #                 shaping: {type: gaussian, target: 0.25, width: 0.5}}]'
-  #   reward.add='[{reward: "mypackage.scoring:score_idr", weight: 1.0}]'
-  #   reward.add='[{cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
-  #                 label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}]'
-  #
-  # An entry may also be a NAME from `presets` below, which is how you keep a tuned term in a config
-  # of your own instead of retyping it: put a presets block in your YAML and launch with
-  # `--config-dir . --config-name my_grpo`, then `reward.add=[my_term]`.
-  add: []
-  presets: {}
-
-  # Imported before any reward name is looked up; a *.py path or a dotted module.
-  module: null
+reward: # total = sum over terms of weight * shaping(reward(idr))
+  terms: []
+  module: null # module containing custom rewards and shaping
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo
 
-# Run and sweep dirs go to the experiment dir, not the repo; override with IDIOM_OUT.
 hydra:
   run:
     dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

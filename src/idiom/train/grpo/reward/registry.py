@@ -10,8 +10,8 @@ that GRPO optimizes.
 
 register_reward accepts either form:
 
-    @register_reward("net_charge_fraction")               # f(idr) -> float, lifted to a batch
-    @register_reward("sae_only_nucleolus", batched=True)  # f(idrs, batch) -> list[float]
+    @register_reward("net_charge_fraction")            # f(idr) -> float, lifted to a batch
+    @register_reward("charge_rank", batched=True)      # f(idrs, batch) -> list[float]
 """
 
 from __future__ import annotations

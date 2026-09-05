@@ -1,7 +1,8 @@
 """GRPO reward subsystem.
 
 A reward term is a raw reward, a shaping rule, and a weight. The total reward is the weighted sum
-of the shaped rewards over the configured terms.
+of the shaped rewards over the configured terms. Nothing is in an objective unless a run named it:
+reward.terms is empty by default and there are no presets.
 
 Modules:
     registry: the reward registry and the per-batch context rewards receive.
@@ -12,12 +13,13 @@ Modules:
 
 A term names its raw reward in one of three ways:
 
-- a registered name, such as the built-in entropy and length;
-- "package.module:function", any importable callable, with no decorator;
+- a registered name, such as entropy and length;
+- "package.module:function", any importable callable, with no decorator. With params, the callable
+  is a factory called with them, which is how a reward takes settings from the config;
 - a cmd, an external scorer spoken to in JSON over a pipe (see external).
 
 Worked external scorers live in the repository at cookbook/rewards/scorers/. The SAE feature
-reward, sae_feature, is imported on demand, since it pulls in the SAE.
+reward, sae_feature.sae_signature, is imported on demand, since it pulls in the SAE.
 """
 
 from idiom.train.grpo.reward import builtin  # noqa: F401 - registers the shipped rewards
@@ -29,7 +31,6 @@ from idiom.train.grpo.reward.compose import (
     is_callable_spec,
     load_callable,
     parse_terms,
-    resolve_add,
 )
 from idiom.train.grpo.reward.external import (
     Scorer,
@@ -70,7 +71,6 @@ __all__ = [
     "quadratic_penalty",
     "register_reward",
     "register_shaping",
-    "resolve_add",
     "sequence_entropy",
     "sequence_length",
     "tolerance",

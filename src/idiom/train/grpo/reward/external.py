@@ -98,23 +98,27 @@ class Scorer:
         argv (list[str]): The scorer command, as arguments.
         cwd (str): Working directory for the child process.
         timeout (float): Seconds to wait for a single response.
+        env (dict | None): Full environment for the child, or None to inherit this process's.
         label (str): Tag prefixed to the child's forwarded stderr.
         proc (subprocess.Popen | None): The running child, or None when not started.
     """
 
     def __init__(self, cmd, *, cwd: str | None = None, timeout: float = 300.0,
-                 label: str = "external") -> None:
+                 env: dict | None = None, label: str = "external") -> None:
         """Record the command and settings without starting the child process.
 
         Args:
             cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
             cwd (str | None): Working directory for the child; the current directory if None.
             timeout (float): Seconds to wait for a single response.
+            env (dict | None): Environment variables for the child, layered over this process's own
+                environment; None passes it through unchanged.
             label (str): Short tag used to prefix the child's forwarded stderr.
         """
         self.argv = _argv(cmd)
         self.cwd = cwd or os.getcwd()
         self.timeout = timeout
+        self.env = {**os.environ, **{k: str(v) for k, v in (env or {}).items()}} if env else None
         self.label = label
         self.proc: subprocess.Popen | None = None
         self._q: queue.Queue = queue.Queue()
@@ -130,7 +134,7 @@ class Scorer:
         """
         try:
             self.proc = subprocess.Popen(
-                self.argv, cwd=self.cwd, text=True, bufsize=1,
+                self.argv, cwd=self.cwd, env=self.env, text=True, bufsize=1,
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 start_new_session=True,  # so a timeout can kill the whole process group
             )
@@ -231,7 +235,8 @@ class Scorer:
 
 
 def make_external_reward(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
-                          cache_max: int = 100_000, label: str = "external"):
+                          env: dict | None = None, cache_max: int = 100_000,
+                          label: str = "external"):
     """Build a batched reward backed by one external scorer subprocess.
 
     Each call creates an independent scorer with its own process and score cache. Empty strings
@@ -243,6 +248,7 @@ def make_external_reward(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: s
         timeout (float): Seconds to wait for one response.
         maxlen (int): Truncate sequences to this length before sending; 0 sends them whole.
         cwd (str | None): Working directory for the child; the current directory if None.
+        env (dict | None): Environment variables set for the child, over this process's own.
         cache_max (int): Number of cached sequences above which the cache is cleared.
         label (str): Short tag for the term, used to prefix the child's stderr.
 
@@ -250,7 +256,7 @@ def make_external_reward(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: s
         Callable[[list[str], Batch], list[float]]: Maps a batch of IDRs to the scorer's raw
             rewards, in order.
     """
-    scorer = Scorer(cmd, cwd=cwd, timeout=timeout, label=label)
+    scorer = Scorer(cmd, cwd=cwd, timeout=timeout, env=env, label=label)
     cache: dict[str, float] = {}
 
     def reward(idrs: list[str], batch: Batch) -> list[float]:

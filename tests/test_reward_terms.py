@@ -1,9 +1,9 @@
 """Tests for the composite (weighted-sum) reward.
 
 The arithmetic is checked against an explicit from-scratch expectation: every term contributes
-weight * shaping(reward) and nothing else does. The cases cover each way a term can enter or leave
-the total -- weighted, shaped or raw, zero-weighted, in-process or named by a user module -- plus
-the validation that rejects a malformed term at build time.
+weight * shaping(reward) and nothing else does. The cases cover each way a term can enter the
+total -- weighted, shaped or raw, zero-weighted, in-process, named by a user module, or built by a
+factory from the term's params -- plus the validation that rejects a malformed term at build time.
 """
 
 import math
@@ -22,10 +22,11 @@ from idiom.train.grpo.reward import (
 
 
 def entropy(idr: str) -> float:
-    """The shipped entropy reward, as a scalar, for the explicit-arithmetic expectation below."""
+    """The registered entropy reward, as a scalar, for the explicit-arithmetic expectation below."""
     return get_reward("entropy")([idr], Batch())[0]
 
-GUARDRAILS = [
+# Two terms a run would typically name; nothing puts them in an objective by itself.
+BASE = [
     {"reward": "entropy", "weight": 0.1, "shaping": {"type": "quadratic", "target": 3.68, "width": 0.2}},
     {"reward": "length", "weight": 0.1, "shaping": {"type": "quadratic", "target": 100, "width": 1.0}},
 ]
@@ -39,7 +40,7 @@ def _cfg(terms, module=None):
 def test_weighted_sum_matches_explicit_arithmetic():
     register_reward("_r_prol")(lambda idr: idr.count("P") / len(idr) if idr else 0.0)
     register_reward("_r_half")(lambda idr: 0.5)
-    cfg = _cfg(GUARDRAILS + [{"reward": "_r_prol", "weight": 2.0},
+    cfg = _cfg(BASE + [{"reward": "_r_prol", "weight": 2.0},
                              {"reward": "_r_half", "weight": 3.0}])
     idr = "P" * 100  # _r_prol = 1.0, and length sits exactly on the target
     totals, breakdown = build_reward(cfg)([idr], 1)
@@ -94,35 +95,22 @@ def test_zero_weight_term_is_logged_but_not_optimized():
     assert breakdown[0]["_watch_raw"] == 7.0     # and is still scored and logged
 
 
-def test_disabled_term_is_skipped_whole():
-    register_reward("_r_off")(lambda idr: 99.0)
-    cfg = _cfg([{"reward": "_r_off", "weight": 1.0, "enabled": False}])
-    totals, breakdown = build_reward(cfg)(["ACDE"], 1)
-    assert totals == [0.0] and breakdown[0] == {"total": 0.0}   # not run, not logged
+def test_empty_terms_is_rejected():
+    # an objective with no terms gives every completion the same reward, so GRPO has no signal;
+    # the library adds nothing of its own, so this is a config error rather than a silent no-op
+    with pytest.raises(ValueError, match="reward.terms is empty"):
+        build_reward(_cfg([]))
 
 
-def test_a_disabled_term_is_not_validated():
-    # the shipped config carries a menu of switched-off terms, so one may name a reward this
-    # environment cannot import, or a module that is not installed; neither may break the run
-    cfg = _cfg([{"reward": "length", "weight": 1.0},
-                {"enabled": False, "reward": "nothing_registers_this", "weight": 1.0},
-                {"enabled": False, "module": "no.such.module", "cmd": "false", "label": "x"}])
-    totals, _ = build_reward(cfg)(["AAA"], 1)
-    assert totals == [3.0]
+def test_missing_terms_key_is_rejected_like_an_empty_list():
+    with pytest.raises(ValueError, match="reward.terms is empty"):
+        parse_terms(OmegaConf.create({"module": None}))
 
 
-def test_enabled_and_zero_weight_differ():
-    # weight 0 runs the term and logs it; enabled false does neither
-    register_reward("_r_seven")(lambda idr: 7.0)
-    _, watched = build_reward(_cfg([{"reward": "_r_seven", "weight": 0.0}]))(["AA"], 1)
-    _, skipped = build_reward(_cfg([{"reward": "_r_seven", "enabled": False}]))(["AA"], 1)
-    assert watched[0]["_r_seven_raw"] == 7.0
-    assert "_r_seven_raw" not in skipped[0]
-
-
-def test_no_terms_scores_zero():
-    totals, breakdown = build_reward(_cfg([]))(["ACDE"], 1)
-    assert totals == [0.0] and breakdown[0] == {"total": 0.0}
+def test_enabled_is_not_a_term_key():
+    # terms are written out per run, so a term is removed by deleting it, not by switching it off
+    with pytest.raises(ValueError, match=r"unknown key\(s\) \['enabled'\]"):
+        parse_terms(_cfg([{"reward": "entropy", "weight": 1.0, "enabled": False}]))
 
 
 def test_the_same_reward_can_appear_twice_under_distinct_labels():
@@ -245,56 +233,47 @@ def test_batched_is_rejected_on_a_registered_reward():
         build_reward(_cfg([{"reward": "entropy", "batched": True, "weight": 1.0}]))
 
 
-# --- reward.add: choosing the objective at launch --------------------------------------------
-# The config carries the guardrails and a named menu; a run says what it optimizes on the command
-# line. Names, not list positions, because positions shift whenever the menu grows.
-
-MENU = {"rg": {"cmd": "true", "label": "rg", "weight": 0.5,
-               "shaping": {"type": "quadratic", "target": 25, "width": 0.2}},
-        "prol": {"reward": "fraction_proline", "weight": 1.0}}
+# --- one flat term format --------------------------------------------------------------------
+# Every term has a label, a weight and a shaping; the rest belongs to one source or the other, and
+# naming a key from the wrong group is an error rather than a silent no-op.
 
 
-def _addcfg(add):
-    return OmegaConf.create({"module": None, "terms": GUARDRAILS, "presets": MENU, "add": add})
+def test_external_keys_are_rejected_on_a_registered_reward():
+    with pytest.raises(ValueError, match=r"\['timeout'\] do not apply to a reward term"):
+        parse_terms(_cfg([{"reward": "entropy", "weight": 1.0, "timeout": 30.0}]))
 
 
-def test_add_is_empty_by_default():
-    assert [s.label for s in parse_terms(_addcfg([]))] == ["entropy", "length"]
+def test_named_keys_are_rejected_on_a_cmd_term():
+    with pytest.raises(ValueError, match=r"\['params'\] do not apply to a cmd scorer term"):
+        parse_terms(_cfg([{"cmd": "true", "label": "x", "weight": 1.0, "params": {"a": 1}}]))
 
 
-def test_add_appends_a_named_preset_after_the_guardrails():
-    assert [s.label for s in parse_terms(_addcfg(["prol"]))] == ["entropy", "length",
-                                                                 "fraction_proline"]
+def test_a_cmd_term_carries_its_env():
+    spec = parse_terms(_cfg([{"cmd": "true", "label": "x", "weight": 1.0,
+                              "env": {"FOO": "bar"}}]))[0]
+    assert spec.env == {"FOO": "bar"}
 
 
-def test_add_preserves_the_order_it_was_named_in():
-    assert [s.label for s in parse_terms(_addcfg(["rg", "prol"]))][2:] == ["rg", "fraction_proline"]
+# --- params: a factory takes its settings from the config -------------------------------------
 
 
-def test_add_accepts_a_whole_term_inline():
-    term = {"reward": "fraction_proline", "label": "mine", "weight": 3.0}
-    specs = parse_terms(_addcfg([term]))
-    assert specs[-1].label == "mine" and specs[-1].weight == 3.0
+def test_params_calls_the_factory(tmp_path):
+    mod = tmp_path / "fact.py"
+    mod.write_text("def make(residue, scale=1.0):\n"
+                   "    return lambda idr: scale * idr.count(residue)\n")
+    cfg = _cfg([{"reward": f"{mod}:make", "label": "rep", "weight": 1.0,
+                 "params": {"residue": "P", "scale": 2.0}}])
+    totals, _ = build_reward(cfg)(["PPAP"], 1)
+    assert totals == [6.0]
 
 
-def test_add_carries_the_presets_shaping_and_weight():
-    spec = parse_terms(_addcfg(["rg"]))[-1]
-    assert spec.weight == 0.5 and spec.shaping["target"] == 25
+def test_params_is_rejected_on_a_registered_reward():
+    with pytest.raises(ValueError, match="params applies only to a 'module:function' reward"):
+        parse_terms(_cfg([{"reward": "entropy", "weight": 1.0, "params": {"a": 1}}]))
 
 
-def test_unknown_preset_names_the_menu():
-    with pytest.raises(ValueError, match=r"unknown preset 'nope'.*\['prol', 'rg'\]"):
-        parse_terms(_addcfg(["nope"]))
-
-
-def test_add_rejects_a_non_name_non_mapping():
-    with pytest.raises(ValueError, match="expected a preset name or a term mapping"):
-        parse_terms(_addcfg([3]))
-
-
-def test_an_unused_preset_is_never_validated():
-    # the menu may name a reward this environment cannot import; that is what makes it free
-    cfg = OmegaConf.create({"module": None, "terms": GUARDRAILS,
-                            "presets": {"bad": {"reward": "no.such.module:f", "weight": 1.0}},
-                            "add": []})
-    assert [s.label for s in parse_terms(cfg)] == ["entropy", "length"]
+def test_without_params_the_callable_is_the_reward_itself(tmp_path):
+    mod = tmp_path / "plain.py"
+    mod.write_text("def score(idr):\n    return float(len(idr))\n")
+    totals, _ = build_reward(_cfg([{"reward": f"{mod}:score", "weight": 1.0}]))(["ACDE"], 1)
+    assert totals == [4.0]

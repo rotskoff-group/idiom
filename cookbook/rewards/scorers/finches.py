@@ -23,10 +23,9 @@ Aim at a negative target to design self-attractive sequences:
       - {cmd: "uv run --script cookbook/rewards/scorers/finches.py --mode homotypic",
          label: eps, weight: 1.0, shaping: {type: quadratic, target: -6.0, width: 1.0}}
 
-Epsilon is unbounded, so keep the entropy and length guardrails on.
+Epsilon is unbounded, so pair it with entropy and length terms.
 
-Environment variables:
-    FINCHES_MODEL   forcefield frontend: "mpipi" (default) or "calvados".
+    --forcefield mpipi | calvados     which coarse-grained force field epsilon is derived from.
 """
 
 import argparse
@@ -40,10 +39,16 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _HERE]
 
 
-def build_frontend():
-    """Return the configured FINCHES frontend."""
-    name = os.environ.get("FINCHES_MODEL", "mpipi").lower()
-    if name == "calvados":
+def build_frontend(forcefield):
+    """Return the FINCHES frontend for a force field.
+
+    Args:
+        forcefield (str): "mpipi" or "calvados".
+
+    Returns:
+        object: The frontend, which exposes epsilon(seq1, seq2).
+    """
+    if forcefield == "calvados":
         from finches import CALVADOS_frontend
         return CALVADOS_frontend()
     from finches import Mpipi_frontend
@@ -57,11 +62,13 @@ def main():
                     help="self-interaction, or interaction with --partner")
     ap.add_argument("--partner", default=None,
                     help="partner residue string, required for --mode heterotypic")
+    ap.add_argument("--forcefield", default="mpipi", choices=("mpipi", "calvados"),
+                    help="coarse-grained force field epsilon is derived from")
     args = ap.parse_args()
     if args.mode == "heterotypic" and not args.partner:
         raise SystemExit("--mode heterotypic needs --partner <sequence>")
 
-    frontend = build_frontend()
+    frontend = build_frontend(args.forcefield)
 
     def score(seq):
         """Return epsilon for one sequence, or 0.0 for an empty string."""

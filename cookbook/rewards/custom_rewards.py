@@ -1,37 +1,12 @@
-"""Template for your own GRPO rewards. Copy this file into your project and edit it.
+"""Template for your own GRPO rewards and shaping. Copy this file into your project and edit it.
 
-A reward is a function of the decoded IDR residue string returning one raw value in whatever units
-suit it. What counts as a good value is the term's shaping, set in the config. The library defines
-only `entropy` and `length`; everything below is an example to edit or throw away.
-
-There are two ways to point a term at a function in this process.
-
-1. A file or module that registers names, named by the term's `module`:
-
-       reward.add='[{reward: fraction_charged, module: /path/to/custom_rewards.py, weight: 1.0,
-                     shaping: {type: gaussian, target: 0.25, width: 0.5}}]'
-
-   `module` takes a *.py path (as here) or a dotted module name, and is imported before the reward
-   name is looked up, so the @register_reward decorators below run.
-
-2. Any importable callable, named directly as "module:function", with no decorator:
-
-       reward.add='[{reward: "mypackage.scoring:score_idr", weight: 1.0}]'
-
-Either way nothing is imported until the term is used, and a name that cannot be resolved fails
-while the config is parsed.
-
-A scorer whose dependencies cannot coexist with IDiom's goes in its own environment instead: see
-scorers/ beside this file. Shaping registers the same way, in custom_shaping.py.
-
-Note that a reward whose optimum sits off the IDR distribution will be reached, and the entropy and
-length guardrails will not stop it -- rewarding hydrophobic composition, for instance, yields
-folded-looking sequences that are no longer disordered.
+A reward reports a raw value; shaping says what a good value is. Both register here, so one term's
+`module` brings in both and `reward.module` stays null.
 """
 
 import re
 
-from idiom.train.grpo.reward import Batch, register_reward
+from idiom.train.grpo.reward import register_reward, register_shaping, tolerance
 
 
 @register_reward("net_charge_fraction")
@@ -103,32 +78,35 @@ def ndsm_motif_count(idr: str) -> float:
     return float(len(re.findall(ndsm, idr)))
 
 
-# --- the batched form ---------------------------------------------------------------------------
-# Register with batched=True (or set `batched: true` on a "module:function" term) to receive the
-# whole step's completions at once. Use it when scoring costs less per batch than per sequence -- a
-# GPU forward pass, a vectorized model -- or, as here, when a sequence can only be scored against
-# the others it was sampled with.
+# custom reward shaping
 
 
-@register_reward("charge_rank_in_group", batched=True)
-def charge_rank_in_group(idrs: list[str], batch: Batch) -> list[float]:
-    """Return each completion's within-group rank on FCR, scaled to [0, 1].
+@register_shaping("one_sided")
+def one_sided(*, target: float, width: float = 1.0, direction: str = "above"):
+    """Build a quadratic penalty on the wrong side of a threshold and no pressure on the right one.
 
-    GRPO samples group_size completions per prompt, so consecutive runs of that many entries belong
-    to one group. This demonstrates the batched signature rather than being a reward to reach for.
+    The acceptable side is flat, so it gives no gradient: pair this with a term that has a
+    preference, or the policy settles just past the threshold.
 
     Args:
-        idrs (list[str]): The decoded IDR residue strings for this step.
-        batch (Batch): What the reward knows about the batch; carries group_size.
+        target (float): The threshold; the penalty is 0 here and on the acceptable side.
+        width (float): Tolerance as a fraction of the target, absolute when the target is 0.
+        direction (str): "above" to accept values >= target, "below" to accept values <= target.
 
     Returns:
-        list[float]: One value per idr, in the order they were given.
+        Callable[[float], float]: 0 on the acceptable side, -1 one tolerance into the wrong side,
+            decreasing without bound beyond that.
+
+    Raises:
+        ValueError: If direction is neither "above" nor "below", or width is not positive.
     """
-    out = [0.0] * len(idrs)
-    g = max(1, batch.group_size)
-    for start in range(0, len(idrs), g):
-        group = list(range(start, min(start + g, len(idrs))))
-        order = sorted(group, key=lambda i: fraction_charged(idrs[i]))
-        for rank, i in enumerate(order):
-            out[i] = rank / max(1, len(group) - 1)
-    return out
+    if direction not in ("above", "below"):
+        raise ValueError(f"one_sided direction must be 'above' or 'below', got {direction!r}")
+    scale = tolerance(target, width)  # keeps width a fraction of a nonzero target, absolute at 0
+    sign = 1.0 if direction == "above" else -1.0
+
+    def shaping(value: float) -> float:
+        deficit = sign * (target - value)  # positive only on the wrong side
+        return -((deficit / scale) ** 2) if deficit > 0 else 0.0
+
+    return shaping

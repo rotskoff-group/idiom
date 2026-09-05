@@ -1,7 +1,8 @@
 """The idiom_train_grpo entrypoint.
 
 build(cfg) wires the GRPO module and its prompt dataset; run(cfg) configures the trainer and fits.
-The reward is a weighted sum of the terms enabled in cfg.reward; see configs/grpo.yaml.
+The reward is the weighted sum of the terms in cfg.reward, all of them named by the run;
+see configs/grpo.yaml.
 """
 
 from __future__ import annotations

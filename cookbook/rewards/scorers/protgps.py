@@ -31,7 +31,7 @@ In configs/grpo.yaml:
 
 The raw reward is a probability in [0, 1], so a term usually leaves it unshaped. --compartment is
 one of the 12 compartments below, or "max" / "mean" over them. High scores are reachable with
-low-complexity tracts, so keep the entropy and length guardrails on.
+low-complexity tracts, so pair it with entropy and length terms.
 
 Environment variables:
     IDIOM_PROTGPS_DIR     where the checkpoints live; downloaded here on first use

@@ -1,14 +1,16 @@
-"""The two guardrail rewards, entropy and length, and the only ones the library defines.
+"""Two sequence-level rewards the library registers, entropy and length.
 
-They keep an objective from being satisfied by a low-complexity tract or by a degenerate length.
-Importing idiom.train.grpo.reward registers both, so a term names one directly:
+Neither is added to an objective for you: they are terms like any other, named by a run in
+reward.terms. Most objectives are worth carrying them, since a target is otherwise satisfiable by a
+low-complexity tract or by a degenerate length. Importing idiom.train.grpo.reward registers both,
+so a term names one with no module of its own:
 
     reward.terms:
       - {reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}
       - {reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}
 
-Write your own rewards from the template in cookbook/rewards/custom_rewards.py, or as external
-scorers in cookbook/rewards/scorers/.
+Write your own rewards and shaping from the template in cookbook/rewards/custom_rewards.py, or as
+external scorers in cookbook/rewards/scorers/.
 """
 
 from __future__ import annotations

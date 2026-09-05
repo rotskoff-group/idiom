@@ -18,14 +18,20 @@ MODE=homotypic                          # EDIT: homotypic, or heterotypic with -
 TARGET=-6.0                             # EDIT: epsilon; negative is attractive
 WIDTH=1.0                               # EDIT: absolute, since epsilon crosses zero
 WEIGHT=1.0
-SCORER="uv run --script cookbook/rewards/scorers/finches.py --mode $MODE"
+FORCEFIELD=mpipi                        # EDIT: mpipi | calvados
+SCORER="uv run --script cookbook/rewards/scorers/finches.py --mode $MODE --forcefield $FORCEFIELD"
 
 export WANDB_MODE=offline
 
 # Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-TERM="{cmd: \"$SCORER\", label: eps, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
+# The whole objective, written out: nothing is added for you and reward.terms is empty by
+# default. entropy and length keep the target from being met by a low-complexity tract or a
+# degenerate length; drop either line and it is gone.
+ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
+LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
+EPS="{cmd: \"$SCORER\", label: eps, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \
     seed=0 \
@@ -48,7 +54,7 @@ idiom_train_grpo \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
     reward.module=null \
-    reward.add="[$TERM]" \
+    reward.terms="[$ENTROPY, $LENGTH, $EPS]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \
     trainer.devices=1 \

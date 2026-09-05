@@ -17,7 +17,7 @@ OUT="${IDIOM_OUT:-$REPO/runs}/grpo-sparrow"
 PROPERTY=radius_of_gyration             # EDIT: any ALBATROSS predictor or sequence parameter
 TARGET=25                               # EDIT: in the property's units
 WIDTH=0.2                               # EDIT: tolerance as a fraction of the target
-WEIGHT=0.5                              # EDIT: keep the step-0 contribution near the guardrails
+WEIGHT=0.5                              # EDIT: keep the step-0 contribution near entropy + length
 SCORER="uv run --script cookbook/rewards/scorers/sparrow.py --property $PROPERTY"
 
 export WANDB_MODE=offline
@@ -25,7 +25,12 @@ export WANDB_MODE=offline
 # Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-TERM="{cmd: \"$SCORER\", label: $PROPERTY, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
+# The whole objective, written out: nothing is added for you and reward.terms is empty by
+# default. entropy and length keep the target from being met by a low-complexity tract or a
+# degenerate length; drop either line and it is gone.
+ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
+LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
+RG="{cmd: \"$SCORER\", label: $PROPERTY, weight: $WEIGHT, shaping: {type: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \
     seed=0 \
@@ -48,7 +53,7 @@ idiom_train_grpo \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
     reward.module=null \
-    reward.add="[$TERM]" \
+    reward.terms="[$ENTROPY, $LENGTH, $RG]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \
     trainer.devices=1 \

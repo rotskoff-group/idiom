@@ -3,9 +3,10 @@
 set -euo pipefail
 
 ###
-# GRPO toward a reward you wrote, running in this interpreter. Three ways to name it below; keep one.
-# The fourth shapes it with a rule of your own, from custom_shaping.py, imported by MODULE.
-# If it needs its own python or torch, use custom_scorer.bash instead.
+# GRPO toward a reward you wrote, running in this interpreter. Four ways to name it below; keep one.
+# The last shapes it with a rule of your own -- custom_rewards.py registers the reward and the rule,
+# so the term's one `module` brings in both. If it needs its own python or torch, use
+# custom_scorer.bash instead.
 # Needs: 1 GPU, ~12 h.
 ###
 
@@ -15,16 +16,23 @@ if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
 
 OUT="${IDIOM_OUT:-$REPO/runs}/grpo-my-reward"
 
-# EDIT: a file registering shaping of your own, imported before every term. null for the shipped
-# rules (quadratic, gaussian, identity); custom_shaping.py adds one_sided.
+# EDIT: a file imported before every term, for shaping that lives somewhere other than the term's
+# own module. null unless you need it -- custom_rewards.py registers its one_sided rule itself.
 MODULE=null
-# MODULE=cookbook/rewards/custom_shaping.py
 
-# EDIT: pick ONE. A term takes one `module`, which is why shaping in its own file goes in MODULE.
-TERM="{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0, shaping: {type: gaussian, target: 0.25, width: 0.5}}"
-# TERM="{reward: \"mypackage.scoring:score_idr\", label: mine, weight: 1.0}"                    # any importable callable
-# TERM="{reward: \"mypackage.scoring:score_batch\", label: mine, batched: true, weight: 1.0}"   # f(idrs, batch), scored a step at a time
-# TERM="{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0, shaping: {type: one_sided, target: 0.30, width: 0.5}}"   # needs MODULE above
+# The whole objective, written out: nothing is added for you and reward.terms is empty by default.
+# This one is deliberately bare -- a single term, no entropy and no length -- to show that a run
+# gets exactly the objective it names. Uncomment the two below for a real run: without them the
+# target is satisfiable by a low-complexity tract or a degenerate length.
+# ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
+# LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
+
+# EDIT: pick ONE.
+MINE="{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0, shaping: {type: gaussian, target: 0.25, width: 0.5}}"
+# MINE="{reward: \"mypackage.scoring:score_idr\", label: mine, weight: 1.0}"                    # any importable callable
+# MINE="{reward: \"mypackage.scoring:score_batch\", label: mine, batched: true, weight: 1.0}"   # f(idrs, batch), scored a step at a time
+# MINE="{reward: \"mypackage.scoring:make_scorer\", label: mine, params: {cutoff: 0.3}, weight: 1.0}"  # a factory, called with params
+# MINE="{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0, shaping: {type: one_sided, target: 0.30, width: 0.5}}"   # shaping from the same file
 
 export WANDB_MODE=offline
 
@@ -49,7 +57,7 @@ idiom_train_grpo \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
     reward.module=$MODULE \
-    reward.add="[$TERM]" \
+    reward.terms="[$MINE]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \
     trainer.devices=1 \

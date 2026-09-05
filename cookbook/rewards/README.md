@@ -4,17 +4,16 @@
 the command line.
 
 ```
-custom_rewards.py   rewards that run in this process — copy this and edit it
-custom_shaping.py   what a good value is, when the three shipped rules don't fit
+custom_rewards.py   rewards that run in this process, and shaping — copy this and edit it
 scorers/            reward models that run in their OWN environment, one program each
 ```
 
-The library defines exactly two rewards, `entropy` and `length`, because every run should carry them.
-It takes no view on what you should design for, so the shipped objective is those two and nothing
-else, and what a run optimizes is named at launch. Each script in [`scripts/grpo/`](../scripts/grpo/)
-spells out one whole objective as a `TERM` at the top, passed to `reward.add`:
+The library takes no view on what you should design for, so **the shipped objective is empty**:
+`reward.terms` is `[]` and there are no presets and no default terms. A run names every term it
+optimizes, which makes the launch line the whole objective. Each script in
+[`scripts/grpo/`](../scripts/grpo/) writes one out and passes it to `reward.terms`:
 
-| script | optimizes | reward |
+| script | objective | reward |
 |---|---|---|
 | [`sae_features.bash`](../scripts/grpo/sae_features.bash) | a target's SAE feature code (the RL-SAE result) | library |
 | [`custom_reward.bash`](../scripts/grpo/custom_reward.bash) | anything you can compute in-process | [`custom_rewards.py`](custom_rewards.py) |
@@ -25,6 +24,7 @@ spells out one whole objective as a `TERM` at the top, passed to `reward.add`:
 | [`pspred.bash`](../scripts/grpo/pspred.bash) | phase-separation dG / c_sat | [`scorers/pspred.py`](scorers/pspred.py) |
 | [`starling.bash`](../scripts/grpo/starling.bash) | ensemble Rg or end-to-end distance | [`scorers/starling.py`](scorers/starling.py) |
 | [`custom_scorer.bash`](../scripts/grpo/custom_scorer.bash) | a scorer you wrote, in its own environment | [`scorers/custom_scorer.py`](scorers/custom_scorer.py) |
+| [`combined.bash`](../scripts/grpo/combined.bash) | epsilon and a compartment at once, two scorers | [`scorers/finches.py`](scorers/finches.py), [`scorers/protgps.py`](scorers/protgps.py) |
 
 ## How a reward is built
 
@@ -39,6 +39,10 @@ reward:
     - {reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}  # residues
 ```
 
+Every term has that same shape — a `label`, a `weight`, a `shaping` — and then the keys belonging to
+its source: `module`, `params` and `batched` for a reward, `timeout`, `maxlen`, `cwd` and `env` for a
+`cmd` scorer. A key from the wrong group is an error, not a silent no-op.
+
 | shaping | shape | use when |
 |---|---|---|
 | `quadratic` | 0 at the target, −1 one `width` out, unbounded below | one target, hit hard |
@@ -50,37 +54,45 @@ register your own; see [writing your own shaping](#writing-your-own-shaping).
 
 `width` is a tolerance in the reward's units — a fraction of a nonzero `target` (`width: 0.2` on
 `target: 25` is ±5 Å), absolute when the target is 0. `weight: 0` keeps a term running and logged
-without optimizing it; `enabled: false` skips it entirely.
+without optimizing it; to take a term out entirely, delete it.
 
-## Choosing the objective at launch
+## Naming the objective at launch
 
-`grpo.yaml` carries the two guardrails and nothing else. What a run designs for is one `TERM` on the
-command line, appended with `reward.add`; several compose in the order you name them.
+`grpo.yaml` carries no terms at all, so a run passes the list it wants to `reward.terms` and gets
+exactly that. Terms compose in the order you name them.
 
 ```bash
 idiom_train_grpo init_from=jxliu2/idiom-300M \
-  reward.add='[{reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}]'
-
-idiom_train_grpo init_from=jxliu2/idiom-300M \
-  reward.add='[{cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
-                label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}]'
-
-idiom_train_grpo init_from=jxliu2/idiom-300M reward.add="[$SAE_TERM, $RG_TERM]"
+  reward.terms='[{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}},
+                 {reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}},
+                 {cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
+                  label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}]'
 ```
 
-An entry may also be a **name** from `reward.presets`, which is how you keep a tuned term without
-retyping it: put a `presets` block in a config of your own, launch with `--config-dir . --config-name
-my_grpo`, then `reward.add=[my_term]` and `reward.presets.my_term.shaping.target=30` to tune it. The
-shipped `presets` is empty — there is no menu to pick from.
+In a script that gets unreadable fast, so each one names its terms first and assembles them on one
+line — which is also how you keep a tuned term without retyping it:
+
+```bash
+ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
+LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
+RG="{cmd: \"$SCORER\", label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}"
+
+idiom_train_grpo init_from=jxliu2/idiom-300M reward.terms="[$ENTROPY, $LENGTH, $RG]"
+```
+
+Drop `$LENGTH` and there is no length term; keep only `$RG` and that is the whole objective. An empty
+list is refused, since it would give every completion the same reward.
 
 ## In-process rewards
 
 Use this whenever the reward can be imported into the environment IDiom runs in, which is most of the
 time. A reward is one function, one raw value, no notion of "good".
 
-**Built in.** Name it and it works — no `module`, nothing on disk: `entropy` and `length` (the
-guardrails), `net_charge_fraction`, `fraction_charged`, `sumo_motif_count`, `ndsm_motif_count`, in
-`idiom/train/grpo/reward/builtin.py`.
+**Registered by the library.** Name it and it works — no `module`, nothing on disk: `entropy` and
+`length`, in `idiom/train/grpo/reward/builtin.py`. They are terms like any other; nothing puts them
+in an objective for you. The examples in [`custom_rewards.py`](custom_rewards.py)
+(`net_charge_fraction`, `fraction_charged`, `sumo_motif_count`, `ndsm_motif_count`) need that file in
+the term's `module`, like any reward of your own.
 
 **Yours, registered by name.** Copy [`custom_rewards.py`](custom_rewards.py) into your project,
 decorate with `@register_reward("fraction_aromatic")`, and point a term at the file (a `*.py` path or
@@ -101,6 +113,17 @@ name the callable directly — no decorator, no import of IDiom, no copy into th
 
 The term is logged under the function's own name unless you give it a `label`. A `module:function`
 that cannot be imported fails while the config is parsed, not on the first training step.
+
+**Yours, with settings.** Add `params` and the callable is a **factory**, called once with them to
+build the reward. This is how a reward that needs configuring takes it from the config, so the run's
+saved `config.yaml` records what it was actually optimizing:
+
+```yaml
+- {reward: "mypackage.scoring:make_scorer", label: mine, weight: 1.0, params: {cutoff: 0.3}}
+```
+
+Validate in the factory: it runs at config time, so a bad setting fails in seconds rather than on the
+first step. `params` applies only to the `module:function` form.
 
 ## Out-of-process scorers
 
@@ -128,7 +151,10 @@ first use and weights are fetched automatically, so there is no install step:
 | `starling.py` | ensemble Rg or end-to-end distance | [STARLING](https://github.com/idptools/starling), 1.5 GB | 9 s GPU |
 
 The scorers are ordinary files in the repository — edit one in place, or copy it and point `cmd` at
-your copy. Several combine in one run, each with its own environment. Check one before spending an
+your copy. Several combine in one run, each with its own environment; see
+[`combined.bash`](../scripts/grpo/combined.bash). A scorer's settings go in its **command line**, so
+that the term — and therefore the run's saved config — records what was scored; `env: {KEY: value}`
+on the term covers a scorer whose only knob is an environment variable. Check one before spending an
 allocation:
 
 ```bash
@@ -155,27 +181,37 @@ seconds instead of after the policy has warm-started.
 both VRAM and time per step. Give the child its own device (`CUDA_VISIBLE_DEVICES=1 uv run --script
 ...`) if you have one, or budget for the contention.
 
-## `sae_only_<name>`
+## The SAE feature reward
 
-`sae_only_<signature>` scores an IDR by the fraction of a target's SAE feature signature firing in
-it, read through a frozen IDiom + SAE lens — so a gain requires encoding the real code, not just
-satisfying a classifier. Already a fraction in [0, 1], so no shaping, and no third-party dependency.
-`sae_signatures.json` ships beside the reward and holds the signatures for the released SAE
-(`IDIOM_SAEREWARD_CASE` selects `top30` or `private30`); a copy sits in the Hub dataset under
-`example_data/sae_features/` as a format reference.
+`sae_signature` scores an IDR by the fraction of a target's SAE feature signature firing in it, read
+through a frozen IDiom + SAE lens — so a gain requires encoding the real code, not just satisfying a
+classifier. Already a fraction in [0, 1], so no shaping, and no third-party dependency. It is a
+factory, so which signature a run chases and where it is read from are `params` on the term and are
+saved with the run:
+
+```yaml
+- {reward: "idiom.train.grpo.reward.sae_feature:sae_signature", label: sae, weight: 1.0,
+   params: {signature: nucleolus, features: signature.json, case: top30}}
+```
+
+`params` takes `signature` (required), `features` (path to the signature JSON), `case` (`top30` or
+`private30` in the shipped file), `sae` (the lens, a Hub repo id or directory) and `device`.
+`sae_signatures.json` ships beside the reward and holds the signatures for the released SAE; a copy
+sits in the Hub dataset under `example_data/sae_features/` as a format reference.
 [`feature_enrichment.ipynb`](../notebooks/feature_enrichment.ipynb) writes a signature from your own
-sequences, and `IDIOM_SAEREWARD_FEATURES` points the reward at it.
+sequences — point `params.features` at it.
 
 ## Picking a target, a width, and a weight
 
 The failure mode is quiet — the objective improves while the sequences stop being IDRs.
 
-**Keep `entropy` and `length` on.** They cost nothing and contribute about **−1.8** to a starting
-sequence. **Size every new term against that**: pick `width` so a typical base generation sits about
-one width from the target, and `weight` so the starting contribution is order 1. A term worth −30 at
-step 0 has made the guardrails invisible — `finches` aimed at −6.0 with `width: 1.0` started at −31.5
-and swamped everything; widened to match the spread of base generations it starts at −3.8 and
-converges with the guardrails intact.
+**Name `entropy` and `length` in most objectives.** Nothing adds them for you, and without them a
+target is satisfiable by a low-complexity tract or a degenerate length. At the weights above they
+cost nothing and contribute about **−1.8** to a starting sequence. **Size every new term against
+that**: pick `width` so a typical base generation sits about one width from the target, and `weight`
+so the starting contribution is order 1. A term worth −30 at step 0 has made them invisible —
+`finches` aimed at −6.0 with `width: 1.0` started at −31.5 and swamped everything; widened to match
+the spread of base generations it starts at −3.8 and converges with them intact.
 
 **Aim inside the natural range.** Base generations from `idiom-300M`:
 
@@ -194,8 +230,8 @@ converges with the guardrails intact.
 
 A reward whose optimum sits off the IDR distribution *will* be reached. Rewarding aromatic content at
 weight 1.0 for 3000 steps hit its target exactly (0.1488 vs 0.15) while collapsing to hydrophobic
-`LVIFA` segments — disorder fell from 0.665 to **0.091** — with entropy and length on target
-throughout. Nothing in the reward said "still an IDR".
+`LVIFA` segments — disorder fell from 0.665 to **0.091** — with the entropy and length terms on
+target throughout. Nothing in the reward said "still an IDR".
 
 ## Writing your own
 
@@ -237,12 +273,12 @@ pre-built venv, a conda env, or `docker run -i`.
 
 ## Writing your own shaping
 
-Shaping extends the same way a reward does: a decorator, in a file you name at launch. The three
-shipped rules all say *be here*, which is wrong whenever the objective is a threshold — an IDR that
-must stay expanded wants Rg ≥ 30 Å, not Rg = 30 Å, and pinning it to the target spends optimization
-pressure fighting improvements.
+Shaping extends the same way a reward does — a decorator, in a file you name at launch — and goes
+in the same file. The three shipped rules all say *be here*, which is wrong whenever the objective
+is a threshold: an IDR that must stay expanded wants Rg ≥ 30 Å, not Rg = 30 Å, and pinning it to the
+target spends optimization pressure fighting improvements.
 
-[`custom_shaping.py`](custom_shaping.py) is that rule, `one_sided`, and the file to copy:
+The Shaping section of [`custom_rewards.py`](custom_rewards.py) is that rule, `one_sided`:
 
 ```python
 from idiom.train.grpo.reward import register_shaping, tolerance
@@ -265,18 +301,18 @@ nonzero target and absolute at 0; and validate in the factory, which runs once a
 bad `direction` fails in seconds instead of on the first step. A `TypeError` from a missing or
 misspelled parameter is already reported as `bad parameters for shaping ...`.
 
-Name it in a term's `shaping.type`, and bring the file in with the config-level `reward.module=`,
-which is imported before every term:
+Name it in a term's `shaping.type`. Since the reward and the rule share a file, the term's own
+`module` brings in both:
 
 ```bash
-idiom_train_grpo init_from=jxliu2/idiom-300M reward.module=cookbook/rewards/custom_shaping.py \
-  reward.add='[{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0,
-                shaping: {type: one_sided, target: 0.30, width: 0.5}}]'
+idiom_train_grpo init_from=jxliu2/idiom-300M \
+  reward.terms='[{reward: fraction_charged, module: cookbook/rewards/custom_rewards.py, weight: 1.0,
+                  shaping: {type: one_sided, target: 0.30, width: 0.5}}]'
 ```
 
-A term takes one `module`, which is why the shaping goes in `reward.module` here — the term's own is
-already spent on the reward. If both live in one file of yours, that file in the term's `module` is
-enough; every module a term names is imported before any shaping is built.
+A term takes one `module`, so if your shaping lives somewhere else, name that file in the
+config-level `reward.module=` instead. Either way every module the config names is imported before
+any shaping is built, so a rule registered by one term's module is available to all of them.
 
 **Flat means no gradient.** A one-sided term stops steering once a completion clears the threshold,
 so it cannot be the only thing driving a run — pair it with a term that has a preference, or the

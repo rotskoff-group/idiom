@@ -19,8 +19,7 @@ SIGNATURE=nucleolus                     # EDIT: the NAME the feature_enrichment 
 # The signature JSON the feature_enrichment notebook writes. Set IDIOM_SIGNATURE to point at it,
 # or drop it at $REPO/signature.json (which is where you'd save it out of Colab).
 FEATURES="${IDIOM_SIGNATURE:-$REPO/signature.json}"
-export IDIOM_SAEREWARD_FEATURES="$FEATURES"
-export IDIOM_SAEREWARD_CASE=top30       # the CASE the feature_enrichment notebook wrote
+CASE=top30                              # EDIT: the CASE the feature_enrichment notebook wrote
 
 export WANDB_MODE=offline
 
@@ -30,7 +29,12 @@ if [[ ! -f "$FEATURES" ]]; then
     exit 1
 fi
 
-TERM="{reward: sae_only_$SIGNATURE, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}"
+# The whole objective, written out: nothing is added for you and reward.terms is empty by
+# default. entropy and length keep the target from being met by a low-complexity tract or a
+# degenerate length; drop either line and it is gone.
+ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
+LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
+SAE="{reward: \"idiom.train.grpo.reward.sae_feature:sae_signature\", label: sae, weight: 1.0, params: {signature: $SIGNATURE, features: \"$FEATURES\", case: $CASE}}"
 
 idiom_train_grpo \
     seed=0 \
@@ -53,7 +57,7 @@ idiom_train_grpo \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
     reward.module=null \
-    reward.add="[$TERM]" \
+    reward.terms="[$ENTROPY, $LENGTH, $SAE]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \
     trainer.devices=1 \

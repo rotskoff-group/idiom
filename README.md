@@ -131,23 +131,31 @@ idiom_train_sae model_ckpt=/path/model.ckpt data.fasta=/path/records.fasta layer
 ```
 
 GRPO optimizes a list of reward **terms**, each pairing a reward with the shaping that says what a
-good value is: `total = Σ weightᵢ · shapingᵢ(rewardᵢ)`. The shipped config carries only the entropy
-and length guardrails; what a run optimizes is named at launch:
+good value is: `total = Σ weightᵢ · shapingᵢ(rewardᵢ)`. The shipped config carries **no terms at
+all** — no defaults, no presets — so a run names its whole objective and the launch line is what is
+being optimized. Terms come in one format whatever the reward is:
 
 ```bash
-# an SAE feature signature (the RL-SAE result)
-idiom_train_grpo init_from=jxliu2/idiom-300M \
-  reward.add='[{reward: sae_only_nucleolus, module: idiom.train.grpo.reward.sae_feature, weight: 1.0}]'
+ENTROPY='{reward: entropy, weight: 1.0, shaping: {type: quadratic, target: 3.65, width: 0.2}}'
+LENGTH='{reward: length,  weight: 1.0, shaping: {type: quadratic, target: 100,  width: 1.0}}'
+
+# an SAE feature signature (the RL-SAE result), with its settings in the term
+SAE='{reward: "idiom.train.grpo.reward.sae_feature:sae_signature", label: sae, weight: 1.0,
+      params: {signature: nucleolus, features: signature.json}}'
 
 # any importable callable
-idiom_train_grpo init_from=jxliu2/idiom-300M \
-  reward.add='[{reward: "mypackage.scoring:score_idr", weight: 1.0}]'
+MINE='{reward: "mypackage.scoring:score_idr", weight: 1.0}'
 
 # a reward model in its own environment
-idiom_train_grpo init_from=jxliu2/idiom-300M \
-  reward.add='[{cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
-                label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}]'
+RG='{cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration",
+     label: rg, weight: 0.5, shaping: {type: quadratic, target: 25, width: 0.2}}'
+
+idiom_train_grpo init_from=jxliu2/idiom-300M reward.terms="[$ENTROPY, $LENGTH, $RG]"
 ```
+
+`entropy` and `length` are worth naming in most objectives — without them a target is satisfiable by
+a low-complexity tract or a degenerate length — but they are terms like any other, so drop either
+one and it is gone. `cookbook/scripts/grpo/` has a ready-to-submit script per objective.
 
 Six external scorers ship in the cookbook — sparrow, finches, PSpred, ProtGPS, PADDLE, STARLING —
 each a standalone program carrying its own environment in a

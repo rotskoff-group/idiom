@@ -85,13 +85,14 @@ beside it on first run (git-ignored; delete to rebuild).
 
 ## Rewards
 
-[`rewards/`](rewards/) holds what GRPO optimizes — rewards that run in this process
+[`rewards/`](rewards/) holds what GRPO optimizes — rewards and shaping that run in this process
 ([`custom_rewards.py`](rewards/custom_rewards.py)) and reward models that run in their own
 environment ([`scorers/`](rewards/scorers/)). Nothing there ships in the wheel; these are files you
 read, copy, and edit, named by a run on the command line.
 
-The shipped objective is the `entropy` and `length` guardrails and nothing else — what a run
-optimizes is named at launch, one `TERM` per script in [`scripts/grpo/`](scripts/grpo/).
+The shipped objective is **empty** — `reward.terms: []`, no defaults and no presets — so a run names
+every term it optimizes. Each script in [`scripts/grpo/`](scripts/grpo/) writes one whole objective
+out and passes it to `reward.terms`.
 
 **See [`rewards/README.md`](rewards/README.md)** for the scorers, the reward and shaping forms,
 picking targets and weights, and writing your own.

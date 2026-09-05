@@ -64,7 +64,7 @@ def test_build_shaping_rejects_a_bad_spec():
 
 
 def test_a_user_module_can_register_a_shaping_type(tmp_path):
-    # reward.module is imported before any shaping is built (cookbook/rewards/custom_shaping.py)
+    # reward.module is imported before any shaping is built (cookbook/rewards/custom_rewards.py)
     mod = tmp_path / "my_shaping.py"
     mod.write_text(
         "from idiom.train.grpo.reward import register_shaping, tolerance\n"
