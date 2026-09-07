@@ -8,11 +8,11 @@ set -euo pipefail
 # Needs: 1 GPU, ~8 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$REPO"
-if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
+REPO="/path/to/idiom"  # EDIT: repository checkout
+OUT="/path/to/output/grpo-my-scorer"  # EDIT: run output directory
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-my-scorer"
+cd "$REPO"
 
 PROPERTY=isoelectric_point              # EDIT: isoelectric_point | molecular_weight
 TARGET=4.5                              # EDIT: acidic

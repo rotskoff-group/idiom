@@ -150,7 +150,8 @@ beside IDiom (python >= 3.10, torch >= 2.4) — and that is what this is for.
 
 Each shipped scorer is a standalone program speaking newline-delimited JSON on stdin/stdout, with its
 environment declared in a [PEP 723](https://peps.python.org/pep-0723/) header. `uv` builds it on
-first use and weights are fetched automatically, so there is no install step:
+first use and weights are fetched automatically. Install `uv` with `python -m pip install uv`
+if needed; no manual scorer dependency installation or `uv sync` is required.
 
 `scorer` is the reward factory that runs one: give it the command, and optionally `timeout`,
 `maxlen`, `cwd`, `env` and `label` (which prefixes the child's stderr).
@@ -180,7 +181,7 @@ allocation:
 ```bash
 export UV_CACHE_DIR=/scratch/you/uv-cache   # on-demand envs are several GB
 
-uv run python -m idiom.train.grpo.reward.external \
+python -m idiom.train.grpo.reward.external \
   --cmd "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration" \
   --shaping quadratic --target 25 --width 0.2
 ```
@@ -218,7 +219,7 @@ It takes `signature` (required), `features` (path to the signature JSON), `case`
 `sae_signatures.json` ships beside the reward and holds the signatures for the released SAE; a copy
 sits in the Hub dataset under `example_data/sae_features/` as a format reference.
 [`feature_enrichment.ipynb`](../notebooks/feature_enrichment.ipynb) writes a signature from your own
-sequences — point `params.features` at it.
+sequences — point the term's `features` at it.
 
 ## Picking a target, a width, and a weight
 

@@ -8,11 +8,11 @@ set -euo pipefail
 # Needs: 1 GPU, ~12 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$REPO"
-if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
+REPO="/path/to/idiom"  # EDIT: repository checkout
+OUT="/path/to/output/grpo-finches"  # EDIT: run output directory
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-finches"
+cd "$REPO"
 
 MODE=homotypic                          # EDIT: homotypic, or heterotypic with --partner
 TARGET=-6.0                             # EDIT: epsilon; negative is attractive

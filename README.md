@@ -29,15 +29,19 @@ Weights download on first use. Inference runs on CPU; a GPU is recommended.
 pip install git+https://github.com/rotskoff-group/idiom.git
 ```
 
-Or clone, which additionally gives you [`cookbook/`](cookbook/) and a locked torch build:
+To run the [`cookbook/`](cookbook/) examples, also clone the repository:
 
 ```bash
 git clone https://github.com/rotskoff-group/idiom.git
 cd idiom
-uv sync      # .venv with the locked torch build, the package, and its CLIs
 ```
 
-Then `source .venv/bin/activate`, or prefix commands with `uv run`. Python >= 3.10.
+The Bash examples use IDiom from your active Python environment and the clone for cookbook files.
+Edit their `REPO`, `OUT`, and other run settings before launching. External-scorer examples also
+need `uv` (`python -m pip install uv`) to manage the scorers' separate dependencies.
+
+Alternatively, developers can run `uv sync` in the checkout to install the package and locked
+dependencies, then `source .venv/bin/activate`. Python >= 3.10.
 
 ## Sequence conventions
 
@@ -163,7 +167,8 @@ idiom_train_grpo init_from=jxliu2/idiom-300M reward.terms="[$ENTROPY, $LENGTH, $
 factory of your own — no registration, no decorators. `entropy` and `length` are worth naming in
 most objectives, since a target is otherwise satisfiable by a low-complexity tract or a degenerate
 length, but they are terms like any other, so drop either one and it is gone.
-`cookbook/scripts/grpo/` has a ready-to-submit script per objective.
+`cookbook/scripts/grpo/` has a script per objective; edit its `REPO` and `OUT` path placeholders
+and run settings before submitting.
 
 Six external scorers ship in the cookbook — sparrow, finches, PSpred, ProtGPS, PADDLE, STARLING —
 each a standalone program carrying its own environment in a

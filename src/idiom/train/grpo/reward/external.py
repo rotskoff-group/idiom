@@ -45,6 +45,22 @@ def _argv(cmd) -> list[str]:
     return shlex.split(cmd)
 
 
+def _label_from_argv(argv: list[str]) -> str:
+    """Name the child by its script, for the stderr prefix, so two scorers are told apart.
+
+    The first ".py" argument is the scorer itself (uv's own flags come before it); its basename is
+    the tag. A command that runs no script falls back to its program name, or "scorer".
+
+    Args:
+        argv (list[str]): The scorer command as arguments.
+
+    Returns:
+        str: A short tag, e.g. "finches" for ".../scorers/finches.py".
+    """
+    script = next((a for a in argv if a.endswith(".py")), argv[0] if argv else "scorer")
+    return os.path.splitext(os.path.basename(script))[0] or "scorer"
+
+
 def parse_response(line: str, n: int) -> list[float]:
     """Validate one response line and return its scores.
 
@@ -98,12 +114,12 @@ class ScorerProcess:
         cwd (str): Working directory for the child process.
         timeout (float): Seconds to wait for a single response.
         env (dict | None): Full environment for the child, or None to inherit this process's.
-        label (str): Tag prefixed to the child's forwarded stderr.
+        label (str): Tag prefixed to the child's forwarded stderr; the script basename by default.
         proc (subprocess.Popen | None): The running child, or None when not started.
     """
 
     def __init__(self, cmd, *, cwd: str | None = None, timeout: float = 300.0,
-                 env: dict | None = None, label: str = "scorer") -> None:
+                 env: dict | None = None, label: str | None = None) -> None:
         """Record the command and settings without starting the child process.
 
         Args:
@@ -112,13 +128,14 @@ class ScorerProcess:
             timeout (float): Seconds to wait for a single response.
             env (dict | None): Environment variables for the child, layered over this process's own
                 environment; None passes it through unchanged.
-            label (str): Short tag used to prefix the child's forwarded stderr.
+            label (str | None): Tag prefixed to the child's forwarded stderr; the script's basename
+                (e.g. "finches") when None, which tells two scorers apart in the log.
         """
         self.argv = _argv(cmd)
         self.cwd = cwd or os.getcwd()
         self.timeout = timeout
         self.env = {**os.environ, **{k: str(v) for k, v in (env or {}).items()}} if env else None
-        self.label = label
+        self.label = label or _label_from_argv(self.argv)
         self.proc: subprocess.Popen | None = None
         self._q: queue.Queue = queue.Queue()
 
@@ -234,7 +251,7 @@ class ScorerProcess:
 
 
 def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
-           env: dict | None = None, cache_max: int = 100_000, label: str = "scorer") -> Reward:
+           env: dict | None = None, cache_max: int = 100_000, label: str | None = None) -> Reward:
     """Build a reward backed by one external scorer subprocess.
 
     This is the reward factory a term names to run a reward model in its own environment:
@@ -253,7 +270,8 @@ def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = No
         cwd (str | None): Working directory for the child; the current directory if None.
         env (dict | None): Environment variables set for the child, over this process's own.
         cache_max (int): Number of cached sequences above which the cache is cleared.
-        label (str): Short tag used to prefix the child's forwarded stderr.
+        label (str | None): Tag prefixed to the child's forwarded stderr; the script's basename
+            (e.g. "finches") when None, which tells two scorers apart in the log.
 
     Returns:
         Reward: Maps a step's IDRs to the scorer's raw rewards, in order.

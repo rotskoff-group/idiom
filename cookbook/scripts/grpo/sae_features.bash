@@ -8,24 +8,23 @@ set -euo pipefail
 # Needs: 1 GPU, ~12 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$REPO"
-if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
+REPO="/path/to/idiom"  # EDIT: repository checkout
+OUT="/path/to/output/grpo-sae"  # EDIT: run output directory
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-sae"
+cd "$REPO"
 
 SIGNATURE=nucleolus                     # EDIT: the NAME the feature_enrichment notebook wrote
 
-# The signature JSON the feature_enrichment notebook writes. Set IDIOM_SIGNATURE to point at it,
-# or drop it at $REPO/signature.json (which is where you'd save it out of Colab).
-FEATURES="${IDIOM_SIGNATURE:-$REPO/signature.json}"
+# The signature JSON the feature_enrichment notebook writes.
+FEATURES="/path/to/signature.json"       # EDIT: notebook output
 CASE=top30                              # EDIT: the CASE the feature_enrichment notebook wrote
 
 export WANDB_MODE=offline
 
 if [[ ! -f "$FEATURES" ]]; then
     echo "no signature at $FEATURES -- run the cookbook/notebooks/feature_enrichment.ipynb" >&2
-    echo "notebook first, then save its signature.json there (or set IDIOM_SIGNATURE)." >&2
+    echo "notebook first, then set FEATURES to the saved signature.json path." >&2
     exit 1
 fi
 

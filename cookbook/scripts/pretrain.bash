@@ -8,11 +8,11 @@ set -euo pipefail
 # Needs: 8 GPUs, ~7 days.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$REPO"
-if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
+REPO="/path/to/idiom"  # EDIT: repository checkout
+OUT="/path/to/output/pretrain"  # EDIT: run output directory
 
-OUT="${IDIOM_OUT:-$REPO/runs}/pretrain"
+cd "$REPO"
 TRAIN_FASTA=/path/to/train.fasta        # EDIT
 VAL_FASTA=/path/to/validation.fasta     # EDIT
 

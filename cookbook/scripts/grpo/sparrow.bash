@@ -8,11 +8,11 @@ set -euo pipefail
 # Needs: 1 GPU, ~12 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$REPO"
-if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
+REPO="/path/to/idiom"  # EDIT: repository checkout
+OUT="/path/to/output/grpo-sparrow"  # EDIT: run output directory
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-sparrow"
+cd "$REPO"
 
 PROPERTY=radius_of_gyration             # EDIT: any ALBATROSS predictor or sequence parameter
 TARGET=25                               # EDIT: in the property's units

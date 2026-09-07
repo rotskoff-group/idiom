@@ -8,11 +8,11 @@ set -euo pipefail
 # Needs: 2 GPUs, ~24 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$REPO"
-if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
+REPO="/path/to/idiom"  # EDIT: repository checkout
+OUT="/path/to/output/grpo-starling"  # EDIT: run output directory
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-starling"
+cd "$REPO"
 
 PROPERTY=radius_of_gyration             # EDIT: radius_of_gyration | end_to_end_distance
 TARGET=25                               # EDIT: in angstroms
@@ -43,7 +43,7 @@ LENGTH="{label: length, \
 
 RG_ENS="{label: rg_ens, \
     weight: $WEIGHT, \
-    reward: {name: scorer, cmd: \"$SCORER\", timeout: $TIMEOUT, label: rg_ens}, \
+    reward: {name: scorer, cmd: \"$SCORER\", timeout: $TIMEOUT}, \
     shaping: {name: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \

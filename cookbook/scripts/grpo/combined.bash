@@ -9,11 +9,11 @@ set -euo pipefail
 # Needs: 1 GPU, ~16 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$REPO"
-if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
+REPO="/path/to/idiom"  # EDIT: repository checkout
+OUT="/path/to/output/grpo-combined"  # EDIT: run output directory
 
-OUT="${IDIOM_OUT:-$REPO/runs}/grpo-combined"
+cd "$REPO"
 
 EPS_TARGET=-6.0                         # EDIT: epsilon; negative is attractive
 EPS_WIDTH=1.0                           # EDIT: absolute, since epsilon crosses zero
@@ -40,12 +40,12 @@ ENTROPY="{label: entropy, \
 
 EPS="{label: eps, \
     weight: $EPS_WEIGHT, \
-    reward: {name: scorer, cmd: \"$FINCHES\", label: eps}, \
+    reward: {name: scorer, cmd: \"$FINCHES\"}, \
     shaping: {name: quadratic, target: $EPS_TARGET, width: $EPS_WIDTH}}"
 
 COMPARTMENT_TERM="{label: protgps, \
     weight: $PROTGPS_WEIGHT, \
-    reward: {name: scorer, cmd: \"$PROTGPS\", label: protgps}, \
+    reward: {name: scorer, cmd: \"$PROTGPS\"}, \
     shaping: identity}"
 
 idiom_train_grpo \

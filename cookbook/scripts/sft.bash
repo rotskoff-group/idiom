@@ -8,11 +8,11 @@ set -euo pipefail
 # Needs: 1 GPU, ~8 h.
 ###
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$REPO"
-if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi
+# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
+REPO="/path/to/idiom"  # EDIT: repository checkout
+OUT="/path/to/output/sft"  # EDIT: run output directory
 
-OUT="${IDIOM_OUT:-$REPO/runs}/sft"
+cd "$REPO"
 TRAIN_FASTA=cookbook/example_data/protgps/nucleolus.fasta   # EDIT
 
 export WANDB_MODE=offline

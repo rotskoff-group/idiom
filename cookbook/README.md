@@ -5,8 +5,8 @@ Runnable material, indexed by what you want to do. [`notebooks/`](notebooks/) ho
 
 The notebooks install IDiom themselves and pull inputs from
 [`jxliu2/idiom-data`](https://huggingface.co/datasets/jxliu2/idiom-data), so **nothing there needs a
-clone** — click a badge and run. The scripts do assume a clone, since they name scorers and configs
-by path.
+clone** — click a badge and run. The scripts use your installed IDiom package and a clone for
+scorers, custom rewards, and example data.
 
 | I want to... | run | needs |
 |---|---|---|
@@ -40,31 +40,44 @@ sequences: the notebook writes a signature of the features enriched in a set, th
 post-trains a model to reproduce that feature code.
 
 ```bash
-# save the notebook's signature.json at the repo root, or set IDIOM_SIGNATURE
-bash cookbook/scripts/grpo/sae_features.bash      # set SIGNATURE=<name> at the top
+# edit REPO, OUT, FEATURES, and SIGNATURE in the script first
+bash cookbook/scripts/grpo/sae_features.bash
 ```
 
 The script refuses to start if the signature is not there, so the two stay in step.
 
 ## Scripts
 
-Plain bash, no scheduler. Each spells out every config value as a Hydra override, so a run is
-reproducible from the script alone:
+Plain bash, no scheduler. Each spells out every config value as a Hydra override. First activate
+your chosen Python environment, install IDiom, and clone the repository to access the cookbook:
+
+```bash
+python -m pip install git+https://github.com/rotskoff-group/idiom.git
+git clone https://github.com/rotskoff-group/idiom.git
+cd idiom
+```
+
+Use the same tag or commit for the installation and clone to keep the examples matched to the
+installed API. External-scorer examples also need `uv` (`python -m pip install uv`); their
+`uv run --script` commands manage each scorer's separate dependencies. No `uv sync` is required.
+
+Edit the path placeholders and run settings before launching:
 
 ```bash
 bash cookbook/scripts/sft.bash
 ```
 
-They locate the repository from their own path and `cd` there, so they run from any directory, and
-activate `.venv/` if present. Output goes to `runs/<name>/`, or `$IDIOM_OUT/<name>`. The remaining
-`# EDIT` markers are the *choices* a run makes (target, width, weight, property, compartment), not
-plumbing. `pretrain.bash` and `train_sae.bash` are the exception: they need a corpus, so
-`TRAIN_FASTA` and `VAL_FASTA` stay placeholders.
+Set `REPO` to the absolute path of your repository checkout and `OUT` to the desired run output
+directory in each script. The scripts `cd` to `REPO` and use `python` and the `idiom_*` commands
+from your active environment; they do not activate a checkout's `.venv/`. For SAE
+feature GRPO, also set `FEATURES` to the signature JSON written by the notebook. Pretraining and
+SAE training need corpus paths (`TRAIN_FASTA` / `VAL_FASTA` or `FASTA`). Other `# EDIT` markers
+identify run choices such as target, width, weight, property, and compartment.
 
 W&B is offline by default; `wandb login` and set `WANDB_MODE=online` for live logging.
 
 **To submit to a scheduler**, wrap rather than edit — the scripts take no arguments and read no
-scheduler variables:
+scheduler variables. Make sure the job uses the environment where you installed IDiom:
 
 ```bash
 sbatch --gpus-per-node=1 --cpus-per-task=8 --time=12:00:00 \

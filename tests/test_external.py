@@ -12,6 +12,7 @@ import pytest
 
 from idiom.train.grpo.reward.external import (
     ScorerProcess,
+    _label_from_argv,
     parse_response,
     scorer,
 )
@@ -72,6 +73,18 @@ def test_parse_response_rejects_garbage():
 def test_parse_response_rejects_missing_scores():
     with pytest.raises(ValueError, match="no 'scores' list"):
         parse_response('{"result": [1]}', 1)
+
+
+# ---------------------------------------------------------------- the stderr label
+
+
+def test_label_defaults_to_the_script_basename(tmp_path):
+    # two scorers with no explicit label get distinct stderr tags from their commands, so a warning
+    # in the log is traceable to the scorer that emitted it
+    assert _label_from_argv(["uv", "run", "--script", "a/b/finches.py", "--mode", "x"]) == "finches"
+    assert _label_from_argv(["/usr/bin/python", "/tmp/foo.py"]) == "foo"
+    assert _label_from_argv(["mycmd", "--flag"]) == "mycmd"  # no script: fall back to the program
+    assert ScorerProcess("uv run --script x/protgps.py --compartment nucleolus").label == "protgps"
 
 
 # ---------------------------------------------------------------- ScorerProcess
