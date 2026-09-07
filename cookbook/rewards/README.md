@@ -208,7 +208,7 @@ See [custom_rewards.py](custom_rewards.py) for configurable examples.
 ## Writing an external scorer
 
 Copy [custom_scorer.py](scorers/custom_scorer.py) together with
-[_protocol.py](scorers/_protocol.py), and edit the dependency header and `build()` function.
+[_scorer_protocol.py](scorers/_scorer_protocol.py), and edit the dependency header and `build()` function.
 Keep the helper adjacent to the scorer and retain the `serve(build)` call. Put heavy imports
 inside `build()`; it returns a batch-scoring function.
 Use dependency versions compatible with your hardware.

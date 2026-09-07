@@ -13,7 +13,7 @@ The pinned torch build must match the CUDA driver.
 import argparse
 import os
 
-from _protocol import serve
+from _scorer_protocol import serve
 
 
 def build():

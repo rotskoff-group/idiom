@@ -27,7 +27,7 @@ import zipfile
 from argparse import Namespace
 from pathlib import Path
 
-from _protocol import serve
+from _scorer_protocol import serve
 
 COMPARTMENTS = [
     "nuclear_speckle", "p-body", "pml-bdoy", "post_synaptic_density", "stress_granule",

@@ -265,7 +265,7 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
 
 SERVE = (
     f"import sys\nsys.path.insert(0, {str(REPO / 'cookbook/rewards/scorers')!r})\n"
-    "from _protocol import serve\nserve(build)\n"
+    "from _scorer_protocol import serve\nserve(build)\n"
 )
 
 

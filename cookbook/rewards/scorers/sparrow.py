@@ -11,7 +11,7 @@ Run with uv run --script; see cookbook/rewards/README.md for reward configuratio
 
 import argparse
 
-from _protocol import serve
+from _scorer_protocol import serve
 
 
 def build():

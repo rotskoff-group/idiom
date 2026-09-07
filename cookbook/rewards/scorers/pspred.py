@@ -24,7 +24,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from _protocol import serve
+from _scorer_protocol import serve
 
 GITHUB_RAW = "https://raw.githubusercontent.com/KULL-Centre/_2024_buelow_PSpred/main"
 FILES = {

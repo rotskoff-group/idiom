@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _protocol import serve
+from _scorer_protocol import serve
 
 REPO_URL = "https://github.com/asanborn/PADDLE.git"
 WINDOW = 53          # PADDLE-noSS scores a fixed 53-residue window
