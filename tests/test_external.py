@@ -99,20 +99,21 @@ def test_scorer_roundtrip(tmp_path):
         s.stop()
 
 
-def test_scorer_handshake_fails_on_bad_command(tmp_path):
+def test_scorer_fails_on_bad_command(tmp_path):
     s = ScorerProcess(f"{sys.executable} {tmp_path / 'does_not_exist.py'}", cwd=str(tmp_path), timeout=30)
-    with pytest.raises(RuntimeError, match="handshake failed"):
+    with pytest.raises(BrokenPipeError, match="exited"):
         s.score(["AAA"])
 
 
-def test_scorer_handshake_fails_when_scorer_writes_garbage(tmp_path):
+def test_scorer_rejects_garbage(tmp_path):
     s = _scorer(tmp_path, """
         import sys
         for line in sys.stdin:
             print("not json at all", flush=True)
     """)
-    with pytest.raises(RuntimeError, match="handshake failed"):
+    with pytest.raises(ValueError, match="non-JSON"):
         s.score(["AAA"])
+    s.stop()
 
 
 def test_scorer_restarts_after_the_child_dies(tmp_path):
@@ -142,7 +143,7 @@ def test_scorer_times_out_instead_of_hanging(tmp_path):
         for line in sys.stdin:
             time.sleep(60)
     """, timeout=1.0)
-    with pytest.raises(RuntimeError, match="handshake failed"):
+    with pytest.raises(TimeoutError, match="round trip exceeded"):
         s.score(["AAA"])
     assert s.proc is None  # the process group was killed, not left running
 
@@ -195,9 +196,8 @@ def test_scorer_batches_dedups_and_caches(tmp_path):
     assert reward(["AAA", "GG"]) == [3.0, 2.0]
 
     batches = [line for line in counter.read_text().splitlines() if line]
-    assert batches[0] == '["MKVGSDEQ"]'      # the handshake
-    assert batches[1] == '["AAA", "CCCCC"]'  # deduped, empty dropped
-    assert batches[2] == '["GG"]'            # only the uncached sequence
+    assert batches[0] == '["AAA", "CCCCC"]'  # deduped, empty dropped
+    assert batches[1] == '["GG"]'            # only the uncached sequence
 
 
 def test_scorer_returns_the_raw_value(tmp_path):
@@ -251,7 +251,8 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
                 return 0.25
     """))
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))  # inherited by the scorer subprocess
-    scorer = ScorerProcess([sys.executable, str(REPO / "cookbook/rewards/scorers/sparrow.py"),
+    # Disable site-packages to verify the helper needs neither IDiom nor training dependencies.
+    scorer = ScorerProcess([sys.executable, "-S", str(REPO / "cookbook/rewards/scorers/sparrow.py"),
                      "--property", "radius_of_gyration"], timeout=30)
     try:
         assert scorer.score(["FWY", "AAAAA", ""]) == [6.0, 10.0, 0.0]
@@ -259,11 +260,13 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
         scorer.stop()
 
 
-# ---------------------------------------------------------------- the pasted serve() block
+# ---------------------------------------------------------------- the shared protocol helper
 
 
-SERVE = (REPO / "cookbook/rewards/scorers/finches.py").read_text()
-SERVE = SERVE[SERVE.index("def serve(build):"):]  # the block every scorer pastes verbatim
+SERVE = (
+    f"import sys\nsys.path.insert(0, {str(REPO / 'cookbook/rewards/scorers')!r})\n"
+    "from _protocol import serve\nserve(build)\n"
+)
 
 
 def test_serve_scores_a_batch_and_zeros_empties(tmp_path):
@@ -295,3 +298,81 @@ def test_serve_turns_a_scorer_exception_into_an_error_response(tmp_path):
     with pytest.raises(RuntimeError, match="bad seq"):
         sc.score(["ACDE"])
     sc.stop()
+
+
+def test_cache_eviction_preserves_current_batch(tmp_path):
+    reward = scorer([sys.executable, str(_scorer_path(tmp_path))], cache_max=1)
+    assert reward(["AAA", "CCCCC"]) == [3.0, 5.0]
+    assert reward(["AAA", "GG"]) == [3.0, 2.0]
+
+
+def test_cache_can_be_disabled(tmp_path):
+    counter = tmp_path / "calls.txt"
+    reward = scorer([sys.executable, str(_batched_scorer_file(tmp_path, counter))], cache_max=0)
+    assert reward(["AAA", "AAA"]) == [3.0, 3.0]
+    assert reward(["AAA"]) == [3.0]
+    assert counter.read_text().splitlines() == ['["AAA"]', '["AAA"]']
+
+
+@pytest.mark.parametrize("values", ["[7]", "[7, 8, 9]", "[float('nan'), 8]", "[float('inf'), 8]"])
+def test_serve_rejects_invalid_model_output(tmp_path, values):
+    path = tmp_path / "invalid.py"
+    path.write_text(f"def build(): return lambda seqs: {values}\n" + SERVE)
+    sc = ScorerProcess([sys.executable, str(path)], timeout=5)
+    try:
+        with pytest.raises(RuntimeError, match="scorer reported an error"):
+            sc.score(["AAA", "CCC"])
+    finally:
+        sc.stop()
+
+
+def test_serve_validates_requests_and_preserves_protocol(tmp_path):
+    import json
+    import subprocess
+
+    path = tmp_path / "protocol.py"
+    path.write_text(
+        "def build():\n"
+        "    print('loading model')\n"
+        "    def score(seqs):\n"
+        "        print('scoring batch')\n"
+        "        return [len(s) for s in seqs]\n"
+        "    return score\n" + SERVE
+    )
+    result = subprocess.run(
+        [sys.executable, str(path)],
+        input='{"sequences":"AAA"}\n{"sequences":[1]}\n{"sequences":["AAA",""]}\n',
+        capture_output=True, text=True, check=True, timeout=5,
+    )
+    responses = [json.loads(line) for line in result.stdout.splitlines()]
+    assert "error" in responses[0] and "error" in responses[1]
+    assert responses[2] == {"scores": [3.0, 0.0]}
+    assert "loading model" in result.stderr and "scoring batch" in result.stderr
+
+
+def test_timeout_covers_blocked_request_write(tmp_path):
+    sc = _scorer(tmp_path, "import time\ntime.sleep(60)", timeout=0.2)
+    try:
+        with pytest.raises(TimeoutError):
+            sc.score(["A" * 1_000_000])
+        assert sc.proc is None
+    finally:
+        sc.stop()
+
+
+def test_stop_kills_and_reaps_uncooperative_child(tmp_path):
+    sc = _scorer(tmp_path, """
+        import json, signal, sys, time
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        for line in sys.stdin:
+            seqs = json.loads(line)["sequences"]
+            print(json.dumps({"scores": [1] * len(seqs)}), flush=True)
+    """)
+    try:
+        assert sc.score(["AAA"]) == [1.0]
+        proc = sc.proc
+        sc.stop()
+        assert proc.returncode is not None
+        assert all(stream.closed for stream in (proc.stdin, proc.stdout, proc.stderr))
+    finally:
+        sc.stop()

@@ -20,7 +20,6 @@ PROTGPS_BATCH sets sequences per forward pass (default 32). Checkpoints download
 """
 
 import argparse
-import json
 import os
 import pickle
 import sys
@@ -28,7 +27,7 @@ import zipfile
 from argparse import Namespace
 from pathlib import Path
 
-import torch
+from _protocol import serve
 
 COMPARTMENTS = [
     "nuclear_speckle", "p-body", "pml-bdoy", "post_synaptic_density", "stress_granule",
@@ -44,6 +43,8 @@ _BATCH = int(os.environ.get("PROTGPS_BATCH", "32"))
 
 def _device():
     """Return the torch device for the classifier."""
+    import torch
+
     return os.environ.get("IDIOM_PROTGPS_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -112,6 +113,8 @@ def build():
     if target not in COMPARTMENTS and target not in ("max", "mean"):
         raise SystemExit(f"--compartment {target!r} is not one of {COMPARTMENTS} (or max, mean)")
 
+    import torch
+
     model = _load_model()
 
     @torch.no_grad()
@@ -131,37 +134,6 @@ def build():
         return scores
 
     return score_batch
-
-
-def serve(build):
-    """Serve newline-delimited JSON requests until stdin closes.
-
-    Call build() once to obtain a batch scorer. Redirect library output to stderr,
-    score empty sequences as 0, and report scoring exceptions as JSON errors.
-    """
-    # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
-    # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.
-    here = os.path.dirname(os.path.abspath(__file__))
-    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
-    # stdout is the protocol. A library that prints on import (TensorFlow, ProtGPS, STARLING) would
-    # corrupt the first response, so keep the real stdout for responses and send chatter to stderr.
-    out, sys.stdout = sys.stdout, sys.stderr
-    score_batch = build()
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            seqs = json.loads(line)["sequences"]
-            keep = [(i, s) for i, s in enumerate(seqs) if s]  # empty completions score 0.0
-            values = score_batch([s for _, s in keep]) if keep else []
-            scores = [0.0] * len(seqs)
-            for (i, _), v in zip(keep, values):
-                scores[i] = float(v)
-            payload = {"scores": scores}
-        except Exception as e:
-            payload = {"error": f"{type(e).__name__}: {e}"}
-        print(json.dumps(payload), file=out, flush=True)
 
 
 if __name__ == "__main__":

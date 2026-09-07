@@ -29,7 +29,7 @@ SHAPING_ALIASES: dict[str, str] = {
 }
 
 
-def lift(score: Callable[[str], float]) -> Reward:
+def batchify(score: Callable[[str], float]) -> Reward:
     """Wrap a single-IDR scorer as a batch reward, preserving input order."""
     return lambda idrs: [float(score(idr)) for idr in idrs]
 

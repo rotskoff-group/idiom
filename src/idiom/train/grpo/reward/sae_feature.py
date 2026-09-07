@@ -14,7 +14,7 @@ import torch
 from idiom import IDiomSAE
 from idiom.data.fim import fim_unprompted
 from idiom.model.activations import extract_activations
-from idiom.train.grpo.reward.resolve import Reward, lift
+from idiom.train.grpo.reward.resolve import Reward, batchify
 
 # The signatures for the released SAE ship next to this module, so the default works in any install
 # and from any working directory; point a term's features at your own JSON of the same shape
@@ -133,5 +133,5 @@ def sae_signature(signature: str, *, features: str = DEFAULT_FEATURES, case: str
         raise ValueError(f"sae_signature: no signature {signature!r} in case {case!r} of "
                          f"{features!r}; available: {sorted(sets)}")
 
-    return lift(lambda idr: feature_match(idr, signature, features=features, case=case, sae=sae,
+    return batchify(lambda idr: feature_match(idr, signature, features=features, case=case, sae=sae,
                                           device=device))

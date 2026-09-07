@@ -10,11 +10,12 @@ PADDLE_STRIDE sets the window stride (default 5).
 Run with uv run --script; model files are cloned on first use.
 """
 
-import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+from _protocol import serve
 
 REPO_URL = "https://github.com/asanborn/PADDLE.git"
 WINDOW = 53          # PADDLE-noSS scores a fixed 53-residue window
@@ -69,7 +70,7 @@ def build():
                 flat.append(w)
                 owner.append(i)
         # PADDLE returns a bare float for a single window and an array otherwise; normalize, or a
-        # one-window batch (the startup handshake, for one) would not be iterable.
+        # one-window batch would not be iterable.
         preds = np.atleast_1d(model.predict(flat))  # one batched forward over every window
         best: dict[int, float] = {}
         for i, z in zip(owner, preds):
@@ -77,37 +78,6 @@ def build():
         return [best.get(i, 0.0) for i in range(len(sequences))]
 
     return score_batch
-
-
-def serve(build):
-    """Serve newline-delimited JSON requests until stdin closes.
-
-    Call build() once to obtain a batch scorer. Redirect library output to stderr,
-    score empty sequences as 0, and report scoring exceptions as JSON errors.
-    """
-    # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
-    # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.
-    here = os.path.dirname(os.path.abspath(__file__))
-    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
-    # stdout is the protocol. A library that prints on import (TensorFlow, ProtGPS, STARLING) would
-    # corrupt the first response, so keep the real stdout for responses and send chatter to stderr.
-    out, sys.stdout = sys.stdout, sys.stderr
-    score_batch = build()
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            seqs = json.loads(line)["sequences"]
-            keep = [(i, s) for i, s in enumerate(seqs) if s]  # empty completions score 0.0
-            values = score_batch([s for _, s in keep]) if keep else []
-            scores = [0.0] * len(seqs)
-            for (i, _), v in zip(keep, values):
-                scores[i] = float(v)
-            payload = {"scores": scores}
-        except Exception as e:
-            payload = {"error": f"{type(e).__name__}: {e}"}
-        print(json.dumps(payload), file=out, flush=True)
 
 
 if __name__ == "__main__":

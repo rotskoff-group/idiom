@@ -119,6 +119,9 @@ reward:
 This is the `reward` field of a term. Optional settings include `maxlen` (truncate inputs),
 `cwd`, `env`, `cache_max`, and `label` (the scorer's stderr prefix).
 The adapter deduplicates sequences, caches scores across steps, and assigns empty sequences raw zero.
+Set `cache_max: 0` to disable caching across steps for stochastic scorers such as STARLING;
+duplicates within a batch still share one score. The first actual batch validates the protocol,
+and `timeout` covers writing the request and waiting for its response, including initial model loading.
 
 | Scorer | Properties | Source |
 |---|---|---|
@@ -181,13 +184,13 @@ length remaining on target.
 
 A factory runs once during setup and returns a function mapping `list[str]` to `list[float]`.
 Return one finite score per sequence, in input order. For a function that scores one sequence,
-`lift` supplies the batch wrapper:
+`batchify` supplies the batch wrapper:
 
 ```python
-from idiom.train.grpo.reward import lift
+from idiom.train.grpo.reward import batchify
 
 def fraction_aromatic():
-    return lift(lambda seq: sum(seq.count(a) for a in "FWY") / len(seq) if seq else 0.0)
+    return batchify(lambda seq: sum(seq.count(a) for a in "FWY") / len(seq) if seq else 0.0)
 ```
 
 Save it in your project and refer to it in a term:
@@ -199,13 +202,15 @@ weight: 1.0
 ```
 
 Factories can take keyword arguments supplied alongside `name`. Validate those arguments during
-setup. For batched model inference, return a batch-scoring function directly instead of using `lift`.
+setup. For batched model inference, return a batch-scoring function directly instead of using `batchify`.
 See [custom_rewards.py](custom_rewards.py) for configurable examples.
 
 ## Writing an external scorer
 
-Copy [custom_scorer.py](scorers/custom_scorer.py), edit its dependency header and `build()` function,
-and retain `serve()`. Put heavy imports inside `build()`; it returns a batch-scoring function.
+Copy [custom_scorer.py](scorers/custom_scorer.py) together with
+[_protocol.py](scorers/_protocol.py), and edit the dependency header and `build()` function.
+Keep the helper adjacent to the scorer and retain the `serve(build)` call. Put heavy imports
+inside `build()`; it returns a batch-scoring function.
 Use dependency versions compatible with your hardware.
 
 The program reads and writes one JSON object per line:
@@ -216,8 +221,8 @@ The program reads and writes one JSON object per line:
 ```
 
 Return an `{"error": "..."}` object on failure. Stdout is reserved for responses; use stderr for logs.
-The supplied `serve()` redirects Python library output and prevents the script filename from
-shadowing the package it imports. Scorers do not need to import IDiom.
+The shared `serve()` validates requests and output counts, rejects non-finite scores, redirects
+Python library output and prevents the script filename from shadowing the package it imports. Scorers do not need to import IDiom.
 
 # Writing your own shaping
 

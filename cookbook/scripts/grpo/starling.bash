@@ -43,7 +43,7 @@ LENGTH="{label: length, \
 
 RG_ENS="{label: rg_ens, \
     weight: $WEIGHT, \
-    reward: {name: scorer, cmd: \"$SCORER\", timeout: $TIMEOUT}, \
+    reward: {name: scorer, cmd: \"$SCORER\", timeout: $TIMEOUT, cache_max: 0}, \
     shaping: {name: quadratic, target: $TARGET, width: $WIDTH}}"
 
 idiom_train_grpo \

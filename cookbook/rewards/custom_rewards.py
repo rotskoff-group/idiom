@@ -1,13 +1,13 @@
 """Templates for in-process GRPO rewards and shaping; copy and adapt.
 
 Factories receive config arguments and return batch rewards or scalar shaping functions.
-Use lift for single-IDR scorers and "module:function" paths to name custom factories.
+Use batchify for single-IDR scorers and "module:function" paths to name custom factories.
 Validate settings in the factory. See cookbook/rewards/README.md for configuration.
 """
 
 import re
 
-from idiom.train.grpo.reward import Reward, Shaping, lift, tolerance
+from idiom.train.grpo.reward import Reward, Shaping, batchify, tolerance
 
 
 def net_charge_fraction() -> Reward:
@@ -19,12 +19,12 @@ def net_charge_fraction() -> Reward:
         neg = sum(idr.count(a) for a in "DE")
         return abs(pos - neg) / len(idr)
 
-    return lift(score)
+    return batchify(score)
 
 
 def fraction_charged() -> Reward:
     """Return a reward for the fraction of D/E/K/R residues; empty sequences score 0."""
-    return lift(lambda idr: sum(idr.count(a) for a in "DEKR") / len(idr) if idr else 0.0)
+    return batchify(lambda idr: sum(idr.count(a) for a in "DEKR") / len(idr) if idr else 0.0)
 
 
 def motif_count(pattern: str = r"[VILMF]K.E") -> Reward:
@@ -37,7 +37,7 @@ def motif_count(pattern: str = r"[VILMF]K.E") -> Reward:
         re.error: If pattern is invalid; checked when the factory is called.
     """
     motif = re.compile(pattern)  # compile now, so a bad pattern fails here
-    return lift(lambda idr: float(len(motif.findall(idr))))
+    return batchify(lambda idr: float(len(motif.findall(idr))))
 
 
 def one_sided(*, target: float, width: float = 1.0, direction: str = "above") -> Shaping:

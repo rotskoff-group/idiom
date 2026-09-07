@@ -22,8 +22,6 @@ import time
 
 from idiom.train.grpo.reward.resolve import SHAPING_ALIASES, Reward, build_from_spec
 
-_PROBE = "MKVGSDEQ"  # handshake sequence: a valid IDR every scorer should be able to score
-
 
 def _argv(cmd) -> list[str]:
     """Return a command as argv, accepting a list, a JSON list, or a shell-quoted string."""
@@ -86,7 +84,7 @@ class ScorerProcess:
     """A persistent scorer subprocess spoken to in newline-delimited JSON.
 
     The child is started on first use and reused across batches. Its stderr is forwarded to this
-    process's stderr with a label prefix, a handshake batch is sent at startup, and a child that
+    process's stderr with a label prefix, the first batch validates the protocol, and a child that
     exits mid-run is restarted once per failed batch.
 
     Attributes:
@@ -113,20 +111,22 @@ class ScorerProcess:
         """
         self.argv = _argv(cmd)
         self.cwd = cwd or os.getcwd()
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be positive and finite")
         self.timeout = timeout
         self.env = {**os.environ, **{k: str(v) for k, v in (env or {}).items()}} if env else None
         self.label = label or _label_from_argv(self.argv)
         self.proc: subprocess.Popen | None = None
         self._q: queue.Queue = queue.Queue()
+        self._threads: list[threading.Thread] = []
 
     def start(self) -> None:
-        """Launch the child, begin draining its streams, and send the handshake batch.
+        """Launch the child and begin draining its streams.
 
         The child runs in its own process group and is terminated at interpreter exit.
 
         Raises:
-            RuntimeError: If the command cannot be run, or does not answer the handshake with a
-                valid response within the timeout.
+            RuntimeError: If the command cannot be run.
         """
         try:
             self.proc = subprocess.Popen(
@@ -138,18 +138,13 @@ class ScorerProcess:
             raise RuntimeError(f"could not run scorer command {self.argv!r}: {e}") from e
 
         self._q = queue.Queue()
-        threading.Thread(target=self._pump_stdout, args=(self.proc, self._q), daemon=True).start()
-        threading.Thread(target=self._pump_stderr, args=(self.proc,), daemon=True).start()
+        self._threads = [
+            threading.Thread(target=self._pump_stdout, args=(self.proc, self._q), daemon=True),
+            threading.Thread(target=self._pump_stderr, args=(self.proc,), daemon=True),
+        ]
+        for thread in self._threads:
+            thread.start()
         atexit.register(self.stop)
-
-        try:
-            self.roundtrip([_PROBE])
-        except Exception as e:
-            self.stop()
-            raise RuntimeError(
-                f"scorer handshake failed: {' '.join(self.argv)}\n  {e}\n"
-                f"  the scorer must read one JSON line from stdin and write "
-                f"{{\"scores\": [...]}} to stdout; see the reward section of the top-level README.md") from e
 
     def _pump_stdout(self, proc: subprocess.Popen, q: queue.Queue) -> None:
         """Forward the child's stdout lines to a queue, putting None at EOF."""
@@ -165,12 +160,28 @@ class ScorerProcess:
     def stop(self) -> None:
         """Terminate the child's process group if it is still running."""
         proc, self.proc = self.proc, None
-        if proc is None or proc.poll() is not None:
+        atexit.unregister(self.stop)
+        if proc is None:
             return
+        # Signal the group even if its leader exited: descendants may still hold pipes or GPUs.
         try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        except (ProcessLookupError, PermissionError, OSError):
-            proc.terminate()
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            proc.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait()
+        for thread in self._threads:
+            thread.join(timeout=1.0)
+        self._threads = []
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
+            stream.close()
 
     def roundtrip(self, seqs: list[str]) -> list[float]:
         """Send one batch to the running child and read one response.
@@ -187,17 +198,36 @@ class ScorerProcess:
             ValueError: If the response is malformed.
             RuntimeError: If the scorer reports an error.
         """
+        proc = self.proc
+        if proc is None:
+            raise RuntimeError("scorer is not running")
+        deadline = time.monotonic() + self.timeout
+        written: queue.Queue = queue.Queue()
+
+        def write_request():
+            try:
+                proc.stdin.write(json.dumps({"sequences": seqs}, separators=(",", ":")) + "\n")
+                proc.stdin.flush()
+                written.put(None)
+            except (BrokenPipeError, OSError) as e:
+                written.put(e)
+
+        writer = threading.Thread(target=write_request, daemon=True)
+        self._threads.append(writer)
+        writer.start()
         try:
-            self.proc.stdin.write(json.dumps({"sequences": seqs}, separators=(",", ":")) + "\n")
-            self.proc.stdin.flush()
-        except (BrokenPipeError, OSError) as e:
-            raise BrokenPipeError(f"scorer stdin closed: {e}") from e
-        try:
-            line = self._q.get(timeout=self.timeout)
+            error = written.get(timeout=max(0, deadline - time.monotonic()))
+            if error is not None:
+                raise BrokenPipeError(f"scorer stdin closed: {error}") from error
+            line = self._q.get(timeout=max(0, deadline - time.monotonic()))
         except queue.Empty:
             self.stop()
-            raise TimeoutError(f"scorer sent no response within {self.timeout:g}s for "
+            raise TimeoutError(f"scorer round trip exceeded {self.timeout:g}s for "
                                f"{len(seqs)} sequences (raise the term's timeout)") from None
+        finally:
+            if writer in self._threads:
+                writer.join()
+                self._threads.remove(writer)
         if line is None:
             code = self.proc.poll() if self.proc else None
             raise BrokenPipeError(f"scorer exited (returncode={code}) without responding")
@@ -215,10 +245,11 @@ class ScorerProcess:
             One score per sequence, in order.
 
         Raises:
-            RuntimeError: If the child cannot be started or fails the handshake.
+            RuntimeError: If the child cannot be started or reports an error.
             BrokenPipeError: If the child dies again after the restart.
         """
         if self.proc is None or self.proc.poll() is not None:
+            self.stop()
             self.start()
         try:
             return self.roundtrip(seqs)
@@ -235,7 +266,7 @@ def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = No
     """Return a reward with its own lazy subprocess and score cache.
 
     Empty strings score 0; duplicate sequences are sent once. Before storing new scores,
-    clear the cache if it already exceeds cache_max.
+    clear the cache if it already exceeds cache_max. Set cache_max=0 to disable caching.
 
     Args:
         cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
@@ -243,7 +274,7 @@ def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = No
         maxlen: Truncate sequences to this length before sending; 0 sends them whole.
         cwd: Working directory for the child; the current directory if None.
         env: Environment variables set for the child, over this process's own.
-        cache_max: Number of cached sequences above which the cache is cleared.
+        cache_max: Number of cached sequences above which the cache is cleared; 0 disables caching.
         label: Tag prefixed to the child's forwarded stderr; the script's basename (e.g. "finches")
             when None, which tells two scorers apart in the log.
 
@@ -251,16 +282,21 @@ def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = No
         Maps a step's IDRs to the scorer's raw rewards, in order.
     """
     child = ScorerProcess(cmd, cwd=cwd, timeout=timeout, env=env, label=label)
+    if cache_max < 0:
+        raise ValueError("cache_max must be nonnegative")
     cache: dict[str, float] = {}
 
     def reward(idrs: list[str]) -> list[float]:
         todo = list(dict.fromkeys(s for s in idrs if s and s not in cache))
+        batch = {s: cache[s] for s in idrs if s and s in cache}
         if todo:
             values = child.score([s[:maxlen] if maxlen else s for s in todo])
             if len(cache) > cache_max:
                 cache.clear()
-            cache.update(zip(todo, values))
-        return [cache[s] if s else 0.0 for s in idrs]
+            batch.update(zip(todo, values))
+            if cache_max:
+                cache.update(zip(todo, values))
+        return [batch[s] if s else 0.0 for s in idrs]
 
     return reward
 

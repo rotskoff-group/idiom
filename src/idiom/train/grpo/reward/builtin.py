@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 
-from idiom.train.grpo.reward.resolve import Reward, lift
+from idiom.train.grpo.reward.resolve import Reward, batchify
 
 
 def composition_entropy(idr: str) -> float:
@@ -22,9 +22,9 @@ def composition_entropy(idr: str) -> float:
 
 def entropy() -> Reward:
     """Return a batch reward for composition entropy in bits."""
-    return lift(composition_entropy)
+    return batchify(composition_entropy)
 
 
 def length() -> Reward:
     """Return a batch reward for sequence length in residues."""
-    return lift(len)
+    return batchify(len)
