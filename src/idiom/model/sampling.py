@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import warnings
+
 import torch
 from torch import Tensor
 
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.attention import KVCache
+from idiom.utils.validation import integer_at_least, validate_sampling
 
 
 def _filter_top_k(logits: Tensor, k: int | None) -> Tensor:
@@ -51,6 +54,7 @@ def sample_next_token(
     Returns:
         One sampled token id per row, shape [B].
     """
+    validate_sampling(temperature, top_k, top_p)
     if temperature == 0:
         return logits.argmax(dim=-1)
     logits = _filter_top_p(_filter_top_k(logits / temperature, top_k), top_p)
@@ -78,18 +82,20 @@ def generate(
     Args:
         model: The transformer to sample from.
         prompt_tokens: Prompt token ids of shape [B, P]; START is prepended internally.
-        max_new_tokens: Maximum number of tokens to generate.
+        max_new_tokens: Maximum tokens to generate, capped by the remaining model context.
         temperature: Sampling temperature; 0 selects the argmax.
         top_k: Top-k filtering cutoff, or None.
         top_p: Top-p (nucleus) filtering cutoff, or None.
         stop_id: "auto" uses the tokenizer's STOP id, an int uses that id, and None disables early
-            stopping so exactly max_new_tokens are generated.
+            stopping so generation runs to the requested or context-limited token budget.
         tokenizer: Defaults to Tokenizer().
         generator: RNG for reproducible sampling.
 
     Returns:
         Generated token ids of shape [B, T], where T <= max_new_tokens.
     """
+    integer_at_least("max_new_tokens", max_new_tokens, 1)
+    validate_sampling(temperature, top_k, top_p)
     tok = tokenizer or Tokenizer()
     if stop_id == "auto":
         stop_id = tok.stop_id
@@ -100,12 +106,26 @@ def generate(
     start = torch.full((B, 1), tok.start_id, dtype=torch.long, device=device)
     inp = torch.cat([start, prompt_tokens], dim=1)  # prepend START
 
+    context_length = model.cfg.max_seq_len
+    if inp.size(1) > context_length:
+        raise ValueError(
+            f"Prompt including START has {inp.size(1)} tokens, exceeding context length {context_length}"
+        )
+    # The last supported input position can predict one final token without another forward.
+    available = context_length - inp.size(1) + 1
+    if max_new_tokens > available:
+        warnings.warn(
+            f"max_new_tokens={max_new_tokens} exceeds remaining context; limiting to {available} tokens",
+            stacklevel=2,
+        )
+        max_new_tokens = available
+
     cache = KVCache(model.cfg.n_layers)
     logits = model(inp, cache=cache)[:, -1]  # prefill -> last-position logits
 
     finished = torch.zeros(B, dtype=torch.bool, device=device)
     generated: list[Tensor] = []
-    for _ in range(max_new_tokens):
+    for step in range(max_new_tokens):
         nxt = sample_next_token(
             logits, temperature=temperature, top_k=top_k, top_p=top_p, generator=generator
         )
@@ -115,6 +135,7 @@ def generate(
         generated.append(nxt)
         if stop_id is not None and bool(finished.all()):
             break
-        logits = model(nxt[:, None], cache=cache)[:, -1]  # decode one step via the cache
+        if step + 1 < max_new_tokens:
+            logits = model(nxt[:, None], cache=cache)[:, -1]  # decode one step via the cache
 
     return torch.stack(generated, dim=1)

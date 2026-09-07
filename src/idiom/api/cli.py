@@ -6,6 +6,7 @@ import argparse
 
 from idiom.api.idiom import IDiom
 from idiom.data.fim import UNPROMPTED
+from idiom.utils.validation import validate_generation
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -33,24 +34,30 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--max-len", type=int, default=None, help="oversample until len <= this (inclusive)")
     p.add_argument("--max-oversample", type=int, default=20,
                    help="cap on total draws as a multiple of n when a length range is set")
-    p.add_argument("--batch-size", type=int, default=None,
-                   help="max sequences per model forward (chunks each draw to bound memory)")
+    p.add_argument("--batch-size", type=int, default=8,
+                   help="max sequences per model forward (default: 8)")
     args = p.parse_args(argv)
 
-    model = IDiom.load(args.model)  # a .ckpt from a training run, a released dir, or a Hub id
     kw = dict(max_new_tokens=args.max_new_tokens, temperature=args.temperature,
-              top_k=args.top_k, top_p=args.top_p, batch_size=args.batch_size)
+              top_k=args.top_k, top_p=args.top_p, batch_size=args.batch_size,
+              max_oversample=args.max_oversample)
     if args.seed is not None:
         kw["seed"] = args.seed
     if args.min_len is not None or args.max_len is not None:
-        kw["length_range"] = (args.min_len or 1, args.max_len or 10**9)
+        kw["length_range"] = (1 if args.min_len is None else args.min_len,
+                              10**9 if args.max_len is None else args.max_len)
         kw["max_oversample"] = args.max_oversample
 
+    try:
+        validate_generation(args.n, **kw)
+    except ValueError as exc:
+        p.error(str(exc))
+    if args.mode != UNPROMPTED and not args.fasta:
+        p.error("prompted mode requires --fasta")
+    model = IDiom.load(args.model)
     if args.mode == UNPROMPTED:
         model.generate_unprompted_fasta(args.out, n=args.n, **kw)
     else:
-        if not args.fasta:
-            p.error("prompted mode requires --fasta")
         model.generate_prompted_fasta(args.fasta, args.out, n=args.n, return_full=args.return_full, **kw)
     print(f"wrote {args.out}")
 

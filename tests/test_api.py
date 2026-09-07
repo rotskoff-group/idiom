@@ -155,3 +155,34 @@ def test_idiomsae_save_records_published_host_model(tmp_path):
     cfg = json.loads((sdir / "sae_config.json").read_text())
     assert cfg["host_model"] == "jxliu2/idiom-300M"
     assert hasattr(sae, "push_to_hub")
+
+
+def test_prompted_defaults_and_fasta(tmp_path):
+    import pytest
+
+    model = _idiom()
+    with pytest.warns(UserWarning, match="remaining context"):
+        assert len(model.generate_prompted("ACDEFG", 1, 3, n=1)) == 1
+    fasta = tmp_path / "in.fasta"
+    fasta.write_text(">A_IDR_2-3\nACDEFG\n")
+    with pytest.warns(UserWarning, match="remaining context"):
+        out = model.generate_prompted_fasta(fasta, tmp_path / "out.fasta", n=1, return_full=True)
+    assert out.exists()
+
+
+def test_generation_batches_are_bounded_and_repeatable():
+    model = _idiom()
+    sae = _idiom_sae(model)
+    for generate in (model.generate_unprompted, lambda **kw: sae.steer_generate(0, 0.5, **kw)):
+        sizes = []
+        handle = model.model.register_forward_pre_hook(lambda module, args: sizes.append(args[0].shape[0]))
+        first = generate(n=19, max_new_tokens=3, seed=42)
+        handle.remove()
+        assert len(first) == 19
+        assert max(sizes) == 8 and 3 in sizes
+        assert first == generate(n=19, max_new_tokens=3, seed=42)
+        sizes = []
+        handle = model.model.register_forward_pre_hook(lambda module, args: sizes.append(args[0].shape[0]))
+        assert len(generate(n=5, batch_size=2, max_new_tokens=3, seed=42)) == 5
+        handle.remove()
+        assert max(sizes) == 2

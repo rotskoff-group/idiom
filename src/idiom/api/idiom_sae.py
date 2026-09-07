@@ -20,6 +20,7 @@ from idiom.sae.features.build_feature_dataset import build_feature_dataset as _b
 from idiom.sae.model.io import load_sae, save_sae
 from idiom.sae.steer import SteeringSpec, steer_generation
 from idiom.utils.device import resolve_device
+from idiom.utils.validation import validate_generation
 
 
 class IDiomSAE:
@@ -214,7 +215,8 @@ class IDiomSAE:
                        normalize: bool = False, relative: bool = False, preserve_norm: bool = False,
                        prompt: str | None = None, max_new_tokens: int = 1000, temperature: float = 1.0,
                        top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
-                       length_range: tuple[int, int] | None = None, max_oversample: int = 20) -> list[str]:
+                       length_range: tuple[int, int] | None = None, max_oversample: int = 20,
+                       batch_size: int | None = None) -> list[str]:
         """Generate IDRs with SAE feature steering; see SteeringSpec for strength semantics.
 
         Args:
@@ -233,21 +235,31 @@ class IDiomSAE:
             seed: Seed for reproducible sampling, or None.
             length_range: Inclusive (lo, hi) length filter, as in generate_unprompted.
             max_oversample: Cap on total draws, as a multiple of n, when length_range is set.
+            batch_size: Maximum sequences per model forward; None uses eight.
 
         Returns:
             The steered IDR residue strings, at most n of them.
         """
+        validate_generation(n, max_new_tokens=max_new_tokens, temperature=temperature,
+                            top_k=top_k, top_p=top_p, seed=seed, length_range=length_range,
+                            max_oversample=max_oversample, batch_size=batch_size)
         spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode,
                             normalize=normalize, relative=relative, preserve_norm=preserve_norm)
         prompt_tokens = self.tok.encode(prompt) if prompt else None
 
         def _batch(k: int, s: int | None) -> list[str]:
             gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
-            out = steer_generation(
-                self.model, self.sae, spec, prompt_tokens=prompt_tokens, n_samples=k,
-                max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
-                tokenizer=self.tok, region=self.region, generator=gen,
-            )
-            return [self.host._decode_idr(row) for row in out]
+            bs = 8 if batch_size is None else batch_size
+            if bs <= 0:
+                raise ValueError("batch_size must be positive")
+            sequences = []
+            for off in range(0, k, bs):
+                out = steer_generation(
+                    self.model, self.sae, spec, prompt_tokens=prompt_tokens, n_samples=min(bs, k - off),
+                    max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
+                    tokenizer=self.tok, region=self.region, generator=gen,
+                )
+                sequences.extend(self.host._decode_idr(row) for row in out)
+            return sequences
 
         return _oversample(_batch, n, length_range=length_range, max_oversample=max_oversample, seed=seed)

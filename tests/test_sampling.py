@@ -57,3 +57,28 @@ def test_sampling_in_range_and_seeded():
     assert out1.shape[0] == 2 and out1.size(1) <= 10
     assert torch.equal(out1, out2)  # same seed -> same samples
     assert int(out1.max()) < TINY.vocab_size and int(out1.min()) >= 0
+
+
+def test_context_boundary_matches_reference_without_extra_forward():
+    import pytest
+
+    model = _model()
+    prompt = torch.tensor([TOK.encode("132")])
+    available = TINY.max_seq_len - prompt.size(1)  # includes the final next-token prediction
+    calls = []
+    handle = model.register_forward_pre_hook(lambda module, args: calls.append(args[0].shape[1]))
+    with pytest.warns(UserWarning, match="remaining context"):
+        out = generate(model, prompt, max_new_tokens=1000, temperature=0, stop_id=None)
+    handle.remove()
+    assert out.shape == (1, available)
+    assert len(calls) == available
+    assert torch.equal(out, _ref_greedy(model, prompt, available))
+
+
+def test_oversized_prompt_rejected_before_forward():
+    import pytest
+
+    model = _model()
+    prompt = torch.zeros((1, TINY.max_seq_len), dtype=torch.long)
+    with pytest.raises(ValueError, match="exceeding context length"):
+        generate(model, prompt, max_new_tokens=1)

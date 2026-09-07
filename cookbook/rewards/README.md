@@ -5,9 +5,9 @@ GRPO maximizes a weighted sum of shaped rewards:
 `total = Σ weight × shaping(raw reward)`
 
 Configure at least one term in `reward.terms`; IDiom adds no terms automatically.
-For setup and launching scripts, see [running examples](../README.md#running-scripts).
+For setup and launching scripts, see [running examples](../scripts/README.md#running-scripts).
 
-## Examples
+# Examples
 
 Clone the repository to access these scripts and their scorer files.
 
@@ -24,7 +24,7 @@ Clone the repository to access these scripts and their scorer files.
 | [custom_scorer.bash](../scripts/grpo/custom_scorer.bash) | Use a scorer in a separate environment |
 | [combined.bash](../scripts/grpo/combined.bash) | Combine FINCHES and ProtGPS |
 
-## Configuring terms
+# Configuring terms
 
 A reward measures a sequence property. Shaping converts that measurement into an objective, and
 the weight scales its contribution. For example, this term favors sequences of 100 residues:
@@ -60,7 +60,7 @@ weighted contribution. A zero-weight term is still evaluated and logged; delete 
 The Bash examples define each term in a variable and pass the list through `reward.terms`.
 See [combined.bash](../scripts/grpo/combined.bash) for a complete multi-term launch.
 
-## Shaping
+# Shaping
 
 | Name | Behavior | Use |
 |---|---|---|
@@ -74,7 +74,7 @@ to `1.0`. In the example above, `width: 0.2` gives a tolerance of 20 residues.
 
 For a floor, ceiling, or acceptable band, use [custom shaping](#writing-your-own-shaping).
 
-## Built-in rewards
+# Built-in rewards
 
 | Name | Raw value |
 |---|---|
@@ -83,7 +83,7 @@ For a floor, ceiling, or acceptable band, use [custom shaping](#writing-your-own
 | `sae_signature` | Fraction of signature features active in an IDR |
 | `scorer` | Value returned by an external program |
 
-### SAE signatures
+## SAE signatures
 
 The SAE reward uses a frozen IDiom model and SAE to measure which signature features activate
 at any residue. Its score is in [0, 1], so identity shaping with positive weight rewards more matches.
@@ -103,7 +103,7 @@ The file format is `{case: {signature: [feature_ids]}}`.
 To build a signature from your sequences, run [feature_enrichment.ipynb](../notebooks/feature_enrichment.ipynb)
 and set the script's `FEATURES`, `SIGNATURE`, and `CASE` to match its output.
 
-## External scorers
+# External scorers
 
 Use `scorer` when a reward needs a separate environment. Install `uv` with
 `python -m pip install uv`; each script declares its dependencies and downloads required weights
@@ -141,7 +141,7 @@ First use may take time to install dependencies and download models. Set `UV_CAC
 a different cache location. GPU scorers also need memory alongside the policy; the STARLING script
 assigns a separate GPU by default.
 
-## Choosing targets and weights
+# Choosing targets and weights
 
 1. Score representative base-model generations to estimate each property's range.
 2. Choose a target supported by your application and reference sequences.
@@ -177,7 +177,7 @@ length remaining on target.
 
 </details>
 
-## Writing your own reward
+# Writing your own reward
 
 A factory runs once during setup and returns a function mapping `list[str]` to `list[float]`.
 Return one finite score per sequence, in input order. For a function that scores one sequence,
@@ -202,7 +202,7 @@ Factories can take keyword arguments supplied alongside `name`. Validate those a
 setup. For batched model inference, return a batch-scoring function directly instead of using `lift`.
 See [custom_rewards.py](custom_rewards.py) for configurable examples.
 
-### Writing an external scorer
+## Writing an external scorer
 
 Copy [custom_scorer.py](scorers/custom_scorer.py), edit its dependency header and `build()` function,
 and retain `serve()`. Put heavy imports inside `build()`; it returns a batch-scoring function.
@@ -219,7 +219,7 @@ Return an `{"error": "..."}` object on failure. Stdout is reserved for responses
 The supplied `serve()` redirects Python library output and prevents the script filename from
 shadowing the package it imports. Scorers do not need to import IDiom.
 
-## Writing your own shaping
+# Writing your own shaping
 
 A shaping factory returns `float -> float`. Supply its path in `shaping.name`, with arguments
 beside the name. The [one_sided example](custom_rewards.py) penalizes values on the wrong side of a

@@ -21,6 +21,7 @@ from idiom.model.io import load_pretrained
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
 from idiom.utils.device import resolve_device
+from idiom.utils.validation import integer_at_least, validate_generation
 
 CONFIG_FILE = "config.json"
 WEIGHTS_FILE = "model.safetensors"
@@ -131,14 +132,18 @@ class IDiom:
     @torch.no_grad()
     def _generate(self, prompt: str, n: int, *, length_range: tuple[int, int] | None = None,
                   max_oversample: int = 20, batch_size: int | None = None, **kw) -> list[str]:
+        validate_generation(n, length_range=length_range, max_oversample=max_oversample,
+                            batch_size=batch_size, **kw)
         seed = kw.pop("seed", None)
         prompt_ids = torch.tensor(self.tok.encode(prompt), device=self.device)
 
         def _batch(k: int, s: int | None) -> list[str]:
             # one Generator per draw, reused across chunks so each chunk samples fresh tokens (and a
-            # draw stays reproducible for a fixed batch_size). batch_size=None -> one batch of k.
+            # draw stays reproducible for a fixed batch_size). batch_size=None uses batches of eight.
             gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
-            bs = batch_size or k
+            bs = 8 if batch_size is None else batch_size
+            if bs <= 0:
+                raise ValueError("batch_size must be positive")
             out: list[str] = []
             for off in range(0, k, bs):
                 prompts = prompt_ids.unsqueeze(0).repeat(min(bs, k - off), 1)
@@ -164,7 +169,7 @@ class IDiom:
             length_range: Inclusive (lo, hi) length filter; sequences are redrawn until n fall in
                 range or the oversampling cap is reached.
             max_oversample: Cap on total draws, as a multiple of n, when length_range is set.
-            batch_size: Maximum sequences per model forward; None uses one batch.
+            batch_size: Maximum sequences per model forward; None uses eight.
 
         Returns:
             The generated IDR residue strings, at most n of them.
@@ -188,6 +193,13 @@ class IDiom:
         Returns:
             The generated IDR residue strings, at most n of them.
         """
+        if not isinstance(seq, str) or not self.tok.is_canonical(seq):
+            raise ValueError("seq must be a non-empty string of canonical amino acids")
+        integer_at_least("idr_start", idr_start, 0)
+        integer_at_least("idr_end", idr_end, 1)
+        if not idr_start < idr_end <= len(seq):
+            raise ValueError("IDR coordinates must satisfy 0 <= idr_start < idr_end <= len(seq)")
+        kw.setdefault("max_new_tokens", 1000)
         return self._generate(fim_prompt(seq, idr_start, idr_end), n, **kw)
 
     # --- FASTA-first wrappers ---
@@ -230,6 +242,7 @@ class IDiom:
         Returns:
             The output FASTA path.
         """
+        validate_generation(n, **kw)
         rows = []
         for r in read_records(in_fasta):
             for i, s in enumerate(self.generate_prompted(r.full_seq, r.idr_start, r.idr_end, n, **kw)):
