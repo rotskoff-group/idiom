@@ -1,4 +1,4 @@
-"""P5 extract tests (CPU-only): FASTA -> embeddings (mean + per-residue), files written."""
+"""extract tests (CPU-only): FASTA -> embeddings (mean + per-residue), files written."""
 
 import numpy as np
 

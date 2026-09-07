@@ -1,12 +1,6 @@
-"""Training dataset mapping records to next-token-prediction pairs.
+"""Next-token training examples from prompted or unprompted FIM records.
 
-Each item assembles a FIM string from a Record (prompted or unprompted, chosen at random per
-sample), tokenizes it, and forms the equal-length pair
-
-    input  = [START, t0, t1, ..., t_{n-1}]
-    target = [t0,    t1, ..., t_{n-1}, STOP]
-
-together with a boolean loss mask. Padding is added by make_collate.
+Inputs prepend START; targets append STOP. make_collate adds right padding.
 """
 
 from __future__ import annotations
@@ -30,14 +24,7 @@ FIM_OVERHEAD = 4
 
 
 def max_protein_len(max_len: int) -> int:
-    """Return the largest full_seq length whose example fits in max_len model positions.
-
-    Args:
-        max_len (int): Maximum number of model positions.
-
-    Returns:
-        int: max_len minus the START token and the three FIM markers.
-    """
+    """Return max_len minus the START token and three FIM markers."""
     return max_len - FIM_OVERHEAD
 
 
@@ -47,13 +34,13 @@ def record_to_example(
     """Build the (input_ids, target_ids) next-token pair for one record.
 
     Args:
-        record (Record): The record to encode.
-        tokenizer (Tokenizer): Character tokenizer for the FIM string.
-        variant (str): "prompted" or "unprompted".
+        record: The record to encode.
+        tokenizer: Character tokenizer for the FIM string.
+        variant: "prompted" or "unprompted".
 
     Returns:
-        tuple[torch.Tensor, torch.Tensor]: Equal-length input and target LongTensors, shifted by
-            one, with START prepended to the input and STOP appended to the target.
+        Equal-length input and target LongTensors, shifted by one, with START prepended to the input
+        and STOP appended to the target.
 
     Raises:
         ValueError: If variant is neither "prompted" nor "unprompted".
@@ -85,12 +72,11 @@ class RecordDataset(Dataset):
 
         Args:
             records (Iterable[Record] | RecordStore): Records to serve, or a memory-mapped store.
-            tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
-            max_len (int): Maximum model positions; longer records are dropped.
-            prompted_prob (float): Probability that a sample uses the prompted variant.
-            completion_only (bool): If True, mask the loss to the IDR completion; if False, to
-                every token.
-            seed (int): Seed for the per-sample prompted/unprompted choice.
+            tokenizer: Tokenizer; defaults to Tokenizer().
+            max_len: Maximum model positions; longer records are dropped.
+            prompted_prob: Probability that a sample uses the prompted variant.
+            completion_only: If True, mask the loss to the IDR completion; if False, to every token.
+            seed: Seed for FIM variant selection.
         """
         self.tok = tokenizer or Tokenizer()
         self.max_len = int(max_len)
@@ -123,14 +109,10 @@ class RecordDataset(Dataset):
         return len(self._keep) if self.store is not None else len(self.records)
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Return the (input_ids, target_ids, loss_mask) triple for one record.
+        """Return (input_ids, target_ids, loss_mask) for kept record i.
 
-        Args:
-            i (int): Index into the kept records.
-
-        Returns:
-            tuple[torch.Tensor, torch.Tensor, torch.Tensor]: Equal-length input ids, target ids,
-                and a boolean mask selecting the target positions that contribute to the loss.
+        All tensors have equal length. The boolean mask selects loss-bearing targets;
+        completion-only mode includes the IDR and STOP.
         """
         rec = self.store[int(self._keep[i])] if self.store is not None else self.records[i]
         # per-sample augmentation: prompted (context) with prob prompted_prob, else unprompted
@@ -148,13 +130,9 @@ class RecordDataset(Dataset):
 
 
 def make_collate(pad_id: int):
-    """Build a collate function that right-pads (input, target, loss_mask) triples into batches.
+    """Return a collator producing right-padded [B, L] (input, target, loss_mask) tensors.
 
-    Args:
-        pad_id (int): Token id used to pad the input and target; the loss mask is padded with False.
-
-    Returns:
-        Callable: A function mapping a list of triples to right-padded [B, L] tensors.
+    Pad input and target with pad_id and the boolean loss mask with False.
     """
 
     def collate(batch):

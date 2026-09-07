@@ -1,9 +1,4 @@
-"""Building the per-residue feature-activation dataset.
-
-Records are run through the host model in batches, the residual stream at one layer is encoded by
-the SAE, and the per-residue top-k features are written as a directory of .npy and .json files.
-Positions index the FIM string with its markers present.
-"""
+"""Write per-residue SAE features with positions in the FIM string, including markers."""
 
 from __future__ import annotations
 
@@ -34,26 +29,24 @@ def build_feature_dataset(
     region: str = "all",
     fim_mode: str = "prompted",
 ) -> Path:
-    """Encode records through an SAE and write the feature dataset to a directory.
+    """Write per-residue top-k features; see FeatureDataset for the file schema.
 
-    Writes top_indices.npy and top_values.npy of shape [N_residues, k], the seq_idx.npy and
-    pos_idx.npy arrays locating each row in strings.json, and meta.json recording k, num_latents,
-    layer, region, and fim_mode.
+    Move both models to device in eval mode. Positions index FIM strings without START.
 
     Args:
         model: The host transformer.
         sae: The trained SparseCoder to encode activations with.
         records: Iterable of records to encode.
-        layer (int): The residual-stream layer to extract.
-        out_dir (str | Path): Directory to write the dataset into; created if needed.
-        tokenizer (Tokenizer | None): Tokenizer for encoding and region masking; a default if None.
-        device (str | torch.device): Device to run extraction and encoding on.
-        batch_size (int): Number of records per forward batch.
-        region (str): Residues to keep: "all", "idr", or "non_idr".
-        fim_mode (str): Prompt format: "prompted" or "unprompted".
+        layer: Zero-based block index to extract.
+        out_dir: Directory to write the dataset into; created if needed.
+        tokenizer: Tokenizer for encoding and region masking; a default if None.
+        device: Device to run extraction and encoding on.
+        batch_size: Number of records per forward batch.
+        region: Residues to keep: "all", "idr", or "non_idr".
+        fim_mode: Prompt format: "prompted" or "unprompted".
 
     Returns:
-        Path: The output directory.
+        The output directory.
 
     Raises:
         ValueError: If fim_mode is neither "prompted" nor "unprompted".

@@ -1,4 +1,4 @@
-"""P4 GRPO module test (CPU-only): a full generate->reward->loss step runs and backprops."""
+"""GRPO module test (CPU-only): a full generate->reward->loss step runs and backprops."""
 
 import torch
 

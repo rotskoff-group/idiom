@@ -1,7 +1,4 @@
-"""Lightning DataModule over per-split record FASTAs.
-
-Reads one FASTA per split into a RecordDataset and serves padded batches.
-"""
+"""Lightning dataloaders for per-split record FASTAs."""
 
 from __future__ import annotations
 
@@ -41,16 +38,16 @@ class RecordDataModule(L.LightningDataModule):
         """Configure the datamodule; the splits are built lazily in setup().
 
         Args:
-            train_fasta (str | Path): Record FASTA for the train split.
-            val_fasta (str | Path | None): Record FASTA for validation, or None to skip validation.
-            test_fasta (str | Path | None): Record FASTA for test, or None to skip testing.
-            tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
-            max_len (int): Maximum model positions; longer records are dropped.
-            prompted_prob (float): Probability that a sample uses the prompted variant.
-            completion_only (bool): If True, mask the loss to the IDR completion.
-            batch_size (int): Batch size for all dataloaders.
-            num_workers (int): DataLoader worker processes.
-            seed (int): Seed for the per-sample prompted/unprompted choice.
+            train_fasta: Record FASTA for the train split.
+            val_fasta: Record FASTA for validation, or None to skip validation.
+            test_fasta: Record FASTA for test, or None to skip testing.
+            tokenizer: Tokenizer; defaults to Tokenizer().
+            max_len: Maximum model positions; longer records are dropped.
+            prompted_prob: Probability that a sample uses the prompted variant.
+            completion_only: If True, mask the loss to the IDR completion.
+            batch_size: Batch size for all dataloaders.
+            num_workers: DataLoader worker processes.
+            seed: Seed for FIM variant selection.
         """
         super().__init__()
         self.train_fasta = train_fasta
@@ -81,11 +78,7 @@ class RecordDataModule(L.LightningDataModule):
         )
 
     def setup(self, stage: str | None = None) -> None:
-        """Build each configured split once.
-
-        Args:
-            stage (str | None): Lightning stage name; ignored.
-        """
+        """Build configured splits once; stage is ignored."""
         # Idempotent: Lightning may call setup() more than once; only build each split once.
         if self.train_set is None:
             self.train_set = self._build(self.train_fasta)

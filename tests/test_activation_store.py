@@ -1,4 +1,4 @@
-"""P5 SAE-streaming tests (CPU-only): ActivationStore -> LitSAE step, and region partitioning."""
+"""SAE-streaming tests (CPU-only): ActivationStore -> LitSAE step, and region partitioning."""
 
 import torch
 from torch.utils.data import DataLoader

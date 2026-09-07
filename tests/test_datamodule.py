@@ -1,4 +1,4 @@
-"""P1 DataModule test (CPU-only): per-split record FASTAs -> padded batches."""
+"""DataModule test (CPU-only): per-split record FASTAs -> padded batches."""
 
 import torch
 

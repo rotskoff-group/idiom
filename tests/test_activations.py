@@ -1,4 +1,4 @@
-"""P2 extractor tests (CPU-only): residue-only selection, marker drop, alignment, multi-layer."""
+"""extractor tests (CPU-only): residue-only selection, marker drop, alignment, multi-layer."""
 
 import torch
 

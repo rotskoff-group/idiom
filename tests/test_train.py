@@ -1,4 +1,4 @@
-"""P3 training tests (CPU-only): masked loss, SFT completion mask, warmup-cosine, fit smoke."""
+"""training tests (CPU-only): masked loss, SFT completion mask, warmup-cosine, fit smoke."""
 
 import lightning as L
 import torch

@@ -1,4 +1,4 @@
-"""P2 model tests (CPU-only): RoPE, RMSNorm, forward shapes, and KV-cache equivalence."""
+"""model tests (CPU-only): RoPE, RMSNorm, forward shapes, and KV-cache equivalence."""
 
 import torch
 

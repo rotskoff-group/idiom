@@ -1,9 +1,4 @@
-"""Streaming activation store for SAE training.
-
-Runs a frozen model over batches of record token sequences, extracts residual-stream activations
-at one layer, and serves them as shuffled [sae_batch_size, d_model] batches. Rows accumulate in a
-buffer that is shuffled and drained once it reaches buffer_size; nothing is written to disk.
-"""
+"""In-memory buffering and shuffling of host-model activations for SAE training."""
 
 from __future__ import annotations
 
@@ -15,17 +10,7 @@ from idiom.model.activations import extract_activations
 
 
 class ActivationStore(IterableDataset):
-    """Iterable dataset yielding shuffled residual-stream activation batches.
-
-    Attributes:
-        model: The frozen host transformer, in eval mode on the store's device.
-        record_loader: The loader supplying token sequences.
-        layer (int): The residual-stream layer being extracted.
-        sae_batch_size (int): Rows per yielded batch.
-        buffer_size (int): Rows accumulated before the buffer is shuffled and drained.
-        device (torch.device): Device extraction and shuffling run on.
-        region (str): Residues kept: "all", "idr", or "non_idr".
-    """
+    """Iterable dataset of shuffled residual-stream batches; see __init__ for buffer settings."""
 
     def __init__(
         self,
@@ -46,13 +31,13 @@ class ActivationStore(IterableDataset):
             model: The host transformer to extract activations from.
             record_loader: A loader yielding either (input, target, mask) triples or input token
                 tensors of shape [B, L].
-            layer (int): The residual-stream layer to extract.
-            sae_batch_size (int): Number of activation rows per yielded batch.
-            buffer_size (int): Number of rows to accumulate before shuffling and draining.
-            device (str | torch.device): Device to run extraction and shuffling on.
-            tokenizer (Tokenizer | None): Tokenizer for region masking; a default if None.
-            drop_markers (bool): If True, keep only real residues; if False, also keep FIM markers.
-            region (str): Residues to keep: "all", "idr", or "non_idr".
+            layer: Zero-based block index to extract.
+            sae_batch_size: Number of activation rows per yielded batch.
+            buffer_size: Number of rows to accumulate before shuffling and draining.
+            device: Device to run extraction and shuffling on.
+            tokenizer: Tokenizer for region masking; a default if None.
+            drop_markers: If True, keep only real residues; if False, also keep FIM markers.
+            region: Residues to keep: "all", "idr", or "non_idr".
         """
         self.model = model.eval().to(device)
         self.record_loader = record_loader  # yields (input, target, mask) or input tokens [B, L]
@@ -83,8 +68,8 @@ class ActivationStore(IterableDataset):
         """Yield shuffled activation batches until the record loader is exhausted.
 
         Yields:
-            torch.Tensor: A batch of shape [sae_batch_size, d_model]. Rows left over after the
-                final drain are discarded.
+            torch.Tensor: A batch of shape [sae_batch_size, d_model]. Rows left over after the final
+                drain are discarded.
         """
         buf: list[torch.Tensor] = []
         n = 0
@@ -111,14 +96,7 @@ class ActivationStore(IterableDataset):
 
     @torch.no_grad()
     def mean_activation(self, max_batches: int = 4) -> torch.Tensor:
-        """Return the mean activation over the first few record batches.
-
-        Args:
-            max_batches (int): Number of record batches to average over.
-
-        Returns:
-            torch.Tensor: The mean activation vector of shape [d_model], on CPU.
-        """
+        """Return the CPU [d_model] mean over residues in the first max_batches record batches."""
         total, count = None, 0
         for i, batch in enumerate(self.record_loader):
             acts = self._acts(self._input_tokens(batch))

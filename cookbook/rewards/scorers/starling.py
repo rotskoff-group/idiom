@@ -2,30 +2,12 @@
 # requires-python = ">=3.10,<3.12"
 # dependencies = ["idptools-starling", "torch==2.4.1"]
 # ///
-"""Score IDRs with STARLING (https://github.com/idptools/starling) as an external GRPO reward.
+"""Score STARLING ensemble dimensions (https://github.com/idptools/starling).
 
-STARLING is a diffusion model that generates coarse-grained conformational ensembles for an IDR, so
-the reward is an ensemble average of the same dimensions sparrow's ALBATROSS predictors estimate
-directly.
-
-    --property radius_of_gyration | end_to_end_distance
-    --conformations N             ensemble size per sequence (default 20)
-
-    reward.terms:
-      - {reward: {name: scorer, timeout: 900,
-                  cmd: "uv run --script cookbook/rewards/scorers/starling.py --property radius_of_gyration"},
-         shaping: {name: quadratic, target: 25, width: 0.2}, label: rg_ens, weight: 1.0}
-
-Cost is about 9 s per 32 sequences at 20 conformations on an H100, roughly doubling GRPO step time,
-so give the term a generous timeout. On CPU it is about 6 s per sequence, too slow to train
-against.
-
-The torch pin matters: the wheel idptools-starling resolves by default can be newer than the host
-CUDA driver, which fails at model load with "The NVIDIA driver on your system is too old". Pin the
-torch build that matches your driver, or run with CUDA_VISIBLE_DEVICES="" to fall back to CPU.
-
-Environment variables:
-    STARLING_DEVICE   torch device (default cuda when visible, else cpu).
+--property selects radius_of_gyration or end_to_end_distance; --conformations sets
+ensemble size (default 20). STARLING_DEVICE overrides CUDA/CPU auto-selection.
+Run with uv run --script. Ensemble generation is expensive; allow a generous scorer timeout.
+The pinned torch build must match the CUDA driver.
 """
 
 import argparse
@@ -61,14 +43,10 @@ def build():
 
 
 def serve(build):
-    """Drive the newline-JSON scorer protocol until stdin closes.
+    """Serve newline-delimited JSON requests until stdin closes.
 
-    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
-    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
-    and model loading inside build() keeps any chatter they print off the protocol stream.
-
-    Args:
-        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    Call build() once to obtain a batch scorer. Redirect library output to stderr,
+    score empty sequences as 0, and report scoring exceptions as JSON errors.
     """
     # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
     # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.

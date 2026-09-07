@@ -1,4 +1,4 @@
-"""P4 GRPO-core tests (CPU-only): rewards + advantages + loss + logprobs."""
+"""GRPO-core tests (CPU-only): rewards + advantages + loss + logprobs."""
 
 import math
 

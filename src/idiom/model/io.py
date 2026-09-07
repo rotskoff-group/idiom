@@ -1,11 +1,7 @@
-"""Load an IDiomTransformer from either on-disk form.
+"""Load models from Lightning checkpoints, release directories, or Hub repositories.
 
-- a Lightning .ckpt: a state_dict whose policy weights are prefixed "model.", plus a
-  hyper_parameters["model_cfg"] dict holding the ModelConfig.
-- a released directory: config.json plus model.safetensors.
-
-Both carry their own ModelConfig, so the architecture comes from the artifact. load_model accepts
-either form, or a Hub repo id.
+Checkpoints store model_cfg and "model."-prefixed weights; releases contain
+config.json and model.safetensors.
 """
 
 from __future__ import annotations
@@ -30,10 +26,10 @@ def _load_checkpoint(ckpt_path: str | Path) -> tuple[ModelConfig, dict]:
     """Read a Lightning checkpoint, returning its stored ModelConfig and state_dict.
 
     Args:
-        ckpt_path (str | Path): Path to the Lightning checkpoint.
+        ckpt_path: Path to the Lightning checkpoint.
 
     Returns:
-        tuple[ModelConfig, dict]: The architecture config and the raw state_dict.
+        The architecture config and the raw state_dict.
 
     Raises:
         ValueError: If the checkpoint carries no stored ModelConfig.
@@ -49,16 +45,10 @@ def _load_checkpoint(ckpt_path: str | Path) -> tuple[ModelConfig, dict]:
 
 
 def config_from_checkpoint(ckpt_path: str | Path) -> ModelConfig:
-    """Return the ModelConfig stored in a Lightning checkpoint's hyperparameters.
-
-    Args:
-        ckpt_path (str | Path): Path to the Lightning checkpoint.
-
-    Returns:
-        ModelConfig: The architecture config stored in the checkpoint.
+    """Read ModelConfig from a Lightning checkpoint's hyperparameters.
 
     Raises:
-        ValueError: If the checkpoint carries no stored ModelConfig.
+        ValueError: If the checkpoint has no stored ModelConfig.
     """
     return _load_checkpoint(ckpt_path)[0]
 
@@ -72,13 +62,12 @@ def load_pretrained(
     frozen reference policy, is ignored.
 
     Args:
-        ckpt_path (str | Path): Path to the Lightning checkpoint.
-        device (str | torch.device): Device to move the model to.
-        eval_mode (bool): If True, put the model in eval mode before returning.
+        ckpt_path: Path to the Lightning checkpoint.
+        device: Device to move the model to.
+        eval_mode: If True, put the model in eval mode before returning.
 
     Returns:
-        tuple[IDiomTransformer, ModelConfig]: The loaded model and the config read from the
-            checkpoint.
+        The loaded model and the config read from the checkpoint.
 
     Raises:
         ValueError: If the checkpoint carries no stored ModelConfig.
@@ -98,13 +87,12 @@ def load_released(
     """Load a released directory holding config.json and model.safetensors.
 
     Args:
-        path (str | Path): Path to the released model directory.
-        device (str | torch.device): Device to move the model to.
-        eval_mode (bool): If True, put the model in eval mode before returning.
+        path: Path to the released model directory.
+        device: Device to move the model to.
+        eval_mode: If True, put the model in eval mode before returning.
 
     Returns:
-        tuple[IDiomTransformer, ModelConfig]: The loaded model and the config read from
-            config.json.
+        The loaded model and the config read from config.json.
     """
     d = Path(path)
     cfg = ModelConfig(**json.loads((d / CONFIG_FILE).read_text()))
@@ -124,12 +112,12 @@ def load_model(
     config.json is read as a released model; any other path is read as a Lightning checkpoint.
 
     Args:
-        path (str | Path): A Lightning checkpoint, a released model directory, or a Hub repo id.
-        device (str | torch.device): Device to move the model to.
-        eval_mode (bool): If True, put the model in eval mode before returning.
+        path: A Lightning checkpoint, a released model directory, or a Hub repo id.
+        device: Device to move the model to.
+        eval_mode: If True, put the model in eval mode before returning.
 
     Returns:
-        tuple[IDiomTransformer, ModelConfig]: The loaded model and its config.
+        The loaded model and its config.
 
     Raises:
         ValueError: If the artifact is a checkpoint that carries no stored ModelConfig.

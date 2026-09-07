@@ -1,4 +1,4 @@
-"""P0 SAE core smoke test (CPU-only): encode/decode round-trip and top-k sparsity."""
+"""SAE core smoke test (CPU-only): encode/decode round-trip and top-k sparsity."""
 
 import torch
 

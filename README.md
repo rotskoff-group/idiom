@@ -2,224 +2,116 @@
 
 [Preprint](https://doi.org/10.64898/2026.04.10.717777) &sdot; [Models](https://huggingface.co/jxliu2) &sdot; [Data](https://huggingface.co/datasets/jxliu2/idiom-data) &sdot; [Cookbook](cookbook/)
 
-IDiom is an autoregressive transformer for generating, designing, and studying intrinsically
-disordered protein regions (IDRs). Trained on 54M IDRs from the AlphaFold Database with a
-fill-in-the-middle objective, it generates IDRs **unprompted** (de novo) or **prompted** (conditioned
-on flanking context), and can be post-trained with reinforcement learning against custom rewards.
-
-We additionally release IDiomSAE, sparse top-k autoencoders trained on IDiom's residual stream, for
-interpreting and steering the model.
+IDiom is an autoregressive transformer for generating and studying intrinsically disordered protein
+regions (IDRs), trained on 54M IDRs from the AlphaFold Database. It generates sequences de novo or
+conditioned on flanking protein context, and supports fine-tuning with custom rewards.
+IDiomSAE provides sparse autoencoders for interpreting and steering the model.
 
 ![IDiom](assets/github_fig.png)
 
-## Models
-
-| Model Name | Parameters | Architecture | HuggingFace Link |
-|---|---|---|---|
-| idiom-300M | 302M | 24 layers, d_model 1024 | [jxliu2/idiom-300M](https://huggingface.co/jxliu2/idiom-300M) |
-| idiom-85M | 85M | 12 layers, d_model 768 | [jxliu2/idiom-85M](https://huggingface.co/jxliu2/idiom-85M) |
-| idiom-20M | 18.9M | 6 layers, d_model 512 | [jxliu2/idiom-20M](https://huggingface.co/jxliu2/idiom-20M) |
-| idiomsae-300M-L18-k32 | — | SAE on `idiom-300M` layer 18, 16,384 latents, k=32 | [jxliu2/idiomsae-300M-L18-k32](https://huggingface.co/jxliu2/idiomsae-300M-L18-k32) |
-
-Weights download on first use. Inference runs on CPU; a GPU is recommended.
-
 ## Installation
 
+Python ≥3.10. Choose either setup.
+
+### Install into an existing environment
+
+Activate your Python environment, then install:
+
 ```bash
-pip install git+https://github.com/rotskoff-group/idiom.git
+python -m pip install git+https://github.com/rotskoff-group/idiom.git
 ```
 
-To run the [`cookbook/`](cookbook/) examples, also clone the repository:
+To access the cookbook files, also clone the repository:
 
 ```bash
 git clone https://github.com/rotskoff-group/idiom.git
 cd idiom
 ```
 
-The Bash examples use IDiom from your active Python environment and the clone for cookbook files.
-Edit their `REPO`, `OUT`, and other run settings before launching. External-scorer examples also
-need `uv` (`python -m pip install uv`) to manage the scorers' separate dependencies.
+### Create an environment from the clone
 
-Alternatively, developers can run `uv sync` in the checkout to install the package and locked
-dependencies, then `source .venv/bin/activate`. Python >= 3.10.
+With `uv` installed (`python -m pip install uv`):
 
-## Sequence conventions
+```bash
+git clone https://github.com/rotskoff-group/idiom.git
+cd idiom
+uv sync
+source .venv/bin/activate
+```
 
-IDiom is a fill-in-the-middle model, so **every input carries an IDR span**. Getting this wrong does
-not raise — it silently produces off-distribution output.
+This installs the checkout with its locked dependencies. For either setup, see
+[running cookbook scripts](cookbook/README.md#running-scripts) for paths and run settings.
 
-- **FASTA headers end with `_IDR_x-y`**, 1-based inclusive, e.g. `>P06748_IDR_119-242`. A fully
-  disordered sequence uses `_IDR_1-<len>`. A bare sequence string is treated as an unprompted IDR.
-- **Python coordinates are 0-based, half-open**: `idr = seq[idr_start:idr_end]`.
-- Only the **20 canonical amino acids**. Non-canonical FASTA entries are dropped with a logged count;
-  a non-canonical sequence passed explicitly raises.
+## Quickstart
 
-## Interactive Usage
+Generate ten IDRs:
 
 ```python
 from idiom import IDiom
 
-model = IDiom.from_pretrained("jxliu2/idiom-300M")   # HF repo id, local directory, or .ckpt
-
-idrs = model.generate_unprompted(n=100, temperature=1.0)
-idrs = model.generate_unprompted(n=100, length_range=(80, 120))
-idrs = model.generate_prompted(protein_seq, idr_start, idr_end, n=100)
-
-values, index = model.embed(["MKKLVA...", "GSGSQP..."], layers=[18], pool="none")[18]
+model = IDiom.from_pretrained("jxliu2/idiom-300M")
+sequences = model.generate_unprompted(n=10)
+print(sequences[0])
 ```
 
-`generate_unprompted_fasta` / `generate_prompted_fasta` write record FASTAs directly. Passing
-`return_full=True` to the prompted one splices each generated IDR back between its flanks and writes
-the whole protein with a corrected span — how you redesign the IDR of an existing protein.
+Weights download on first use. Inference supports CPU; a GPU is recommended.
+See the [notebooks](cookbook/notebooks/) for prompted generation, embeddings, and SAE analysis,
+or the [usage reference](cookbook/usage.md) for scoring and exporting models.
 
-Score sequences under the model's own fill-in-the-middle objective:
+## Models
 
-```python
-from idiom.utils.perplexity import perplexity
+| Model | Parameters | Architecture |
+|---|---|---|
+| [idiom-300M](https://huggingface.co/jxliu2/idiom-300M) | 302M | 24 layers, width 1024 |
+| [idiom-85M](https://huggingface.co/jxliu2/idiom-85M) | 85M | 12 layers, width 768 |
+| [idiom-20M](https://huggingface.co/jxliu2/idiom-20M) | 18.9M | 6 layers, width 512 |
+| [idiomsae-300M-L18-k32](https://huggingface.co/jxliu2/idiomsae-300M-L18-k32) | — | SAE on layer 18 of idiom-300M; 16,384 latents, k=32 |
 
-perplexity(model.model, "heldout.fasta", device=model.device)   # {"nll", "perplexity", "n_tokens"}
-```
+## Sequence conventions
 
-Tutorial: [`generate_and_embed.ipynb`](cookbook/notebooks/generate_and_embed.ipynb)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/generate_and_embed.ipynb)
+IDiom uses fill-in-the-middle formatting, which requires an IDR span. Incorrect spans can produce
+off-distribution output even when the input is accepted.
 
-## Sparse Autoencoders
+- FASTA headers end with `_IDR_x-y`, using 1-based inclusive coordinates:
+  `>P06748_IDR_119-242`. For a fully disordered sequence, use `_IDR_1-<length>`.
+- Python coordinates are 0-based and half-open: `idr = seq[idr_start:idr_end]`.
+  A bare sequence string is treated as an unprompted IDR.
+- Use the 20 canonical amino acids. Non-canonical FASTA entries are dropped with a logged count;
+  explicitly supplied non-canonical sequences raise an error.
 
-`IDiomSAE` bundles an SAE with its host model and layer, so it always runs on the distribution it was
-trained on.
+## Training
 
-```python
-from idiom import IDiomSAE
+The [cookbook](cookbook/) includes scripts for pretraining, supervised fine-tuning, SAE training,
+and GRPO post-training. Training commands use YAML configs with command-line overrides.
+The [reward guide](cookbook/rewards/) explains custom objectives and external scorers.
 
-sae = IDiomSAE.from_pretrained("jxliu2/idiomsae-300M-L18-k32")   # host model auto-loaded
+## Command-line tools
 
-feats, accessions = sae.encode("proteins.fasta", pool="mean")    # pool="none" for per-residue
-seqs = sae.steer_generate(feature=1234, strength=0.5, n=100)
-```
-
-`encode` takes `region=` (`all`, `idr`, `non_idr`), defaulting to what the SAE was trained on. The
-released SAE was trained unprompted on IDR residues, so `region="idr"` is its only valid value.
-Steering modes are `add_direction` (default), `clamp`, and `ablate`; `normalize`, `relative`, and
-`preserve_norm` control how `strength` is interpreted.
-
-Build a per-residue feature dataset, then rank features and pull the sequences that drive one:
-
-```bash
-idiom_feature_dataset --sae jxliu2/idiomsae-300M-L18-k32 --fasta records.fasta --out features/
-streamlit run src/idiom/sae/features/feature_viewer.py -- --features features/
-```
-
-```python
-from idiom.sae.features import FeatureDataset
-
-fd = FeatureDataset("features/")
-ids, freq, mean_act = fd.feature_ranking()
-seq_ids, scores = fd.top_sequences(ids[0], n=20)
-```
-
-Tutorials: [`sae_features.ipynb`](cookbook/notebooks/sae_features.ipynb)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/sae_features.ipynb),
-[`feature_enrichment.ipynb`](cookbook/notebooks/feature_enrichment.ipynb)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/feature_enrichment.ipynb)
-
-## Training and Post-training
-
-Hydra CLIs over flat YAMLs in `src/idiom/configs/`. For real runs start from the
-[cookbook's training scripts](cookbook/scripts/), which spell out every config value.
-
-```bash
-idiom_build_store --fasta corpus.fasta          # memory-mapped record store, recommended at scale
-idiom_train_autoreg data.train_fasta=corpus.fasta model.n_layers=24 model.d_model=1024
-idiom_train_autoreg --config-name sft init_from=jxliu2/idiom-300M data.train_fasta=sft.fasta
-idiom_train_sae model_ckpt=/path/model.ckpt data.fasta=/path/records.fasta layer=18 sae.k=32
-```
-
-GRPO optimizes a list of reward **terms**, each pairing a reward with the shaping that says what a
-good value is: `total = Σ weightᵢ · shapingᵢ(rewardᵢ)`. The shipped config carries **no terms at
-all** — no defaults, no presets — so a run names its whole objective and the launch line is what is
-being optimized.
-
-A term is four keys — `reward`, `shaping`, `weight`, `label` — and the reward and the shaping are
-named the same way: a name, plus that thing's own arguments.
-
-```bash
-ENTROPY='{label: entropy, weight: 1.0, reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}}'
-LENGTH='{label: length,  weight: 1.0, reward: length,  shaping: {name: quadratic, target: 100,  width: 1.0}}'
-
-# an SAE feature signature (the RL-SAE result)
-SAE='{label: sae, weight: 1.0, reward: {name: sae_signature, signature: nucleolus,
-                                        features: signature.json}}'
-
-# a reward model in its own environment
-RG='{label: rg, weight: 0.5,
-     reward: {name: scorer,
-              cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration"},
-     shaping: {name: quadratic, target: 25, width: 0.2}}'
-
-# anything importable, with its own settings
-MINE='{label: mine, weight: 1.0, reward: {name: "mypackage.scoring:make_scorer", cutoff: 0.3}}'
-
-idiom_train_grpo init_from=jxliu2/idiom-300M reward.terms="[$ENTROPY, $LENGTH, $RG]"
-```
-
-`entropy`, `length`, `scorer` and `sae_signature` are the shipped reward names; `quadratic`,
-`gaussian` and `identity` the shipped shaping. Anything else is a `module:function` path to a
-factory of your own — no registration, no decorators. `entropy` and `length` are worth naming in
-most objectives, since a target is otherwise satisfiable by a low-complexity tract or a degenerate
-length, but they are terms like any other, so drop either one and it is gone.
-`cookbook/scripts/grpo/` has a script per objective; edit its `REPO` and `OUT` path placeholders
-and run settings before submitting.
-
-Six external scorers ship in the cookbook — sparrow, finches, PSpred, ProtGPS, PADDLE, STARLING —
-each a standalone program carrying its own environment in a
-[PEP 723](https://peps.python.org/pep-0723/) header, so there is no install step. **Rewards are
-documented in full in [`cookbook/rewards/README.md`](cookbook/rewards/README.md).**
-
-Training writes a Lightning `.ckpt`. `save_pretrained` converts one into the released
-`config.json` + `model.safetensors` pair, and `push_to_hub` uploads it with a model card:
-
-```python
-model = IDiom.load("runs/grpo/checkpoints/last.ckpt")
-model.save_pretrained("my-idiom-nucleolus")
-model.push_to_hub("me/my-idiom-nucleolus", private=True)
-```
-
-`IDiomSAE` has the same two methods, recording its host model so the pair reloads in one call.
-
-## Command-line Tools
-
-| Command | Does |
-|---------|------|
-| `idiom_generate` | generate unprompted/prompted IDRs to a FASTA |
-| `idiom_extract` | export residual-stream embeddings from a FASTA |
-| `idiom_train_autoreg` | pretrain, and SFT via `--config-name sft` |
-| `idiom_train_grpo` | GRPO post-training against a reward |
-| `idiom_train_sae` | train a top-k SAE on a layer |
-| `idiom_feature_dataset` | build the per-residue SAE feature dataset |
-| `idiom_build_store` | build a memory-mapped record store from a record FASTA |
-
-```bash
-idiom_generate unprompted --model jxliu2/idiom-300M --n 1000 --out idrs.fasta
-idiom_extract --ckpt model.ckpt --fasta proteins.fasta --layers 18 --out embeddings/
-```
+| Command | Purpose |
+|---|---|
+| `idiom_generate` | Generate unprompted or prompted IDRs to FASTA |
+| `idiom_extract` | Export residual-stream embeddings |
+| `idiom_train_autoreg` | Pretrain, or fine-tune with `--config-name sft` |
+| `idiom_train_grpo` | Post-train with custom rewards |
+| `idiom_train_sae` | Train a sparse autoencoder |
+| `idiom_feature_dataset` | Build a per-residue SAE feature dataset |
+| `idiom_build_store` | Build a memory-mapped record store from FASTA |
 
 ## Data
 
-[`jxliu2/idiom-data`](https://huggingface.co/datasets/jxliu2/idiom-data) holds plain FASTAs.
-`training_sequences/` is the pretraining corpus — `train.fasta`, 53.6M records / 23.6 GB, plus
-validation and test at ~271k each. `example_data/` holds the demo-sized sets the notebooks use.
+[jxliu2/idiom-data](https://huggingface.co/datasets/jxliu2/idiom-data) contains the training FASTAs
+and cookbook example data. The training split contains 53.6M records (23.6 GB); validation and test
+contain approximately 271k records each.
 
 ```bash
 hf download jxliu2/idiom-data --repo-type dataset --include "training_sequences/*"
 ```
 
-The corpus is 54,155,136 IDR records from the AlphaFold Database (pLDDT segmentation, 90% clustering,
-length <= 1020, dedup, DisProt holdout removal, SignalP-6 filtering).
+See the [cookbook data notes](cookbook/README.md#example-data) for demo datasets and provenance.
 
 ## Contributing
 
-Contributions are welcome — fork the repository, raise issues, contribute reward functions, and open
-pull requests.
+Issues, reward examples, and pull requests are welcome.
 
 ## Citation
 
@@ -237,5 +129,5 @@ pull requests.
 ## License
 
 Code is released under the [MIT License](LICENSE). The pretraining corpus is CC BY 4.0, inherited
-from AlphaFold DB / UniProt. Data redistributed in [`cookbook/example_data/`](cookbook/example_data/)
-carries the licenses of its original sources.
+from AlphaFold DB / UniProt. Data in [cookbook/example_data/](cookbook/example_data/) retains the
+licenses of its original sources.

@@ -1,4 +1,4 @@
-"""SAE training: the streaming activation store, the LightningModule, and the idiom_train_sae entrypoint."""
+"""Streaming activations and Lightning training for sparse autoencoders."""
 
 from idiom.sae.train.activation_store import ActivationStore
 from idiom.sae.train.lit_sae import LitSAE

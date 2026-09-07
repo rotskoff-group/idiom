@@ -1,7 +1,4 @@
-"""Rotary position embeddings (RoPE), in the Llama-style rotate-half formulation.
-
-The cos/sin tables are precomputed up to max_seq_len and indexed by absolute position.
-"""
+"""Rotary position embeddings using precomputed Llama-style rotate-half tables."""
 
 from __future__ import annotations
 
@@ -21,9 +18,9 @@ class Rope(nn.Module):
         """Precompute the cos and sin tables as non-persistent buffers.
 
         Args:
-            head_dim (int): Per-head dimension; must be even.
-            max_seq_len (int): Largest position the tables cover.
-            base (float): Base of the inverse-frequency geometric progression.
+            head_dim: Per-head dimension; must be even.
+            max_seq_len: Largest position the tables cover.
+            base: Base of the inverse-frequency geometric progression.
         """
         super().__init__()
         # inverse frequencies for each rotation plane (head_dim/2 of them)
@@ -35,15 +32,9 @@ class Rope(nn.Module):
         self.register_buffer("sin", emb.sin(), persistent=False)
 
     def apply(self, q: Tensor, k: Tensor, positions: Tensor) -> tuple[Tensor, Tensor]:
-        """Rotate q and k at the given absolute positions.
+        """Rotate q and k ([B, H, L, head_dim]) at absolute positions ([L]).
 
-        Args:
-            q (Tensor): Query tensor of shape [B, H, L, head_dim].
-            k (Tensor): Key tensor of shape [B, H, L, head_dim].
-            positions (Tensor): Absolute position index for each element of the L axis.
-
-        Returns:
-            tuple[Tensor, Tensor]: The rotated q and k, with the same shapes as the inputs.
+        Return (rotated_q, rotated_k) with unchanged shapes.
         """
         cos = self.cos[positions].to(q.dtype)[None, None]  # [1, 1, L, head_dim] -> broadcasts over B, H
         sin = self.sin[positions].to(q.dtype)[None, None]

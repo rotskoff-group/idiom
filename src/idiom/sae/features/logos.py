@@ -1,8 +1,4 @@
-"""Cutting the residue windows a sequence logo is built from.
-
-Both functions work on the in-memory output of IDiomSAE.encode(pool="none"): a [N_res, latents]
-activation matrix plus its per-row index.
-"""
+"""Sequence-logo windows from the per-residue output of IDiomSAE.encode."""
 
 from __future__ import annotations
 
@@ -17,8 +13,7 @@ def per_sequence_activations(feats, index) -> list[tuple[str, np.ndarray]]:
         index (list[dict]): Per-row metadata carrying accession, source_pos, and residue.
 
     Returns:
-        list[tuple[str, np.ndarray]]: One (residue_string, row_indices) per accession, in the order
-            the accessions first appear.
+        One (residue_string, row_indices) per accession, in the order the accessions first appear.
     """
     order: list[str] = []
     rows: dict[str, list[int]] = {}
@@ -49,8 +44,8 @@ def top_windows(feature_id, feats, per_seq, *, n_windows=60, half_width=7) -> li
         half_width (int): Residues on each side of the peak; window length is 2*half_width+1.
 
     Returns:
-        list[str]: Equal-length residue windows, most-active first. Sequences shorter than the
-            window, and sequences where the feature never fires, are left out.
+        Equal-length residue windows, most-active first. Sequences shorter than the window, and
+        sequences where the feature never fires, are left out.
     """
     length = 2 * half_width + 1
     peaks = []

@@ -21,16 +21,10 @@ PROMPTED, UNPROMPTED = "prompted", "unprompted"
 
 
 def normalize_mode(mode: str) -> str:
-    """Validate a prompting-mode string and return it unchanged.
-
-    Args:
-        mode (str): A prompting-mode string.
-
-    Returns:
-        str: The mode, either "prompted" or "unprompted".
+    """Return a valid prompting mode unchanged.
 
     Raises:
-        ValueError: If mode is neither "prompted" nor "unprompted".
+        ValueError: If mode is not "prompted" or "unprompted".
     """
     if mode not in (PROMPTED, UNPROMPTED):
         raise ValueError(f"mode must be 'prompted' or 'unprompted', got {mode!r}")
@@ -38,46 +32,20 @@ def normalize_mode(mode: str) -> str:
 
 
 def fim_prompted(seq: str, start: int, end: int) -> str:
-    """Build the prompted FIM string "1{prefix}3{suffix}2{IDR}".
-
-    Args:
-        seq (str): The full protein sequence.
-        start (int): IDR start index (0-based, inclusive).
-        end (int): IDR end index (0-based, exclusive).
-
-    Returns:
-        str: The FIM-formatted string, with the IDR moved to the end after both flanks.
-    """
+    """Return "1{prefix}3{suffix}2{IDR}" using the 0-based half-open span seq[start:end]."""
     prefix, idr, suffix = seq[:start], seq[start:end], seq[end:]
     return f"{PREFIX}{prefix}{SUFFIX}{suffix}{MIDDLE}{idr}"
 
 
 def fim_unprompted(seq: str, start: int, end: int) -> str:
-    """Build the unprompted FIM string "132{IDR}".
-
-    Args:
-        seq (str): The full protein sequence.
-        start (int): IDR start index (0-based, inclusive).
-        end (int): IDR end index (0-based, exclusive).
-
-    Returns:
-        str: The FIM-formatted string, with empty prefix and suffix.
-    """
+    """Return "132{IDR}" using the 0-based half-open span seq[start:end]."""
     return f"{PREFIX}{SUFFIX}{MIDDLE}{seq[start:end]}"
 
 
 def fim_prompt(seq: str = "", start: int = 0, end: int = 0) -> str:
-    """Build the generation prompt "1{prefix}3{suffix}2".
+    """Return "1{prefix}3{suffix}2", omitting the 0-based half-open span seq[start:end].
 
-    With the default empty sequence the prompt is "132".
-
-    Args:
-        seq (str): The full protein sequence (empty for an unprompted prompt).
-        start (int): IDR start index (0-based, inclusive).
-        end (int): IDR end index (0-based, exclusive).
-
-    Returns:
-        str: The prompt string; the model generates the IDR after the "2" marker.
+    Empty defaults produce the unprompted prefix "132".
     """
     return f"{PREFIX}{seq[:start]}{SUFFIX}{seq[end:]}{MIDDLE}"
 
@@ -89,13 +57,13 @@ def residue_source_positions(seq_len: int, start: int, end: int, variant: str = 
     for "prompted", and the IDR alone for "unprompted".
 
     Args:
-        seq_len (int): Length of the full sequence.
-        start (int): IDR start index (0-based, inclusive).
-        end (int): IDR end index (0-based, exclusive).
-        variant (str): "prompted" or "unprompted".
+        seq_len: Length of the full sequence.
+        start: IDR start index (0-based, inclusive).
+        end: IDR end index (0-based, exclusive).
+        variant: "prompted" or "unprompted".
 
     Returns:
-        list[int]: The source position of each residue, in FIM order.
+        The source position of each residue, in FIM order.
 
     Raises:
         ValueError: If variant is neither "prompted" nor "unprompted".

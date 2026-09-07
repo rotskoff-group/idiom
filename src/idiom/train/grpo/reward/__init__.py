@@ -1,25 +1,6 @@
-"""GRPO reward subsystem.
+"""Configurable GRPO rewards: raw batch scores, scalar shaping, and weighted composition.
 
-A reward term is a reward, a shaping rule, and a weight. The total reward is the weighted sum of
-the shaped rewards over the configured terms. Nothing is in an objective unless a run named it:
-reward.terms is empty by default and the library ships no presets.
-
-A term is four keys, and the reward and the shaping are named the same way -- a factory plus its
-arguments, as a bare name or a mapping:
-
-    {reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}, weight: 1.0}
-    {reward: {name: scorer, cmd: "uv run --script my_scorer.py"}, label: mine, weight: 1.0}
-    {reward: {name: "mypkg.scoring:make_scorer", cutoff: 0.3}, label: mine, weight: 1.0}
-
-Modules:
-    resolve: what a reward is, the shipped aliases, and how a spec becomes a callable.
-    builtin: the entropy and length reward factories.
-    shaping: the shipped shaping rules, and the arithmetic behind them.
-    external: scorer, the reward factory that runs a reward model in its own environment.
-    compose: config validation and the weighted-sum composition that LitGRPO calls.
-
-Worked external scorers live in the repository at cookbook/rewards/scorers/. The SAE feature
-reward, sae_feature.sae_signature, is imported on demand, since it pulls in the SAE.
+Terms name factories by alias or "module:function" path. See cookbook/rewards for examples.
 """
 
 from idiom.train.grpo.reward.builtin import composition_entropy, entropy, length

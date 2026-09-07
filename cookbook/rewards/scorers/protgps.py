@@ -10,35 +10,13 @@
 #   "requests",
 # ]
 # ///
-"""Score IDRs with ProtGPS (https://github.com/pgmikhael/protgps) as an external GRPO reward.
+"""Score ProtGPS compartment probabilities (https://github.com/pgmikhael/protgps).
 
-ProtGPS is a condensate-localization classifier over a small ESM-2, mapping a residue string to 12
-compartment probabilities. Its environment pins python 3.8, torch 2.0 and pytorch-lightning 1.6.4,
-which cannot coexist with IDiom's; the PEP 723 header above is that whole environment, built and
-cached by uv on first use.
-
-The checkpoints (166 MB, CC BY 4.0) are downloaded once from the paper's Zenodo record into
-IDIOM_PROTGPS_DIR:
-
-    uv run python -m idiom.train.grpo.reward.external \
-        --cmd "uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus"
-
-In configs/grpo.yaml:
-
-    reward.terms:
-      - {reward: {name: scorer,
-                  cmd: "uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus"},
-         label: protgps, weight: 1.0}
-
-The raw reward is a probability in [0, 1], so a term usually leaves it unshaped. --compartment is
-one of the 12 compartments below, or "max" / "mean" over them. High scores are reachable with
-low-complexity tracts, so pair it with entropy and length terms.
-
-Environment variables:
-    IDIOM_PROTGPS_DIR     where the checkpoints live; downloaded here on first use
-                          (default ~/.cache/idiom/protgps).
-    IDIOM_PROTGPS_DEVICE  torch device (default cuda if available else cpu).
-    PROTGPS_BATCH         sequences per forward pass (default 32).
+Run with uv run --script to use the isolated dependencies in the PEP 723 header.
+--compartment selects one of 12 compartments, or "max" / "mean" across them.
+IDIOM_PROTGPS_DIR sets the checkpoint cache (default ~/.cache/idiom/protgps);
+IDIOM_PROTGPS_DEVICE selects the device (default CUDA if available, otherwise CPU).
+PROTGPS_BATCH sets sequences per forward pass (default 32). Checkpoints download on first use.
 """
 
 import argparse
@@ -73,7 +51,7 @@ def _checkpoint_dir() -> Path:
     """Return the checkpoint directory, downloading the Zenodo release on first use.
 
     Returns:
-        Path: A directory holding <stem>.args and <stem>epoch=26.ckpt.
+        A directory holding <stem>.args and <stem>epoch=26.ckpt.
     """
     d = Path(os.environ.get("IDIOM_PROTGPS_DIR",
                             Path.home() / ".cache/idiom/protgps")).expanduser()
@@ -156,14 +134,10 @@ def build():
 
 
 def serve(build):
-    """Drive the newline-JSON scorer protocol until stdin closes.
+    """Serve newline-delimited JSON requests until stdin closes.
 
-    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
-    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
-    and model loading inside build() keeps any chatter they print off the protocol stream.
-
-    Args:
-        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    Call build() once to obtain a batch scorer. Redirect library output to stderr,
+    score empty sequences as 0, and report scoring exceptions as JSON errors.
     """
     # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
     # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.

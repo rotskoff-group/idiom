@@ -1,19 +1,6 @@
-"""Composition of the total GRPO reward from its configured terms.
+"""Compose rewards as sum(weight * shaping(raw_reward)).
 
-build_reward turns the reward config's terms list into a single function mapping (idrs, group_size)
-to per-idr totals and a matching per-term breakdown. Every term follows one rule,
-
-    total reward = sum over terms of weight * shaping(reward(idrs))
-
-A term is four keys -- a reward, a shaping, a weight, and the label it is logged under. The reward
-and the shaping are named the same way, as a factory plus its arguments; see resolve.
-
-The library adds nothing of its own: reward.terms is empty by default and a run names every term it
-optimizes, so the launch line is the whole objective. A term with weight 0 keeps running and stays
-logged but has no influence.
-
-Terms are built here, before the model is loaded, so a config error costs seconds rather than a
-warm-started policy.
+Every term is explicit; zero-weight terms are still evaluated and logged.
 """
 
 from __future__ import annotations
@@ -39,10 +26,10 @@ class Term:
     """One built reward term.
 
     Attributes:
-        label (str): Name the term is logged under; unique among the terms.
-        weight (float): Multiplier on the shaped reward; 0 logs the term without optimizing it.
-        reward (Reward): Maps a step's IDRs to one raw value each.
-        shaping (Shaping): Maps one raw value to its shaped value.
+        label: Name the term is logged under; unique among the terms.
+        weight: Multiplier on the shaped reward; 0 logs the term without optimizing it.
+        reward: Maps a step's IDRs to one raw value each.
+        shaping: Maps one raw value to its shaped value.
     """
 
     label: str
@@ -55,15 +42,14 @@ def _parse_term(raw: dict, where: str) -> tuple[str, float, object, object]:
     """Validate one term's shape and return its parts, without importing anything.
 
     Args:
-        raw (dict): One entry of reward.terms.
-        where (str): The term's config path, used in error messages.
+        raw: One entry of reward.terms.
+        where: The term's config path, used in error messages.
 
     Returns:
-        tuple[str, float, object, object]: The label, weight, reward spec and shaping spec.
+        The label, weight, reward spec and shaping spec.
 
     Raises:
-        ValueError: If the term carries an unknown key, names no reward, or names a reward with no
-            label that gives it one.
+        ValueError: If the term is malformed, has unknown keys, or has no reward.
     """
     if not isinstance(raw, dict):
         raise ValueError(f"{where}: a term is a mapping of {sorted(TERM_KEYS)}, got "
@@ -86,10 +72,7 @@ def _parse_term(raw: dict, where: str) -> tuple[str, float, object, object]:
 
 
 def _check_unique_labels(labels: list[str]) -> None:
-    """Reject two terms logged under one label, which would collide in the breakdown and in W&B.
-
-    Args:
-        labels (list[str]): The terms' labels, in config order.
+    """Reject duplicate logging labels.
 
     Raises:
         ValueError: If two terms share a label.
@@ -103,17 +86,13 @@ def _check_unique_labels(labels: list[str]) -> None:
 
 
 def build_terms(rcfg: DictConfig) -> list[Term]:
-    """Validate a reward config and build its terms.
-
-    Every term's shape is checked first, so a typo is reported before anything is imported; the
-    rewards and shaping rules are then built, which is what resolves and validates their names and
-    arguments.
+    """Validate all term specs and labels before importing their factories.
 
     Args:
-        rcfg (DictConfig): The reward config: a terms list.
+        rcfg: The reward config: a terms list.
 
     Returns:
-        list[Term]: One built term per config entry, in order.
+        One built term per config entry, in order.
 
     Raises:
         ValueError: If the terms list is empty, two terms share a label, or a term does not
@@ -147,13 +126,13 @@ def build_reward(rcfg: DictConfig):
     """Build the total reward from a reward config.
 
     Args:
-        rcfg (DictConfig): The reward config: a terms list (see configs/grpo.yaml).
+        rcfg: The reward config: a terms list (see configs/grpo.yaml).
 
     Returns:
-        Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]]: Maps
-            (idrs, group_size) to the per-idr totals and a matching breakdown. Each breakdown dict
-            holds every term's weighted contribution under its label, its raw reward under
-            "<label>_raw", and the total.
+        Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]]: Maps (idrs,
+            group_size) to the per-idr totals and a matching breakdown. Each breakdown dict holds
+            every term's weighted contribution under its label, its raw reward under "<label>_raw",
+            and the total.
 
     Raises:
         ValueError: If the config does not validate; see build_terms.

@@ -1,23 +1,8 @@
-"""Template for your own GRPO rewards and shaping. Copy this file into your project and edit it.
+"""Templates for in-process GRPO rewards and shaping; copy and adapt.
 
-A reward reports a raw value; shaping says what a good value is. Both are written the same way --
-a factory returning the thing it builds -- and both are named in a term by their "module:function"
-path, so nothing here needs registering ahead of time:
-
-    reward.terms='[{reward: "cookbook/rewards/custom_rewards.py:fraction_charged", weight: 1.0,
-                    shaping: {name: gaussian, target: 0.25, width: 0.5}}]'
-
-A factory takes the term's arguments and returns what runs every step: for a reward, a function
-mapping the step's IDRs to one raw value each; for shaping, f(raw) -> float. Use lift when you have
-a function that scores a single IDR, which is most of the time. Factories are called once, while
-the config is validated, so validate arguments there and a bad setting fails in seconds.
-
-A scorer whose dependencies cannot coexist with IDiom's runs in its own environment instead: see
-scorers/ beside this file.
-
-A reward whose optimum sits off the IDR distribution will be reached, and entropy and length terms
-will not stop it -- rewarding hydrophobic composition, for instance, yields folded-looking
-sequences that are no longer disordered.
+Factories receive config arguments and return batch rewards or scalar shaping functions.
+Use lift for single-IDR scorers and "module:function" paths to name custom factories.
+Validate settings in the factory. See cookbook/rewards/README.md for configuration.
 """
 
 import re
@@ -26,13 +11,7 @@ from idiom.train.grpo.reward import Reward, Shaping, lift, tolerance
 
 
 def net_charge_fraction() -> Reward:
-    """Build a reward scoring the absolute net charge per residue (K/R positive, D/E negative).
-
-    Natural IDR sets sit near 0.10; a target above that designs a polyelectrolyte.
-
-    Returns:
-        Reward: |net charge| divided by length, or 0.0 for an empty string.
-    """
+    """Return a reward for abs(K + R - D - E) / length; empty sequences score 0."""
     def score(idr: str) -> float:
         if not idr:
             return 0.0
@@ -44,61 +23,36 @@ def net_charge_fraction() -> Reward:
 
 
 def fraction_charged() -> Reward:
-    """Build a reward scoring the fraction of charged residues -- the FCR of the Das-Pappu diagram.
-
-    FCR is how much charge there is and net_charge_fraction is how unbalanced it is; together they
-    separate a polyampholyte from a polyelectrolyte. Natural IDR sets sit near 0.25.
-
-    Returns:
-        Reward: (D + E + K + R) divided by length, or 0.0 for an empty string.
-    """
+    """Return a reward for the fraction of D/E/K/R residues; empty sequences score 0."""
     return lift(lambda idr: sum(idr.count(a) for a in "DEKR") / len(idr) if idr else 0.0)
 
 
 def motif_count(pattern: str = r"[VILMF]K.E") -> Reward:
-    """Build a reward counting non-overlapping matches of a regex in an IDR.
-
-    The default is psi-KxE, the SUMOylation consensus (hydrophobic-Lys-any-Glu); natural
-    repression-domain IDRs carry about 0.6 per sequence. The NDSM variant extends it with a
-    downstream acidic stretch, "[VILMF]K.E[DE]+", and is about 0.1 per sequence.
-
-    This one takes an argument, which is what a term's reward mapping is for:
-
-        reward: {name: "cookbook/rewards/custom_rewards.py:motif_count", pattern: "[VILMF]K.E[DE]+"}
+    """Return a reward counting non-overlapping regex matches per IDR.
 
     Args:
-        pattern (str): The regex to count.
-
-    Returns:
-        Reward: Number of non-overlapping matches per IDR.
+        pattern: Regex; defaults to the SUMOylation consensus [VILMF]K.E.
 
     Raises:
-        ValueError: If the pattern does not compile. Raising in the factory reports it at config
-            time rather than on the first training step.
+        re.error: If pattern is invalid; checked when the factory is called.
     """
     motif = re.compile(pattern)  # compile now, so a bad pattern fails here
     return lift(lambda idr: float(len(motif.findall(idr))))
 
 
 def one_sided(*, target: float, width: float = 1.0, direction: str = "above") -> Shaping:
-    """Build a quadratic penalty on the wrong side of a threshold and no pressure on the right one.
-
-    The three shipped rules -- quadratic, gaussian, identity -- all say *be here*, which is wrong
-    whenever the objective is a threshold: an IDR that must stay expanded wants Rg >= 30 A, not
-    Rg = 30 A. The acceptable side is flat, so it gives no gradient: pair this with a term that has
-    a preference, or the policy settles just past the threshold.
+    """Return a quadratic penalty outside an acceptable threshold.
 
     Args:
-        target (float): The threshold; the penalty is 0 here and on the acceptable side.
-        width (float): Tolerance as a fraction of the target, absolute when the target is 0.
-        direction (str): "above" to accept values >= target, "below" to accept values <= target.
+        target: Threshold where the penalty reaches 0.
+        width: Positive fractional tolerance; absolute when target is 0.
+        direction: "above" accepts values >= target; "below" accepts values <= target.
 
     Returns:
-        Shaping: 0 on the acceptable side, -1 one tolerance into the wrong side, decreasing
-            without bound beyond that.
+        A function scoring 0 on the accepted side and -1 one tolerance outside it.
 
     Raises:
-        ValueError: If direction is neither "above" nor "below", or width is not positive.
+        ValueError: If direction is invalid or width is not positive.
     """
     if direction not in ("above", "below"):
         raise ValueError(f"one_sided direction must be 'above' or 'below', got {direction!r}")

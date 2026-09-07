@@ -1,15 +1,6 @@
-"""A reward for reproducing a target's SAE feature code.
+"""Reward the fraction of a target SAE signature active in an IDR.
 
-sae_signature is a reward factory like any other, so which signature a run chases, and which SAE
-and signature file it is read from, are arguments in the term and are saved with the run.
-
-    reward.terms:
-      - {reward: {name: sae_signature, signature: nucleolus, features: signature.json},
-         label: sae, weight: 1.0}
-
-The reward scores an IDR by the fraction of the signature's features that appear in the SAE top-k
-at any of the IDR's residues, a value in [0, 1]. The signature file maps a case name to a mapping
-of signature name to feature ids, and can be built with cookbook/notebooks/feature_enrichment.ipynb.
+Signature JSON maps case names to {signature_name: [feature_ids]}.
 """
 
 from __future__ import annotations
@@ -45,11 +36,11 @@ def _featuresets(features: str, case: str) -> dict:
     """Return the {name: [feature ids]} mapping for one case of a signature file.
 
     Args:
-        features (str): Path to the signature JSON, {case: {name: [feature ids]}}.
-        case (str): Which case of the file to read.
+        features: Path to the signature JSON, {case: {name: [feature ids]}}.
+        case: Which case of the file to read.
 
     Returns:
-        dict: The signature name to feature id list mapping for that case.
+        The signature name to feature id list mapping for that case.
 
     Raises:
         KeyError: If the case is not present in the signature file.
@@ -80,21 +71,20 @@ def _target_ids(signature: str, features: str, case: str, sae_dir: str, device: 
 def feature_match(idr: str, signature: str, *, features: str = DEFAULT_FEATURES,
                   case: str = DEFAULT_CASE, sae: str = DEFAULT_SAE,
                   device: str | None = None) -> float:
-    """Return the fraction of a signature's features that fire on an IDR.
+    """Return the fraction of signature features with positive activation on an IDR.
 
-    The IDR is encoded through the SAE in the unprompted FIM format; a feature fires if it is in
-    the SAE top-k at any of the IDR's residues.
+    Encode in unprompted FIM format; a feature counts if active at any selected residue.
 
     Args:
-        idr (str): The decoded IDR residue string.
-        signature (str): Signature name in the signature file.
-        features (str): Path to the signature JSON.
-        case (str): Which case of the signature file to read.
-        sae (str): SAE to use as the lens, as a Hub repo id or a local directory.
-        device (str | None): Torch device for the lens; cuda when available if None.
+        idr: The decoded IDR residue string.
+        signature: Signature name in the signature file.
+        features: Path to the signature JSON.
+        case: Which case of the signature file to read.
+        sae: SAE to use as the lens, as a Hub repo id or a local directory.
+        device: Torch device for the lens; cuda when available if None.
 
     Returns:
-        float: The fraction of the signature's features that fire, or 0.0 for an empty string.
+        The fraction of the signature's features that fire, or 0.0 for an empty string.
 
     Raises:
         KeyError: If the case or the signature is not in the signature file.
@@ -114,21 +104,19 @@ def feature_match(idr: str, signature: str, *, features: str = DEFAULT_FEATURES,
 
 def sae_signature(signature: str, *, features: str = DEFAULT_FEATURES, case: str = DEFAULT_CASE,
                   sae: str = DEFAULT_SAE, device: str | None = None) -> Reward:
-    """Build the feature-match reward for one signature, from a term's arguments.
+    """Build a feature-match reward, validating the signature immediately.
 
-    The signature file is read and validated here, so a missing file, case or signature fails at
-    config time rather than on the first training step. The SAE itself is loaded lazily, on the
-    first IDR scored.
+    Load the SAE lazily on the first non-empty IDR.
 
     Args:
-        signature (str): Signature name in the signature file.
-        features (str): Path to the signature JSON, {case: {name: [feature ids]}}.
-        case (str): Which case of the signature file to read.
-        sae (str): SAE to use as the lens, as a Hub repo id or a local directory.
-        device (str | None): Torch device for the lens; cuda when available if None.
+        signature: Signature name in the signature file.
+        features: Path to the signature JSON, {case: {name: [feature ids]}}.
+        case: Which case of the signature file to read.
+        sae: SAE to use as the lens, as a Hub repo id or a local directory.
+        device: Torch device for the lens; cuda when available if None.
 
     Returns:
-        Reward: A raw reward in [0, 1] per IDR.
+        A raw reward in [0, 1] per IDR.
 
     Raises:
         ValueError: If the signature file cannot be read, or holds neither the case nor the

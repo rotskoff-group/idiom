@@ -1,17 +1,7 @@
-"""Testing which SAE features are over-represented in a set of sequences against a background.
+"""SAE feature enrichment against a background sequence set.
 
-A feature fires in a sequence if the SAE selects it at any of that sequence's residues, counted
-once per sequence. From the positive and background firing counts, enrich computes a
-Haldane-Anscombe log2 odds ratio, standardizes it against a hypergeometric null, converts that to a
-two-sided p-value, and controls the false discovery rate with Benjamini-Hochberg. A feature is
-enriched when its FDR, log2 odds ratio, and prevalence all pass the module's thresholds, and
-top_features keeps the strongest as a signature.
-
-boundary_features identifies features whose strongest firings sit at an IDR's first or last
-residues, detecting the excision boundary rather than a motif; top_features drops them by default.
-
-load_sequences reads a FASTA whether or not its headers carry an IDR span, and length_match samples
-a background whose length distribution follows the positive set's.
+Uses smoothed log2 odds ratios, a hypergeometric null, and Benjamini-Hochberg FDR.
+Signatures exclude boundary-associated features by default.
 """
 
 from __future__ import annotations
@@ -47,8 +37,7 @@ def feature_counts(feature_dir, keep=None) -> tuple[np.ndarray, int]:
         keep (Iterable[int] | None): Restrict the count to these sequence indices, or None for all.
 
     Returns:
-        tuple[np.ndarray, int]: Per-feature sequence counts of length num_latents, and the number
-            of sequences counted.
+        Per-feature sequence counts of length num_latents, and the number of sequences counted.
     """
     d = Path(feature_dir)
     ti = np.load(d / "top_indices.npy")
@@ -74,15 +63,7 @@ def feature_counts(feature_dir, keep=None) -> tuple[np.ndarray, int]:
 
 
 def bh_fdr(p: np.ndarray) -> np.ndarray:
-    """Compute Benjamini-Hochberg adjusted p-values.
-
-    Args:
-        p (np.ndarray): Raw p-values.
-
-    Returns:
-        np.ndarray: Adjusted p-values in the input order, each clipped to [0, 1] and
-            non-decreasing in the raw p-value.
-    """
+    """Return Benjamini-Hochberg adjusted p-values in input order, clipped to [0, 1]."""
     p = np.asarray(p, float)
     n = p.size
     order = np.argsort(p)
@@ -106,17 +87,17 @@ def enrich(a: np.ndarray, n_pos: int, b: np.ndarray, n_neg: int, num_latents: in
     from the FDR correction, leaving their fdr entry NaN.
 
     Args:
-        a (np.ndarray): Per-feature count of positive sequences in which the feature fires.
-        n_pos (int): Number of positive sequences.
-        b (np.ndarray): Per-feature count of background sequences in which the feature fires.
-        n_neg (int): Number of background sequences.
-        num_latents (int): Total number of SAE latents.
-        smooth (float): Pseudocount added to all four contingency cells.
-        min_total_fire (int): Minimum pooled firing count for a feature to be tested.
+        a: Per-feature count of positive sequences in which the feature fires.
+        n_pos: Number of positive sequences.
+        b: Per-feature count of background sequences in which the feature fires.
+        n_neg: Number of background sequences.
+        num_latents: Total number of SAE latents.
+        smooth: Pseudocount added to all four contingency cells.
+        min_total_fire: Minimum pooled firing count for a feature to be tested.
 
     Returns:
-        dict: The counts a and b, the sizes n_pos and n_neg, and the per-feature arrays log2or, z,
-            p, fdr, active, prev_pos, and prev_neg.
+        The counts a and b, the sizes n_pos and n_neg, and the per-feature arrays log2or, z, p, fdr,
+        active, prev_pos, and prev_neg.
     """
     a = np.pad(np.asarray(a, float), (0, num_latents - len(a)))
     b = np.pad(np.asarray(b, float), (0, num_latents - len(b)))
@@ -143,13 +124,13 @@ def enriched_mask(result: dict, *, fdr_alpha: float = FDR_ALPHA,
     """Return a boolean mask of the features passing the FDR, odds-ratio, and prevalence cutoffs.
 
     Args:
-        result (dict): Output of enrich.
-        fdr_alpha (float): FDR ceiling.
-        log2or_floor (float): Minimum log2 odds ratio.
-        prev_pos_floor (float): Minimum prevalence in the positive set.
+        result: Output of enrich.
+        fdr_alpha: FDR ceiling.
+        log2or_floor: Minimum log2 odds ratio.
+        prev_pos_floor: Minimum prevalence in the positive set.
 
     Returns:
-        np.ndarray: A boolean mask over all features.
+        A boolean mask over all features.
     """
     return ((result["fdr"] < fdr_alpha)
             & (result["log2or"] >= log2or_floor)
@@ -159,21 +140,17 @@ def enriched_mask(result: dict, *, fdr_alpha: float = FDR_ALPHA,
 def boundary_features(feature_dir, feature_ids, *, edge: int = BOUNDARY_EDGE,
                       frac_thresh: float = BOUNDARY_FRAC,
                       top_windows: int = BOUNDARY_TOP_WINDOWS) -> set[int]:
-    """Identify features whose strongest firings sit at the first or last residues of a sequence.
-
-    For each candidate feature, the top_windows highest-activating firings are examined and the
-    feature is flagged if at least frac_thresh of them fall within edge residues of either end.
+    """Identify features concentrated near the ends of stored FIM sequences.
 
     Args:
         feature_dir (str | Path): A feature dataset directory.
         feature_ids (Iterable[int]): Candidate features to test.
-        edge (int): Number of residues from either end that count as a boundary.
-        frac_thresh (float): Fraction of top firings at a boundary above which a feature is
-            flagged.
-        top_windows (int): Number of top-activating firings per feature to examine.
+        edge: Number of residues from either end that count as a boundary.
+        frac_thresh: Fraction of top firings at a boundary above which a feature is flagged.
+        top_windows: Number of top-activating firings per feature to examine.
 
     Returns:
-        set[int]: The subset of feature_ids that were flagged.
+        The subset of feature_ids that were flagged.
     """
     feature_ids = [int(f) for f in feature_ids]
     if not feature_ids:
@@ -230,17 +207,17 @@ def top_features(result: dict, *, n: int = 30, prev_min: float = PREV_POS_FLOOR,
     """Select a signature as the top n enriched features, ranked by log2 odds ratio.
 
     Args:
-        result (dict): Output of enrich.
-        n (int): Maximum number of features to keep.
-        prev_min (float): Minimum prevalence in the positive set.
-        drop_boundary (bool): If True, remove boundary features before truncating to n.
-        feature_dir (str | Path | None): Feature dataset used to detect boundary features;
-            required when drop_boundary is True.
+        result: Output of enrich.
+        n: Maximum number of features to keep.
+        prev_min: Minimum prevalence in the positive set.
+        drop_boundary: If True, remove boundary features before truncating to n.
+        feature_dir (str | Path | None): Feature dataset used to detect boundary features; required
+            when drop_boundary is True.
         **mask_kwargs: Forwarded to enriched_mask as fdr_alpha, log2or_floor, and prev_pos_floor.
 
     Returns:
-        list[int]: Feature ids in descending order of log2 odds ratio, fewer than n if the
-            enriched pool is smaller.
+        Feature ids in descending order of log2 odds ratio, fewer than n if the enriched pool is
+        smaller.
 
     Raises:
         ValueError: If drop_boundary is True and feature_dir is None.
@@ -266,12 +243,12 @@ def write_signature(path, signatures: dict[str, list[int]], *, case: str = "top3
 
     Args:
         path (str | Path): Output JSON path.
-        signatures (dict[str, list[int]]): Signature name to feature ids.
-        case (str): Case name to store the signatures under.
-        provenance (dict | None): Notes merged into the file's "_provenance" entry.
+        signatures: Signature name to feature ids.
+        case: Case name to store the signatures under.
+        provenance: Notes merged into the file's "_provenance" entry.
 
     Returns:
-        Path: The written path.
+        The written path.
     """
     out = Path(path)
     blob = json.loads(out.read_text()) if out.exists() else {}
@@ -284,15 +261,9 @@ def write_signature(path, signatures: dict[str, list[int]], *, case: str = "top3
 
 
 def load_sequences(path) -> list[Record]:
-    """Read a FASTA into Records, tolerating headers with no _IDR_x-y span.
+    """Read canonical FASTA records, treating unusable IDR spans as the whole sequence.
 
-    A header without a usable span becomes a record whose whole sequence is the IDR.
-
-    Args:
-        path (str | Path): FASTA file.
-
-    Returns:
-        list[Record]: One record per sequence, in file order.
+    Records retain file order.
     """
     out = []
     for header, seq in read_fasta(path):

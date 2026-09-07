@@ -1,4 +1,4 @@
-"""P1 tests (CPU-only): FASTA reader + drop policy, header parsing, record dataset."""
+"""tests (CPU-only): FASTA reader + drop policy, header parsing, record dataset."""
 
 import torch
 

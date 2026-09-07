@@ -1,18 +1,8 @@
-"""External reward models, run as subprocess scorers.
+"""Persistent subprocess rewards using newline-delimited JSON.
 
-A scorer is a program that speaks newline-delimited JSON on stdin and stdout, one exchange per
-GRPO step:
-
-    ->  {"sequences": ["ACDEF...", "GHIKL..."]}
-    <-  {"scores": [24.8, 31.2]}          # or {"error": "..."}
-
-It imports nothing from IDiom, so it runs in its own virtualenv, conda environment, or container,
-and returns a raw reward in its own units; the term's shaping is applied on the IDiom side.
-
-A command can be checked before it is used in a run:
-
-    python -m idiom.train.grpo.reward.external --cmd "<scorer command>" \
-        --shaping quadratic --target 25 --width 0.2
+Requests contain {"sequences": [...]}; responses contain {"scores": [...]} or
+{"error": "..."}. Scores follow input order; shaping is applied in IDiom.
+Run python -m idiom.train.grpo.reward.external --help to check a scorer command.
 """
 
 from __future__ import annotations
@@ -46,17 +36,7 @@ def _argv(cmd) -> list[str]:
 
 
 def _label_from_argv(argv: list[str]) -> str:
-    """Name the child by its script, for the stderr prefix, so two scorers are told apart.
-
-    The first ".py" argument is the scorer itself (uv's own flags come before it); its basename is
-    the tag. A command that runs no script falls back to its program name, or "scorer".
-
-    Args:
-        argv (list[str]): The scorer command as arguments.
-
-    Returns:
-        str: A short tag, e.g. "finches" for ".../scorers/finches.py".
-    """
+    """Return the first .py argument's stem, falling back to the program name or "scorer"."""
     script = next((a for a in argv if a.endswith(".py")), argv[0] if argv else "scorer")
     return os.path.splitext(os.path.basename(script))[0] or "scorer"
 
@@ -65,15 +45,15 @@ def parse_response(line: str, n: int) -> list[float]:
     """Validate one response line and return its scores.
 
     Args:
-        line (str): One line of the scorer's stdout.
-        n (int): Number of sequences that were sent.
+        line: One line of the scorer's stdout.
+        n: Number of sequences that were sent.
 
     Returns:
-        list[float]: Exactly n finite scores, in the order the sequences were sent.
+        Exactly n finite scores, in the order the sequences were sent.
 
     Raises:
-        ValueError: If the line is not a JSON object, carries no "scores" list, carries a number
-            of scores other than n, or holds a value that is not a finite number.
+        ValueError: If the line is not a JSON object, carries no "scores" list, carries a number of
+            scores other than n, or holds a value that is not a finite number.
         RuntimeError: If the scorer returned an "error" field instead of scores.
     """
     try:
@@ -124,12 +104,12 @@ class ScorerProcess:
 
         Args:
             cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
-            cwd (str | None): Working directory for the child; the current directory if None.
-            timeout (float): Seconds to wait for a single response.
-            env (dict | None): Environment variables for the child, layered over this process's own
-                environment; None passes it through unchanged.
-            label (str | None): Tag prefixed to the child's forwarded stderr; the script's basename
-                (e.g. "finches") when None, which tells two scorers apart in the log.
+            cwd: Working directory for the child; the current directory if None.
+            timeout: Seconds to wait for a single response.
+            env: Environment variables for the child, layered over this process's own environment;
+                None passes it through unchanged.
+            label: Tag prefixed to the child's forwarded stderr; the script's basename (e.g.
+                "finches") when None, which tells two scorers apart in the log.
         """
         self.argv = _argv(cmd)
         self.cwd = cwd or os.getcwd()
@@ -196,10 +176,10 @@ class ScorerProcess:
         """Send one batch to the running child and read one response.
 
         Args:
-            seqs (list[str]): Sequences to score.
+            seqs: Sequences to score.
 
         Returns:
-            list[float]: One score per sequence, in order.
+            One score per sequence, in order.
 
         Raises:
             TimeoutError: If no response arrives within the timeout; the child is stopped.
@@ -229,10 +209,10 @@ class ScorerProcess:
         If the child dies during the batch, it is restarted once and the batch is retried.
 
         Args:
-            seqs (list[str]): Sequences to score.
+            seqs: Sequences to score.
 
         Returns:
-            list[float]: One score per sequence, in order.
+            One score per sequence, in order.
 
         Raises:
             RuntimeError: If the child cannot be started or fails the handshake.
@@ -252,29 +232,23 @@ class ScorerProcess:
 
 def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
            env: dict | None = None, cache_max: int = 100_000, label: str | None = None) -> Reward:
-    """Build a reward backed by one external scorer subprocess.
+    """Return a reward with its own lazy subprocess and score cache.
 
-    This is the reward factory a term names to run a reward model in its own environment:
-
-        reward: {name: scorer, cmd: "uv run --script my_scorer.py", timeout: 600}
-
-    Each call creates an independent scorer with its own process and score cache. The child is
-    started on the first step, not here. Empty strings score 0.0 without a round trip and duplicate
-    sequences are sent once; scores are cached across steps until the cache exceeds cache_max
-    entries, at which point it is cleared.
+    Empty strings score 0; duplicate sequences are sent once. Before storing new scores,
+    clear the cache if it already exceeds cache_max.
 
     Args:
         cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
-        timeout (float): Seconds to wait for one response.
-        maxlen (int): Truncate sequences to this length before sending; 0 sends them whole.
-        cwd (str | None): Working directory for the child; the current directory if None.
-        env (dict | None): Environment variables set for the child, over this process's own.
-        cache_max (int): Number of cached sequences above which the cache is cleared.
-        label (str | None): Tag prefixed to the child's forwarded stderr; the script's basename
-            (e.g. "finches") when None, which tells two scorers apart in the log.
+        timeout: Seconds to wait for one response.
+        maxlen: Truncate sequences to this length before sending; 0 sends them whole.
+        cwd: Working directory for the child; the current directory if None.
+        env: Environment variables set for the child, over this process's own.
+        cache_max: Number of cached sequences above which the cache is cleared.
+        label: Tag prefixed to the child's forwarded stderr; the script's basename (e.g. "finches")
+            when None, which tells two scorers apart in the log.
 
     Returns:
-        Reward: Maps a step's IDRs to the scorer's raw rewards, in order.
+        Maps a step's IDRs to the scorer's raw rewards, in order.
     """
     child = ScorerProcess(cmd, cwd=cwd, timeout=timeout, env=env, label=label)
     cache: dict[str, float] = {}
@@ -296,12 +270,12 @@ def check(cmd, shaping_spec: dict | None = None, seqs: list[str] | None = None) 
 
     Args:
         cmd (str | list[str]): The scorer command to check.
-        shaping_spec (dict | None): A term's shaping spec -- a name plus that rule's arguments --
-            or None to show the raw reward unshaped.
-        seqs (list[str] | None): Sequences to score; a small built-in set if None.
+        shaping_spec: A term's shaping spec -- a name plus that rule's arguments -- or None to show
+            the raw reward unshaped.
+        seqs: Sequences to score; a small built-in set if None.
 
     Returns:
-        int: 0 if the scorer answered, 1 if it failed.
+        0 if the scorer answered, 1 if it failed.
     """
     seqs = seqs or ["MEEEKKKKSSSTTTDDDQQQQNNNN",
                     "GSGSGSGSGSGSGSGSGSGSGSGSGSGSGS",
@@ -329,10 +303,10 @@ def main(argv: list[str] | None = None) -> int:
     """Parse arguments and check an external scorer command.
 
     Args:
-        argv (list[str] | None): Argument list; sys.argv[1:] if None.
+        argv: Argument list; sys.argv[1:] if None.
 
     Returns:
-        int: Process exit status.
+        Process exit status.
     """
     p = argparse.ArgumentParser(description="Check an external reward scorer command.")
     p.add_argument("--cmd", required=True, help="command that runs the scorer")

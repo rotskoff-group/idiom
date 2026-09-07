@@ -1,9 +1,4 @@
-"""The idiom_train_grpo entrypoint.
-
-build(cfg) wires the GRPO module and its prompt dataset; run(cfg) configures the trainer and fits.
-The reward is the weighted sum of the terms in cfg.reward, all of them named by the run;
-see configs/grpo.yaml.
-"""
+"""Hydra entrypoint for GRPO with explicitly configured reward terms."""
 
 from __future__ import annotations
 
@@ -33,10 +28,10 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     cfg.prompts.fasta.
 
     Args:
-        cfg (DictConfig): Resolved GRPO config, with grpo, reward, prompts, and init_from.
+        cfg: Resolved GRPO config, with grpo, reward, prompts, and init_from.
 
     Returns:
-        tuple[LitGRPO, PromptDataset]: The GRPO module and its prompt dataset.
+        The GRPO module and its prompt dataset.
 
     Raises:
         ValueError: If cfg.prompts.mode is neither "unprompted" nor "prompted".
@@ -62,7 +57,7 @@ def run(cfg: DictConfig) -> None:
     alongside last.ckpt; otherwise only the final step is saved.
 
     Args:
-        cfg (DictConfig): Resolved GRPO config.
+        cfg: Resolved GRPO config.
     """
     L.seed_everything(cfg.seed, workers=True)
     out_dir = Path(cfg.out_dir)
@@ -107,11 +102,7 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="grpo")
 def main(cfg: DictConfig) -> None:
-    """Run GRPO post-training with the Hydra-composed config.
-
-    Args:
-        cfg (DictConfig): The composed config.
-    """
+    """Run GRPO post-training from the Hydra config."""
     run(cfg)
 
 

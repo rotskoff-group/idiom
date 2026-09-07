@@ -2,30 +2,11 @@
 # requires-python = ">=3.10"
 # dependencies = ["finches @ git+https://github.com/idptools/finches.git"]
 # ///
-"""Score IDRs with FINCHES (https://github.com/idptools/finches) as an external GRPO reward.
+"""Score FINCHES interaction epsilon (https://github.com/idptools/finches).
 
-FINCHES computes epsilon, a mean-field interaction parameter derived from a coarse-grained force
-field (Mpipi-GG or CALVADOS). Negative epsilon means attractive, positive means repulsive.
-
-Two modes:
-
-    --mode homotypic                 epsilon(seq, seq): self-interaction, i.e. how strongly the
-                                     sequence likes itself (LLPS propensity).
-    --mode heterotypic --partner S   epsilon(seq, S): interaction with a fixed partner sequence,
-                                     which is how you design a co-condensate or binding partner
-                                     for a protein you already have.
-
-Reference values on this scale (Mpipi, homotypic): an FUS-LC-like aromatic tract is about -8.5,
-IDiom's base generations average +3.6 (sd 7.0), and natural ProtGPS nucleolus IDRs average +7.7.
-Aim at a negative target to design self-attractive sequences:
-
-    reward.terms:
-      - {reward: {name: scorer, cmd: "uv run --script cookbook/rewards/scorers/finches.py --mode homotypic"},
-         shaping: {name: quadratic, target: -6.0, width: 1.0}, label: eps, weight: 1.0}
-
-Epsilon is unbounded, so pair it with entropy and length terms.
-
-    --forcefield mpipi | calvados     which coarse-grained force field epsilon is derived from.
+Use --mode homotypic for self-interaction or --mode heterotypic --partner SEQUENCE.
+Choose --forcefield mpipi or calvados. Negative epsilon indicates attraction.
+Run with uv run --script; see cookbook/rewards/README.md for reward configuration.
 """
 
 import argparse
@@ -74,14 +55,10 @@ def build():
 
 
 def serve(build):
-    """Drive the newline-JSON scorer protocol until stdin closes.
+    """Serve newline-delimited JSON requests until stdin closes.
 
-    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
-    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
-    and model loading inside build() keeps any chatter they print off the protocol stream.
-
-    Args:
-        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    Call build() once to obtain a batch scorer. Redirect library output to stderr,
+    score empty sequences as 0, and report scoring exceptions as JSON errors.
     """
     # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
     # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.

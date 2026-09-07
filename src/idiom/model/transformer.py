@@ -1,9 +1,4 @@
-"""The IDiom transformer: a sequence-only, pre-norm, RoPE transformer with KV-cache support.
-
-forward serves both a full-sequence pass (no cache) and autoregressive decoding (pass a KVCache,
-and positions continue from cache.length). With return_hidden_states it also returns each block's
-residual-stream output.
-"""
+"""Pre-norm RoPE transformer with optional tied embeddings and KV caching."""
 
 from __future__ import annotations
 
@@ -24,8 +19,8 @@ class SwiGLU(nn.Module):
         """Build the fused gate/up projection and the down projection.
 
         Args:
-            d_model (int): Input and output width.
-            expansion_ratio (float): Hidden width as a multiple of d_model.
+            d_model: Input and output width.
+            expansion_ratio: Hidden width as a multiple of d_model.
         """
         super().__init__()
         hidden = int(expansion_ratio * d_model)
@@ -33,14 +28,7 @@ class SwiGLU(nn.Module):
         self.w_down = nn.Linear(hidden, d_model, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:
-        """Apply down(silu(gate) * up).
-
-        Args:
-            x (Tensor): Input of shape [..., d_model].
-
-        Returns:
-            Tensor: Output of shape [..., d_model].
-        """
+        """Apply down(silu(gate) * up), preserving shape [..., d_model]."""
         gate, up = self.w_gate_up(x).chunk(2, dim=-1)
         return self.w_down(F.silu(gate) * up)
 
@@ -52,7 +40,7 @@ class Block(nn.Module):
         """Build the block's two norms, attention, and feed-forward network.
 
         Args:
-            cfg (ModelConfig): Architecture config for the attention and SwiGLU submodules.
+            cfg: Architecture config for the attention and SwiGLU submodules.
         """
         super().__init__()
         self.attn_norm = RMSNorm(cfg.d_model, cfg.norm_eps)
@@ -92,7 +80,7 @@ class IDiomTransformer(nn.Module):
         projections (attention wo and SwiGLU w_down) are rescaled by 1 / sqrt(2 * n_layers).
 
         Args:
-            cfg (ModelConfig): The architecture to build.
+            cfg: The architecture to build.
         """
         super().__init__()
         self.cfg = cfg
@@ -130,9 +118,9 @@ class IDiomTransformer(nn.Module):
         When a cache is given, positions continue from cache.length and the cache is extended by L.
 
         Args:
-            tokens (Tensor): Token ids of shape [B, L].
-            cache (KVCache | None): Cache to read and extend, or None for a full forward.
-            return_hidden_states (bool): If True, also return each block's residual-stream output.
+            tokens: Token ids of shape [B, L].
+            cache: Cache to read and extend, or None for a full forward.
+            return_hidden_states: If True, also return each block's residual-stream output.
 
         Returns:
             Tensor | tuple[Tensor, list[Tensor]]: Logits [B, L, vocab_size], or (logits, hidden)

@@ -1,4 +1,4 @@
-"""P0 smoke tests: the v2 package skeleton imports and resolves CPU. CPU-only."""
+"""smoke tests: the package imports and resolves CPU. CPU-only."""
 
 from idiom.utils.device import is_cpu_only, resolve_device
 

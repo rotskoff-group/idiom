@@ -1,10 +1,4 @@
-"""KV-cached autoregressive generation.
-
-START is prepended to the prompt, the prompt is prefilled in one forward pass that fills the
-cache, and tokens are then decoded one at a time. Each sequence in a batch stops at its first STOP
-token and is padded thereafter. Sampling is controlled by temperature (0 for greedy), top_k, and
-top_p.
-"""
+"""KV-cached generation with temperature, top-k, and nucleus sampling."""
 
 from __future__ import annotations
 
@@ -42,20 +36,20 @@ def sample_next_token(
     top_p: float | None = None,
     generator: torch.Generator | None = None,
 ) -> Tensor:
-    """Sample one token id per row of logits.
+    """Sample one token per logits row.
 
-    Filtering is applied after temperature scaling, top_k before top_p.
+    Apply temperature, top-k, then top-p. Temperature 0 uses argmax without filtering.
 
     Args:
-        logits (Tensor): Logits of shape [B, V].
-        temperature (float): Sampling temperature; 0 selects the argmax.
-        top_k (int | None): If set, restrict sampling to the top_k highest-logit tokens.
-        top_p (float | None): If set, restrict sampling to the smallest set of tokens whose
-            cumulative probability exceeds top_p.
-        generator (torch.Generator | None): RNG for reproducible sampling.
+        logits: Logits of shape [B, V].
+        temperature: Sampling temperature; 0 selects the argmax.
+        top_k: If set, restrict sampling to the top_k highest-logit tokens.
+        top_p: If set, restrict sampling to the smallest set of tokens whose cumulative probability
+            exceeds top_p.
+        generator: RNG for reproducible sampling.
 
     Returns:
-        Tensor: One sampled token id per row, shape [B].
+        One sampled token id per row, shape [B].
     """
     if temperature == 0:
         return logits.argmax(dim=-1)
@@ -77,25 +71,24 @@ def generate(
     tokenizer: Tokenizer | None = None,
     generator: torch.Generator | None = None,
 ) -> Tensor:
-    """Generate tokens continuing each prompt in a batch.
+    """Generate continuations, prepending START internally.
 
-    Decoding stops early once every sequence has emitted stop_id; sequences that finish first are
-    filled with the tokenizer's PAD id.
+    Finished rows retain stop_id and receive PAD thereafter. Stop once all rows finish.
 
     Args:
         model: The transformer to sample from.
-        prompt_tokens (Tensor): Prompt token ids of shape [B, P]; START is prepended internally.
-        max_new_tokens (int): Maximum number of tokens to generate.
-        temperature (float): Sampling temperature; 0 selects the argmax.
-        top_k (int | None): Top-k filtering cutoff, or None.
-        top_p (float | None): Top-p (nucleus) filtering cutoff, or None.
-        stop_id (int | str | None): "auto" uses the tokenizer's STOP id, an int uses that id, and
-            None disables early stopping so exactly max_new_tokens are generated.
-        tokenizer (Tokenizer | None): Tokenizer; a default Tokenizer if None.
-        generator (torch.Generator | None): RNG for reproducible sampling.
+        prompt_tokens: Prompt token ids of shape [B, P]; START is prepended internally.
+        max_new_tokens: Maximum number of tokens to generate.
+        temperature: Sampling temperature; 0 selects the argmax.
+        top_k: Top-k filtering cutoff, or None.
+        top_p: Top-p (nucleus) filtering cutoff, or None.
+        stop_id: "auto" uses the tokenizer's STOP id, an int uses that id, and None disables early
+            stopping so exactly max_new_tokens are generated.
+        tokenizer: Defaults to Tokenizer().
+        generator: RNG for reproducible sampling.
 
     Returns:
-        Tensor: Generated token ids of shape [B, T], where T <= max_new_tokens.
+        Generated token ids of shape [B, T], where T <= max_new_tokens.
     """
     tok = tokenizer or Tokenizer()
     if stop_id == "auto":

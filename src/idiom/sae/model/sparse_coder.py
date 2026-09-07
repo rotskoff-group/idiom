@@ -1,14 +1,4 @@
-"""The top-k / group-max sparse autoencoder, following EleutherAI sparsify.
-
-- the encoder applies ReLU then top-k selection;
-- b_dec is subtracted before the encoder and added back after the decoder;
-- the decoder is a single weight W_dec of shape [num_latents, d_in] whose rows are unit-norm;
-- the main loss is the fraction of variance unexplained (FVU), normalized by the batch variance;
-- the AuxK loss has the top dead latents predict the reconstruction residual;
-- Multi-TopK is an optional auxiliary FVU computed at 4k active latents.
-
-forward returns a ForwardOutput carrying the reconstruction and all three losses.
-"""
+"""Top-k and group-max sparse autoencoders with FVU, AuxK, and Multi-TopK losses."""
 
 from __future__ import annotations
 
@@ -24,9 +14,9 @@ class EncoderOutput(NamedTuple):
     """The selected latents and the activations they were selected from.
 
     Attributes:
-        top_acts (Tensor): Activations of the selected latents, shape [..., k].
-        top_indices (Tensor): Indices of the selected latents, shape [..., k].
-        pre_acts (Tensor): Post-ReLU activations before selection, shape [..., num_latents].
+        top_acts: Activations of the selected latents, shape [..., k].
+        top_indices: Indices of the selected latents, shape [..., k].
+        pre_acts: Post-ReLU activations before selection, shape [..., num_latents].
     """
 
     top_acts: Tensor
@@ -38,12 +28,12 @@ class ForwardOutput(NamedTuple):
     """The reconstruction of a forward pass and its losses.
 
     Attributes:
-        sae_out (Tensor): The reconstruction, shape [..., d_in].
-        latent_acts (Tensor): Activations of the selected latents, shape [..., k].
-        latent_indices (Tensor): Indices of the selected latents, shape [..., k].
-        fvu (Tensor): Scalar fraction of variance unexplained.
-        auxk_loss (Tensor): Scalar dead-latent revival loss; 0 when no latents are marked dead.
-        multi_topk_fvu (Tensor): Scalar Multi-TopK FVU; 0 unless multi_topk is set.
+        sae_out: The reconstruction, shape [..., d_in].
+        latent_acts: Activations of the selected latents, shape [..., k].
+        latent_indices: Indices of the selected latents, shape [..., k].
+        fvu: Scalar fraction of variance unexplained.
+        auxk_loss: Scalar dead-latent revival loss; 0 when no latents are marked dead.
+        multi_topk_fvu: Scalar Multi-TopK FVU; 0 unless multi_topk is set.
     """
 
     sae_out: Tensor
@@ -55,18 +45,12 @@ class ForwardOutput(NamedTuple):
 
 
 class SparseCoder(nn.Module):
-    """Top-k (or group-max) sparse autoencoder over a single layer's residual stream.
+    """Top-k or group-max sparse autoencoder over a layer's residual stream.
 
     Attributes:
-        d_in (int): Input dimension.
-        num_latents (int): Number of latents.
-        activation (str): Selection rule, "topk" or "groupmax".
-        multi_topk (bool): Whether the Multi-TopK auxiliary loss is computed.
-        normalize_decoder (bool): Whether decoder rows are held at unit norm.
-        k (Tensor): Number of latents kept active per token, stored as a buffer.
-        encoder (nn.Linear): The encoder projection.
-        W_dec (nn.Parameter): Decoder weight of shape [num_latents, d_in].
-        b_dec (nn.Parameter): Decoder bias of shape [d_in].
+        k: Scalar tensor storing the number of selected latents per token.
+        W_dec: Decoder weights, shape [num_latents, d_in].
+        b_dec: Decoder bias, shape [d_in].
     """
 
     def __init__(
@@ -82,22 +66,19 @@ class SparseCoder(nn.Module):
         device: str | torch.device | None = None,
         dtype: torch.dtype | None = None,
     ):
-        """Build the encoder, decoder, and decoder bias.
-
-        The decoder is initialized from the encoder weights and, when normalize_decoder is set,
-        row-normalized.
+        """Initialize the decoder from encoder weights, optionally normalizing its rows.
 
         Args:
-            d_in (int): Input (residual-stream) dimension.
-            num_latents (int): Number of latents; 0 uses d_in * expansion_factor.
-            expansion_factor (int): Latents-per-input multiplier used when num_latents is 0.
-            k (int): Number of latents kept active per token.
-            activation (Literal["topk", "groupmax"]): Selection rule: global top-k, or the maximum
-                within each of k equal groups of latents.
-            multi_topk (bool): If True, also compute the Multi-TopK auxiliary FVU.
-            normalize_decoder (bool): If True, initialize decoder rows to unit norm.
-            device (str | torch.device | None): Device for the parameters.
-            dtype (torch.dtype | None): Dtype for the parameters.
+            d_in: Input (residual-stream) dimension.
+            num_latents: Number of latents; 0 uses d_in * expansion_factor.
+            expansion_factor: Latents-per-input multiplier used when num_latents is 0.
+            k: Number of latents kept active per token.
+            activation: Selection rule: global top-k, or the maximum within each of k equal groups
+                of latents.
+            multi_topk: If True, also compute the Multi-TopK auxiliary FVU.
+            normalize_decoder: If True, initialize decoder rows to unit norm.
+            device: Device for the parameters.
+            dtype: Dtype for the parameters.
 
         Raises:
             ValueError: If activation is "groupmax" and num_latents is not divisible by k.
@@ -143,11 +124,10 @@ class SparseCoder(nn.Module):
         """Encode an input by subtracting b_dec, projecting, applying ReLU, and selecting latents.
 
         Args:
-            x (Tensor): Input activations of shape [..., d_in].
+            x: Input activations of shape [..., d_in].
 
         Returns:
-            EncoderOutput: The selected activations and indices, unsorted, and the pre-selection
-                activations.
+            The selected activations and indices, unsorted, and the pre-selection activations.
         """
         pre_acts = F.relu(self.encoder(x - self.b_dec))
         k = int(self.k)
@@ -168,37 +148,23 @@ class SparseCoder(nn.Module):
         """Decode a sparse latent set as a weighted sum of decoder rows, plus b_dec.
 
         Args:
-            top_acts (Tensor): Activations of the selected latents, shape [..., k].
-            top_indices (Tensor): Latent indices of the selected latents, shape [..., k].
+            top_acts: Activations of the selected latents, shape [..., k].
+            top_indices: Latent indices of the selected latents, shape [..., k].
 
         Returns:
-            Tensor: The reconstruction of shape [..., d_in].
+            The reconstruction of shape [..., d_in].
         """
         chosen = self.W_dec[top_indices]  # [..., k, d_in]
         return (top_acts.unsqueeze(-1) * chosen).sum(dim=-2) + self.b_dec
 
     def encode_dense(self, x: Tensor) -> Tensor:
-        """Encode an input and scatter the selected latents into a dense vector.
-
-        Args:
-            x (Tensor): Input activations of shape [..., d_in].
-
-        Returns:
-            Tensor: Latent activations of shape [..., num_latents], zero outside the selected set.
-        """
+        """Return [..., num_latents] activations for x [..., d_in], zero outside selected latents."""
         top_acts, top_indices, _ = self.encode(x)
         out = x.new_zeros(*x.shape[:-1], self.num_latents)
         return out.scatter_(-1, top_indices, top_acts.to(out.dtype))
 
     def decode_dense(self, f: Tensor) -> Tensor:
-        """Decode from a dense [..., num_latents] latent vector.
-
-        Args:
-            f (Tensor): Dense latent activations of shape [..., num_latents].
-
-        Returns:
-            Tensor: The reconstruction of shape [..., d_in].
-        """
+        """Decode [..., num_latents] activations to [..., d_in], including b_dec."""
         return f @ self.W_dec + self.b_dec
 
     def forward(self, x: Tensor, *, dead_mask: Tensor | None = None) -> ForwardOutput:
@@ -207,13 +173,13 @@ class SparseCoder(nn.Module):
         All three losses are normalized by the total variance of x within the batch.
 
         Args:
-            x (Tensor): Input activations of shape [..., d_in].
-            dead_mask (Tensor | None): Boolean mask over latents marking dead ones. When given and
-                any are dead, the AuxK loss fits those latents to the reconstruction residual.
+            x: Input activations of shape [..., d_in].
+            dead_mask: Boolean mask over latents marking dead ones. When given and any are dead, the
+                AuxK loss fits those latents to the reconstruction residual.
 
         Returns:
-            ForwardOutput: The reconstruction, the selected latents, and the FVU, AuxK, and
-                Multi-TopK losses; the last two are 0 when not applicable.
+            The reconstruction, the selected latents, and the FVU, AuxK, and Multi-TopK losses; the
+            last two are 0 when not applicable.
         """
         top_acts, top_indices, pre_acts = self.encode(x)
         sae_out = self.decode(top_acts, top_indices)

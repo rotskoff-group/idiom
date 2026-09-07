@@ -2,29 +2,12 @@
 # requires-python = ">=3.9,<3.12"
 # dependencies = ["tensorflow==2.11.*", "numpy<2", "pandas"]
 # ///
-"""Score IDRs with PADDLE (https://github.com/asanborn/PADDLE) as an external GRPO reward.
+"""Score PADDLE-noSS activation-domain strength (https://github.com/asanborn/PADDLE).
 
-PADDLE is a convolutional network that predicts acidic transcriptional activation domains from
-sequence (Sanborn et al., eLife 2021). This scorer uses PADDLE-noSS, the variant that runs from
-sequence alone with no PSIPRED/IUPred structure input.
-
-PADDLE scores a fixed 53-residue window, so an IDR is tiled into windows and the reward is the
-strongest window's Z-score. A sequence shorter than 53 residues is padded on both flanks with the
-background residue.
-
-    reward.terms:
-      - {reward: {name: scorer, cmd: "uv run --script cookbook/rewards/scorers/paddle.py",
-                  timeout: 600}, label: paddle, weight: 1.0}
-
-The raw reward is a Z-score against PADDLE's background; strong natural activation domains sit well
-above 5. Leave it unshaped to maximize activation strength, or give it a quadratic target for a
-particular strength.
-
-The model files (36 MB, Apache-2.0) are cloned once from GitHub into IDIOM_PADDLE_DIR.
-
-Environment variables:
-    IDIOM_PADDLE_DIR   where the PADDLE checkout lives (default ~/.cache/idiom/paddle).
-    PADDLE_STRIDE      window stride in residues (default 5; 1 is exhaustive and slower).
+Return the maximum Z-score over 53-residue windows; pad shorter sequences on both sides.
+IDIOM_PADDLE_DIR sets the checkout cache (default ~/.cache/idiom/paddle).
+PADDLE_STRIDE sets the window stride (default 5).
+Run with uv run --script; model files are cloned on first use.
 """
 
 import json
@@ -43,7 +26,7 @@ def _paddle_dir() -> Path:
     """Return the PADDLE checkout, cloning it on first use.
 
     Returns:
-        Path: A directory holding paddle.py and models/.
+        A directory holding paddle.py and models/.
     """
     d = Path(os.environ.get("IDIOM_PADDLE_DIR", Path.home() / ".cache/idiom/paddle")).expanduser()
     if (d / "paddle.py").exists():
@@ -97,14 +80,10 @@ def build():
 
 
 def serve(build):
-    """Drive the newline-JSON scorer protocol until stdin closes.
+    """Serve newline-delimited JSON requests until stdin closes.
 
-    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
-    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
-    and model loading inside build() keeps any chatter they print off the protocol stream.
-
-    Args:
-        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    Call build() once to obtain a batch scorer. Redirect library output to stderr,
+    score empty sequences as 0, and report scoring exceptions as JSON errors.
     """
     # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
     # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.

@@ -1,12 +1,4 @@
-"""The LightningModule that trains a SparseCoder, following EleutherAI sparsify.
-
-- loss = fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8;
-- decoder rows are renormalized to unit norm before every forward;
-- the decoder gradient component parallel to its rows is removed before the optimizer step;
-- a latent counts as dead once it has not fired in the last dead_feature_tokens tokens;
-- Adam, with the learning rate scaled as 2e-4 / (num_latents / 2**14)**0.5 unless one is given;
-- no gradient clipping unless grad_clip_norm is set.
-"""
+"""SAE training with dead-latent tracking and optional decoder normalization."""
 
 from __future__ import annotations
 
@@ -29,15 +21,10 @@ def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None):
 
 
 class LitSAE(L.LightningModule):
-    """LightningModule that trains a SparseCoder on batches of activations.
+    """Train a SparseCoder on activation batches.
 
-    Attributes:
-        sae (SparseCoder): The autoencoder being trained.
-        lr (float): The learning rate in use, whether passed in or auto-scaled.
-        auxk_alpha (float): Weight on the AuxK loss.
-        dead_feature_tokens (int): Tokens without firing after which a latent counts as dead.
-        grad_clip_norm (float | None): Gradient-norm clip value, or None for no clipping.
-        num_tokens_since_fired (Tensor): Per-latent count of tokens since that latent last fired.
+    Loss is fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8. Track tokens since each
+    latent was selected and optionally keep decoder rows normalized.
     """
 
     def __init__(
@@ -60,19 +47,19 @@ class LitSAE(L.LightningModule):
         """Build the SparseCoder and record the optimizer and schedule settings.
 
         Args:
-            d_in (int): Input (residual-stream) dimension.
-            k (int): Number of latents kept active per token.
-            expansion_factor (int): Latents-per-input multiplier.
-            activation (str): Selection rule, "topk" or "groupmax".
-            multi_topk (bool): If True, add the Multi-TopK auxiliary loss.
-            normalize_decoder (bool): If True, keep decoder rows at unit norm.
-            lr (float | None): Learning rate; scaled from num_latents if None.
-            total_steps (int): Scheduler horizon in optimizer steps.
-            warmup_steps (int): Linear warmup steps at the start of training.
-            decay_start (int | None): Step at which linear decay begins, or None for no decay.
-            auxk_alpha (float): Weight on the AuxK loss; 0 disables the dead-latent mask.
-            dead_feature_tokens (int): Tokens without firing after which a latent counts as dead.
-            grad_clip_norm (float | None): Gradient-norm clip value, or None for no clipping.
+            d_in: Input (residual-stream) dimension.
+            k: Number of latents kept active per token.
+            expansion_factor: Latents-per-input multiplier.
+            activation: Selection rule, "topk" or "groupmax".
+            multi_topk: If True, add the Multi-TopK auxiliary loss.
+            normalize_decoder: If True, keep decoder rows at unit norm.
+            lr: Learning rate; scaled from num_latents if None.
+            total_steps: Scheduler horizon in optimizer steps.
+            warmup_steps: Linear warmup steps at the start of training.
+            decay_start: Step at which linear decay begins, or None for no decay.
+            auxk_alpha: Weight on the AuxK loss; 0 disables the dead-latent mask.
+            dead_feature_tokens: Tokens without firing after which a latent counts as dead.
+            grad_clip_norm: Gradient-norm clip value, or None for no clipping.
         """
         super().__init__()
         self.save_hyperparameters()
@@ -103,11 +90,7 @@ class LitSAE(L.LightningModule):
 
     @t.no_grad()
     def init_b_dec_from_mean(self, mean_activation: t.Tensor):
-        """Set the decoder bias to a precomputed mean activation.
-
-        Args:
-            mean_activation (t.Tensor): The mean activation vector of shape [d_in].
-        """
+        """Set the decoder bias to mean_activation ([d_in]), matching its device and dtype."""
         self.sae.b_dec.data = mean_activation.to(self.sae.b_dec.device, self.sae.b_dec.dtype)
 
     def on_train_batch_start(self, *args, **kwargs):
@@ -119,8 +102,8 @@ class LitSAE(L.LightningModule):
         """Run one step on a batch of activations, updating and logging the dead-latent counters.
 
         Args:
-            batch (t.Tensor): Activation rows of shape [n_tokens, d_in].
-            batch_idx (int): Index of the batch within the epoch; unused.
+            batch: Activation rows of shape [n_tokens, d_in].
+            batch_idx: Index of the batch within the epoch; unused.
 
         Returns:
             t.Tensor: The scalar loss, fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8.
@@ -160,12 +143,9 @@ class LitSAE(L.LightningModule):
     def configure_gradient_clipping(
         self, optimizer, gradient_clip_val=None, gradient_clip_algorithm=None
     ):
-        """Remove the parallel decoder-gradient component, then clip if grad_clip_norm is set.
+        """Project decoder gradients off their rows, then apply grad_clip_norm if set.
 
-        Args:
-            optimizer: The optimizer about to step.
-            gradient_clip_val: Lightning's clip value; ignored, grad_clip_norm is used.
-            gradient_clip_algorithm: Lightning's clip algorithm; ignored, the norm is used.
+        Lightning's gradient_clip_val and gradient_clip_algorithm are ignored.
         """
         if self.sae.normalize_decoder and self.sae.W_dec.grad is not None:
             self.sae.remove_gradient_parallel_to_decoder_directions()
@@ -178,12 +158,7 @@ class LitSAE(L.LightningModule):
 
     @t.no_grad()
     def validation_step(self, batch: t.Tensor, batch_idx: int):
-        """Log held-out FVU, explained variance, and L0; the AuxK loss is training-only.
-
-        Args:
-            batch (t.Tensor): Activation rows of shape [n_tokens, d_in].
-            batch_idx (int): Index of the batch within the epoch; unused.
-        """
+        """Log held-out FVU, explained variance, and L0 for batch [n_tokens, d_in]."""
         out = self.sae(batch)
         l0 = (out.latent_acts > 0).float().sum(-1).mean()
         self.log_dict(

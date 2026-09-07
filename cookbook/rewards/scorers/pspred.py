@@ -10,27 +10,12 @@
 #   "numpy<2",
 # ]
 # ///
-"""Score IDRs with PSpred (https://github.com/KULL-Centre/_2024_buelow_PSpred) as an external reward.
+"""Score PSpred phase-separation predictions (https://github.com/KULL-Centre/_2024_buelow_PSpred).
 
-PSpred predicts the thermodynamics of homotypic phase separation from sequence -- the transfer free
-energy dG in kT, and the saturation concentration c_sat in mg/mL -- with models trained on CALVADOS
-coarse-grained simulations (von Bulow et al., PNAS 2025). For scale: LAF1 scores dG = -6.1 kT with
-c_sat = 1.2 mg/mL, poly-GS scores dG = +0.3 kT with c_sat = 80 mg/mL.
-
-    --target dG              transfer free energy in kT; more negative phase-separates more readily
-    --target logcdil_mgml    log saturation concentration; lower phase-separates more readily
-    --target cdil_mgml       the same, exponentiated to mg/mL
-
-    reward.terms:
-      - {reward: {name: scorer, cmd: "uv run --script cookbook/rewards/scorers/pspred.py --target dG"},
-         shaping: {name: quadratic, target: -6.0, width: 0.3}, label: dG, weight: 1.0}
-
-The predictor's own files (3.7 MB: two scripts, a residue table and three joblib models) are fetched
-once from the project's GitHub into IDIOM_PSPRED_DIR. The scikit-learn pin matters: the models are
-pickles and will not load against a different version.
-
-Environment variables:
-    IDIOM_PSPRED_DIR   where the predictor files live (default ~/.cache/idiom/pspred).
+--target selects dG (kT), logcdil_mgml (log concentration), or cdil_mgml (mg/mL).
+Lower values indicate stronger phase-separation propensity.
+IDIOM_PSPRED_DIR sets the model cache (default ~/.cache/idiom/pspred), downloaded on first use.
+Run with uv run --script; the scikit-learn pin is required to load the model pickles.
 """
 
 import argparse
@@ -56,7 +41,7 @@ def _pspred_dir() -> Path:
     """Return the predictor directory, downloading its files on first use.
 
     Returns:
-        Path: A directory holding the two scripts, the residue table and the three models.
+        A directory holding the two scripts, the residue table and the three models.
     """
     d = Path(os.environ.get("IDIOM_PSPRED_DIR", Path.home() / ".cache/idiom/pspred")).expanduser()
     d.mkdir(parents=True, exist_ok=True)
@@ -108,14 +93,10 @@ def build():
 
 
 def serve(build):
-    """Drive the newline-JSON scorer protocol until stdin closes.
+    """Serve newline-delimited JSON requests until stdin closes.
 
-    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
-    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
-    and model loading inside build() keeps any chatter they print off the protocol stream.
-
-    Args:
-        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    Call build() once to obtain a batch scorer. Redirect library output to stderr,
+    score empty sequences as 0, and report scoring exceptions as JSON errors.
     """
     # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
     # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.

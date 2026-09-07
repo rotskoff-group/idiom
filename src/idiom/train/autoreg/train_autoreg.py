@@ -1,9 +1,4 @@
-"""The idiom_train_autoreg entrypoint, covering pretraining and SFT.
-
-build(cfg) wires the module and datamodule; run(cfg) configures the trainer and fits. SFT is
-selected with --config-name sft, which sets init_from for the warm start and
-data.completion_only for the loss mask.
-"""
+"""Hydra entrypoint for pretraining and SFT (--config-name sft)."""
 
 from __future__ import annotations
 
@@ -30,11 +25,11 @@ def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
     cfg.trainer.max_steps.
 
     Args:
-        cfg (DictConfig): Resolved training config, with optim, trainer, data, seed, and either
-            model or init_from.
+        cfg: Resolved training config, with optim, trainer, data, seed, and either model or
+            init_from.
 
     Returns:
-        tuple[LitAutoregressive, RecordDataModule]: The training module and its datamodule.
+        The training module and its datamodule.
     """
     optim = OmegaConf.to_container(cfg.optim, resolve=True)
     optim["max_steps"] = cfg.trainer.max_steps  # scheduler shares the trainer's horizon
@@ -69,7 +64,7 @@ def run(cfg: DictConfig) -> None:
     when it is set.
 
     Args:
-        cfg (DictConfig): Resolved training config.
+        cfg: Resolved training config.
     """
     L.seed_everything(cfg.seed, workers=True)
     out_dir = Path(cfg.out_dir)
@@ -122,11 +117,7 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="pretrain")
 def main(cfg: DictConfig) -> None:
-    """Run training with the Hydra-composed config.
-
-    Args:
-        cfg (DictConfig): The composed config.
-    """
+    """Run pretraining or SFT from the Hydra config."""
     run(cfg)
 
 

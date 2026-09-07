@@ -1,16 +1,4 @@
-"""Two sequence-level rewards the library ships, entropy and length.
-
-Neither is in an objective unless a run names it: reward.terms is empty by default and both are
-terms like any other. Most objectives are worth carrying them, since a target is otherwise
-satisfiable by a low-complexity tract or by a degenerate length.
-
-    reward.terms:
-      - {reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}, weight: 1.0}
-      - {reward: length,  shaping: {name: quadratic, target: 100,  width: 1.0}, weight: 1.0}
-
-Write your own rewards and shaping from the template in cookbook/rewards/custom_rewards.py, or as
-external scorers in cookbook/rewards/scorers/.
-"""
+"""Composition entropy and residue-count rewards."""
 
 from __future__ import annotations
 
@@ -21,16 +9,9 @@ from idiom.train.grpo.reward.resolve import Reward, lift
 
 
 def composition_entropy(idr: str) -> float:
-    """Return the Shannon entropy of an IDR's amino-acid composition, in bits.
+    """Return amino-acid composition entropy in bits; empty strings score 0.
 
-    The value ranges from 0 for a single repeated residue to log2(20), about 4.32 bits, for a
-    uniform composition. Natural IDRs sit near 3.65 bits.
-
-    Args:
-        idr (str): The decoded IDR residue string.
-
-    Returns:
-        float: Composition entropy in bits, or 0.0 for an empty string.
+    For canonical sequences the range is [0, log2(20)].
     """
     if not idr:
         return 0.0
@@ -40,18 +21,10 @@ def composition_entropy(idr: str) -> float:
 
 
 def entropy() -> Reward:
-    """Build the reward scoring an IDR's composition entropy in bits.
-
-    Returns:
-        Reward: Composition entropy per IDR; see composition_entropy.
-    """
+    """Return a batch reward for composition entropy in bits."""
     return lift(composition_entropy)
 
 
 def length() -> Reward:
-    """Build the reward scoring an IDR's length in residues.
-
-    Returns:
-        Reward: Number of residues per IDR.
-    """
+    """Return a batch reward for sequence length in residues."""
     return lift(len)

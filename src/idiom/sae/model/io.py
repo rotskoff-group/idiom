@@ -1,7 +1,6 @@
-"""The SAE release format: sae_config.json plus sae.safetensors.
+"""SAE releases: sae_config.json and sae.safetensors.
 
-The config records the host model, the layer, the residue region, the prompt format, and the
-SparseCoder shape, so a release loads with nothing supplied by the caller.
+The config records architecture, host model, layer, region, and FIM mode.
 """
 
 from __future__ import annotations
@@ -26,17 +25,16 @@ def save_sae(
     """Write sae_config.json and sae.safetensors for a trained SAE.
 
     Args:
-        sae (SparseCoder): The sparse coder to serialize.
-        out_dir (str | Path): Directory to write the release into; created if needed.
-        host_model (str | None): The checkpoint path or Hub repo id of the host model, recorded so
-            the release can load its host.
-        layer (int): The residual-stream layer the SAE was trained on.
-        region (str): The residue region the SAE was trained on: "all", "idr", or "non_idr".
-        fim_mode (str): The prompt format the residual stream was taken under: "prompted" or
-            "unprompted".
+        sae: The sparse coder to serialize.
+        out_dir: Directory to write the release into; created if needed.
+        host_model: The checkpoint path or Hub repo id of the host model, recorded so the release
+            can load its host.
+        layer: Zero-based training block index.
+        region: The residue region the SAE was trained on: "all", "idr", or "non_idr".
+        fim_mode: The prompt format the residual stream was taken under: "prompted" or "unprompted".
 
     Returns:
-        Path: The output directory.
+        The output directory.
 
     Raises:
         ValueError: If fim_mode is neither "prompted" nor "unprompted".
@@ -66,12 +64,12 @@ def load_sae(
     """Load a released SAE directory into a SparseCoder and its config.
 
     Args:
-        path (str | Path): Directory holding sae_config.json and sae.safetensors.
-        device (str | torch.device): Device to move the loaded model onto.
+        path: Directory holding sae_config.json and sae.safetensors.
+        device: Device to move the loaded model onto.
 
     Returns:
-        tuple[SparseCoder, dict]: The SparseCoder in eval mode, and the config dict, which carries
-            host_model, layer, region, and fim_mode.
+        The SparseCoder in eval mode, and the config dict, which carries host_model, layer, region,
+        and fim_mode.
 
     Raises:
         ValueError: If the config records a fim_mode that is not a valid prompting mode.

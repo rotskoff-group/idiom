@@ -1,13 +1,4 @@
-"""Feature-steered generation.
-
-Runs the KV-cached sampler inside a steering context, so the chosen layer's residual stream is
-modified at every forward pass of generation. SteeringSpec selects the mode:
-
-- "add_direction": add the selected features' decoder rows, scaled absolutely, relative to the
-  local residual norm, or relative with the norm preserved;
-- "clamp": encode, set the selected latents to fixed values, decode, and substitute;
-- "ablate": subtract the selected features' decoder contribution.
-"""
+"""Generate IDRs by adding decoder directions, clamping latents, or ablating features."""
 
 from __future__ import annotations
 
@@ -31,22 +22,19 @@ from idiom.sae.steer.hooks import (
 
 @dataclass
 class SteeringSpec:
-    """Which features to steer, how hard, and in which mode.
+    """Feature-steering settings for a zero-based transformer block index.
 
     Attributes:
-        layer (int): Residual-stream layer to steer.
-        feature_idx (int | Sequence[int]): One latent index, or several to steer together.
-        strength (float | Sequence[float]): Steering strength; a scalar applied to every feature,
-            or one value per feature. Its meaning depends on mode and the flags below.
-        mode (str): "add_direction", "clamp", or "ablate".
-        clamp_value (float | Sequence[float] | None): Target activation for "clamp"; strength is
-            used when None.
-        normalize (bool): For "add_direction", scale the summed decoder rows to unit norm before
-            applying strength, so strength is the push magnitude.
-        relative (bool): For "add_direction", scale the push by each position's residual norm, so
-            strength is a fraction of it. Overrides normalize.
-        preserve_norm (bool): With relative, restore each position's original residual norm after
-            the push.
+        layer: Block to edit.
+        feature_idx: One feature index or a sequence of indices.
+        strength: Scalar or per-feature weights for plain addition and clamping. Normalized/relative
+            addition uses only the first value. Ablation requires a scalar subtraction factor; 0
+            falls back to 1.
+        mode: "add_direction", "clamp" (SAE reconstruction), or "ablate" (subtract contribution).
+        clamp_value: Clamp targets; defaults to strength. Scalars broadcast across features.
+        normalize: Normalize the summed decoder direction before scaling by strength.
+        relative: Scale by each residual norm; overrides normalize.
+        preserve_norm: Restore original residual norms after relative addition only.
     """
 
     layer: int
@@ -83,19 +71,14 @@ def _broadcast(values: list, n: int, name: str) -> list:
 
 
 def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
-    """Build the forward hook described by a SteeringSpec.
-
-    "add_direction" adds the sum of the selected decoder rows, scaled by the spec's normalize,
-    relative, and preserve_norm flags. "clamp" pins the selected latents to their target values in
-    one SAE round trip. "ablate" subtracts the selected features' decoder contribution, with
-    strength as the subtraction factor.
+    """Return the forward hook defined by spec; see SteeringSpec for mode semantics.
 
     Args:
         sae: The trained SAE providing W_dec, encode_dense, and decode_dense.
-        spec (SteeringSpec): Which features to steer, how hard, and in which mode.
+        spec: Which features to steer, how hard, and in which mode.
 
     Returns:
-        Callable: The forward hook implementing the requested steering.
+        The forward hook implementing the requested steering.
 
     Raises:
         ValueError: If spec.mode is not "add_direction", "clamp", or "ablate", or if a per-feature
@@ -146,23 +129,20 @@ def steer_generation(
     tokenizer=None,
     generator=None,
 ):
-    """Generate sequences with one or more SAE features steered.
-
-    The sampler runs inside a steering context on spec.layer, so the edit is applied at every
-    generation step and the region mask is recomputed as the sequence grows.
+    """Sample with region-masked steering on spec.layer, updating the mask at each step.
 
     Args:
         model: An IDiomTransformer.
         sae: The trained SAE for spec.layer, providing W_dec, encode_dense, and decode_dense.
-        spec (SteeringSpec): Which features to steer, how hard, and in which mode.
+        spec: Which features to steer, how hard, and in which mode.
         prompt_tokens: A 1-D sequence of prompt token ids, repeated to n_samples; the encoding of
             "132" if None. START is prepended by the sampler.
-        n_samples (int): Number of sequences to generate.
-        max_new_tokens (int): Maximum new tokens to sample per sequence.
-        temperature (float): Sampling temperature.
-        top_k (int | None): Top-k sampling cutoff, or None.
-        top_p (float | None): Nucleus sampling cutoff, or None.
-        region (str): Positions to steer: "all", "idr", or "non_idr".
+        n_samples: Number of sequences to generate.
+        max_new_tokens: Maximum new tokens to sample per sequence.
+        temperature: Sampling temperature.
+        top_k: Top-k sampling cutoff, or None.
+        top_p: Nucleus sampling cutoff, or None.
+        region: Positions to steer: "all", "idr", or "non_idr".
         tokenizer: Tokenizer for encoding the prompt and building the region mask; a default if
             None.
         generator: torch.Generator for reproducible sampling, or None.

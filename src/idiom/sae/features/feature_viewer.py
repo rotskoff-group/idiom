@@ -1,12 +1,6 @@
-"""Streamlit viewer for a feature-activation dataset.
+"""Streamlit viewer for ranked SAE features and residue-level activations.
 
-Shows, for a chosen feature, its top activating sequences with each residue shaded in proportion
-to that feature's activation there. Features are ordered by maximum activation, total activation,
-or firing count, and reached by rank or by index.
-
-Run:
-    streamlit run src/idiom/sae/features/feature_viewer.py -- \\
-        --features ./data/feature_dataset_L18
+Run with streamlit run src/idiom/sae/features/feature_viewer.py -- --features DATASET_DIR.
 """
 
 from __future__ import annotations

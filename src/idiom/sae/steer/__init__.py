@@ -1,4 +1,4 @@
-"""Residual-stream forward hooks and feature-steered generation."""
+"""Hooks and sampling utilities for SAE feature steering."""
 
 from idiom.sae.steer.hooks import (
     add_direction_hook,

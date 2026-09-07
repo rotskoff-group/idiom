@@ -1,4 +1,4 @@
-"""P2 sampling tests (CPU-only): KV-cached generation + sampling controls."""
+"""sampling tests (CPU-only): KV-cached generation + sampling controls."""
 
 import torch
 

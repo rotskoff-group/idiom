@@ -1,8 +1,4 @@
-"""The idiom_train_sae entrypoint.
-
-build(cfg) wires the frozen host model, the record source, the streaming ActivationStore, and the
-LitSAE module; run(cfg) fits and writes the release directory.
-"""
+"""Hydra entrypoint for SAE training and release export."""
 
 from __future__ import annotations
 
@@ -31,10 +27,10 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     The host model is loaded from cfg.model_ckpt and its d_model sets the SAE input width.
 
     Args:
-        cfg (DictConfig): Resolved SAE training config.
+        cfg: Resolved SAE training config.
 
     Returns:
-        tuple[LitSAE, ActivationStore]: The LightningModule and its activation store.
+        The LightningModule and its activation store.
     """
     device = resolve_device(cfg.device)
     tok = Tokenizer()
@@ -77,7 +73,7 @@ def run(cfg: DictConfig) -> None:
     The recorded fim_mode is "unprompted" only when cfg.data.prompted_prob is 0.
 
     Args:
-        cfg (DictConfig): Resolved SAE training config.
+        cfg: Resolved SAE training config.
     """
     L.seed_everything(cfg.seed, workers=True)
     out_dir = Path(cfg.out_dir)
@@ -109,11 +105,7 @@ def run(cfg: DictConfig) -> None:
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="sae")
 def main(cfg: DictConfig) -> None:
-    """Train an SAE with the Hydra-composed config.
-
-    Args:
-        cfg (DictConfig): The composed config.
-    """
+    """Train an SAE from the Hydra config."""
     run(cfg)
 
 

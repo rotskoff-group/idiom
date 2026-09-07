@@ -1,140 +1,102 @@
 # Cookbook
 
-Runnable material, indexed by what you want to do. [`notebooks/`](notebooks/) holds the walkthroughs,
-[`scripts/`](scripts/) the training scripts, [`rewards/`](rewards/) what GRPO optimizes.
+Examples for generation, interpretation, and training. Start with the [installation instructions](../README.md#installation).
 
-The notebooks install IDiom themselves and pull inputs from
-[`jxliu2/idiom-data`](https://huggingface.co/datasets/jxliu2/idiom-data), so **nothing there needs a
-clone** — click a badge and run. The scripts use your installed IDiom package and a clone for
-scorers, custom rewards, and example data.
+| Task | Example |
+|---|---|
+| Generate sequences and extract embeddings | [generate_and_embed.ipynb](notebooks/generate_and_embed.ipynb) |
+| Analyze SAE features and steer generation | [sae_features.ipynb](notebooks/sae_features.ipynb) |
+| Find enriched features in a sequence set | [feature_enrichment.ipynb](notebooks/feature_enrichment.ipynb) |
+| Train toward an SAE feature signature | [sae_features.bash](scripts/grpo/sae_features.bash) |
+| Train with a custom reward | [custom_reward.bash](scripts/grpo/custom_reward.bash) |
+| Train with an external scorer | [Reward examples](rewards/README.md#examples) |
+| Fine-tune on a sequence set | [sft.bash](scripts/sft.bash) |
+| Train an SAE | [train_sae.bash](scripts/train_sae.bash) |
+| Pretrain IDiom | [pretrain.bash](scripts/pretrain.bash) |
 
-| I want to... | run | needs |
-|---|---|---|
-| **generate IDRs** de novo or between flanks, and pull out embeddings | [`generate_and_embed.ipynb`](notebooks/generate_and_embed.ipynb) | GPU |
-| **see what an SAE feature is**, and steer generation along it | [`sae_features.ipynb`](notebooks/sae_features.ipynb) | GPU |
-| **find what my sequences share** — enriched features and their residue grammar | [`feature_enrichment.ipynb`](notebooks/feature_enrichment.ipynb) | GPU |
-| **design toward an SAE feature code** (the RL-SAE result) | [`scripts/grpo/sae_features.bash`](scripts/grpo/sae_features.bash) | 1 GPU, hours |
-| **design toward my own reward** (in this interpreter) | [`scripts/grpo/custom_reward.bash`](scripts/grpo/custom_reward.bash) | 1 GPU, hours |
-| **design toward a published reward model** (its own environment) | [`scripts/grpo/`](scripts/grpo/) — one script each | 1 GPU, hours |
-| **specialize a model on my own set** | [`scripts/sft.bash`](scripts/sft.bash) | 1 GPU |
-| **train an SAE on another layer** | [`scripts/train_sae.bash`](scripts/train_sae.bash) | 1 GPU |
-| **pretrain from scratch** | [`scripts/pretrain.bash`](scripts/pretrain.bash) | 8 GPUs, days |
+[Usage reference](usage.md): FASTA output, perplexity, feature datasets, and model export.
 
-## Notebooks
+## Running notebooks
 
-Three walkthroughs, read in this order, each ending by pointing at the next. Colab links are in
-[`notebooks/README.md`](notebooks/README.md).
+Open a [notebook locally or in Colab](notebooks/). Each installs IDiom if needed and downloads
+example data. Edit its parameter cell to use your own inputs. A GPU is recommended.
 
-1. **`generate_and_embed`** — unprompted and prompted generation, redesigning a real protein's IDR,
-   and residual-stream embeddings.
-2. **`sae_features`** — which SAE features fire on a sequence, and steering generation along one.
-3. **`feature_enrichment`** — which features are enriched in *your* set, their residue grammar, and
-   the signature that turns them into an RL target.
+For SAE-guided GRPO, run `feature_enrichment.ipynb` first. Set `FEATURES`, `SIGNATURE`, and `CASE`
+in `scripts/grpo/sae_features.bash` to match the notebook's exported signature.
 
-Each opens with a setup cell that `pip install`s IDiom if missing and defines `example_data()`, which
-pulls a demo FASTA from the Hub — so they run identically in Colab, local Jupyter, or on a cluster.
-Edit the parameter cell to point one at your own model, SAE, or sequences.
+## Running scripts
 
-`feature_enrichment.ipynb → scripts/grpo/sae_features.bash` is the RL-SAE pipeline on your own
-sequences: the notebook writes a signature of the features enriched in a set, the training script
-post-trains a model to reproduce that feature code.
+Scripts use IDiom from your active Python environment and the clone for cookbook files.
+Either [installation workflow](../README.md#installation) works. When installing and cloning
+separately, use the same tag or commit to keep the examples matched to the installed API.
 
-```bash
-# edit REPO, OUT, FEATURES, and SIGNATURE in the script first
-bash cookbook/scripts/grpo/sae_features.bash
-```
-
-The script refuses to start if the signature is not there, so the two stay in step.
-
-## Scripts
-
-Plain bash, no scheduler. Each spells out every config value as a Hydra override. First activate
-your chosen Python environment, install IDiom, and clone the repository to access the cookbook:
-
-```bash
-python -m pip install git+https://github.com/rotskoff-group/idiom.git
-git clone https://github.com/rotskoff-group/idiom.git
-cd idiom
-```
-
-Use the same tag or commit for the installation and clone to keep the examples matched to the
-installed API. External-scorer examples also need `uv` (`python -m pip install uv`); their
-`uv run --script` commands manage each scorer's separate dependencies. No `uv sync` is required.
-
-Edit the path placeholders and run settings before launching:
+1. Activate the environment where IDiom is installed.
+2. Edit `REPO`, `OUT`, input paths, and run settings in the selected script.
+3. Run it from the clone:
 
 ```bash
 bash cookbook/scripts/sft.bash
 ```
 
-Set `REPO` to the absolute path of your repository checkout and `OUT` to the desired run output
-directory in each script. The scripts `cd` to `REPO` and use `python` and the `idiom_*` commands
-from your active environment; they do not activate a checkout's `.venv/`. For SAE
-feature GRPO, also set `FEATURES` to the signature JSON written by the notebook. Pretraining and
-SAE training need corpus paths (`TRAIN_FASTA` / `VAL_FASTA` or `FASTA`). Other `# EDIT` markers
-identify run choices such as target, width, weight, property, and compartment.
+External-scorer examples also require `uv` (`python -m pip install uv`). Their
+`uv run --script` commands install each scorer's dependencies separately; no `uv sync` is needed
+for the pip workflow.
 
-W&B is offline by default; `wandb login` and set `WANDB_MODE=online` for live logging.
+Most training examples use one GPU; pretraining uses eight, and the STARLING example uses two.
+Check the selected script for resource estimates. W&B logging is offline by default; run
+`wandb login` and change the script's `WANDB_MODE` to `online` for live logging.
 
-**To submit to a scheduler**, wrap rather than edit — the scripts take no arguments and read no
-scheduler variables. Make sure the job uses the environment where you installed IDiom:
+<details>
+<summary>Advanced execution: schedulers, multiple GPUs, and checkpoints</summary>
+
+Submit a script with your scheduler, ensuring the job inherits the environment containing IDiom:
 
 ```bash
 sbatch --gpus-per-node=1 --cpus-per-task=8 --time=12:00:00 \
     --wrap "bash $PWD/cookbook/scripts/grpo/sparrow.bash"
 ```
 
-**Multi-GPU.** Lightning launches one process per GPU from `trainer.devices`, so do not put a
-launcher in front of these. `data.batch_size` is per GPU; global batch is
-`batch_size × devices × accumulate_grad_batches`. For multi-node, launch with `srun`, one task per
-GPU, and `+trainer.num_nodes=<N>`.
+On one node, Lightning launches processes according to `trainer.devices`. For multi-node runs,
+use `srun` with one task per GPU and set `+trainer.num_nodes=<N>`. For autoregressive training,
+global batch size is `data.batch_size × devices × nodes × accumulate_grad_batches`.
 
-**Resuming.** `pretrain.bash` and `sft.bash` pick up `$OUT/checkpoints/last.ckpt` automatically. GRPO
-and SAE keep only a final checkpoint — pass `resume_from=<ckpt>`, or set `trainer.checkpoint_every=<N>`.
+Pretraining starts from scratch. SFT and GRPO load the model specified by `init_from`; SAE
+training loads a frozen host model from `model_ckpt`. These accept a Hub model ID, a released
+directory, or a Lightning checkpoint.
 
-Every script warm-starts from anything `model/io.load_model` accepts: a HF repo id, a released
-directory, or a `.ckpt`. Training on a FASTA builds a memory-mapped `<fasta>.idiomstore/` sidecar
-beside it on first run (git-ignored; delete to rebuild).
+- Pretraining and SFT scripts automatically resume from `$OUT/checkpoints/last.ckpt` when present.
+- GRPO saves a final-step checkpoint by default. Set `trainer.checkpoint_every` for periodic
+  checkpoints and `last.ckpt`; set `resume_from` to resume a saved checkpoint.
+- SAE training exports `sae_config.json` and `sae.safetensors` to `OUT` on completion.
+  Its trainer uses Lightning's checkpoint defaults; `resume_from` accepts a Lightning checkpoint,
+  not the exported SAE weights.
 
-## Rewards
+FASTA training builds a memory-mapped `<fasta>.idiomstore/` sidecar on first use. You can also
+build it ahead of time with `idiom_build_store --fasta /path/to/corpus.fasta`.
 
-[`rewards/`](rewards/) holds what GRPO optimizes — rewards and shaping that run in this process
-([`custom_rewards.py`](rewards/custom_rewards.py)) and reward models that run in their own
-environment ([`scorers/`](rewards/scorers/)). Nothing there ships in the wheel; these are files you
-read, copy, and edit, named by a run on the command line.
-
-The shipped objective is **empty** — `reward.terms: []`, no defaults and no presets — so a run names
-every term it optimizes. Each script in [`scripts/grpo/`](scripts/grpo/) writes one whole objective
-out and passes it to `reward.terms`.
-
-**See [`rewards/README.md`](rewards/README.md)** for the scorers, the reward and shaping forms,
-picking targets and weights, and writing your own.
+</details>
 
 ## Example data
 
-The notebooks' inputs live on the Hub under `example_data/` in
-[`jxliu2/idiom-data`](https://huggingface.co/datasets/jxliu2/idiom-data) — demo-sized subsets (≤150
-records) of curated IDR sets, with `_IDR_x-y` headers, so each drops straight into `sae.encode`,
-`idiom_train_autoreg`, and the enrichment pipeline. Not the full datasets used in the paper.
+Demo FASTAs and SAE signatures are available in [example_data/](example_data/) and on
+[jxliu2/idiom-data](https://huggingface.co/datasets/jxliu2/idiom-data). Notebooks download their
+inputs; Bash scripts use local paths.
 
-```
-protgps/       6 subcellular-condensate IDR sets (stress_granule, p-body, nuclear_speckle,
-               nucleolus, chromosome, nuclear_pore_complex)
-effector/      activation (ad) and repression (rd) domain IDRs
-disprot/       DisProt proteins with annotated IDR spans, held out of pretraining — these
-               carry real flanks, so they are the reference set for prompted generation
-sae_features/  sae_signatures.json, the released SAE's signatures, as a format reference
-```
+| Directory | Contents |
+|---|---|
+| `protgps/` | IDRs from six subcellular compartments |
+| `effector/` | Activation and repression domain IDRs |
+| `disprot/` | Held-out proteins with annotated IDR spans and flanking context |
+| `sae_features/` | Released SAE signatures as a format reference |
 
 ```bash
 hf download jxliu2/idiom-data --repo-type dataset --include "example_data/*"
 ```
 
-`protgps/` and `effector/` records are fully disordered (the whole record is the span). `effector/`
-headers carry extra free-text fields after the accession, which IDiom ignores. A copy is mirrored in
-[`example_data/`](example_data/) for the bash scripts, which name their inputs by path.
+The ProtGPS and effector records mark the whole sequence as the IDR. DisProt records include
+flanks; preserve their annotated spans for prompted generation.
+See [sequence conventions](../README.md#sequence-conventions).
 
-**Provenance.** `protgps/` — [ProtGPS](https://github.com/pgmikhael/protgps) (Kilgore et al.).
-`effector/` — DelRosso et al., *Nature* 2023. `disprot/` — [DisProt](https://disprot.org/), CC BY
-4.0. Redistributed for demonstration only; cite the original works and check their licenses for any
-other use.
+Sources: [ProtGPS](https://github.com/pgmikhael/protgps) (Kilgore et al.),
+DelRosso et al., *Nature* 2023 (effector domains), and [DisProt](https://disprot.org/) (CC BY 4.0).
+These are demonstration subsets; cite the original works and follow their licenses when reusing them.

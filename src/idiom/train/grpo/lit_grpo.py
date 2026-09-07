@@ -1,9 +1,4 @@
-"""The GRPO post-training LightningModule.
-
-Each step expands every prompt in the batch into group_size completions, rewards each decoded IDR,
-computes group-normalized advantages, and applies the GRPO loss with a KL penalty against a
-frozen reference policy. Prompts within a batch must be equal length.
-"""
+"""GRPO rollouts and optimization against a frozen reference policy."""
 
 from __future__ import annotations
 
@@ -56,22 +51,21 @@ class LitGRPO(L.LightningModule):
         """Build the policy and its frozen reference, and record the GRPO settings.
 
         Args:
-            cfg (ModelConfig): Transformer architecture configuration.
-            reward_terms (Callable): The composite reward, mapping (idrs, group_size) to per-idr
-                totals and a matching per-term breakdown; see reward.build_reward.
-            group_size (int): Number of completions generated per prompt.
-            max_new_tokens (int): Maximum completion length to generate.
-            lr (float): AdamW learning rate.
-            beta_kl (float): Weight of the KL penalty to the reference policy.
-            eps_clip (float): PPO clipping range around a ratio of 1.
-            temperature (float): Sampling temperature for generation.
-            top_k (int | None): Top-k sampling cutoff, or None.
-            top_p (float | None): Nucleus sampling cutoff, or None.
-            normalize_advantage (bool): If True, divide advantages by their group's standard
-                deviation.
-            log_samples_every (int): Print example completions every this many steps; 0 disables.
-            n_log_samples (int): Number of example completions to print.
-            tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
+            cfg: Transformer architecture configuration.
+            reward_terms: The composite reward, mapping (idrs, group_size) to per-idr totals and a
+                matching per-term breakdown; see reward.build_reward.
+            group_size: Number of completions generated per prompt.
+            max_new_tokens: Maximum completion length to generate.
+            lr: AdamW learning rate.
+            beta_kl: Weight of the KL penalty to the reference policy.
+            eps_clip: PPO clipping range around a ratio of 1.
+            temperature: Sampling temperature for generation.
+            top_k: Top-k sampling cutoff, or None.
+            top_p: Nucleus sampling cutoff, or None.
+            normalize_advantage: If True, divide advantages by their group's standard deviation.
+            log_samples_every: Print example completions every this many steps; 0 disables.
+            n_log_samples: Number of example completions to print.
+            tokenizer: Tokenizer; defaults to Tokenizer().
         """
         super().__init__()
         self.cfg = cfg
@@ -108,7 +102,7 @@ class LitGRPO(L.LightningModule):
             **kwargs: GRPO arguments forwarded to the constructor.
 
         Returns:
-            LitGRPO: A module holding the pretrained weights in both the policy and the reference.
+            A module holding the pretrained weights in both the policy and the reference.
         """
         model, cfg = load_model(init_from, eval_mode=False)
         lit = cls(cfg, reward_terms, **kwargs)
@@ -128,15 +122,13 @@ class LitGRPO(L.LightningModule):
         return self.tok.decode(ids)  # clean residue string for the reward fn (e.g. an external scorer)
 
     def training_step(self, batch: torch.Tensor, batch_idx: int):
-        """Roll out completions, score them, and return the GRPO loss for one batch.
+        """Roll out completions and return GRPO loss for equal-length prompts.
 
-        Logs the loss, the mean and standard deviation of the reward, the KL to the reference, the
-        mean completion length and composition entropy, and, when a breakdown is available, each
-        term's contribution to the objective and its raw reward.
+        Log reward totals and terms, KL, length, and composition entropy.
 
         Args:
-            batch (torch.Tensor): Equal-length prompts of shape [B, P].
-            batch_idx (int): Index of the batch within the epoch; unused.
+            batch: Equal-length prompts of shape [B, P].
+            batch_idx: Index of the batch within the epoch; unused.
 
         Returns:
             torch.Tensor: The scalar GRPO loss.
@@ -216,9 +208,5 @@ class LitGRPO(L.LightningModule):
         print("=" * 70, flush=True)
 
     def configure_optimizers(self):
-        """Build AdamW over the policy parameters, excluding the reference.
-
-        Returns:
-            torch.optim.Optimizer: The optimizer.
-        """
+        """Return AdamW over policy parameters only."""
         return torch.optim.AdamW(self.model.parameters(), lr=self.lr)

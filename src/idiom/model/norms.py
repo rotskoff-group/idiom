@@ -13,22 +13,15 @@ class RMSNorm(nn.Module):
         """Build the norm with a unit-initialized scale.
 
         Args:
-            dim (int): Size of the normalized last dimension.
-            eps (float): Value added to the mean square before the reciprocal square root.
+            dim: Size of the normalized last dimension.
+            eps: Value added to the mean square before the reciprocal square root.
         """
         super().__init__()
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x: Tensor) -> Tensor:
-        """Normalize x by its root mean square over the last dimension and apply the scale.
-
-        Args:
-            x (Tensor): Input of shape [..., dim].
-
-        Returns:
-            Tensor: The normalized, scaled tensor, in the input dtype.
-        """
+        """Normalize the last dimension of x in float32, cast back, and apply the learned scale."""
         # Normalize by RMS over the last dim, in float32 for stability, then rescale.
         dtype = x.dtype
         x = x.float()

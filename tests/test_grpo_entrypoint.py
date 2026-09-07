@@ -1,4 +1,4 @@
-"""P4 GRPO entrypoint tests (CPU-only): composite reward + build() wiring."""
+"""GRPO entrypoint tests (CPU-only): composite reward + build() wiring."""
 
 import math
 import re

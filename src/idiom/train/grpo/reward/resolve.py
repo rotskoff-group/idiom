@@ -1,23 +1,7 @@
-"""How a config spec names the thing it wants, and how that name becomes a callable.
+"""Resolve reward and shaping factories from aliases or "module:function" paths.
 
-Rewards and shaping rules are built the same way, from the same kind of spec: a **factory** named
-either by an alias or by a "module:function" path, called with the spec's own arguments.
-
-    entropy                                         # a bare name, no arguments
-    {name: quadratic, target: 3.65, width: 0.2}     # a name plus that factory's arguments
-    {name: "mypkg.scoring:make_scorer", cutoff: 0.3}
-
-A reward factory returns a *reward*: one call per GRPO step, mapping the step's decoded IDRs to one
-raw value each. Wrap a function that scores a single IDR with lift:
-
-    def fraction_charged():
-        return lift(lambda idr: sum(idr.count(a) for a in "DEKR") / len(idr) if idr else 0.0)
-
-A shaping factory returns f(raw) -> float. Both are called once, while the config is validated, so
-a factory that raises on a bad argument fails in seconds rather than on the first training step.
-
-The aliases are short names for the factories the library ships; they map to "module:function"
-paths and are resolved before anything is imported, so naming one imports only what it points at.
+Specs are names or mappings such as {name: quadratic, target: 100, width: 0.2}.
+Reward factories return batch scorers; shaping factories return scalar functions.
 """
 
 from __future__ import annotations
@@ -46,26 +30,12 @@ SHAPING_ALIASES: dict[str, str] = {
 
 
 def lift(score: Callable[[str], float]) -> Reward:
-    """Turn a function scoring one IDR into a reward scoring a whole step.
-
-    Args:
-        score (Callable[[str], float]): Maps one decoded IDR to one raw value.
-
-    Returns:
-        Reward: Maps a list of IDRs to one raw value each, in order.
-    """
+    """Wrap a single-IDR scorer as a batch reward, preserving input order."""
     return lambda idrs: [float(score(idr)) for idr in idrs]
 
 
 def import_module(spec: str):
-    """Import a module by dotted name or by path to a .py file.
-
-    Args:
-        spec (str): A dotted module path, or a path ending in ".py".
-
-    Returns:
-        ModuleType: The imported module.
-    """
+    """Import and return a module by dotted name or .py file path."""
     if spec.endswith(".py"):
         mod_spec = importlib.util.spec_from_file_location("idiom_reward_module", spec)
         module = importlib.util.module_from_spec(mod_spec)
@@ -78,8 +48,8 @@ def load_callable(path: str, where: str = "spec"):
     """Import and return the callable a "module:function" path names.
 
     Args:
-        path (str): "package.module:function", or "path/to/file.py:function".
-        where (str): The config path this came from, used in error messages.
+        path: "package.module:function", or "path/to/file.py:function".
+        where: The config path this came from, used in error messages.
 
     Returns:
         Callable: The named attribute.
@@ -109,10 +79,10 @@ def spec_name(spec, where: str) -> tuple[str, dict]:
 
     Args:
         spec: A bare name, or a mapping with a "name" plus that factory's arguments.
-        where (str): The config path this came from, used in error messages.
+        where: The config path this came from, used in error messages.
 
     Returns:
-        tuple[str, dict]: The name, and the keyword arguments for its factory.
+        The name, and the keyword arguments for its factory.
 
     Raises:
         ValueError: If the spec is neither a string nor a mapping, or a mapping without a name.
@@ -135,16 +105,16 @@ def build_from_spec(spec, aliases: dict[str, str], what: str, where: str):
 
     Args:
         spec: A bare name, or a mapping with a "name" plus that factory's arguments.
-        aliases (dict[str, str]): Short names for the factories the library ships.
-        what (str): "reward" or "shaping", used in error messages.
-        where (str): The config path this came from, used in error messages.
+        aliases: Short names for the factories the library ships.
+        what: "reward" or "shaping", used in error messages.
+        where: The config path this came from, used in error messages.
 
     Returns:
         Callable: The reward or shaping rule the factory returned.
 
     Raises:
-        ValueError: If the spec is malformed, the name resolves to nothing importable, the
-            arguments do not fit the factory, or the factory does not return a callable.
+        ValueError: If the spec is malformed, the name resolves to nothing importable, the arguments
+            do not fit the factory, or the factory does not return a callable.
     """
     name, kwargs = spec_name(spec, where)
     path = aliases.get(name, name)

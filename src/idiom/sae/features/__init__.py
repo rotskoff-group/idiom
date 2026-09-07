@@ -1,4 +1,4 @@
-"""The per-residue feature-activation dataset: building it, reading it, and enrichment analysis."""
+"""Feature datasets, enrichment analysis, and sequence-logo windows."""
 
 from idiom.sae.features.build_feature_dataset import build_feature_dataset
 from idiom.sae.features.feature_activations import FeatureDataset

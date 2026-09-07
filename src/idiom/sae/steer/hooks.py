@@ -1,18 +1,4 @@
-"""Forward hooks that modify the residual stream, and the context manager that installs them.
-
-A hook registered on model.blocks[layer] returns a modified [B, L, d_model] tensor, which becomes
-the input to the next block. The hooks here cover four kinds of edit:
-
-- add_direction_hook, add_relative_direction_hook, add_relative_renorm_direction_hook: add a
-  vector, sized absolutely, relative to the local residual norm, or relative with the norm
-  preserved;
-- subtract_contribution_hook: remove chosen features' decoder contribution;
-- sae_edit_hook: replace the residual with the SAE reconstruction of edited latents;
-- substitute_hook: replace the residual with a fixed vector.
-
-The steering context manager installs a hook and, given a tokenizer, confines its effect to the
-positions the tokenizer's region mask selects.
-"""
+"""Residual-stream edit hooks and a context manager for region-masked steering."""
 
 from __future__ import annotations
 
@@ -23,15 +9,7 @@ import torch
 
 
 def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callable:
-    """Build a hook that adds strength * direction to every position's residual vector.
-
-    Args:
-        direction (torch.Tensor): The vector to add, shape [d_model].
-        strength (float): Scalar multiplier on direction.
-
-    Returns:
-        Callable: A forward hook.
-    """
+    """Return a hook adding strength * direction ([d_model]) at every position."""
 
     def hook(module, inputs, output):
         d = direction.to(output.device, output.dtype)
@@ -41,16 +19,9 @@ def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callab
 
 
 def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> Callable:
-    """Build a hook that adds alpha * ||x|| * unit(direction) at each position.
+    """Return a hook adding alpha * ||x|| * unit(direction) at each position.
 
-    alpha is a dimensionless fraction of the position's own residual norm.
-
-    Args:
-        direction (torch.Tensor): The steering direction, normalized internally, shape [d_model].
-        alpha (float): Push size as a fraction of each position's residual norm.
-
-    Returns:
-        Callable: A forward hook.
+    Direction has shape [d_model]; alpha is a fraction of the local residual norm.
     """
     u = direction / (direction.norm() + 1e-8)
 
@@ -63,16 +34,9 @@ def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> 
 
 
 def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> Callable:
-    """Build a hook that adds a relative direction, then restores each position's original norm.
+    """Return a relative-direction hook that restores each position's original norm.
 
-    The output has the same per-position norm as the input.
-
-    Args:
-        direction (torch.Tensor): The steering direction, normalized internally, shape [d_model].
-        alpha (float): How far to rotate toward the direction.
-
-    Returns:
-        Callable: A forward hook.
+    Add alpha * ||x|| * unit(direction), then renormalize. Direction has shape [d_model].
     """
     u = direction / (direction.norm() + 1e-8)
 
@@ -86,18 +50,10 @@ def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1
 
 
 def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 1.0) -> Callable:
-    """Build a hook computing x - scale * sum_f act_f(x) * W_dec[f] over the chosen features.
+    """Return a hook subtracting scale * sum_f activation_f(x) * W_dec[f].
 
-    Other features and the reconstruction residual are left untouched. scale of 1 erases the
-    features exactly, above 1 over-subtracts, and below 0 amplifies them.
-
-    Args:
-        sae: The SAE providing encode_dense and W_dec.
-        feature_idxs (Sequence[int]): Latents to subtract.
-        scale (float): Multiplier on the subtracted contribution.
-
-    Returns:
-        Callable: A forward hook.
+    Use feature_idxs to select latents. Scale 1 removes their current decoder contribution;
+    negative scale amplifies it. Preserve the reconstruction residual.
     """
     idx = torch.as_tensor(list(feature_idxs), dtype=torch.long)
 
@@ -111,14 +67,7 @@ def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 
 
 
 def substitute_hook(vector: torch.Tensor) -> Callable:
-    """Build a hook that replaces every position's residual vector with a fixed vector.
-
-    Args:
-        vector (torch.Tensor): The replacement vector, shape [d_model], broadcast over positions.
-
-    Returns:
-        Callable: A forward hook.
-    """
+    """Return a hook replacing every residual vector with vector ([d_model])."""
 
     def hook(module, inputs, output):
         v = vector.to(output.device, output.dtype)
@@ -128,18 +77,10 @@ def substitute_hook(vector: torch.Tensor) -> Callable:
 
 
 def sae_edit_hook(sae, edit_fn: Callable[[torch.Tensor], torch.Tensor]) -> Callable:
-    """Build a hook computing decode_dense(edit_fn(encode_dense(x))).
+    """Return a hook computing sae.decode_dense(edit_fn(sae.encode_dense(x))).
 
-    The residual is replaced by the SAE reconstruction, so the output carries the SAE's
-    reconstruction error.
-
-    Args:
-        sae: The SAE providing encode_dense and decode_dense.
-        edit_fn (Callable[[torch.Tensor], torch.Tensor]): Maps a dense latent tensor of shape
-            [B, L, num_latents] to an edited tensor of the same shape.
-
-    Returns:
-        Callable: A forward hook.
+    edit_fn maps [B, L, num_latents] to the same shape. Replacing the residual with the
+    SAE reconstruction introduces reconstruction error.
     """
 
     def hook(module, inputs, output):
@@ -156,11 +97,11 @@ def clamp_features_edit(
     """Build an edit function that sets each listed latent to a fixed value at every position.
 
     Args:
-        feature_idxs (Sequence[int]): Latents to clamp.
-        values (Sequence[float]): Target value for each latent, aligned with feature_idxs.
+        feature_idxs: Latents to clamp.
+        values: Target value for each latent, aligned with feature_idxs.
 
     Returns:
-        Callable[[torch.Tensor], torch.Tensor]: An edit function over the dense latent tensor.
+        An edit function over the dense latent tensor.
 
     Raises:
         ValueError: If feature_idxs and values differ in length.
@@ -180,24 +121,23 @@ def clamp_features_edit(
 
 @contextmanager
 def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str = "all"):
-    """Register a forward hook on one transformer block for the duration of the context.
+    """Temporarily install a hook on model.blocks[layer]; remove hooks on exit.
 
-    With a tokenizer given, the edit is confined to the positions its region mask selects,
-    recomputed on every forward pass; a pre-hook accumulates the running token sequence so the mask
-    is correct during KV-cached decoding. With tokenizer None the hook applies at every position.
+    With a tokenizer, mask edits by region, tracking tokens during cached decoding.
+    Without one, edit all positions.
 
     Args:
         model: An IDiomTransformer.
-        layer (int): Index of the block to hook.
-        hook (Callable): The forward hook to register.
+        layer: Index of the block to hook.
+        hook: The forward hook to register.
         tokenizer: Tokenizer used to recompute the region mask, or None to apply the hook
             everywhere.
-        region (str): Positions to edit: "all", "idr", or "non_idr".
+        region: Positions to edit: "all", "idr", or "non_idr".
 
     Yields:
         The model, with the hook registered; all hooks are removed on exit.
 
-    Example:
+    Examples:
         with steering(model, layer=6, hook=add_direction_hook(sae.W_dec[j], 8.0)):
             logits = model(tokens)
     """

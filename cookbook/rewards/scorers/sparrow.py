@@ -2,20 +2,11 @@
 # requires-python = ">=3.10"
 # dependencies = ["sparrow @ git+https://github.com/idptools/sparrow.git"]
 # ///
-"""Score IDRs with sparrow (https://github.com/idptools/sparrow) as an external GRPO reward.
+"""Score sparrow sequence properties (https://github.com/idptools/sparrow).
 
-Its dependencies live in the script header above, so uv builds and caches the environment on demand
-and the config only names the script. In configs/grpo.yaml:
-
-    reward.terms:
-      - {reward: {name: scorer,
-                  cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration"},
-         shaping: {name: quadratic, target: 25, width: 0.2}, label: rg, weight: 0.5}
-
-It returns the raw property value; the term's shaping turns that into a reward. --property is any
-ALBATROSS predictor (radius_of_gyration, end_to_end_distance, asphericity, scaling_exponent,
-prefactor) or a sequence parameter (FCR, NCPR, kappa, SCD, complexity). kappa returns -1.0 for a
-sequence with no charged residues, so target it only alongside an FCR constraint.
+--property selects an ALBATROSS prediction or a Protein attribute such as FCR or NCPR.
+Kappa returns -1 for sequences without charged residues.
+Run with uv run --script; see cookbook/rewards/README.md for reward configuration.
 """
 
 import argparse
@@ -48,14 +39,10 @@ def build():
 
 
 def serve(build):
-    """Drive the newline-JSON scorer protocol until stdin closes.
+    """Serve newline-delimited JSON requests until stdin closes.
 
-    build() is called once, after stdout is claimed for the protocol, and returns score_batch: a
-    function mapping a list of (non-empty) residue strings to one raw score each. Doing the imports
-    and model loading inside build() keeps any chatter they print off the protocol stream.
-
-    Args:
-        build (Callable[[], Callable[[list[str]], list[float]]]): Returns the batch scorer.
+    Call build() once to obtain a batch scorer. Redirect library output to stderr,
+    score empty sequences as 0, and report scoring exceptions as JSON errors.
     """
     # This file's own directory is sys.path[0]; drop it so a scorer named after the package it wraps
     # (sparrow.py importing sparrow) resolves to the installed package, not back to itself.

@@ -1,9 +1,4 @@
-"""The DAPO-style GRPO objective, as pure tensor functions.
-
-sequence_logprobs returns per-token log-probs under a model, group_advantages normalizes rewards
-within each prompt's group, and grpo_loss combines a PPO-clipped policy-gradient term with a
-Schulman KL penalty to a reference policy, averaged token-level over the batch.
-"""
+"""Token-level GRPO loss, group advantages, and reference-policy KL estimates."""
 
 from __future__ import annotations
 
@@ -13,14 +8,9 @@ from torch import Tensor
 
 
 def sequence_logprobs(model, tokens: Tensor) -> Tensor:
-    """Return the log-probability the model assigns each token given its prefix.
+    """Return log-probabilities of tokens[:, 1:] given their prefixes.
 
-    Args:
-        model: Model mapping token ids to next-token logits.
-        tokens (Tensor): Token id sequence of shape [B, L].
-
-    Returns:
-        Tensor: Log-probs of tokens[:, 1:], shape [B, L-1].
+    Input token ids have shape [B, L]; output has shape [B, L-1].
     """
     logits = model(tokens)[:, :-1]  # predict position t+1 from <=t
     logp = F.log_softmax(logits.float(), dim=-1)
@@ -34,15 +24,9 @@ def _kl_per_token(policy_logp: Tensor, ref_logp: Tensor) -> Tensor:
 
 
 def sequence_kl(policy_logp: Tensor, ref_logp: Tensor, completion_mask: Tensor) -> Tensor:
-    """Return the token-level mean Schulman KL over the masked positions.
+    """Return mean Schulman k3 KL over completion_mask; return 0 for an empty mask.
 
-    Args:
-        policy_logp (Tensor): Per-token log-probs under the policy, shape [B, T].
-        ref_logp (Tensor): Per-token log-probs under the reference, shape [B, T].
-        completion_mask (Tensor): Mask selecting completion tokens, shape [B, T].
-
-    Returns:
-        Tensor: The scalar mean KL.
+    All inputs have shape [B, T]. The estimate is exp(d) - d - 1, where d = ref - policy.
     """
     kl = _kl_per_token(policy_logp, ref_logp)
     return (kl * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
@@ -56,13 +40,13 @@ def group_advantages(
     Rewards are reshaped into consecutive groups of group_size, one group per prompt.
 
     Args:
-        rewards (Tensor): Flat rewards of shape [B*G].
-        group_size (int): Number of completions per prompt group.
-        normalize (bool): If True, also divide each advantage by its group's standard deviation.
-        eps (float): Floor on the group standard deviation.
+        rewards: Flat rewards of shape [B*G].
+        group_size: Number of completions per prompt group.
+        normalize: If True, also divide each advantage by its group's standard deviation.
+        eps: Floor on the group standard deviation.
 
     Returns:
-        Tensor: Flat advantages of shape [B*G].
+        Flat advantages of shape [B*G].
     """
     grouped = rewards.view(-1, group_size)
     adv = grouped - grouped.mean(dim=1, keepdim=True)
@@ -81,21 +65,20 @@ def grpo_loss(
     beta_kl: float = 0.0,
     eps_clip: float = 0.2,
 ) -> Tensor:
-    """Compute the GRPO loss over completion tokens.
+    """Return token-mean negative clipped policy gain plus beta_kl * KL.
 
-    The loss is the PPO-clipped policy-gradient term, minus beta_kl times the Schulman KL to the
-    reference, averaged over the masked tokens.
+    The importance ratio uses detached current-policy log-probabilities as its baseline.
 
     Args:
-        policy_logp (Tensor): Policy per-token log-probs of shape [B, T].
-        ref_logp (Tensor): Reference per-token log-probs of shape [B, T].
-        advantages (Tensor): Per-sequence advantages of shape [B].
-        completion_mask (Tensor): Completion-token mask of shape [B, T].
-        beta_kl (float): Weight of the KL penalty; 0 omits the term.
-        eps_clip (float): PPO clipping range around a ratio of 1.
+        policy_logp: Policy per-token log-probs of shape [B, T].
+        ref_logp: Reference per-token log-probs of shape [B, T].
+        advantages: Per-sequence advantages of shape [B].
+        completion_mask: Completion-token mask of shape [B, T].
+        beta_kl: Weight of the KL penalty; 0 omits the term.
+        eps_clip: PPO clipping range around a ratio of 1.
 
     Returns:
-        Tensor: The scalar GRPO loss.
+        The scalar GRPO loss.
     """
     adv = advantages[:, None]
     ratio = torch.exp(policy_logp - policy_logp.detach())

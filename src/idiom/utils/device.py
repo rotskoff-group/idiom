@@ -1,8 +1,4 @@
-"""Device resolution.
-
-A device is taken from an explicit argument, then the IDIOM_DEVICE environment variable, then
-"cuda" if a GPU is visible, else "cpu".
-"""
+"""Device selection from an explicit argument, IDIOM_DEVICE, or CUDA availability."""
 
 from __future__ import annotations
 
@@ -12,15 +8,7 @@ import torch
 
 
 def resolve_device(device: str | torch.device | None = None) -> torch.device:
-    """Resolve a device.
-
-    Args:
-        device (str | torch.device | None): An explicit device, or None or "auto" to fall back to
-            IDIOM_DEVICE and then to a GPU if one is visible.
-
-    Returns:
-        torch.device: The resolved device.
-    """
+    """Resolve an explicit device, or use IDIOM_DEVICE then CUDA/CPU for None or "auto"."""
     if device is not None and str(device) != "auto":
         return torch.device(device)  # explicit request wins
     env = os.environ.get("IDIOM_DEVICE")
@@ -30,12 +18,5 @@ def resolve_device(device: str | torch.device | None = None) -> torch.device:
 
 
 def is_cpu_only(device: str | torch.device | None = None) -> bool:
-    """Return whether the resolved device is CPU.
-
-    Args:
-        device (str | torch.device | None): Device to resolve; see resolve_device.
-
-    Returns:
-        bool: True if the resolved device is CPU.
-    """
+    """Return whether resolve_device(device) selects CPU."""
     return resolve_device(device).type == "cpu"

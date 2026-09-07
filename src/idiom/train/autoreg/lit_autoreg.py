@@ -1,8 +1,4 @@
-"""The autoregressive LightningModule used for both pretraining and SFT.
-
-The loss mask comes with each batch: every token for pretraining, or only the IDR completion for
-SFT.
-"""
+"""Lightning training with masked next-token cross-entropy."""
 
 from __future__ import annotations
 
@@ -44,14 +40,13 @@ class LitAutoregressive(L.LightningModule):
         """Build the transformer and record the optimizer and schedule settings.
 
         Args:
-            cfg (ModelConfig): Transformer architecture configuration.
-            lr (float): Base learning rate.
-            warmup_steps (int): Linear warmup length before the cosine decay begins.
-            max_steps (int): Scheduler horizon, normally the trainer's max_steps.
-            weight_decay (float): AdamW weight decay.
-            betas (tuple[float, float]): AdamW beta coefficients.
-            min_lr_ratio (float): Floor of the cosine decay, as a fraction of the base learning
-                rate.
+            cfg: Transformer architecture configuration.
+            lr: Base learning rate.
+            warmup_steps: Linear warmup length before the cosine decay begins.
+            max_steps: Scheduler horizon, normally the trainer's max_steps.
+            weight_decay: AdamW weight decay.
+            betas: AdamW beta coefficients.
+            min_lr_ratio: Floor of the cosine decay, as a fraction of the base learning rate.
         """
         super().__init__()
         self.cfg = cfg
@@ -73,12 +68,12 @@ class LitAutoregressive(L.LightningModule):
         The architecture is read from the artifact.
 
         Args:
-            init_from (str): A Lightning .ckpt, a released model directory, or a Hub repo id; any
-                form idiom.model.io.load_model accepts.
+            init_from: A Lightning .ckpt, a released model directory, or a Hub repo id; any form
+                idiom.model.io.load_model accepts.
             **kwargs: Optimizer and schedule arguments forwarded to the constructor.
 
         Returns:
-            LitAutoregressive: A module holding the pretrained weights.
+            A module holding the pretrained weights.
         """
         model, cfg = load_model(init_from, eval_mode=False)
         lit = cls(cfg, **kwargs)
@@ -95,50 +90,26 @@ class LitAutoregressive(L.LightningModule):
         return (per_token * mask).sum() / mask.sum().clamp(min=1)
 
     def training_step(self, batch, batch_idx):
-        """Compute and log the masked next-token loss for one training batch.
-
-        Args:
-            batch (tuple): The (input_ids, target_ids, loss_mask) triple for the batch.
-            batch_idx (int): Index of the batch within the epoch (unused).
-
-        Returns:
-            torch.Tensor: The scalar training loss.
-        """
+        """Return and log masked cross-entropy for (input_ids, target_ids, loss_mask)."""
         x, y, mask = batch
         loss = self._masked_loss(self.model(x), y, mask)
         self.log("train/loss", loss, prog_bar=True, on_step=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        """Compute and log the masked next-token loss for one validation batch.
-
-        Args:
-            batch (tuple): The (input_ids, target_ids, loss_mask) triple for the batch.
-            batch_idx (int): Index of the batch within the epoch (unused).
-
-        Returns:
-            torch.Tensor: The scalar validation loss.
-        """
+        """Return and log validation cross-entropy for (input_ids, target_ids, loss_mask)."""
         x, y, mask = batch
         loss = self._masked_loss(self.model(x), y, mask)
         self.log("val/loss", loss, prog_bar=True, on_epoch=True, sync_dist=True)
         return loss
 
     def on_before_optimizer_step(self, optimizer):
-        """Log per-parameter and total L2 gradient norms.
-
-        Args:
-            optimizer (torch.optim.Optimizer): The optimizer about to step; unused.
-        """
+        """Log per-parameter and total L2 gradient norms."""
         # grad_2.0_norm/* keys, matching the earlier IDiom pretrain logging.
         self.log_dict(grad_norm(self, norm_type=2))
 
     def configure_optimizers(self):
-        """Build AdamW and its per-step warmup-cosine schedule.
-
-        Returns:
-            dict: An optimizer and a per-step lr_scheduler config.
-        """
+        """Return AdamW with a per-step warmup-cosine schedule."""
         opt = torch.optim.AdamW(
             self.model.parameters(), lr=self.lr, betas=self.betas, weight_decay=self.weight_decay
         )

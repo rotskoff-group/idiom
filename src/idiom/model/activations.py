@@ -1,8 +1,4 @@
-"""Residual-stream activation extraction.
-
-Runs the model with return_hidden_states, selects positions with the tokenizer's region mask, and
-returns the kept activation rows with the sequence, position, and token id of each.
-"""
+"""Residual-stream extraction with token and position metadata."""
 
 from __future__ import annotations
 
@@ -19,11 +15,11 @@ class LayerActivations:
     """Kept activation rows at one layer, with per-row alignment metadata.
 
     Attributes:
-        layer (int): The layer these activations were taken from.
-        values (Tensor): Residual-stream vectors, shape [N_kept, d_model].
-        seq_idx (Tensor): Row of the input batch each vector came from, shape [N_kept].
-        pos_idx (Tensor): Position within that token sequence, shape [N_kept].
-        token_id (Tensor): Token id at that position, shape [N_kept].
+        layer: The layer these activations were taken from.
+        values: Residual-stream vectors, shape [N_kept, d_model].
+        seq_idx: Row of the input batch each vector came from, shape [N_kept].
+        pos_idx: Position within that token sequence, shape [N_kept].
+        token_id: Token id at that position, shape [N_kept].
     """
 
     layer: int
@@ -43,21 +39,19 @@ def extract_activations(
     drop_markers: bool = True,
     region: str = "all",
 ) -> dict[int, LayerActivations]:
-    """Extract residual-stream activations at the given layers for the selected positions.
-
-    Positions are selected with Tokenizer.region_mask.
+    """Extract selected residual-stream rows using Tokenizer.region_mask.
 
     Args:
         model: The transformer to run.
-        tokens (Tensor): Token ids of shape [B, L], as fed to the model.
-        layers (list[int]): Layer indices whose residual stream to extract.
-        tokenizer (Tokenizer | None): Tokenizer for position selection; a default if None.
-        drop_markers (bool): If True, keep only real residues; if False, also keep FIM markers.
-        region (str): Positions to keep: "all", "idr", or "non_idr".
+        tokens: Token ids of shape [B, L], as fed to the model.
+        layers: Zero-based block indices.
+        tokenizer: Tokenizer for position selection; a default if None.
+        drop_markers: If True, keep only real residues; if False, also keep FIM markers.
+        region: Positions to keep: "all", "idr", or "non_idr".
 
     Returns:
-        dict[int, LayerActivations]: One LayerActivations per requested layer, each holding the
-            same selected positions in the same order.
+        One LayerActivations per requested layer, each holding the same selected positions in the
+        same order.
 
     Raises:
         ValueError: If region is not "all", "idr", or "non_idr".

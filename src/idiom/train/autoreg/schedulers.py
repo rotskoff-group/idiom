@@ -20,13 +20,13 @@ def warmup_cosine(
     max_steps, and stays there.
 
     Args:
-        optimizer (torch.optim.Optimizer): Optimizer whose learning rate is scheduled.
-        warmup_steps (int): Number of linear warmup steps before the cosine decay begins.
-        max_steps (int): Step at which the cosine decay reaches min_lr_ratio.
-        min_lr_ratio (float): Floor of the decay, as a fraction of the base learning rate.
+        optimizer: Optimizer whose learning rate is scheduled.
+        warmup_steps: Number of linear warmup steps before the cosine decay begins.
+        max_steps: Step at which the cosine decay reaches min_lr_ratio.
+        min_lr_ratio: Floor of the decay, as a fraction of the base learning rate.
 
     Returns:
-        torch.optim.lr_scheduler.LambdaLR: The configured scheduler, stepped per optimizer step.
+        The configured scheduler, stepped per optimizer step.
     """
 
     def lr_factor(step: int) -> float:

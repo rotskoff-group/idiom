@@ -1,4 +1,4 @@
-"""P1 data tests (CPU-only): tokenizer, FIM transforms, and marker-drop alignment."""
+"""data tests (CPU-only): tokenizer, FIM transforms, and marker-drop alignment."""
 
 import torch
 

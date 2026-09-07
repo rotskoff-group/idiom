@@ -1,13 +1,6 @@
-"""Memory-mapped columnar record store built from a record FASTA.
+"""Memory-mapped FASTA records, stored in a "<fasta>.idiomstore" sidecar.
 
-A store is a directory of flat binary files — contiguous sequence and accession byte buffers, CSR
-offset arrays, and IDR coordinate arrays — read back with numpy.memmap and indexed to a Record on
-demand. It holds the same records as idiom.data.io.read_records.
-
-A store is a sidecar named "<fasta>.idiomstore", built on first use by open_or_build or ahead of
-time with the idiom_build_store CLI:
-
-    idiom_build_store --fasta /path/train.fasta            # -> /path/train.fasta.idiomstore
+Use open_or_build for lazy construction or idiom_build_store to build ahead of time.
 """
 
 from __future__ import annotations
@@ -34,14 +27,7 @@ _BYTE_DTYPE = np.uint8
 
 
 def store_path_for(fasta: str | Path) -> Path:
-    """Return the default sidecar store directory for a record FASTA.
-
-    Args:
-        fasta (str | Path): Path to the record FASTA.
-
-    Returns:
-        Path: The path "<fasta>.idiomstore".
-    """
+    """Return the sidecar path "<fasta>.idiomstore"."""
     return Path(str(fasta) + STORE_SUFFIX)
 
 
@@ -56,15 +42,15 @@ def build_record_store(
 ) -> Path:
     """Parse a record FASTA into a columnar store and return its directory.
 
-    The store is built into a temporary directory and atomically renamed into place.
+    Build in a temporary directory, remove any existing store, then rename into place.
 
     Args:
-        fasta (str | Path): Path to the record FASTA to convert.
-        store_dir (str | Path | None): Output store directory; "<fasta>.idiomstore" if None.
-        drop_noncanonical (bool): If True, drop non-canonical sequences, as read_records does.
+        fasta: Path to the record FASTA to convert.
+        store_dir: Output store directory; "<fasta>.idiomstore" if None.
+        drop_noncanonical: If True, drop non-canonical sequences, as read_records does.
 
     Returns:
-        Path: The store directory.
+        The store directory.
     """
     fasta = Path(fasta)
     store_dir = Path(store_dir) if store_dir else store_path_for(fasta)
@@ -121,7 +107,7 @@ class RecordStore:
         """Open a built store and memory-map its arrays.
 
         Args:
-            store_dir (str | Path): Directory holding the store files.
+            store_dir: Directory holding the store files.
         """
         self.dir = Path(store_dir)
         self.meta = json.loads((self.dir / _META).read_text())
@@ -142,22 +128,11 @@ class RecordStore:
         return self.meta["n"]
 
     def seq_lengths(self) -> np.ndarray:
-        """Return the full_seq length of every record.
-
-        Returns:
-            np.ndarray: An int64 array of per-record sequence lengths.
-        """
+        """Return full-sequence lengths as an int64 array, in record order."""
         return (self._seq_off[1:] - self._seq_off[:-1]).astype(np.int64)
 
     def __getitem__(self, i: int) -> Record:
-        """Decode one record from the memory-mapped buffers.
-
-        Args:
-            i (int): Record index.
-
-        Returns:
-            Record: The record at index i.
-        """
+        """Decode the record at nonnegative index i from the memory-mapped buffers."""
         s, e = int(self._seq_off[i]), int(self._seq_off[i + 1])
         a0, a1 = int(self._acc_off[i]), int(self._acc_off[i + 1])
         seq = self._seq[s:e].tobytes().decode("ascii")
@@ -187,14 +162,14 @@ def open_or_build(
     poll and then open the result. A lock older than lock_timeout is removed as abandoned.
 
     Args:
-        fasta (str | Path): Path to the record FASTA.
-        drop_noncanonical (bool): If True, drop non-canonical sequences when building.
-        lock_timeout (float): Seconds after which a lock is considered stale, and the limit on how
-            long a waiting caller blocks.
-        poll (float): Seconds between checks while waiting for another process to finish building.
+        fasta: Path to the record FASTA.
+        drop_noncanonical: If True, drop non-canonical sequences when building.
+        lock_timeout: Seconds after which a lock is considered stale, and the limit on how long a
+            waiting caller blocks.
+        poll: Seconds between checks while waiting for another process to finish building.
 
     Returns:
-        RecordStore: A memory-mapped store for fasta.
+        A memory-mapped store for fasta.
 
     Raises:
         TimeoutError: If the build lock is not released within lock_timeout.

@@ -1,4 +1,4 @@
-"""P5 steering tests (CPU-only): region-masked residual edits and steered sampling."""
+"""steering tests (CPU-only): region-masked residual edits and steered sampling."""
 
 import torch
 

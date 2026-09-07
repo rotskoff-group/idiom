@@ -63,16 +63,7 @@ class Tokenizer:
 
     # --- validation ---
     def is_canonical(self, seq: str) -> bool:
-        """Return whether seq contains only the 20 canonical amino acids.
-
-        FIM markers and control characters are not canonical.
-
-        Args:
-            seq (str): The sequence to check.
-
-        Returns:
-            bool: True if seq is non-empty and every character is a canonical amino acid.
-        """
+        """Return whether seq is non-empty and contains only uppercase canonical amino acids."""
         return bool(seq) and all(c in RESIDUE_SET for c in seq)
 
     # --- encode / decode ---
@@ -80,10 +71,10 @@ class Tokenizer:
         """Map a residue/FIM string to token ids, adding no control tokens.
 
         Args:
-            s (str): A string of residue and/or FIM-marker characters.
+            s: A string of residue and/or FIM-marker characters.
 
         Returns:
-            list[int]: The token id for each character, in order.
+            The token id for each character, in order.
 
         Raises:
             ValueError: If s contains a character that is neither a residue nor a FIM marker.
@@ -97,14 +88,7 @@ class Tokenizer:
             ) from None
 
     def decode(self, ids: Iterable[int]) -> str:
-        """Map token ids back to a string, dropping control tokens.
-
-        Args:
-            ids (Iterable[int]): Token ids to decode.
-
-        Returns:
-            str: The residue/FIM string.
-        """
+        """Decode token ids to a residue/FIM string, omitting control tokens."""
         n_seq = self.n_residues + self.n_fim
         return "".join(self._itos[int(i)] for i in ids if int(i) < n_seq)
 
@@ -118,16 +102,7 @@ class Tokenizer:
         return self.n_residues <= int(i) < self.n_residues + self.n_fim
 
     def residue_mask(self, ids: torch.Tensor) -> torch.Tensor:
-        """Return a boolean mask that is True at real-residue positions.
-
-        Equivalent to region_mask with region="all".
-
-        Args:
-            ids (torch.Tensor): Token ids, shape [B, L].
-
-        Returns:
-            torch.Tensor: A boolean [B, L] mask, True at residue positions.
-        """
+        """Return a boolean mask of residue positions, with the same shape as ids."""
         return self.region_mask(ids)
 
     def region_mask(
@@ -139,14 +114,14 @@ class Tokenizer:
         "2" marker that opens the IDR.
 
         Args:
-            ids (torch.Tensor): Token ids, shape [B, L].
-            region (str): Which kept positions to select: "all" for every kept position, "idr" for
-                only those after the "2" marker, "non_idr" for only those before it. A row with no
-                "2" marker contributes nothing to "idr" or "non_idr".
-            drop_markers (bool): If True, keep only real residues; if False, also keep FIM markers.
+            ids: Token ids, shape [B, L].
+            region: Which kept positions to select: "all" for every kept position, "idr" for only
+                those after the "2" marker, "non_idr" for only those before it. A row with no "2"
+                marker contributes nothing to "idr" or "non_idr".
+            drop_markers: If True, keep only real residues; if False, also keep FIM markers.
 
         Returns:
-            torch.Tensor: A boolean [B, L] mask of the selected positions.
+            A boolean [B, L] mask of the selected positions.
 
         Raises:
             ValueError: If region is not "all", "idr", or "non_idr".

@@ -1,8 +1,4 @@
-"""Held-out perplexity under the FIM next-token objective.
-
-Scores a record FASTA through the RecordDataset pipeline training uses, and reports the masked
-next-token loss.
-"""
+"""Held-out next-token NLL and perplexity over record FASTAs."""
 
 from __future__ import annotations
 
@@ -30,19 +26,19 @@ def perplexity(
 
     Args:
         model: The model to evaluate, called as model(input_ids) -> logits.
-        fasta (str): Path to the held-out record FASTA.
-        tokenizer (Tokenizer | None): Character tokenizer; a default Tokenizer if None.
-        max_len (int): Maximum model positions; longer records are dropped.
-        prompted_prob (float): Probability that a sample uses the prompted variant.
-        batch_size (int): Batch size for the evaluation dataloader.
-        num_workers (int): DataLoader worker processes.
-        device (str): Device to run the model on.
-        max_records (int | None): If set, evaluate only the first this many records.
-        seed (int): Seed for the per-sample prompted/unprompted choice.
+        fasta: Path to the held-out record FASTA.
+        tokenizer: Tokenizer; defaults to Tokenizer().
+        max_len: Maximum model positions; longer records are dropped.
+        prompted_prob: Probability that a sample uses the prompted variant.
+        batch_size: Batch size for the evaluation dataloader.
+        num_workers: DataLoader worker processes.
+        device: Device to run the model on.
+        max_records: If set, evaluate only the first this many records.
+        seed: Seed for FIM variant selection.
 
     Returns:
-        dict[str, float]: "nll", the mean per-token NLL in nats; "perplexity", its exponential;
-            and "n_tokens", the number of scored tokens.
+        "nll", the mean per-token NLL in nats; "perplexity", its exponential; and "n_tokens", the
+        number of scored tokens.
     """
     tok = tokenizer or Tokenizer()
     records = read_records(fasta)

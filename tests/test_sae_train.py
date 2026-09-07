@@ -1,4 +1,4 @@
-"""P5 SAE entrypoint tests (CPU-only): build() wires a frozen model (arch read from ckpt)."""
+"""SAE entrypoint tests (CPU-only): build() wires a frozen model (arch read from ckpt)."""
 
 from dataclasses import asdict
 

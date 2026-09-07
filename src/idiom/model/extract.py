@@ -1,8 +1,4 @@
-"""Sequence and FASTA embedding, and the idiom_extract CLI.
-
-Each record is FIM-formatted, the residual stream is taken at the requested layers, and the
-residue rows are paired with their source positions in the original sequence.
-"""
+"""Sequence and FASTA embeddings with source-residue alignment."""
 
 from __future__ import annotations
 
@@ -35,13 +31,12 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
 
     Args:
         model: The transformer to run.
-        inputs (str | Path | Record | Iterable[str | Record]): A record FASTA path, a bare
-            sequence string, or an iterable of sequences and/or Records; see
-            idiom.data.io.to_records.
-        layers (list[int]): Layer indices whose residual stream to extract.
+        inputs (str | Path | Record | Iterable[str | Record]): A record FASTA path, a bare sequence
+            string, or an iterable of sequences and/or Records; see idiom.data.io.to_records.
+        layers (list[int]): Zero-based block indices.
         pool (str): "mean" for one vector per sequence, averaged over its IDR residues, or "none"
             for one row per residue.
-        tokenizer (Tokenizer | None): Tokenizer; a default Tokenizer if None.
+        tokenizer (Tokenizer | None): Defaults to Tokenizer().
         device (str | torch.device): Device to run the model on.
         fim_mode (str): Prompt format the activations are taken under, "prompted" or "unprompted".
 
@@ -90,8 +85,8 @@ def write_embeddings(embeddings: dict, out_dir: str | Path) -> None:
     """Write each layer's embeddings as "layer_<l>.npy" and its metadata as "layer_<l>_index.csv".
 
     Args:
-        embeddings (dict): Mapping of layer to (values, index), as returned by embed_fasta.
-        out_dir (str | Path): Directory to create and write into.
+        embeddings: Mapping of layer to (values, index), as returned by embed_fasta.
+        out_dir: Directory to create and write into.
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

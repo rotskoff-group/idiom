@@ -1,4 +1,4 @@
-"""P5 feature-dataset tests (CPU-only): build -> read -> reduce, with residue alignment."""
+"""feature-dataset tests (CPU-only): build -> read -> reduce, with residue alignment."""
 
 from idiom.data.io import Record
 from idiom.data.tokenizer import RESIDUES, Tokenizer
