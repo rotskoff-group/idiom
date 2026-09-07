@@ -22,10 +22,13 @@ idiom_train_sae \
     device=auto \
     model_ckpt=jxliu2/idiom-300M \
     resume_from=null \
+    wandb_project=idiom-sae \
+    run_name=null \
     layer=18 \
     region=all \
     data.fasta="$FASTA" \
     data.prompted_prob=0.5 \
+    data.shuffle=true \
     data.record_batch_size=16 \
     sae_batch_size=4096 \
     buffer_size=262144 \
@@ -41,6 +44,8 @@ idiom_train_sae \
     trainer.accelerator=auto \
     trainer.devices=1 \
     out_dir="$OUT" \
-    hydra.run.dir="$OUT/hydra"
+    hydra.run.dir="$OUT/hydra" \
+    hydra.sweep.dir="$OUT/hydra/multirun" \
+    'hydra.sweep.subdir=${hydra.job.num}'
 
 echo "DONE -> $OUT"

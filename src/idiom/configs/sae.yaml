@@ -4,6 +4,8 @@ seed: 0
 device: auto
 model_ckpt: ??? # required: frozen base (a .ckpt, a released dir, or a HF repo id); arch read from it
 resume_from: null # mid-run resume (optimizer/step/RNG) from a .ckpt
+wandb_project: idiom-sae
+run_name: null
 
 layer: 8 # residual-stream block to train the SAE on (must be < n_layers)
 region: all # residues feeding the SAE: all | idr | non_idr (split at the '2' marker)
@@ -11,6 +13,7 @@ region: all # residues feeding the SAE: all | idr | non_idr (split at the '2' ma
 data:
   fasta: ??? # required: record FASTA whose activations feed the SAE
   prompted_prob: 0.5 # prompted (context) vs unprompted (de novo); 0.0 = a pure de novo SAE
+  shuffle: true # randomize record order
   record_batch_size: 16 # sequences per model forward, re-batched into sae_batch_size
 
 sae_batch_size: 4096 # activation rows per SAE step

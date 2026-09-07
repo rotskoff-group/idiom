@@ -38,13 +38,23 @@ LENGTH="{label: length, \
 
 PADDLE="{label: paddle, \
     weight: $WEIGHT, \
-    reward: {name: scorer, cmd: \"$SCORER\", timeout: $TIMEOUT}, \
+    reward: {name: scorer, \
+        cmd: \"$SCORER\", \
+        timeout: $TIMEOUT, \
+        maxlen: 0, \
+        cwd: null, \
+        env: null, \
+        cache_max: 100000, \
+        label: null}, \
     shaping: identity}"
 
 idiom_train_grpo \
     seed=0 \
     device=auto \
     init_from=jxliu2/idiom-300M \
+    resume_from=null \
+    wandb_project=idiom-grpo \
+    run_name=null \
     prompts.mode=unprompted \
     prompts.n=1000 \
     prompts.fasta=null \
@@ -70,6 +80,8 @@ idiom_train_grpo \
     trainer.log_every_n_steps=1 \
     trainer.checkpoint_every=0 \
     out_dir="$OUT" \
-    hydra.run.dir="$OUT/hydra"
+    hydra.run.dir="$OUT/hydra" \
+    hydra.sweep.dir="$OUT/hydra/multirun" \
+    'hydra.sweep.subdir=${hydra.job.num}'
 
 echo "DONE -> $OUT"

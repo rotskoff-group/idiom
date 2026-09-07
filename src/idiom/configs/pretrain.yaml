@@ -17,15 +17,23 @@ data:
   num_workers: 8
 
 model: # the released idiom-300M; idiom-85M = 12L/768/12, idiom-20M = 6L/512/8
+  vocab_size: 27
   n_layers: 24
   d_model: 1024
   n_heads: 16
   max_seq_len: 1024 # longest protein + 4 (START + the three FIM markers)
 
+  rope_base: 10000.0
+  expansion_ratio: 2.6666666666666665
+  norm_eps: 1.0e-5
+  qk_norm: true
+  tie_embeddings: true
+
 optim: # paper recipe: AdamW, no weight decay, warmup 3k then cosine to 10%
   lr: 4.0e-4
   warmup_steps: 3000
   weight_decay: 0.0
+  betas: [0.9, 0.95]
   min_lr_ratio: 0.1
 
 trainer: # global batch 1024 = 32/GPU * 8 GPUs * accum 4

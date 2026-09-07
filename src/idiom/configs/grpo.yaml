@@ -3,6 +3,8 @@ seed: 0
 device: auto
 init_from: ??? # required: model to optimize (a .ckpt, a released dir, or a HF repo id)
 resume_from: null # mid-run resume (optimizer/step/RNG) from a .ckpt
+wandb_project: idiom-grpo
+run_name: null
 
 prompts:
   mode: unprompted # unprompted (de novo) | prompted (per-protein flank prompts)

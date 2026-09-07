@@ -34,6 +34,11 @@ separately, use the same tag or commit to keep the examples matched to the insta
 bash cookbook/scripts/sft.bash
 ```
 
+Training commands list every IDiom config parameter explicitly, including null values, reward-factory
+arguments, and Hydra run/sweep paths. Defaults live in `src/idiom/configs/`; SFT reads its model
+architecture from `init_from`. Hydra’s framework settings can be inspected with `--cfg hydra`,
+and the composed training settings with `--cfg job`. These flags print configuration without training.
+
 External-scorer examples also require `uv` (`python -m pip install uv`). Their
 `uv run --script` commands install each scorer's dependencies separately; no `uv sync` is needed
 for the pip workflow.
