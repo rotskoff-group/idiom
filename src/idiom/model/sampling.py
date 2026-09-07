@@ -15,7 +15,7 @@ from idiom.utils.validation import integer_at_least, validate_sampling
 def _filter_top_k(logits: Tensor, k: int | None) -> Tensor:
     if not k or k >= logits.size(-1):
         return logits
-    kth = logits.topk(k, dim=-1).values[..., -1, None]  # k-th largest logit per row
+    kth = logits.topk(k, dim=-1).values[..., -1, None]
     return logits.masked_fill(logits < kth, float("-inf"))
 
 
@@ -24,7 +24,7 @@ def _filter_top_p(logits: Tensor, p: float | None) -> Tensor:
         return logits
     sorted_logits, sorted_idx = torch.sort(logits, descending=True, dim=-1)
     cum = sorted_logits.softmax(-1).cumsum(-1)
-    remove = cum > p  # drop the tail past cumulative prob p
+    remove = cum > p
     remove[..., 1:] = remove[..., :-1].clone()  # shift so the token that crosses p is kept
     remove[..., 0] = False
     remove = torch.zeros_like(remove).scatter(-1, sorted_idx, remove)  # back to original order
@@ -104,7 +104,7 @@ def generate(
     B = prompt_tokens.size(0)
 
     start = torch.full((B, 1), tok.start_id, dtype=torch.long, device=device)
-    inp = torch.cat([start, prompt_tokens], dim=1)  # prepend START
+    inp = torch.cat([start, prompt_tokens], dim=1)
 
     context_length = model.cfg.max_seq_len
     if inp.size(1) > context_length:
@@ -121,7 +121,7 @@ def generate(
         max_new_tokens = available
 
     cache = KVCache(model.cfg.n_layers)
-    logits = model(inp, cache=cache)[:, -1]  # prefill -> last-position logits
+    logits = model(inp, cache=cache)[:, -1]
 
     finished = torch.zeros(B, dtype=torch.bool, device=device)
     generated: list[Tensor] = []
@@ -130,12 +130,12 @@ def generate(
             logits, temperature=temperature, top_k=top_k, top_p=top_p, generator=generator
         )
         if stop_id is not None:
-            nxt = torch.where(finished, torch.full_like(nxt, tok.pad_id), nxt)  # pad once finished
+            nxt = torch.where(finished, torch.full_like(nxt, tok.pad_id), nxt)
             finished = finished | (nxt == stop_id)
         generated.append(nxt)
         if stop_id is not None and bool(finished.all()):
             break
         if step + 1 < max_new_tokens:
-            logits = model(nxt[:, None], cache=cache)[:, -1]  # decode one step via the cache
+            logits = model(nxt[:, None], cache=cache)[:, -1]
 
     return torch.stack(generated, dim=1)

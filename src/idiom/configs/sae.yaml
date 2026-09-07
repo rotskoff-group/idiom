@@ -1,8 +1,8 @@
-# SAE training config. Activations stream from a frozen IDiom; none are cached to disk.
+# Stream activations from a frozen IDiom for SAE training.
 #   idiom_train_sae model_ckpt=jxliu2/idiom-300M data.fasta=/path/records.fasta layer=18
 seed: 0
 device: auto
-model_ckpt: ??? # required: frozen base (a .ckpt, a released dir, or a HF repo id); arch read from it
+model_ckpt: ??? # Frozen model: checkpoint, release directory, or Hub repo ID
 resume_from: null # mid-run resume (optimizer/step/RNG) from a .ckpt
 wandb_project: idiom-sae
 run_name: null
@@ -13,7 +13,7 @@ region: all # residues feeding the SAE: all | idr | non_idr (split at the '2' ma
 data:
   fasta: ??? # required: record FASTA whose activations feed the SAE
   prompted_prob: 0.5 # prompted (context) vs unprompted (de novo); 0.0 = a pure de novo SAE
-  shuffle: true # randomize record order
+  shuffle: true
   record_batch_size: 16 # sequences per model forward, re-batched into sae_batch_size
 
 sae_batch_size: 4096 # activation rows per SAE step
@@ -36,7 +36,7 @@ trainer:
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/sae
 
-# Run and sweep dirs go to the experiment dir, not the repo; override with IDIOM_OUT.
+# IDIOM_OUT overrides the output root.
 hydra:
   run:
     dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

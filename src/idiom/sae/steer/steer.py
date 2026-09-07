@@ -40,14 +40,11 @@ class SteeringSpec:
     layer: int
     feature_idx: int | Sequence[int]
     strength: float | Sequence[float]
-    mode: str = "add_direction"  # "add_direction" | "clamp" | "ablate"
+    mode: str = "add_direction"
     clamp_value: float | Sequence[float] | None = None
-    normalize: bool = False  # add_direction: use strength * unit(sum of decoder rows), so the push
-    #                          magnitude == strength regardless of how many features are summed.
-    relative: bool = False   # add_direction: push = strength * ||x_pos|| * unit(sum of decoder rows),
-    #                          i.e. strength is a dimensionless FRACTION of the local residual norm.
-    preserve_norm: bool = False  # relative only: renorm each position back to ||x_pos|| after the push,
-    #                              so steering ROTATES x toward the feature at constant norm (no inflation).
+    normalize: bool = False
+    relative: bool = False
+    preserve_norm: bool = False
 
 
 def _as_list(x) -> list:
@@ -58,11 +55,7 @@ def _as_list(x) -> list:
 
 
 def _broadcast(values: list, n: int, name: str) -> list:
-    """Return values repeated to length n if it holds one element, or unchanged if it holds n.
-
-    Raises:
-        ValueError: If values holds neither 1 nor n elements.
-    """
+    """Broadcast one value to n entries; reject lengths other than 1 or n."""
     if len(values) == 1:
         return values * n
     if len(values) != n:
@@ -87,15 +80,12 @@ def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
     feats = _as_list(spec.feature_idx)
     if spec.mode == "add_direction":
         if spec.relative:
-            # push = strength(=alpha) * ||x_pos|| * unit(sum of unit decoder rows)
             raw = sum(sae.W_dec[i].detach() for i in feats)
             alpha = float(_as_list(spec.strength)[0])
-            if spec.preserve_norm:  # rotate toward the feature at constant ||x_pos|| (no norm inflation)
+            if spec.preserve_norm:
                 return add_relative_renorm_direction_hook(raw, alpha)
             return add_relative_direction_hook(raw, alpha)
         if spec.normalize:
-            # strength sets the push magnitude directly: strength * unit(sum of unit decoder rows),
-            # so N (how many features) controls only the direction, not the magnitude.
             raw = sum(sae.W_dec[i].detach() for i in feats)
             scale = float(_as_list(spec.strength)[0])
             direction = raw / (raw.norm() + 1e-8) * scale
@@ -155,7 +145,7 @@ def steer_generation(
     sae = sae.to(device).eval()
 
     if prompt_tokens is None:
-        prompt_tokens = tok.encode("132")  # unprompted / de novo
+        prompt_tokens = tok.encode("132")
     prompt = torch.as_tensor(list(prompt_tokens), dtype=torch.long)
     prompts = prompt.unsqueeze(0).repeat(n_samples, 1).to(device)
 

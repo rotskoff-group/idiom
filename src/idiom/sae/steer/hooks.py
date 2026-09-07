@@ -27,7 +27,7 @@ def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> 
 
     def hook(module, inputs, output):
         d = u.to(output.device, output.dtype)
-        scale = alpha * output.norm(dim=-1, keepdim=True)   # [B, L, 1] per-position residual norm
+        scale = alpha * output.norm(dim=-1, keepdim=True)
         return output + scale * d
 
     return hook
@@ -42,9 +42,9 @@ def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1
 
     def hook(module, inputs, output):
         d = u.to(output.device, output.dtype)
-        norm = output.norm(dim=-1, keepdim=True)            # [B, L, 1] original per-position norm
-        steered = output + alpha * norm * d                 # relative push (would grow the norm) ...
-        return steered / (steered.norm(dim=-1, keepdim=True) + 1e-8) * norm  # ... then renorm back
+        norm = output.norm(dim=-1, keepdim=True)
+        steered = output + alpha * norm * d
+        return steered / (steered.norm(dim=-1, keepdim=True) + 1e-8) * norm
 
     return hook
 
@@ -148,10 +148,9 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
         latest: dict = {}
 
         def _capture(_module, args):
-            tok_in = args[0]  # model(tokens, ...) -> args[0] is the token ids
+            tok_in = args[0]
             prev = latest.get("tokens")
-            # A multi-token call (prefill / full forward) is the full context; a single new token
-            # is an incremental cached decode step, so append it to the running sequence.
+            # Prefill replaces the context; cached single-token decoding extends it.
             if prev is None or tok_in.shape[1] > 1:
                 latest["tokens"] = tok_in
             else:
@@ -166,7 +165,7 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
             n = output.shape[1]
             if tokens is None or tokens.shape[1] < n:
                 return edited  # can't align tokens to positions; fall back to unmasked edit
-            mask = tokenizer.region_mask(tokens, region=region)[:, -n:]  # last n positions
+            mask = tokenizer.region_mask(tokens, region=region)[:, -n:]
             return torch.where(mask.unsqueeze(-1).to(output.device), edited, output)
 
         hook = _masked

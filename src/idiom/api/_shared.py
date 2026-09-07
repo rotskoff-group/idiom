@@ -39,7 +39,7 @@ def _oversample(batch_fn, n: int, *, length_range: tuple[int, int] | None = None
     kept: list[str] = []
     drawn, rounds, cap = 0, 0, n * max(1, max_oversample)
     while len(kept) < n and drawn < cap:
-        s = None if seed is None else seed + rounds  # vary the seed per batch
+        s = None if seed is None else seed + rounds
         kept.extend(x for x in batch_fn(n, s) if x and lo <= len(x) <= hi)
         drawn += n
         rounds += 1

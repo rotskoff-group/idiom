@@ -16,9 +16,6 @@ from idiom.data.fim import fim_unprompted
 from idiom.model.activations import extract_activations
 from idiom.train.grpo.reward.resolve import Reward, batchify
 
-# The signatures for the released SAE ship next to this module, so the default works in any install
-# and from any working directory; point a term's features at your own JSON of the same shape
-# (cookbook/notebooks/feature_enrichment.ipynb writes one) to override.
 DEFAULT_SAE = "jxliu2/idiomsae-300M-L18-k32"
 DEFAULT_FEATURES = str(Path(__file__).resolve().parent / "sae_signatures.json")
 DEFAULT_CASE = "top30"
@@ -33,18 +30,7 @@ def _sae(sae_dir: str, device: str | None):
 
 @lru_cache(maxsize=8)
 def _featuresets(features: str, case: str) -> dict:
-    """Return the {name: [feature ids]} mapping for one case of a signature file.
-
-    Args:
-        features: Path to the signature JSON, {case: {name: [feature ids]}}.
-        case: Which case of the file to read.
-
-    Returns:
-        The signature name to feature id list mapping for that case.
-
-    Raises:
-        KeyError: If the case is not present in the signature file.
-    """
+    """Read a case as {signature_name: [feature_ids]}; raise KeyError if absent."""
     blob = json.loads(Path(features).read_text())
     if case not in blob:
         cases = [k for k in blob if not k.startswith("_")]
@@ -55,11 +41,7 @@ def _featuresets(features: str, case: str) -> dict:
 
 @lru_cache(maxsize=32)
 def _target_ids(signature: str, features: str, case: str, sae_dir: str, device: str | None):
-    """Return a signature's feature ids as a LongTensor on the SAE's device.
-
-    Raises:
-        KeyError: If the signature is not in the given case of the signature file.
-    """
+    """Return signature indices on the SAE device; raise KeyError for an unknown signature."""
     sets = _featuresets(features, case)
     if signature not in sets:
         raise KeyError(f"signature {signature!r} not in case {case!r} of {features} "
@@ -92,13 +74,13 @@ def feature_match(idr: str, signature: str, *, features: str = DEFAULT_FEATURES,
     if not idr:
         return 0.0
     lens = _sae(sae, device)
-    s = fim_unprompted(idr, 0, len(idr))                            # "132" + idr (unprompted)
+    s = fim_unprompted(idr, 0, len(idr))
     tokens = torch.tensor([[lens.tok.start_id, *lens.tok.encode(s)]], device=lens.device)
     acts = extract_activations(lens.model, tokens, [lens.layer], tokenizer=lens.tok,
                                drop_markers=True, region=lens.region)[lens.layer]
-    feats = lens.sae.encode_dense(acts.values.to(lens.device))      # [n_idr_res, num_latents]
+    feats = lens.sae.encode_dense(acts.values.to(lens.device))
     ids = _target_ids(signature, features, case, sae, device)
-    fired = (feats[:, ids] > 0).any(dim=0).float()                  # [n_ids]
+    fired = (feats[:, ids] > 0).any(dim=0).float()
     return float(fired.mean())
 
 

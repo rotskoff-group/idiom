@@ -24,11 +24,7 @@ _PAD = "G"           # neutral flank when a sequence is shorter than one window
 
 
 def _paddle_dir() -> Path:
-    """Return the PADDLE checkout, cloning it on first use.
-
-    Returns:
-        A directory holding paddle.py and models/.
-    """
+    """Return the PADDLE checkout containing paddle.py and models/, cloning it if needed."""
     d = Path(os.environ.get("IDIOM_PADDLE_DIR", Path.home() / ".cache/idiom/paddle")).expanduser()
     if (d / "paddle.py").exists():
         return d
@@ -48,7 +44,7 @@ def _windows(seq: str) -> list[str]:
         return [_PAD * left + seq + _PAD * (short - left)]
     starts = list(range(0, len(seq) - WINDOW + 1, _STRIDE))
     if starts[-1] != len(seq) - WINDOW:
-        starts.append(len(seq) - WINDOW)  # always include the final window
+        starts.append(len(seq) - WINDOW)
     return [seq[s:s + WINDOW] for s in starts]
 
 
@@ -69,9 +65,8 @@ def build():
             for w in _windows(seq):
                 flat.append(w)
                 owner.append(i)
-        # PADDLE returns a bare float for a single window and an array otherwise; normalize, or a
-        # one-window batch would not be iterable.
-        preds = np.atleast_1d(model.predict(flat))  # one batched forward over every window
+        # PADDLE returns a scalar for a single window.
+        preds = np.atleast_1d(model.predict(flat))
         best: dict[int, float] = {}
         for i, z in zip(owner, preds):
             best[i] = max(best.get(i, float("-inf")), float(z))

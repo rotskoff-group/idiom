@@ -32,14 +32,12 @@ def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
         The training module and its datamodule.
     """
     optim = OmegaConf.to_container(cfg.optim, resolve=True)
-    optim["max_steps"] = cfg.trainer.max_steps  # scheduler shares the trainer's horizon
+    optim["max_steps"] = cfg.trainer.max_steps
 
     if cfg.get("init_from"):
-        # SFT: warm start; architecture comes from the pretrained checkpoint, not the config
         lit = LitAutoregressive.init_from_checkpoint(cfg.init_from, **optim)
         log.info(f"Warm-started from {cfg.init_from}")
     else:
-        # pretraining: this is where the architecture is defined
         lit = LitAutoregressive(ModelConfig(**OmegaConf.to_container(cfg.model, resolve=True)), **optim)
 
     dm = RecordDataModule(
@@ -58,10 +56,9 @@ def build(cfg: DictConfig) -> tuple[LitAutoregressive, RecordDataModule]:
 def run(cfg: DictConfig) -> None:
     """Build the module and data, configure the trainer and logger, and fit.
 
-    Writes the resolved config to cfg.out_dir, logs to Weights & Biases, and checkpoints into
-    cfg.out_dir/checkpoints: a rolling last.ckpt every cfg.ckpt_every_n_steps steps, plus the three
-    best by val/loss when a validation set is configured. Training resumes from cfg.resume_from
-    when it is set.
+    Save the resolved config and checkpoints under cfg.out_dir and log to W&B.
+    Keep a rolling last.ckpt every cfg.ckpt_every_n_steps and the three best validation
+    checkpoints. Resume training state from cfg.resume_from when set.
 
     Args:
         cfg: Resolved training config.
@@ -78,13 +75,10 @@ def run(cfg: DictConfig) -> None:
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
     trainer_kw = OmegaConf.to_container(cfg.trainer, resolve=True)
     has_val = bool(cfg.data.get("val_fasta"))
-    if not has_val:  # no held-out set (e.g. SFT) -> turn the val loop off entirely
+    if not has_val:
         trainer_kw["limit_val_batches"] = 0
         trainer_kw["num_sanity_val_steps"] = 0
-    # Two checkpoint streams: (1) a frequent rolling last.ckpt (every ckpt_every_n_steps train steps)
-    # so a preempted/timed-out run resumes losing at most that many steps, independent of the much
-    # rarer validation cadence; (2) the 3 best by val/loss, saved at each validation (when a val set
-    # exists). The rolling callback alone owns last.ckpt (save_top_k=0 -> it only writes last.ckpt).
+    # Only the rolling callback writes last.ckpt; validation saves the three best models.
     ckpt_dir = out_dir / "checkpoints"
     every_n = int(cfg.get("ckpt_every_n_steps", 2000))
     callbacks = [
@@ -92,15 +86,11 @@ def run(cfg: DictConfig) -> None:
         LearningRateMonitor(logging_interval="step"),
     ]
     if has_val:
-        # auto_insert_metric_name=False + explicit underscore filename -> "epoch_0_step_25000.ckpt"
-        # instead of Lightning's default "epoch=0-step=25000.ckpt" (the '=' is a pain to shell-quote).
         callbacks.insert(0, ModelCheckpoint(
             dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3,
             filename="epoch_{epoch}_step_{step}", auto_insert_metric_name=False,
         ))
-    # Single-node cookbook scripts launch once and let Lightning spawn local ranks, even under
-    # SLURM. Multi-node jobs instead use an external launcher (e.g. srun, one task per GPU);
-    # retain Lightning's environment detection so it reads the launcher's global/local ranks.
+    # Spawn local ranks for single-node jobs; use launcher-provided ranks for multi-node jobs.
     plugins = [LightningEnvironment()] if trainer_kw.get("num_nodes", 1) == 1 else None
     trainer = L.Trainer(
         **trainer_kw,
@@ -109,9 +99,6 @@ def run(cfg: DictConfig) -> None:
         default_root_dir=out_dir,
         plugins=plugins,
     )
-    # resume_from restores optimizer state + global step + LR schedule + RNG (a true mid-run resume,
-    # e.g. after preemption); distinct from init_from, which is a weights-only warm start. Mutually
-    # exclusive — set at most one.
     trainer.fit(lit, datamodule=dm, ckpt_path=cfg.get("resume_from"))
 
 

@@ -8,9 +8,7 @@ from idiom.data.dataset import RecordDataset
 from idiom.data.io import read_records
 from idiom.data.record_store import RecordStore, build_record_store, open_or_build, store_path_for
 
-# Two valid records, one non-canonical (X -> dropped, D15), one malformed header (no _IDR_),
-# one out-of-range span (end > len -> dropped). read_records keeps exactly the first two + the
-# 5th (valid). Sequences are multi-line-wrapped to exercise the parser.
+# Wrapped FASTA records include valid entries, a non-canonical sequence, and invalid spans.
 FASTA = """\
 >P1_IDR_2-5
 MKLVQRST
@@ -51,13 +49,12 @@ def test_seq_lengths_vectorized(tmp_path):
 
 
 def test_dataset_parity_store_vs_list(tmp_path):
-    """Store-backed and list-backed RecordDataset yield identical (x, y, mask) at every index."""
     fasta = _write(tmp_path)
     for completion_only in (False, True):
         ds_list = RecordDataset(read_records(fasta), seed=7, completion_only=completion_only)
         ds_store = RecordDataset(open_or_build(fasta), seed=7, completion_only=completion_only)
         assert len(ds_list) == len(ds_store)
-        for i in range(len(ds_list)):  # same seed + same record order => same per-sample rng draw
+        for i in range(len(ds_list)):
             xl, yl, ml = ds_list[i]
             xs, ys, ms = ds_store[i]
             assert torch.equal(xl, xs) and torch.equal(yl, ys) and torch.equal(ml, ms)
@@ -78,9 +75,9 @@ def test_open_or_build_caches_and_rebuilds_on_change(tmp_path):
     s1 = open_or_build(fasta)
     assert store_dir.is_dir() and len(s1) == 3
     mtime1 = (store_dir / "meta.json").stat().st_mtime_ns
-    open_or_build(fasta)  # valid cache -> must not rebuild
+    open_or_build(fasta)
     assert (store_dir / "meta.json").stat().st_mtime_ns == mtime1
 
-    fasta.write_text(FASTA + ">P6_IDR_1-4\nKLMNQRST\n")  # source changed -> stale -> rebuild
+    fasta.write_text(FASTA + ">P6_IDR_1-4\nKLMNQRST\n")
     s2 = open_or_build(fasta)
     assert len(s2) == 4

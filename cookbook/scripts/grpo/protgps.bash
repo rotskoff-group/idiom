@@ -2,13 +2,9 @@
 
 set -euo pipefail
 
-###
-# GRPO toward a condensate compartment, scored by ProtGPS. Its environment pins python 3.8 and
-# torch 2.0, which is why it runs out of process. Already a probability, so no shaping.
+# Optimize ProtGPS compartment probabilities without shaping.
 # Needs: 1 GPU, ~12 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-protgps"  # EDIT: run output directory
 
@@ -23,14 +19,9 @@ export WANDB_MODE=offline
 export IDIOM_PROTGPS_DEVICE=cpu
 export PROTGPS_BATCH=1
 
-# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, written out: nothing is added for you and reward.terms is empty by
-# default. entropy and length keep the target from being met by a low-complexity tract or a
-# degenerate length; drop either line and it is gone.
-# A probability in [0, 1], and compartment prediction is length-sensitive on its own, so this
-# objective carries entropy and no length term.
+# ProtGPS is length-sensitive; this objective uses entropy regularization without a length term.
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

@@ -2,13 +2,9 @@
 
 set -euo pipefail
 
-###
-# GRPO toward a single-chain dimension predicted by sparrow (ALBATROSS); the scorer runs in its own
-# uv environment and imports nothing from IDiom. Base generations sit at 26.9 +/- 15.7 A.
+# Optimize single-chain dimensions predicted by sparrow (ALBATROSS).
 # Needs: 1 GPU, ~12 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-sparrow"  # EDIT: run output directory
 
@@ -22,12 +18,9 @@ SCORER="uv run --script cookbook/rewards/scorers/sparrow.py --property $PROPERTY
 
 export WANDB_MODE=offline
 
-# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, written out: nothing is added for you and reward.terms is empty by
-# default. entropy and length keep the target from being met by a low-complexity tract or a
-# degenerate length; drop either line and it is gone.
+# Entropy and length terms discourage low-complexity or extreme-length solutions.
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

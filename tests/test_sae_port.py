@@ -1,4 +1,4 @@
-"""SAE core smoke test (CPU-only): encode/decode round-trip and top-k sparsity."""
+"""SAE core smoke test: encode/decode round-trip and top-k sparsity."""
 
 import torch
 
@@ -17,5 +17,4 @@ def test_sparse_coder_forward_cpu():
     f = sae.encode_dense(x)
     assert f.shape == (32, n_latents)
     assert sae.decode_dense(f).shape == x.shape
-    # top-k sparsity: at most k strictly-positive latents per row.
     assert int((f > 0).sum(-1).max()) <= k

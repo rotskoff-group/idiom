@@ -22,10 +22,9 @@ __all__ = ["build", "build_reward", "run"]
 def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     """Wire the GRPO module and prompt dataset from a resolved config.
 
-    The policy is warm-started from cfg.init_from, and its architecture is read from that artifact.
-    cfg.prompts.mode selects the prompt dataset: "unprompted" repeats the bare "132" prompt
-    cfg.prompts.n times, "prompted" takes cfg.prompts.n_per flank prompts from each record in
-    cfg.prompts.fasta.
+    Load weights and architecture from cfg.init_from. Unprompted mode repeats "132"
+    cfg.prompts.n times; prompted mode repeats each FASTA record's flank prompt
+    cfg.prompts.n_per times.
 
     Args:
         cfg: Resolved GRPO config, with grpo, reward, prompts, and init_from.
@@ -40,8 +39,6 @@ def build(cfg: DictConfig) -> tuple[LitGRPO, object]:
     reward_terms = build_reward(cfg.reward)
     lit = LitGRPO.init_from_checkpoint(cfg.init_from, reward_terms=reward_terms, **grpo_kw)
 
-    # prompts.mode takes the same two values as every other prompting-mode field, so it goes
-    # through the same validation gate rather than carrying its own vocabulary.
     if normalize_mode(cfg.prompts.mode) == UNPROMPTED:
         ds = unprompted_prompts(cfg.prompts.n)
     else:
@@ -70,9 +67,7 @@ def run(cfg: DictConfig) -> None:
         project=cfg.get("wandb_project", "idiom-grpo"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
-    # Plot every metric against the REAL training step. Lightning logs trainer/global_step as a
-    # metric but lets W&B's internal _step increment once per log flush (= every log_every_n_steps
-    # steps), which compresses the default x-axis; this makes global_step the x-axis so a step is a step.
+    # Use training steps for the W&B x-axis; its default step counts log flushes.
     try:
         wandb_logger.experiment.define_metric("trainer/global_step")
         wandb_logger.experiment.define_metric("*", step_metric="trainer/global_step")
@@ -81,9 +76,7 @@ def run(cfg: DictConfig) -> None:
     trainer_cfg = OmegaConf.to_container(cfg.trainer, resolve=True)
     ckpt_every = trainer_cfg.pop("checkpoint_every", 0)
     max_steps = trainer_cfg.get("max_steps") or None
-    # Step-based checkpointing only -- NO per-epoch saves (setting every_n_train_steps makes Lightning
-    # skip epoch-end saves). checkpoint_every>0 -> keep every N steps + last.ckpt; checkpoint_every=0
-    # -> save ONLY the final-step checkpoint (step_step=<max_steps>.ckpt), nothing else.
+    # Disable epoch-end saves; checkpoint_every=0 saves only the final step.
     callbacks = [ModelCheckpoint(
         dirpath=out_dir / "checkpoints",
         every_n_train_steps=ckpt_every or max_steps,

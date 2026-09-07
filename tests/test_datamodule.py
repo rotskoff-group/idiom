@@ -1,4 +1,4 @@
-"""DataModule test (CPU-only): per-split record FASTAs -> padded batches."""
+"""DataModule test: per-split record FASTAs -> padded batches."""
 
 import torch
 
@@ -24,13 +24,11 @@ def test_datamodule_batches(tmp_path):
     x, y, m = next(iter(dm.train_dataloader()))
     assert x.shape == y.shape == m.shape
     assert x.size(0) == 2 and x.dtype == torch.long and m.dtype == torch.bool
-    # every row starts with START; padding uses pad_id.
     assert (x[:, 0] == TOK.start_id).all()
     assert x.max().item() <= TOK.mask_id
 
 
 def test_no_val_fasta_skips_validation(tmp_path):
-    # SFT often has no held-out set: val_dataloader must be None so Lightning skips validation
     tr = tmp_path / "train.fasta"
     tr.write_text(TRAIN)
     dm = RecordDataModule(tr, None, tokenizer=TOK, batch_size=2, max_len=64, num_workers=0)

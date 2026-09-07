@@ -45,37 +45,26 @@ class IDiomSAE:
         self.host = model
         self.layer = int(layer)
         self.host_model = host_model
-        # The distribution this SAE was trained on: which residues it reads (region) and the prompt
-        # format those activations were taken under (fim_mode). Both are reapplied automatically
-        # everywhere downstream — encode, steering, feature datasets — so the SAE is never
-        # run on a distribution it did not see. They are independent axes, and "idr" in region (a
-        # residue slice) means something different from "prompted" in fim_mode (a prompt format).
         self.region = region
         self.fim_mode = normalize_mode(fim_mode)
 
     def __repr__(self) -> str:
-        """Return the host, layer, training distribution, and SAE shape."""
         return (f"IDiomSAE(host={self.host_model!r}, layer={self.layer}, region={self.region!r}, "
                 f"fim_mode={self.fim_mode!r}, latents={self.sae.num_latents}, "
                 f"k={getattr(self.sae, 'k', '?')})")
 
-    # convenience pass-throughs to the host model
     @property
     def model(self) -> IDiomTransformer:
-        """The host model's transformer."""
         return self.host.model
 
     @property
     def tok(self) -> Tokenizer:
-        """The host model's tokenizer."""
         return self.host.tok
 
     @property
     def device(self) -> torch.device:
-        """The device the host model is on."""
         return self.host.device
 
-    # --- load / save (HF-style, mirrors IDiom) ---
     @classmethod
     def from_pretrained(cls, name_or_path, *, model: IDiom | None = None, device="auto") -> IDiomSAE:
         """Load a released SAE directory holding sae_config.json and sae.safetensors.
@@ -123,9 +112,8 @@ class IDiomSAE:
 
         Args:
             repo_id: Target Hub repo id for the SAE.
-            host_model: Repo id of the host model to record, such as "jxliu2/idiom-300M". A Hub repo
-                id here is what lets the uploaded SAE load its host from the Hub. The host_model
-                this SAE already carries is used if None.
+            host_model: Host model Hub repo ID, used to reload the host with the SAE.
+                Defaults to this SAE's recorded host_model.
             private: Whether a newly created repo is private.
             model_card: Text to upload as README.md, or None.
             commit_message: Commit message for the upload.
@@ -144,7 +132,6 @@ class IDiomSAE:
                               commit_message=commit_message or f"Upload {repo_id}")
         return f"https://huggingface.co/{repo_id}"
 
-    # --- feature activations ---
     @torch.no_grad()
     def encode(self, inputs, *, pool: str = "mean", region: str | None = None):
         """Compute SAE feature activations for the residues of each record.
@@ -168,9 +155,6 @@ class IDiomSAE:
             ValueError: If region is not "idr" for an unprompted-mode SAE.
         """
         region = region or self.region
-        # An unprompted-mode SAE only ever sees "132{IDR}", so there are no non-IDR residues to
-        # select: silently returning IDR features under the name "all" (or an empty array for
-        # "non_idr") would hide the SAE's training distribution from the caller.
         if self.fim_mode == UNPROMPTED and region != "idr":
             raise ValueError(
                 f"region={region!r} is not available from this SAE: it was trained in unprompted "
@@ -212,7 +196,6 @@ class IDiomSAE:
                     tokenizer=self.tok, device=self.device, batch_size=batch_size,
                     region=self.region, fim_mode=self.fim_mode)
 
-    # --- steering ---
     @torch.no_grad()
     def steer_generate(self, feature, strength, *, n: int = 100, mode: str = "add_direction",
                        normalize: bool = False, relative: bool = False, preserve_norm: bool = False,

@@ -34,7 +34,7 @@ def _argv(cmd) -> list[str]:
 
 
 def _label_from_argv(argv: list[str]) -> str:
-    """Return the first .py argument's stem, falling back to the program name or "scorer"."""
+    """Derive a logging label from the script or executable name."""
     script = next((a for a in argv if a.endswith(".py")), argv[0] if argv else "scorer")
     return os.path.splitext(os.path.basename(script))[0] or "scorer"
 
@@ -50,8 +50,7 @@ def parse_response(line: str, n: int) -> list[float]:
         Exactly n finite scores, in the order the sequences were sent.
 
     Raises:
-        ValueError: If the line is not a JSON object, carries no "scores" list, carries a number of
-            scores other than n, or holds a value that is not a finite number.
+        ValueError: If the response is not a JSON object with exactly n finite scores.
         RuntimeError: If the scorer returned an "error" field instead of scores.
     """
     try:
@@ -81,11 +80,10 @@ def parse_response(line: str, n: int) -> list[float]:
 
 
 class ScorerProcess:
-    """A persistent scorer subprocess spoken to in newline-delimited JSON.
+    """A persistent scorer subprocess using newline-delimited JSON.
 
-    The child is started on first use and reused across batches. Its stderr is forwarded to this
-    process's stderr with a label prefix, the first batch validates the protocol, and a child that
-    exits mid-run is restarted once per failed batch.
+    Start lazily, reuse across batches, and retry once if the child exits mid-batch.
+    Forward child stderr with a label prefix.
 
     Attributes:
         argv (list[str]): The scorer command, as arguments.
@@ -106,8 +104,7 @@ class ScorerProcess:
             timeout: Seconds to wait for a single response.
             env: Environment variables for the child, layered over this process's own environment;
                 None passes it through unchanged.
-            label: Tag prefixed to the child's forwarded stderr; the script's basename (e.g.
-                "finches") when None, which tells two scorers apart in the log.
+            label: Prefix for child stderr; defaults to the script basename.
         """
         self.argv = _argv(cmd)
         self.cwd = cwd or os.getcwd()
@@ -254,7 +251,6 @@ class ScorerProcess:
         try:
             return self.roundtrip(seqs)
         except BrokenPipeError as e:
-            # the child died mid-run (OOM, segfault); one restart, then let the error stand
             print(f"[{self.label}] restarting scorer after: {e}", file=sys.stderr, flush=True)
             self.stop()
             self.start()
@@ -275,8 +271,7 @@ def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = No
         cwd: Working directory for the child; the current directory if None.
         env: Environment variables set for the child, over this process's own.
         cache_max: Number of cached sequences above which the cache is cleared; 0 disables caching.
-        label: Tag prefixed to the child's forwarded stderr; the script's basename (e.g. "finches")
-            when None, which tells two scorers apart in the log.
+        label: Prefix for child stderr; defaults to the script basename.
 
     Returns:
         Maps a step's IDRs to the scorer's raw rewards, in order.
@@ -360,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
         spec["width"] = args.width
     try:
         return check(args.cmd, None if args.shaping == "identity" else spec, args.sequences or None)
-    except ValueError as e:  # a bad --shaping combination, reported without a traceback
+    except ValueError as e:
         print(f"FAILED: {e}", file=sys.stderr)
         return 2
 

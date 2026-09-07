@@ -76,7 +76,7 @@ def load_sae(
     """
     d = Path(path)
     cfg = json.loads((d / SAE_CONFIG_FILE).read_text())
-    if "fim_mode" in cfg:  # validate here, so a hand-edited config fails at load, not at first use
+    if "fim_mode" in cfg:
         cfg["fim_mode"] = normalize_mode(cfg["fim_mode"])
     sae = SparseCoder(
         cfg["d_in"], num_latents=cfg["num_latents"], k=cfg["k"],

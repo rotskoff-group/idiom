@@ -10,7 +10,7 @@ import importlib
 import importlib.util
 from collections.abc import Callable
 
-# A reward scores a whole step at once: one raw value per IDR, in the order they were given.
+# Batch rewards return one raw score per IDR in input order.
 Reward = Callable[[list[str]], list[float]]
 
 _BUILTIN = "idiom.train.grpo.reward.builtin"
@@ -45,7 +45,7 @@ def import_module(spec: str):
 
 
 def load_callable(path: str, where: str = "spec"):
-    """Import and return the callable a "module:function" path names.
+    """Resolve a "module:function" path to a callable.
 
     Args:
         path: "package.module:function", or "path/to/file.py:function".
@@ -63,7 +63,7 @@ def load_callable(path: str, where: str = "spec"):
         raise ValueError(f"{where}: {path!r} is not of the form 'module:function'")
     try:
         module = import_module(mod_name)
-    except Exception as e:  # ImportError, FileNotFoundError, or anything the module raises
+    except Exception as e:
         raise ValueError(f"{where}: cannot import {mod_name!r} ({type(e).__name__}: {e})") from e
     try:
         fn = getattr(module, attr)
@@ -75,7 +75,7 @@ def load_callable(path: str, where: str = "spec"):
 
 
 def spec_name(spec, where: str) -> tuple[str, dict]:
-    """Split a spec into the factory it names and the arguments it passes.
+    """Split a factory spec into its name and keyword arguments.
 
     Args:
         spec: A bare name, or a mapping with a "name" plus that factory's arguments.
@@ -101,7 +101,7 @@ def spec_name(spec, where: str) -> tuple[str, dict]:
 
 
 def build_from_spec(spec, aliases: dict[str, str], what: str, where: str):
-    """Resolve a spec and call the factory it names, returning what that factory built.
+    """Build a reward or shaping function from a factory spec.
 
     Args:
         spec: A bare name, or a mapping with a "name" plus that factory's arguments.
@@ -124,7 +124,7 @@ def build_from_spec(spec, aliases: dict[str, str], what: str, where: str):
     fn = load_callable(path, f"{where}: {what} {name!r}")
     try:
         built = fn(**kwargs)
-    except TypeError as e:  # a missing argument, or one this factory does not take
+    except TypeError as e:
         raise ValueError(f"{where}: bad arguments for {what} {name!r}: {e}") from e
     if not callable(built):
         raise ValueError(f"{where}: {what} {name!r} must be a factory returning a callable, but "

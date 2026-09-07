@@ -52,7 +52,7 @@ def top_windows(feature_id, feats, per_seq, *, n_windows=60, half_width=7) -> li
     peaks = []
     for residues, idx in per_seq:
         if len(residues) < length:
-            continue  # too short to cut a full window
+            continue
         acts = feats[idx, feature_id]
         p = int(acts.argmax())
         peaks.append((float(acts[p]), residues, p))
@@ -60,7 +60,7 @@ def top_windows(feature_id, feats, per_seq, *, n_windows=60, half_width=7) -> li
     windows = []
     for act, residues, p in peaks[:n_windows]:
         if act <= 0:
-            break  # feature never fires beyond here
-        start = min(max(p - half_width, 0), len(residues) - length)  # clamp so the window fits
+            break
+        start = min(max(p - half_width, 0), len(residues) - length)
         windows.append(residues[start:start + length])
     return windows

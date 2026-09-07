@@ -1,4 +1,4 @@
-"""Tests for SAE feature enrichment (CPU-only, synthetic feature datasets -- no model needed)."""
+"""Tests for SAE feature enrichment."""
 
 import json
 import math
@@ -25,12 +25,12 @@ def _make_dataset(tmp_path, per_seq_features, num_latents=10, n_res=5, values=No
     k = len(per_seq_features[0])
     ti, si, pi, tv, strings = [], [], [], [], []
     for s, feats in enumerate(per_seq_features):
-        strings.append("132" + "A" * n_res)          # FIM markers then residues
+        strings.append("132" + "A" * n_res)
         for r in range(n_res):
             ti.append(list(feats))
             tv.append(values[s][r] if values else [1.0] * k)
             si.append(s)
-            pi.append(3 + r)                          # absolute index into the string
+            pi.append(3 + r)
     np.save(d / "top_indices.npy", np.array(ti, dtype=np.int32))
     np.save(d / "top_values.npy", np.array(tv, dtype=np.float32))
     np.save(d / "seq_idx.npy", np.array(si, dtype=np.int32))
@@ -50,7 +50,6 @@ def test_feature_counts(tmp_path):
     assert counts[2] == 1
     assert counts[3] == 1
     assert counts[0] == 0
-    # restricting to a subset of sequences
     counts, n_seq = feature_counts(d, keep=[0])
     assert n_seq == 1 and counts[1] == 1 and counts[3] == 0
 
@@ -58,7 +57,7 @@ def test_feature_counts(tmp_path):
 def test_bh_fdr_monotone_and_bounded():
     q = bh_fdr(np.array([0.001, 0.01, 0.5, 0.9]))
     assert np.all((q >= 0) & (q <= 1))
-    assert np.all(np.diff(q) >= -1e-12)          # non-decreasing with p
+    assert np.all(np.diff(q) >= -1e-12)
     assert q[0] < q[-1]
 
 
@@ -86,9 +85,7 @@ def test_two_sided_p_matches_normal():
 def test_enrich_separates_signal_from_noise():
     n_latents = 4
     n_pos, n_neg = 100, 1000
-    #   feature 0: fires in every positive, never in background -> strongly enriched
-    #   feature 1: fires at the same rate in both               -> not enriched
-    #   feature 2: fires in one positive only                   -> below MIN_TOTAL_FIRE, untested
+    # Feature 0 is enriched, feature 1 is neutral, and feature 2 has too few firings to test.
     a = np.array([100.0, 50.0, 1.0, 0.0])
     b = np.array([0.0, 500.0, 0.0, 0.0])
     r = enrich(a, n_pos, b, n_neg, n_latents)
@@ -108,13 +105,11 @@ def test_top_features_ranks_by_log2or(tmp_path):
     r = enrich(a, 100, b, 1000, n_latents)
     ids = top_features(r, n=2, drop_boundary=False)
     assert len(ids) == 2
-    # ranked by log2 odds ratio, descending
     assert r["log2or"][ids[0]] >= r["log2or"][ids[1]]
 
 
 def test_boundary_features_flags_terminal_firing(tmp_path):
-    # Sequences must be longer than 2*edge for a "middle" to exist at all: with 15 residues at
-    # string indices 3..17 and edge=2, boundary means index <= 5 or >= 15.
+    # Residues occupy FIM positions 3..17; edge=2 selects positions <=5 or >=15.
     n_res = 15
     per_seq = [[7, 5]] * 4
     vals = []
@@ -139,8 +134,6 @@ def test_write_signature_roundtrip(tmp_path):
 
 
 def test_load_sequences_reads_spans_and_falls_back_to_whole_sequence(tmp_path):
-    # a curated record carries its IDR span; a plain FASTA of sequences does not, and both have to
-    # load, since the set a user wants to test is usually the second kind
     fa = tmp_path / "in.fasta"
     fa.write_text(">P1_IDR_2-5\nACDEFGHI\n>plain some description here\nMKVGSDEQ\n")
     recs = load_sequences(fa)
@@ -161,8 +154,7 @@ def _rec(acc, length, start=0):
 
 
 def test_length_match_follows_the_positive_length_distribution():
-    # every positive is ~10 residues, so a background pool split between short and long must come
-    # back short -- otherwise length-tracking features look enriched
+    # Length matching should prevent length-sensitive features from appearing enriched.
     rng = np.random.default_rng(0)
     positives = [_rec(f"p{i}", 10) for i in range(20)]
     background = [_rec(f"s{i}", 10) for i in range(100)] + [_rec(f"l{i}", 300) for i in range(100)]
@@ -172,8 +164,7 @@ def test_length_match_follows_the_positive_length_distribution():
 
 
 def test_length_match_tops_up_when_a_bin_cannot_be_filled():
-    # the pool has only 5 sequences at the positives' length; the rest is made up elsewhere rather
-    # than returning a short background
+    # Underfilled length bins must draw from the remaining pool.
     rng = np.random.default_rng(0)
     positives = [_rec(f"p{i}", 10) for i in range(20)]
     background = [_rec(f"s{i}", 10) for i in range(5)] + [_rec(f"l{i}", 300) for i in range(100)]

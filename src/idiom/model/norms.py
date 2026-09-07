@@ -22,7 +22,6 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         """Normalize the last dimension of x in float32, cast back, and apply the learned scale."""
-        # Normalize by RMS over the last dim, in float32 for stability, then rescale.
         dtype = x.dtype
         x = x.float()
         x = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)

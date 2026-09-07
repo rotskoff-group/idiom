@@ -1,4 +1,4 @@
-"""training tests (CPU-only): masked loss, SFT completion mask, warmup-cosine, fit smoke."""
+"""Training tests: masked loss, SFT completion mask, warmup-cosine, fit smoke."""
 
 import lightning as L
 import pytest
@@ -45,13 +45,11 @@ def test_warmup_cosine_shape():
         lrs.append(opt.param_groups[0]["lr"])
         opt.step()
         sched.step()
-    assert lrs[0] < lrs[4] and abs(max(lrs) - 1.0) < 1e-6  # warms up to base LR
-    assert lrs[-1] < lrs[5] and lrs[-1] >= 0.1 - 1e-6  # decays toward min_lr_ratio
+    assert lrs[0] < lrs[4] and abs(max(lrs) - 1.0) < 1e-6
+    assert lrs[-1] < lrs[5] and lrs[-1] >= 0.1 - 1e-6
 
 
 def test_init_from_checkpoint_roundtrip(tmp_path):
-    # Save a pretrained module, warm-start a new one, and confirm weights transfer (SFT path).
-    # The arch is recovered from the (self-describing) checkpoint, not re-declared.
     lit = LitAutoregressive(TINY)
     ckpt = tmp_path / "pre.ckpt"
     torch.save(
@@ -82,11 +80,10 @@ def test_build_wires_pretrain_and_sft(tmp_path):
     }
     lit, dm = build(OmegaConf.create(base))
     assert lit.model.cfg.n_layers == 2 and lit.max_steps_ == 5
-    assert dm.completion_only is True  # SFT-style data wiring propagated
+    assert dm.completion_only is True
 
 
 def test_trainer_fit_smoke(tmp_path):
-    # exercises configure_optimizers + scheduler + a couple of optimizer steps, CPU-only.
     lit = LitAutoregressive(TINY, warmup_steps=1, max_steps=2)
     trainer = L.Trainer(
         max_steps=2, accelerator="cpu", devices=1, logger=False,
@@ -123,6 +120,6 @@ def test_autoreg_runner_preserves_external_launcher_for_multiple_nodes(tmp_path,
         assert len(captured["plugins"]) == 1
         assert isinstance(captured["plugins"][0], LightningEnvironment)
     else:
-        assert captured["plugins"] is None  # Lightning can detect SLURM/torchrun ranks
+        assert captured["plugins"] is None
     assert captured["num_nodes"] == nodes and captured["devices"] == 4
     assert captured["lit"] is module and captured["fit_args"]["datamodule"] is data

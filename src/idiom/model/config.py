@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelConfig:
-    """Hyperparameters defining an IDiom transformer's architecture.
+    """IDiom transformer architecture settings.
 
     Attributes:
         vocab_size: Number of tokens in the tokenizer alphabet.
@@ -26,12 +26,12 @@ class ModelConfig:
     """
 
     vocab_size: int = 27  # idiom.data.tokenizer: 20 residues + 3 FIM markers + 4 controls
-    n_layers: int = 12  # defaults = GPT-2 small (d768/12h, head_dim 64)
+    n_layers: int = 12
     d_model: int = 768
     n_heads: int = 12
     max_seq_len: int = 1024
     rope_base: float = 10_000.0
-    expansion_ratio: float = 8 / 3  # SwiGLU hidden ≈ expansion_ratio * d_model
+    expansion_ratio: float = 8 / 3
     norm_eps: float = 1e-5
     qk_norm: bool = True
     tie_embeddings: bool = True
@@ -48,8 +48,6 @@ class ModelConfig:
         return self.d_model // self.n_heads
 
 
-# The three released sizes, named for their parameter counts to match the Hub repo ids
-# (jxliu2/idiom-20M, -85M, -300M). head_dim is 64 throughout.
 def idiom_20m() -> ModelConfig:
     """Architecture of jxliu2/idiom-20M (18.9M params)."""
     return ModelConfig(n_layers=6, d_model=512, n_heads=8)

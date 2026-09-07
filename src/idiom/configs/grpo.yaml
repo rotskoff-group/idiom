@@ -1,7 +1,6 @@
-# GRPO post-training config
 seed: 0
 device: auto
-init_from: ??? # required: model to optimize (a .ckpt, a released dir, or a HF repo id)
+init_from: ??? # Checkpoint, release directory, or Hub repo ID
 resume_from: null # mid-run resume (optimizer/step/RNG) from a .ckpt
 wandb_project: idiom-grpo
 run_name: null
@@ -32,16 +31,12 @@ trainer:
   devices: 1
   gradient_clip_val: 1.0
   accumulate_grad_batches: 2 # micro-batches per optimizer step
-  log_every_n_steps: 1 # every step, so W&B's _step axis matches the training step
+  log_every_n_steps: 1
   checkpoint_every: 0 # periodic checkpoint every N steps (0 = last only)
 
 reward: # total = sum over terms of weight * shaping(reward(idr))
-  # Empty on purpose: a run names every term it optimizes. A term is a reward, a shaping, a weight
-  # and a label; reward and shaping are each a name plus that factory's arguments. Shipped reward
-  # names: entropy, length, scorer, sae_signature. Shipped shaping: quadratic, gaussian, identity.
-  # Anything else is a "module:function" path. See cookbook/scripts/grpo/ for a script per objective.
-  #
-  #   reward.terms='[{reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}, weight: 1.0}]'
+  # Configure every term explicitly; rewards and shaping accept aliases or "module:function" paths.
+  # See cookbook/rewards/README.md for examples.
   terms: []
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo

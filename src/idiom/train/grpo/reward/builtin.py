@@ -21,10 +21,10 @@ def composition_entropy(idr: str) -> float:
 
 
 def entropy() -> Reward:
-    """Return a batch reward for composition entropy in bits."""
+    """Build a composition-entropy reward in bits."""
     return batchify(composition_entropy)
 
 
 def length() -> Reward:
-    """Return a batch reward for sequence length in residues."""
+    """Build a sequence-length reward in residues."""
     return batchify(len)

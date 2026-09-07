@@ -14,17 +14,16 @@ import numpy as np
 
 from idiom.data.io import Record, parse_idr_header, read_fasta
 
-# Enrichment thresholds (the published signatures were built with exactly these).
-MIN_TOTAL_FIRE = 5      # a feature must fire in >= this many sequences overall to be tested
-FDR_ALPHA = 1e-3        # Benjamini-Hochberg false discovery rate ceiling
+# Defaults used to build the published signatures.
+MIN_TOTAL_FIRE = 5
+FDR_ALPHA = 1e-3
 SMOOTH = 0.5            # Haldane-Anscombe pseudocount added to all four contingency cells
-LOG2OR_FLOOR = 1.0      # minimum log2 odds ratio
-PREV_POS_FLOOR = 0.05   # minimum fraction of the positive set in which the feature fires
+LOG2OR_FLOOR = 1.0
+PREV_POS_FLOOR = 0.05
 
-# Boundary-artifact detection (features that fire at an IDR's excision points, not on a motif).
-BOUNDARY_EDGE = 2       # residues from either end that count as "at the boundary"
-BOUNDARY_FRAC = 0.5     # flag if >= this fraction of a feature's top windows are at a boundary
-BOUNDARY_TOP_WINDOWS = 80   # top-activating firings per feature examined
+BOUNDARY_EDGE = 2
+BOUNDARY_FRAC = 0.5
+BOUNDARY_TOP_WINDOWS = 80
 
 _AA = set("ACDEFGHIKLMNPQRSTVWY")
 
@@ -226,7 +225,7 @@ def top_features(result: dict, *, n: int = 30, prev_min: float = PREV_POS_FLOOR,
     """
     mask = enriched_mask(result, **mask_kwargs) & (result["prev_pos"] >= prev_min)
     ids = np.where(mask)[0]
-    ids = ids[np.argsort(-result["log2or"][ids])]          # rank by log2 odds ratio
+    ids = ids[np.argsort(-result["log2or"][ids])]
     ranked = [int(f) for f in ids]
 
     if drop_boundary:
@@ -274,7 +273,7 @@ def load_sequences(path) -> list[Record]:
             if not 0 <= start < end <= len(seq):
                 raise ValueError
         except ValueError:
-            acc, start, end = header.split()[0], 0, len(seq)  # no span: the whole sequence is the IDR
+            acc, start, end = header.split()[0], 0, len(seq)
         out.append(Record(acc, seq, start, end))
     return out
 
@@ -282,8 +281,7 @@ def load_sequences(path) -> list[Record]:
 def length_match(positives, background, *, n, rng, bin_width=20):
     """Sample a background whose IDR-length distribution follows the positive set's.
 
-    Length bins the background cannot fill are topped up from the rest of it, so the result is as
-    close to n as the pool allows.
+    Fill undersupplied length bins from the remaining pool; return at most n records.
 
     Args:
         positives (list[Record]): Positive records.

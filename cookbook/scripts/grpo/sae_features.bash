@@ -2,13 +2,10 @@
 
 set -euo pipefail
 
-###
 # GRPO toward an SAE feature signature (RL-SAE). Scores the fraction of a signature firing in an
 # IDR; already in [0, 1], so no shaping. Run the feature_enrichment notebook first to write the signature.
 # Needs: 1 GPU, ~12 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-sae"  # EDIT: run output directory
 
@@ -28,9 +25,7 @@ if [[ ! -f "$FEATURES" ]]; then
     exit 1
 fi
 
-# The whole objective, written out: nothing is added for you and reward.terms is empty by
-# default. entropy and length keep the target from being met by a low-complexity tract or a
-# degenerate length; drop either line and it is gone.
+# Entropy and length terms discourage low-complexity or extreme-length solutions.
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

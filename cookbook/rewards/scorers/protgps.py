@@ -48,18 +48,14 @@ def _device():
 
 
 def _checkpoint_dir() -> Path:
-    """Return the checkpoint directory, downloading the Zenodo release on first use.
-
-    Returns:
-        A directory holding <stem>.args and <stem>epoch=26.ckpt.
-    """
+    """Download the Zenodo checkpoint release if needed and return its directory."""
     d = Path(os.environ.get("IDIOM_PROTGPS_DIR",
                             Path.home() / ".cache/idiom/protgps")).expanduser()
     # the Zenodo archive unpacks as checkpoints/protgps/..., so accept either layout
     for cand in (d, d / "checkpoints"):
         if (cand / f"{_CKPT_STEM}.args").exists():
             return cand
-    import requests  # only needed on the first run
+    import requests
 
     d.mkdir(parents=True, exist_ok=True)
     zip_path = d / "checkpoints.zip"
@@ -81,11 +77,7 @@ def _checkpoint_dir() -> Path:
 
 
 def _load_model():
-    """Load the ProtGPS classifier, downloading its checkpoints if needed.
-
-    Returns:
-        The ProtGPS lightning module, in eval mode on the chosen device.
-    """
+    """Load the ProtGPS classifier in eval mode on the selected device."""
     from protgps.utils.loading import get_object
 
     parent = _checkpoint_dir()

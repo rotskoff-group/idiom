@@ -16,13 +16,11 @@ from idiom.model.io import load_model
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
 from idiom.train.grpo.core import group_advantages, grpo_loss, sequence_kl, sequence_logprobs
-
-# For logging entropy
 from idiom.train.grpo.reward.builtin import composition_entropy
 
 
 class LitGRPO(L.LightningModule):
-    """GRPO post-training module performing rollout, reward, advantages, and the GRPO step.
+    """Train a policy with GRPO against a frozen reference.
 
     Attributes:
         cfg (ModelConfig): The architecture being trained.
@@ -48,7 +46,7 @@ class LitGRPO(L.LightningModule):
         n_log_samples: int = 3,
         tokenizer: Tokenizer | None = None,
     ) -> None:
-        """Build the policy and its frozen reference, and record the GRPO settings.
+        """Initialize the policy, frozen reference, and GRPO settings.
 
         Args:
             cfg: Transformer architecture configuration.
@@ -71,7 +69,6 @@ class LitGRPO(L.LightningModule):
         self.cfg = cfg
         self.save_hyperparameters({"model_cfg": asdict(cfg)})
         self.model = IDiomTransformer(cfg)
-        # Frozen reference = the initial policy
         self.reference = copy.deepcopy(self.model).eval()
         self.reference.requires_grad_(False)
 
@@ -91,7 +88,7 @@ class LitGRPO(L.LightningModule):
 
     @classmethod
     def init_from_checkpoint(cls, init_from, reward_terms, **kwargs) -> LitGRPO:
-        """Build a module whose policy and reference both hold a pretrained model's weights.
+        """Initialize the policy and reference from pretrained weights.
 
         The architecture is read from the artifact.
 
@@ -116,10 +113,10 @@ class LitGRPO(L.LightningModule):
         ids: list[int] = []
         for i in completion.tolist():
             if i in (self.tok.stop_id, self.tok.pad_id):
-                break  # completion ends at the first STOP/PAD
+                break
             if self.tok.is_residue(i):
-                ids.append(i)  # residues only; drop stray FIM markers (1/2/3) the model may emit
-        return self.tok.decode(ids)  # clean residue string for the reward fn (e.g. an external scorer)
+                ids.append(i)
+        return self.tok.decode(ids)
 
     def training_step(self, batch: torch.Tensor, batch_idx: int):
         """Roll out completions and return GRPO loss for equal-length prompts.
@@ -133,11 +130,11 @@ class LitGRPO(L.LightningModule):
         Returns:
             torch.Tensor: The scalar GRPO loss.
         """
-        prompts = batch  # [B, P], equal-length prompts
+        prompts = batch
         rep = prompts.repeat_interleave(self.group_size, dim=0)  # [B*G, P]
         BG, P = rep.shape
 
-        with torch.no_grad():  # rollouts are off-policy data; no grad through generation
+        with torch.no_grad():
             completions = generate(
                 self.model, rep, max_new_tokens=self.max_new_tokens, temperature=self.temperature,
                 top_k=self.top_k, top_p=self.top_p, tokenizer=self.tok,
@@ -147,13 +144,12 @@ class LitGRPO(L.LightningModule):
         start = torch.full((BG, 1), self.tok.start_id, dtype=torch.long, device=rep.device)
         full = torch.cat([start, rep, completions], dim=1)  # [B*G, 1+P+T]
 
-        # completion mask over targets (= full[:, 1:]): the T completion positions, minus pad.
+        # Align the completion mask with full[:, 1:], excluding padding.
         mask = torch.zeros(BG, P + T, device=rep.device)
         mask[:, P:] = (completions != self.tok.pad_id).float()
 
         idrs = [self._decode_idr(completions[i]) for i in range(BG)]
-        # The composite reward scores the whole step at once, so an external term makes one round
-        # trip per step, and returns the per-term breakdown that is logged below.
+        # Score the whole step in one batch to amortize external scorer calls.
         totals, breakdown = self.reward_terms(idrs, self.group_size)
         rewards = torch.tensor(totals, device=rep.device, dtype=torch.float)
         advantages = group_advantages(rewards, self.group_size, normalize=self.normalize_advantage)
@@ -172,7 +168,7 @@ class LitGRPO(L.LightningModule):
         seq_len = torch.tensor([float(len(idr)) for idr in idrs], device=rep.device)
         seq_ent = torch.tensor([composition_entropy(idr) for idr in idrs], device=rep.device)
         metrics = {
-            "trainer/global_step": float(self.global_step),  # real step -> W&B x-axis (see run())
+            "trainer/global_step": float(self.global_step),
             "train/loss": loss,
             "train/reward": rewards.mean(),
             "train/reward_std": rewards.std(),
@@ -180,8 +176,7 @@ class LitGRPO(L.LightningModule):
             "train/seq_len": seq_len.mean(),
             "train/seq_entropy": seq_ent.mean(),
         }
-        # Per-term means, two per term: train/reward_length is the contribution to the objective,
-        # train/reward_length_raw the raw reward (98 residues, 3.6 bits) in its own units.
+        # Log both raw rewards and weighted contributions to the objective.
         if breakdown:
             for key in breakdown[0]:
                 if key == "total":

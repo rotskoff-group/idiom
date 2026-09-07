@@ -13,10 +13,10 @@ from idiom.model.rope import Rope
 
 
 class SwiGLU(nn.Module):
-    """SwiGLU feed-forward network, with the gate and up projections fused into one matmul."""
+    """SwiGLU with fused gate and up projections."""
 
     def __init__(self, d_model: int, expansion_ratio: float) -> None:
-        """Build the fused gate/up projection and the down projection.
+        """Initialize the SwiGLU projections.
 
         Args:
             d_model: Input and output width.
@@ -34,10 +34,10 @@ class SwiGLU(nn.Module):
 
 
 class Block(nn.Module):
-    """Pre-norm transformer block computing x + attn(norm(x)) then x + ffn(norm(x))."""
+    """Pre-norm attention and SwiGLU block."""
 
     def __init__(self, cfg: ModelConfig) -> None:
-        """Build the block's two norms, attention, and feed-forward network.
+        """Initialize the transformer block.
 
         Args:
             cfg: Architecture config for the attention and SwiGLU submodules.
@@ -74,7 +74,7 @@ class IDiomTransformer(nn.Module):
     """
 
     def __init__(self, cfg: ModelConfig) -> None:
-        """Build the embedding, blocks, final norm, and output head, and initialize the weights.
+        """Initialize the transformer.
 
         Linear and embedding weights are drawn from N(0, 0.02); the residual-stream output
         projections (attention wo and SwiGLU w_down) are rescaled by 1 / sqrt(2 * n_layers).
@@ -92,10 +92,7 @@ class IDiomTransformer(nn.Module):
         if cfg.tie_embeddings:
             self.lm_head.weight = self.embed.weight
 
-        # GPT-style init: small std keeps init logits ~0, so initial CE ~ ln(vocab) instead of the
-        # ~sqrt(d_model) blow-up from PyTorch's default Embedding std=1.0 (tied -> lm_head too).
-        # Residual-stream writers (attn wo, ffn w_down) are scaled by 1/sqrt(2*n_layers) so the
-        # residual variance doesn't grow with depth.
+        # Small initial weights limit logits; scaled output projections limit variance growth with depth.
         for module in self.modules():  # not self.apply(): Rope defines its own .apply(q,k,positions)
             self._init_weights(module)
         for name, p in self.named_parameters():
@@ -104,7 +101,6 @@ class IDiomTransformer(nn.Module):
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:
-        """Initialize one Linear or Embedding module in place."""
         if isinstance(module, nn.Linear):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
@@ -135,7 +131,7 @@ class IDiomTransformer(nn.Module):
         for i, block in enumerate(self.blocks):
             x = block(x, self.rope, positions, cache, i)
             if return_hidden_states:
-                hidden.append(x)  # residual stream after block i (what the SAE trains on)
+                hidden.append(x)
 
         if cache is not None:
             cache.length += L  # advance once per forward, after every layer has appended

@@ -18,8 +18,7 @@ from idiom.data.io import Record
 from idiom.data.record_store import RecordStore
 from idiom.data.tokenizer import Tokenizer
 
-# A full example is START + 1{prefix}3{suffix}2{IDR}: the 3 FIM markers + START over the
-# residues. So model positions = len(full_seq) + 4. Records longer than that are dropped.
+# Each input needs START and three FIM markers in addition to its residues.
 FIM_OVERHEAD = 4
 
 
@@ -81,14 +80,11 @@ class RecordDataset(Dataset):
         self.tok = tokenizer or Tokenizer()
         self.max_len = int(max_len)
         self.prompted_prob = float(prompted_prob)
-        # completion_only=True -> SFT: compute loss only on the IDR completion (after the 2
-        # marker). False -> pretraining: loss on every token.
         self.completion_only = bool(completion_only)
         self._rng = random.Random(seed)
 
         keep = max_protein_len(self.max_len)  # filter on the full-context length so any sample fits
         if isinstance(records, RecordStore):
-            # Memory-mapped store: never materialize Records; keep an index of the rows that fit.
             self.store: RecordStore | None = records
             self.records = None
             self._keep = np.nonzero(records.seq_lengths() <= keep)[0]
@@ -96,7 +92,7 @@ class RecordDataset(Dataset):
             n_kept = len(self._keep)
         else:
             self.store = None
-            records = list(records)  # materialize (may be a generator) so we can filter + index
+            records = list(records)
             self.records = [r for r in records if len(r.full_seq) <= keep]
             self._keep = None
             n_total = len(records)
@@ -115,17 +111,15 @@ class RecordDataset(Dataset):
         completion-only mode includes the IDR and STOP.
         """
         rec = self.store[int(self._keep[i])] if self.store is not None else self.records[i]
-        # per-sample augmentation: prompted (context) with prob prompted_prob, else unprompted
         variant = PROMPTED if self._rng.random() < self.prompted_prob else UNPROMPTED
         x, y = record_to_example(rec, self.tok, variant=variant)
         if self.completion_only:
-            # The IDR is the trailing part of the FIM string, so target's last (idr_len + 1)
-            # positions are the IDR residues + STOP — the completion to train on for SFT.
+            # The final targets are the IDR residues followed by STOP.
             idr_len = rec.idr_end - rec.idr_start
             mask = torch.zeros(y.size(0), dtype=torch.bool)
             mask[-(idr_len + 1) :] = True
         else:
-            mask = torch.ones(y.size(0), dtype=torch.bool)  # pretraining: loss on all tokens
+            mask = torch.ones(y.size(0), dtype=torch.bool)
         return x, y, mask
 
 
@@ -139,7 +133,7 @@ def make_collate(pad_id: int):
         inputs, targets, masks = zip(*batch)
         x = pad_sequence(inputs, batch_first=True, padding_value=pad_id)
         y = pad_sequence(targets, batch_first=True, padding_value=pad_id)
-        m = pad_sequence(masks, batch_first=True, padding_value=False)  # pad positions: no loss
+        m = pad_sequence(masks, batch_first=True, padding_value=False)
         return x, y, m
 
     return collate

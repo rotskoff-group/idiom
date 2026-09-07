@@ -1,12 +1,12 @@
-# Pretraining config. Every key is overridable on the CLI, e.g.:
+# Override settings on the CLI:
 #   idiom_train_autoreg data.train_fasta=/path/train.fasta model.n_layers=12 model.d_model=768
 seed: 0
 device: auto # auto | cpu | cuda
 init_from: null # weights-only warm start from a .ckpt (see sft.yaml)
 resume_from: null # mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
 ckpt_every_n_steps: 2000 # rolling last.ckpt cadence, for preemption-safe resume
-wandb_project: idiom # needs `wandb login` or WANDB_API_KEY; WANDB_MODE=offline to disable
-run_name: null # optional wandb run name
+wandb_project: idiom # WANDB_MODE=offline disables syncing
+run_name: null
 
 data:
   train_fasta: ??? # required: per-split record FASTA from curation
@@ -47,7 +47,7 @@ trainer: # global batch 1024 = 32/GPU * 8 GPUs * accum 4
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/pretrain
 
-# Run and sweep dirs go to the experiment dir, not the repo; override with IDIOM_OUT.
+# IDIOM_OUT overrides the output root.
 hydra:
   run:
     dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

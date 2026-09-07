@@ -22,7 +22,7 @@ STORE_SUFFIX = ".idiomstore"
 _VERSION = 1
 _META = "meta.json"
 _OFF_DTYPE = np.int64       # CSR offsets into the byte buffers (file can exceed 2 GB)
-_COORD_DTYPE = np.int32     # IDR coords (<= max protein length, comfortably in int32)
+_COORD_DTYPE = np.int32
 _BYTE_DTYPE = np.uint8
 
 
@@ -96,7 +96,7 @@ def build_record_store(
 
 
 class RecordStore:
-    """Read-only, memory-mapped view over a built store.
+    """Read-only memory-mapped record store.
 
     Attributes:
         dir (Path): The store directory.
@@ -147,7 +147,7 @@ def _valid(store_dir: Path, fasta: Path) -> bool:
         return False
     if meta.get("version") != _VERSION:
         return False
-    sig = _source_sig(fasta)  # rebuild if the source FASTA changed
+    sig = _source_sig(fasta)
     return (meta.get("source_size") == sig["source_size"]
             and meta.get("source_mtime_ns") == sig["source_mtime_ns"])
 

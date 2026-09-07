@@ -1,4 +1,4 @@
-"""extract tests (CPU-only): FASTA -> embeddings (mean + per-residue), files written."""
+"""Extract tests: FASTA -> embeddings (mean + per-residue), files written."""
 
 import numpy as np
 import pytest
@@ -21,7 +21,7 @@ def test_pool_mean_one_vector_per_sequence(tmp_path):
     model = IDiomTransformer(TINY).eval()
     emb = embed_fasta(model, _fasta(tmp_path), layers=[1], pool="mean")
     values, index = emb[1]
-    assert values.shape == (2, TINY.d_model)  # 2 sequences -> 2 vectors
+    assert values.shape == (2, TINY.d_model)
     assert [r["accession"] for r in index] == ["A", "B"]
 
 
@@ -29,7 +29,6 @@ def test_pool_none_per_residue_with_alignment(tmp_path):
     model = IDiomTransformer(TINY).eval()
     emb = embed_fasta(model, _fasta(tmp_path), layers=[0, 1], pool="none")
     values, index = emb[1]
-    # one row per residue across both sequences; alignment metadata present.
     assert values.shape[0] == len(index) and values.shape[1] == TINY.d_model
     assert set(index[0]) == {"record_idx", "accession", "source_pos", "residue", "is_idr"}
     assert any(r["is_idr"] for r in index) and set(emb) == {0, 1}

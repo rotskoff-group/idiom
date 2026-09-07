@@ -2,15 +2,12 @@
 
 set -euo pipefail
 
-###
 # Pretrain IDiom 24L (~302M params) on 1024-token FIM. Global batch = 32 x 8 GPUs x 4 accum = 1024.
 # Training settings match src/idiom/configs/pretrain.yaml.
 # Single node: launch this script once; Lightning starts one process per GPU.
 # For multi-node pretraining, use the srun example in cookbook/scripts/README.md.
 # Needs: 8 GPUs, ~7 days.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/pretrain"  # EDIT: run output directory
 

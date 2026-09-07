@@ -34,7 +34,7 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     """
     device = resolve_device(cfg.device)
     tok = Tokenizer()
-    model, model_cfg = load_model(cfg.model_ckpt, device=device)  # a .ckpt, released dir, or HF repo id
+    model, model_cfg = load_model(cfg.model_ckpt, device=device)
 
     records = RecordDataset(
         open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len,
@@ -42,9 +42,8 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     )
     record_loader = DataLoader(
         records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id),
-        shuffle=cfg.data.get("shuffle", True),  # random record order (RecordDataset is map-style);
-        # with a finite max_steps this makes the consumed slice a uniform draw over the whole corpus
-        # rather than the file head. Default on; set data.shuffle=false to restore file-order streaming.
+        # Shuffle to avoid training only on the file head when max_steps is finite.
+        shuffle=cfg.data.get("shuffle", True),
     )
     store = ActivationStore(
         model, record_loader, cfg.layer, sae_batch_size=cfg.sae_batch_size,
@@ -92,10 +91,7 @@ def run(cfg: DictConfig) -> None:
         **OmegaConf.to_container(cfg.trainer, resolve=True), logger=wandb_logger, default_root_dir=out_dir
     )
     trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
-    # Canonical SAE release (host_model + layer + region + fim_mode recorded): loads via
-    # IDiomSAE.from_pretrained. fim_mode is the prompt format downstream tools must rebuild
-    # activations under, so it is "unprompted" only when training saw no flanks at all
-    # (prompted_prob == 0); any mixture means the SAE has seen prompted context and is recorded so.
+    # Any mixture with flanking context is recorded as prompted.
     fim_mode = UNPROMPTED if float(cfg.data.get("prompted_prob", 0.5)) == 0.0 else PROMPTED
     save_sae(
         lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer,

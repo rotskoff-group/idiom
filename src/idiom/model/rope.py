@@ -23,7 +23,6 @@ class Rope(nn.Module):
             base: Base of the inverse-frequency geometric progression.
         """
         super().__init__()
-        # inverse frequencies for each rotation plane (head_dim/2 of them)
         inv_freq = 1.0 / (base ** (torch.arange(0, head_dim, 2).float() / head_dim))
         t = torch.arange(max_seq_len).float()
         freqs = torch.outer(t, inv_freq)  # [max_seq_len, head_dim/2]

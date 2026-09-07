@@ -68,7 +68,7 @@ def build_feature_dataset(
         acts = extract_activations(
             model, tokens, [layer], tokenizer=tok, drop_markers=True, region=region
         )[layer]
-        top_val, top_ix, _ = sae.encode(acts.values.to(device))  # [N_res, k]
+        top_val, top_ix, _ = sae.encode(acts.values.to(device))
 
         top_idx_parts.append(top_ix.cpu().to(torch.int32).numpy())
         top_val_parts.append(top_val.cpu().to(torch.float32).numpy())
@@ -103,7 +103,6 @@ def main() -> None:
     p.add_argument("--batch-size", type=int, default=16)
     args = p.parse_args()
 
-    # the SAE release carries its host model + layer, so nothing else need be specified
     IDiomSAE.from_pretrained(args.sae).build_feature_dataset(
         args.fasta, args.out, batch_size=args.batch_size,
     )

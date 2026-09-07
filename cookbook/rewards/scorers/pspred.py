@@ -39,11 +39,7 @@ FEATURES = ["mean_lambda", "faro", "shd", "ncpr", "fcr", "scd", "ah_ij", "nu_svr
 
 
 def _pspred_dir() -> Path:
-    """Return the predictor directory, downloading its files on first use.
-
-    Returns:
-        A directory holding the two scripts, the residue table and the three models.
-    """
+    """Download the predictor scripts, residue table, and models if needed; return their directory."""
     d = Path(os.environ.get("IDIOM_PSPRED_DIR", Path.home() / ".cache/idiom/pspred")).expanduser()
     d.mkdir(parents=True, exist_ok=True)
     missing = {name: url for name, url in FILES.items() if not (d / name).exists()}
@@ -71,8 +67,7 @@ def build():
     import predictor
     from predictor import X_from_seq
 
-    # The joblib models were pickled from a notebook, so their classes are looked up in __main__;
-    # without this, loading fails with "Can't get attribute 'Model' on <module '__main__'>".
+    # Notebook pickles resolve model classes through __main__.
     import __main__
     for name in dir(predictor):
         if not name.startswith("_") and not hasattr(__main__, name):

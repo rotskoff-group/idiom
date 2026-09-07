@@ -31,9 +31,9 @@ def warmup_cosine(
 
     def lr_factor(step: int) -> float:
         if step < warmup_steps:
-            return (step + 1) / max(1, warmup_steps)  # linear warmup
+            return (step + 1) / max(1, warmup_steps)
         progress = (step - warmup_steps) / max(1, max_steps - warmup_steps)
-        cosine = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))  # 1 -> 0
+        cosine = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
         return min_lr_ratio + (1.0 - min_lr_ratio) * cosine
 
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_factor)

@@ -2,34 +2,29 @@
 
 set -euo pipefail
 
-###
-# GRPO toward a reward you wrote, running in this interpreter. Four ways to name it below; keep one.
-# The last shapes it with a rule of your own; both live in custom_rewards.py and are named by path,
-# so nothing needs registering. If it needs its own python or torch, use custom_scorer.bash instead.
+# GRPO toward a reward you wrote, running in this interpreter. Pick one objective below.
+# Factories are loaded by path from custom_rewards.py.
+# Use custom_scorer.bash when the reward needs a separate environment.
 # Needs: 1 GPU, ~12 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-my-reward"  # EDIT: run output directory
 
 cd "$REPO"
 
-# The whole objective, written out: nothing is added for you and reward.terms is empty by default.
-# This one is deliberately bare -- a single term, no entropy and no length -- to show that a run
-# gets exactly the objective it names. Uncomment the two below for a real run: without them the
-# target is satisfiable by a low-complexity tract or a degenerate length.
+# Optional entropy and length terms discourage low-complexity or extreme-length solutions.
 # ENTROPY='{label: entropy, weight: 1.0, reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}}'
 # LENGTH='{label: length,  weight: 1.0, reward: length,  shaping: {name: quadratic, target: 100,  width: 1.0}}'
 
 # EDIT: pick ONE.
+# Accept charged fractions >= 0.30; penalize lower values quadratically (-1 at 0.15).
 MINE="{label: fcr, \
     weight: 1.0, \
     reward: \"cookbook/rewards/custom_rewards.py:fraction_charged\", \
-    shaping: {name: gaussian, target: 0.25, width: 0.5}}"
+    shaping: {name: \"cookbook/rewards/custom_rewards.py:one_sided\", target: 0.30, width: 0.5, direction: above}}"
+# MINE="{label: fcr, weight: 1.0, reward: \"cookbook/rewards/custom_rewards.py:fraction_charged\", shaping: {name: gaussian, target: 0.25, width: 0.5}}"   # built-in shaping
 # MINE="{label: mine, weight: 1.0, reward: \"mypackage.scoring:score_idr\", shaping: identity}"                # any importable factory
 # MINE="{label: mine, weight: 1.0, reward: {name: \"mypackage.scoring:make_scorer\", cutoff: 0.3}, shaping: identity}"   # a factory with arguments
-# MINE="{label: fcr, weight: 1.0, reward: \"cookbook/rewards/custom_rewards.py:fraction_charged\", shaping: {name: \"cookbook/rewards/custom_rewards.py:one_sided\", target: 0.30, width: 0.5}}"   # shaping of your own
 
 export WANDB_MODE=offline
 

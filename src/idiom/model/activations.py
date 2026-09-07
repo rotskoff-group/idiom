@@ -12,7 +12,7 @@ from idiom.data.tokenizer import Tokenizer
 
 @dataclass
 class LayerActivations:
-    """Kept activation rows at one layer, with per-row alignment metadata.
+    """Residual-stream rows and their token positions at one layer.
 
     Attributes:
         layer: The layer these activations were taken from.
@@ -59,12 +59,11 @@ def extract_activations(
     tok = tokenizer or Tokenizer()
     _, hidden = model(tokens, return_hidden_states=True)
 
-    # Single shared selector (token class + IDR region) — identical to what steering uses.
-    keep = tok.region_mask(tokens, region=region, drop_markers=drop_markers)  # [B, L] bool
-    seq_idx, pos_idx = keep.nonzero(as_tuple=True)  # flat indices of kept tokens
+    keep = tok.region_mask(tokens, region=region, drop_markers=drop_markers)
+    seq_idx, pos_idx = keep.nonzero(as_tuple=True)
 
     out: dict[int, LayerActivations] = {}
     for layer in layers:
-        values = hidden[layer][seq_idx, pos_idx]  # [N_kept, d_model]
+        values = hidden[layer][seq_idx, pos_idx]
         out[layer] = LayerActivations(layer, values, seq_idx, pos_idx, tokens[seq_idx, pos_idx])
     return out

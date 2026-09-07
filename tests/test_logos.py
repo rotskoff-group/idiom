@@ -1,4 +1,4 @@
-"""Tests for the residue windows a feature logo is built from (CPU-only, synthetic activations)."""
+"""Tests for the residue windows a feature logo is built from."""
 
 import numpy as np
 
@@ -19,8 +19,7 @@ def test_per_sequence_activations_regroups_rows_by_accession():
 
 
 def test_per_sequence_activations_orders_rows_by_source_position():
-    # rows arrive in whatever order the encoder emitted; the residue string must still read left
-    # to right, or every window cut from it is scrambled
+    # Encoder rows may be shuffled; logo windows must follow source-residue order.
     index = [{"accession": "A", "source_pos": 2, "residue": "V"},
              {"accession": "A", "source_pos": 0, "residue": "M"},
              {"accession": "A", "source_pos": 1, "residue": "K"}]
@@ -45,7 +44,7 @@ def test_top_windows_centres_on_the_peak_and_ranks_by_activation():
 
 
 def test_top_windows_clamps_a_peak_at_the_edge():
-    seqs = [("A", "WAAAA")]                                 # peak at position 0
+    seqs = [("A", "WAAAA")]
     feats = _feats(5, {0: 1.0})
     per_seq = per_sequence_activations(feats, _index(seqs))
     assert top_windows(0, feats, per_seq, half_width=1) == ["WAA"]   # clamped, still full width
@@ -53,6 +52,6 @@ def test_top_windows_clamps_a_peak_at_the_edge():
 
 def test_top_windows_skips_short_sequences_and_silent_features():
     seqs = [("short", "AA"), ("silent", "CCCCCCC")]
-    feats = _feats(9, {})                                   # nothing fires anywhere
+    feats = _feats(9, {})
     per_seq = per_sequence_activations(feats, _index(seqs))
     assert top_windows(0, feats, per_seq, half_width=2) == []

@@ -2,13 +2,10 @@
 
 set -euo pipefail
 
-###
-# GRPO toward an ensemble dimension sampled by STARLING -- what sparrow regresses, generated from a
-# conformational ensemble instead. Needs its own GPU; with one card, drop SCORER_CUDA_DEVICE.
+# Optimize STARLING ensemble dimensions.
+# Use a separate scorer GPU, or unset SCORER_CUDA_DEVICE to share one.
 # Needs: 2 GPUs, ~24 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-starling"  # EDIT: run output directory
 
@@ -25,12 +22,9 @@ SCORER="env CUDA_VISIBLE_DEVICES=$SCORER_CUDA_DEVICE uv run --script cookbook/re
 export WANDB_MODE=offline
 export CUDA_VISIBLE_DEVICES=0           # the policy keeps GPU 0
 
-# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, written out: nothing is added for you and reward.terms is empty by
-# default. entropy and length keep the target from being met by a low-complexity tract or a
-# degenerate length; drop either line and it is gone.
+# Entropy and length terms discourage low-complexity or extreme-length solutions.
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

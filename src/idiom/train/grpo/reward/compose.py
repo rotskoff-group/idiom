@@ -35,7 +35,7 @@ def _finite(value, where: str) -> float:
 
 @dataclass(frozen=True)
 class Term:
-    """One built reward term.
+    """A weighted reward and its shaping function.
 
     Attributes:
         label: Name the term is logged under; unique among the terms.
@@ -51,18 +51,7 @@ class Term:
 
 
 def _parse_term(raw: dict, where: str) -> tuple[str, float, object, object]:
-    """Validate one term's shape and return its parts, without importing anything.
-
-    Args:
-        raw: One entry of reward.terms.
-        where: The term's config path, used in error messages.
-
-    Returns:
-        The label, weight, reward spec and shaping spec.
-
-    Raises:
-        ValueError: If the term is malformed, has unknown keys, or has no reward.
-    """
+    """Validate a term and return its label, weight, reward spec, and shaping spec."""
     if not isinstance(raw, dict):
         raise ValueError(f"{where}: a term is a mapping of {sorted(TERM_KEYS)}, got "
                          f"{type(raw).__name__}")
@@ -77,19 +66,14 @@ def _parse_term(raw: dict, where: str) -> tuple[str, float, object, object]:
     if reward_spec is None:
         raise ValueError(f"{where}: a term needs a reward -- a shipped name, a 'module:function' "
                          f"path, or a mapping of either plus that factory's arguments")
-    # The term is logged under its reward's name, taking the function from a dotted path, since the
-    # whole path makes an unreadable metric key.
+    # Use the factory name as the default metric label.
     label = term.get("label") or spec_name(reward_spec, f"{where}.reward")[0].rpartition(":")[2]
     weight = _finite(term.get("weight", 1.0), f"{where} ({label!r}).weight")
     return label, weight, reward_spec, term.get("shaping")
 
 
 def _check_unique_labels(labels: list[str]) -> None:
-    """Reject duplicate logging labels.
-
-    Raises:
-        ValueError: If two terms share a label.
-    """
+    """Reject duplicate metric labels with ValueError."""
     seen: dict[str, int] = {}
     for i, label in enumerate(labels):
         if label in seen:
@@ -169,8 +153,8 @@ def build_reward(rcfg: DictConfig):
                 raw_i = _finite(value, f"{where}, raw score")
                 shaped = _finite(term.shaping(raw_i), f"{where}, shaped score")
                 shaped_i = _finite(term.weight * shaped, f"{where}, weighted score")
-                breakdown[i][f"{term.label}_raw"] = raw_i   # the raw reward, in its own units
-                breakdown[i][term.label] = shaped_i         # its contribution to the objective
+                breakdown[i][f"{term.label}_raw"] = raw_i
+                breakdown[i][term.label] = shaped_i
                 totals[i] = _finite(totals[i] + shaped_i, f"{where}, accumulated total")
         for i, total in enumerate(totals):
             breakdown[i]["total"] = total

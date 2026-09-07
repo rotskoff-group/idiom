@@ -1,4 +1,4 @@
-"""Unified model loading (CPU-only): self-describing checkpoints + format-agnostic load_model."""
+"""Unified model loading: self-describing checkpoints + format-agnostic load_model."""
 
 from dataclasses import asdict
 
@@ -12,7 +12,7 @@ CFG = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=
 
 
 def _ckpt(tmp_path, cfg=CFG, *, with_cfg=True):
-    """A Lightning-style ckpt; self-describing (hyper_parameters.model_cfg) unless with_cfg=False."""
+    """Save a Lightning checkpoint, optionally omitting its ModelConfig."""
     m = IDiomTransformer(cfg)
     obj = {"state_dict": {f"model.{k}": v for k, v in m.state_dict().items()}}
     if with_cfg:
@@ -35,23 +35,23 @@ def test_config_from_checkpoint_errors_without_stored_cfg(tmp_path):
 
 def test_load_pretrained_reads_arch_from_checkpoint(tmp_path):
     m, ckpt = _ckpt(tmp_path)
-    loaded, cfg = load_pretrained(ckpt)  # arch is read from the ckpt
+    loaded, cfg = load_pretrained(ckpt)
     assert loaded.cfg == CFG
     assert cfg == CFG
     for a, b in zip(m.state_dict().values(), loaded.state_dict().values()):
         assert torch.equal(a, b)
-    assert not loaded.training  # eval mode
+    assert not loaded.training
 
 
 def test_load_model_dispatches_ckpt_and_dir(tmp_path):
     from idiom import IDiom
 
     _, ckpt = _ckpt(tmp_path)
-    model_ck, cfg_ck = load_model(ckpt)  # .ckpt path
+    model_ck, cfg_ck = load_model(ckpt)
     assert cfg_ck == CFG and isinstance(model_ck, IDiomTransformer)
 
     rel = tmp_path / "rel"
-    IDiom.from_lightning_checkpoint(ckpt).save_pretrained(rel)  # released dir
+    IDiom.from_lightning_checkpoint(ckpt).save_pretrained(rel)
     model_dir, cfg_dir = load_model(rel)
     assert cfg_dir == CFG
     for a, b in zip(model_ck.state_dict().values(), model_dir.state_dict().values()):

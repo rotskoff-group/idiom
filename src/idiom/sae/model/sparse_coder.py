@@ -11,7 +11,7 @@ from torch import Tensor, nn
 
 
 class EncoderOutput(NamedTuple):
-    """The selected latents and the activations they were selected from.
+    """Selected latents and pre-selection activations.
 
     Attributes:
         top_acts: Activations of the selected latents, shape [..., k].
@@ -25,7 +25,7 @@ class EncoderOutput(NamedTuple):
 
 
 class ForwardOutput(NamedTuple):
-    """The reconstruction of a forward pass and its losses.
+    """SAE reconstruction, selected latents, and losses.
 
     Attributes:
         sae_out: The reconstruction, shape [..., d_in].
@@ -101,9 +101,7 @@ class SparseCoder(nn.Module):
         self.encoder = nn.Linear(d_in, self.num_latents, device=device, dtype=dtype)
         self.encoder.bias.data.zero_()
 
-        # Decoder: one unit-norm row per latent. Initialized to the encoder weights
-        # (sparsify's "tied" init), then row-normalized.
-        self.W_dec = nn.Parameter(self.encoder.weight.data.clone())  # [num_latents, d_in]
+        self.W_dec = nn.Parameter(self.encoder.weight.data.clone())
         if normalize_decoder:
             self.set_decoder_norm_to_unit_norm()
 
@@ -111,15 +109,12 @@ class SparseCoder(nn.Module):
 
     @property
     def device(self) -> torch.device:
-        """Device the parameters live on."""
         return self.encoder.weight.device
 
     @property
     def dtype(self) -> torch.dtype:
-        """Dtype of the parameters."""
         return self.encoder.weight.dtype
 
-    # --- encode / decode ---
     def encode(self, x: Tensor) -> EncoderOutput:
         """Encode an input by subtracting b_dec, projecting, applying ReLU, and selecting latents.
 
@@ -211,7 +206,6 @@ class SparseCoder(nn.Module):
 
         return ForwardOutput(sae_out, top_acts, top_indices, fvu, auxk_loss, multi_topk_fvu)
 
-    # --- decoder constraints (sparsify methods) ---
     @torch.no_grad()
     def set_decoder_norm_to_unit_norm(self):
         """Rescale every decoder row to unit norm, in place."""

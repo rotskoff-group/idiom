@@ -7,10 +7,8 @@
 Run with uv run --script to install the PEP 723 dependencies. This example scores
 Biopython isoelectric point or molecular weight, selected by --property.
 
-Implement build() to load the model and return a batch scorer. Use the adjacent _scorer_protocol.py helper:
-stdin accepts {"sequences": [...]}; stdout returns {"scores": [...]} or {"error": "..."},
-one JSON object per line. Scores must be finite and match input order.
-See cookbook/rewards/README.md for configuration and command checks.
+Implement build() to return a batch scorer. _scorer_protocol.serve handles JSON I/O;
+return one finite score per input sequence. See cookbook/rewards/README.md.
 """
 
 import argparse
@@ -25,7 +23,7 @@ def build():
                     choices=["isoelectric_point", "molecular_weight"])
     prop = ap.parse_args().property
 
-    from Bio.SeqUtils.ProtParam import ProteinAnalysis  # a heavy import belongs here, not at top
+    from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
     def score_batch(sequences):
         """Return one property value per non-empty sequence; let serve() report errors."""

@@ -1,8 +1,4 @@
-"""Trivial reward factories used only by the test suite.
-
-Config-driven tests name these by their "module:function" path, e.g.
-reward: tests.reward_fixtures:fraction_proline.
-"""
+"""Importable reward factories for tests."""
 
 from omegaconf import OmegaConf
 
@@ -20,7 +16,7 @@ def fraction_alanine() -> Reward:
 
 
 def scaled(residue: str = "P", scale: float = 1.0) -> Reward:
-    """Build a reward counting one residue and scaling it -- a factory that takes arguments."""
+    """Build a scaled residue-count reward."""
     return batchify(lambda idr: scale * idr.count(residue))
 
 

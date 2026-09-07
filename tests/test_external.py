@@ -17,7 +17,7 @@ from idiom.train.grpo.reward.external import (
     scorer,
 )
 
-REPO = Path(__file__).resolve().parents[1]  # the scorers are repository material
+REPO = Path(__file__).resolve().parents[1]
 
 
 def _scorer(tmp_path, body, name="fake_scorer.py", **kw):
@@ -37,7 +37,6 @@ ECHO_LENGTHS = """
 """
 
 
-# ---------------------------------------------------------------- parse_response
 
 
 def test_parse_response_happy():
@@ -45,7 +44,6 @@ def test_parse_response_happy():
 
 
 def test_parse_response_rejects_length_mismatch():
-    # the critical check: fewer scores than sequences must never be silently zipped
     with pytest.raises(ValueError, match="2 scores for 3 sequences"):
         parse_response('{"scores": [1, 2]}', 3)
 
@@ -75,26 +73,22 @@ def test_parse_response_rejects_missing_scores():
         parse_response('{"result": [1]}', 1)
 
 
-# ---------------------------------------------------------------- the stderr label
 
 
 def test_label_defaults_to_the_script_basename(tmp_path):
-    # two scorers with no explicit label get distinct stderr tags from their commands, so a warning
-    # in the log is traceable to the scorer that emitted it
     assert _label_from_argv(["uv", "run", "--script", "a/b/finches.py", "--mode", "x"]) == "finches"
     assert _label_from_argv(["/usr/bin/python", "/tmp/foo.py"]) == "foo"
-    assert _label_from_argv(["mycmd", "--flag"]) == "mycmd"  # no script: fall back to the program
+    assert _label_from_argv(["mycmd", "--flag"]) == "mycmd"
     assert ScorerProcess("uv run --script x/protgps.py --compartment nucleolus").label == "protgps"
 
 
-# ---------------------------------------------------------------- ScorerProcess
 
 
 def test_scorer_roundtrip(tmp_path):
     s = _scorer(tmp_path, ECHO_LENGTHS)
     try:
         assert s.score(["AAA", "CCCCC"]) == [3.0, 5.0]
-        assert s.score(["MK"]) == [2.0]  # same process reused across batches
+        assert s.score(["MK"]) == [2.0]
     finally:
         s.stop()
 
@@ -132,7 +126,7 @@ def test_scorer_restarts_after_the_child_dies(tmp_path):
         assert s.score(["AAA"]) == [3.0]
         with pytest.raises(BrokenPipeError):
             s.score(["DIE"])  # restart happens, then the same batch kills it again
-        assert s.score(["AAAA"]) == [4.0]  # a healthy batch works again afterwards
+        assert s.score(["AAAA"]) == [4.0]
     finally:
         s.stop()
 
@@ -145,7 +139,7 @@ def test_scorer_times_out_instead_of_hanging(tmp_path):
     """, timeout=1.0)
     with pytest.raises(TimeoutError, match="round trip exceeded"):
         s.score(["AAA"])
-    assert s.proc is None  # the process group was killed, not left running
+    assert s.proc is None
 
 
 def test_scorer_error_response_propagates(tmp_path):
@@ -163,12 +157,11 @@ def test_scorer_error_response_propagates(tmp_path):
     try:
         with pytest.raises(RuntimeError, match="unsupported residue"):
             s.score(["BAD"])
-        assert s.score(["AAA"]) == [0.0]  # in-band errors leave the process alive
+        assert s.score(["AAA"]) == [0.0]
     finally:
         s.stop()
 
 
-# ---------------------------------------------------------------- the batched reward
 
 
 def _batched_scorer_file(tmp_path, counter):
@@ -188,7 +181,6 @@ def _batched_scorer_file(tmp_path, counter):
 
 
 def test_scorer_batches_dedups_and_caches(tmp_path):
-    """Empty strings cost no round trip, duplicates are sent once, repeats hit the cache."""
     counter = tmp_path / "calls.txt"
     path = _batched_scorer_file(tmp_path, counter)
     reward = scorer(f"{sys.executable} {path}", cwd=str(tmp_path))
@@ -201,14 +193,11 @@ def test_scorer_batches_dedups_and_caches(tmp_path):
 
 
 def test_scorer_returns_the_raw_value(tmp_path):
-    # the scorer reports its own units and stops there; shaping is the term's job, not the
-    # subprocess's, so the objective is retuned without touching that environment
     reward = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
     assert reward(["AAA", "AAAAA"]) == [3.0, 5.0]
 
 
 def test_two_scorers_are_independent(tmp_path):
-    # two scorers in one run get their own process and cache, and must not share global state
     m1 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
     m2 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path),
                                maxlen=2)
@@ -217,7 +206,6 @@ def test_two_scorers_are_independent(tmp_path):
 
 
 def test_a_command_can_be_given_as_an_argument_list(tmp_path):
-    # the escape hatch from shell quoting: a path with a space in it survives unsplit
     path = _scorer_path(tmp_path, name="len scorer.py")
     reward = scorer([sys.executable, str(path)], cwd=str(tmp_path))
     assert reward(["AAA"]) == [3.0]
@@ -230,11 +218,7 @@ def _scorer_path(tmp_path, name="len_scorer.py"):
 
 
 def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
-    """The shipped sparrow scorer speaks the protocol against a stub sparrow package.
-
-    sparrow itself is a heavy build, so a stub standing in for it is put on the child's import
-    path, leaving the real script's argument parsing, protocol loop, and error handling under test.
-    """
+    """Test the real scorer protocol with a stub sparrow package to avoid heavy dependencies."""
     (tmp_path / "sparrow.py").write_text(textwrap.dedent("""
         class _Predictor:
             def __init__(self, seq):
@@ -250,8 +234,8 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
             def FCR(self):
                 return 0.25
     """))
-    monkeypatch.setenv("PYTHONPATH", str(tmp_path))  # inherited by the scorer subprocess
-    # Disable site-packages to verify the helper needs neither IDiom nor training dependencies.
+    # Disable site-packages to test the protocol without IDiom or training dependencies.
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
     scorer = ScorerProcess([sys.executable, "-S", str(REPO / "cookbook/rewards/scorers/sparrow.py"),
                      "--property", "radius_of_gyration"], timeout=30)
     try:
@@ -260,7 +244,6 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
         scorer.stop()
 
 
-# ---------------------------------------------------------------- the shared protocol helper
 
 
 SERVE = (
@@ -270,7 +253,6 @@ SERVE = (
 
 
 def test_serve_scores_a_batch_and_zeros_empties(tmp_path):
-    """The shared serve() block: build() returns score_batch, empties score 0.0, order preserved."""
     (tmp_path / "s.py").write_text(
         "import json, os, sys\n"
         "def build():\n"
@@ -285,7 +267,6 @@ def test_serve_scores_a_batch_and_zeros_empties(tmp_path):
 
 
 def test_serve_turns_a_scorer_exception_into_an_error_response(tmp_path):
-    """A raise inside score_batch becomes an {"error": ...} the parent surfaces, not a crash."""
     (tmp_path / "s.py").write_text(
         "import json, os, sys\n"
         "def build():\n"

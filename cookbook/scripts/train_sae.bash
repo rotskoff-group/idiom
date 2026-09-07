@@ -2,13 +2,10 @@
 
 set -euo pipefail
 
-###
 # Train a top-k SAE, streaming activations from a frozen IDiom (no activation cache on disk).
 # layer must be < n_layers; expansion_factor=32 gives 32 x d_model latents.
 # Needs: 1 GPU, ~24 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/sae"  # EDIT: run output directory
 

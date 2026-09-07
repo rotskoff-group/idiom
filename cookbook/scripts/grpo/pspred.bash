@@ -2,13 +2,10 @@
 
 set -euo pipefail
 
-###
 # GRPO toward phase-separation thermodynamics, scored by PSpred. dG is transfer free energy in kT.
 # Base generations average -0.1 (sd 0.8); LAF1, a 170-residue LLPS driver, reaches -6.1.
 # Needs: 1 GPU, ~12 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-pspred"  # EDIT: run output directory
 
@@ -22,12 +19,9 @@ SCORER="uv run --script cookbook/rewards/scorers/pspred.py --target $TARGET_KIND
 
 export WANDB_MODE=offline
 
-# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, written out: nothing is added for you and reward.terms is empty by
-# default. entropy and length keep the target from being met by a low-complexity tract or a
-# degenerate length; drop either line and it is gone.
+# Entropy and length terms discourage low-complexity or extreme-length solutions.
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

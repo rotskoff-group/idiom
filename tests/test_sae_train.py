@@ -1,4 +1,4 @@
-"""SAE entrypoint tests (CPU-only): build() wires a frozen model (arch read from ckpt)."""
+"""SAE entrypoint tests: build() wires a frozen model (arch read from ckpt)."""
 
 from dataclasses import asdict
 
@@ -12,7 +12,7 @@ CFG = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=
 
 
 def _save_ckpt(tmp_path):
-    """Self-describing ckpt (carries its ModelConfig), like a real training checkpoint."""
+    """Save a checkpoint with its ModelConfig."""
     m = IDiomTransformer(CFG)
     ckpt = tmp_path / "m.ckpt"
     torch.save(
@@ -28,7 +28,7 @@ def test_sae_build_wires_and_streams(tmp_path):
     fasta = tmp_path / "r.fasta"
     fasta.write_text(">A_IDR_3-9\nMEDSKVDNRPQACDEFG\n>B_IDR_2-7\nACDEFGHIKLMN\n")
     cfg = OmegaConf.create({
-        "seed": 0, "device": "cpu", "model_ckpt": str(ckpt),  # arch read from the ckpt
+        "seed": 0, "device": "cpu", "model_ckpt": str(ckpt),
         "layer": 1,
         "data": {"fasta": str(fasta), "prompted_prob": 1.0, "record_batch_size": 2},
         "sae_batch_size": 8, "buffer_size": 8, "init_b_dec_from_mean": True,
@@ -38,5 +38,5 @@ def test_sae_build_wires_and_streams(tmp_path):
     })
     lit, store = build(cfg)
     assert lit.sae.d_in == 16 and store.layer == 1
-    batch = next(iter(store))  # streamed activations flow through the wired store
+    batch = next(iter(store))
     assert batch.shape[1] == 16

@@ -1,4 +1,4 @@
-"""tests (CPU-only): FASTA reader + drop policy, header parsing, record dataset."""
+"""Tests: FASTA reader + drop policy, header parsing, record dataset."""
 
 import torch
 
@@ -26,13 +26,11 @@ def _write(tmp_path, text):
 
 def test_read_fasta_drops_noncanonical(tmp_path):
     pairs = read_fasta(_write(tmp_path, FASTA))
-    # P00002 has an 'X' -> dropped; the other two survive.
     accs = [h.split("_IDR_")[0] for h, _ in pairs]
     assert accs == ["P00001", "P00003"]
 
 
 def test_parse_idr_header():
-    # 1-indexed inclusive in the header -> 0-indexed half-open internally.
     assert parse_idr_header("P06748_IDR_119-242") == ("P06748", 118, 242)
     assert parse_idr_header("P00001_IDR_3-6 trailing") == ("P00001", 2, 6)
 
@@ -49,22 +47,21 @@ def test_record_to_example_shift():
     x, y = record_to_example(rec, TOK, variant="prompted")
     assert x.shape == y.shape
     assert x[0].item() == TOK.start_id and y[-1].item() == TOK.stop_id
-    # the shift: input[1:] == target[:-1], and it decodes to the FIM string.
     assert torch.equal(x[1:], y[:-1])
     assert TOK.decode(x[1:].tolist()) == "1MEDS3RPQ2KVDN"
 
 
 def test_dataset_len_filter_and_getitem():
-    keep = max_protein_len(16)  # 16 - 4 = 12
+    keep = max_protein_len(16)
     recs = [
-        Record("ok", "MEDSKVDNRPQ", 2, 5),   # len 11 <= 12 -> kept
-        Record("too_long", "A" * 20, 0, 19),  # len 20 > 12 -> dropped
+        Record("ok", "MEDSKVDNRPQ", 2, 5),
+        Record("too_long", "A" * 20, 0, 19),
     ]
     ds = RecordDataset(recs, TOK, max_len=16, prompted_prob=1.0)
     assert len(ds) == 1 and keep == 12
     x, y, m = ds[0]
     assert x[0].item() == TOK.start_id and x.dtype == torch.long
-    assert m.shape == y.shape and m.all()  # pretraining default: loss on all tokens
+    assert m.shape == y.shape and m.all()
 
 
 def test_collate_pads():
@@ -73,22 +70,17 @@ def test_collate_pads():
     collate = make_collate(TOK.pad_id)
     x, y, m = collate([ds[0], ds[1]])
     assert x.shape == y.shape == m.shape and x.size(0) == 2
-    # shorter row is padded out to the batch max length.
     assert (x == TOK.pad_id).any()
 
 
 def test_to_records_normalizes_inputs(tmp_path):
-    # a bare sequence -> one unprompted Record spanning the whole sequence
     recs = list(to_records("MEDSKVDN"))
     assert len(recs) == 1
     assert (recs[0].accession, recs[0].idr_start, recs[0].idr_end) == ("seq_0", 0, 8)
-    # a list of bare sequences -> synthetic accessions seq_0, seq_1, ...
     recs = list(to_records(["MEDS", "ACDE"]))
     assert [r.accession for r in recs] == ["seq_0", "seq_1"]
-    # Records pass through unchanged (single or iterable)
     r = Record("X", "MEDS", 1, 3)
     assert list(to_records(r)) == [r] and list(to_records([r])) == [r]
-    # a FASTA path is parsed with read_records
     fa = tmp_path / "p.fasta"
     fa.write_text(">A_IDR_2-4\nMEDSKV\n")
     recs = list(to_records(fa))
@@ -99,7 +91,7 @@ def test_to_records_noncanonical_sequence_raises():
     import pytest
 
     with pytest.raises(ValueError, match="canonical"):
-        list(to_records("MEDSX"))  # explicit bad sequence errors (not silently dropped)
+        list(to_records("MEDSX"))
 
 
 def test_long_bare_sequence_matches_list_input():

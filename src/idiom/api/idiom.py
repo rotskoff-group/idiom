@@ -43,7 +43,6 @@ class IDiom:
         self.device = torch.device(device)
         self.model.to(self.device)
 
-    # --- load / save (HF-style) ---
     @classmethod
     def load(cls, name_or_path: str | Path, *, device="auto") -> IDiom:
         """Load a checkpoint file, release directory, or Hub repository.
@@ -51,7 +50,7 @@ class IDiom:
         Existing files are read as Lightning checkpoints; other inputs use from_pretrained.
         The returned wrapper is in eval mode; device="auto" uses resolve_device.
         """
-        if Path(name_or_path).is_file():  # a Lightning .ckpt
+        if Path(name_or_path).is_file():
             return cls.from_lightning_checkpoint(name_or_path, device=device)
         return cls.from_pretrained(name_or_path, device=device)
 
@@ -118,14 +117,13 @@ class IDiom:
         model, _ = load_pretrained(ckpt_path, device=dev)
         return cls(model, device=dev)
 
-    # --- generation ---
     def _decode_idr(self, row: torch.Tensor) -> str:
         """Decode one generated row to a residue string, stopping at the first STOP or PAD."""
         ids: list[int] = []
         for i in row.tolist():
             if i in (self.tok.stop_id, self.tok.pad_id):
-                break  # IDR ends at the first STOP/PAD
-            if self.tok.is_residue(i):  # keep residues only; drop any stray FIM markers
+                break
+            if self.tok.is_residue(i):
                 ids.append(i)
         return self.tok.decode(ids)
 
@@ -138,8 +136,7 @@ class IDiom:
         prompt_ids = torch.tensor(self.tok.encode(prompt), device=self.device)
 
         def _batch(k: int, s: int | None) -> list[str]:
-            # one Generator per draw, reused across chunks so each chunk samples fresh tokens (and a
-            # draw stays reproducible for a fixed batch_size). batch_size=None uses batches of eight.
+            # Reuse the RNG across chunks; reproducibility depends on batch_size.
             gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
             bs = 8 if batch_size is None else batch_size
             if bs <= 0:
@@ -202,7 +199,6 @@ class IDiom:
         kw.setdefault("max_new_tokens", 1000)
         return self._generate(fim_prompt(seq, idr_start, idr_end), n, **kw)
 
-    # --- FASTA-first wrappers ---
     def generate_unprompted_fasta(self, out_fasta, n: int = 100, *, prefix: str = "idiom_unprompted",
                                   **kw) -> Path:
         """Generate unprompted IDRs and write them to a record FASTA.
@@ -220,8 +216,6 @@ class IDiom:
             The output FASTA path.
         """
         seqs = self.generate_unprompted(n, **kw)
-        # the whole generated sequence is the IDR -> header carries the span _IDR_1-len so the
-        # output is a valid record FASTA (read_records-parseable). See _idr_header.
         records = [(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s]
         return _write_fasta(records, out_fasta)
 
@@ -257,7 +251,6 @@ class IDiom:
                     rows.append((_idr_header(acc, s), s))
         return _write_fasta(rows, out_fasta)
 
-    # --- embeddings ---
     def embed(self, inputs, layers: list[int], *, pool: str = "mean"):
         """Extract residual-stream embeddings; see embed_fasta for the output schema.
 

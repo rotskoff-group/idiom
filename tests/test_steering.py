@@ -1,4 +1,4 @@
-"""steering tests (CPU-only): region-masked residual edits and steered sampling."""
+"""Steering tests: region-masked residual edits and steered sampling."""
 
 import pytest
 import torch
@@ -17,7 +17,7 @@ RECS = [Record(f"r{i}", "MEDSKVDNRPQACDEFG", 3, 12) for i in range(4)]
 
 def test_steering_context_only_edits_residues():
     model = IDiomTransformer(TINY).eval()
-    tokens = torch.tensor([[TOK.start_id, *TOK.encode("1AC3D2EF")]])  # markers + residues
+    tokens = torch.tensor([[TOK.start_id, *TOK.encode("1AC3D2EF")]])
     base = model(tokens)
     direction = torch.ones(TINY.d_model)
     with steering(model, 0, add_direction_hook(direction, 5.0), tokenizer=TOK):

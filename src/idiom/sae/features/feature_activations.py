@@ -18,7 +18,7 @@ import numpy as np
 
 
 class FeatureDataset:
-    """Reader over a feature-activation dataset directory.
+    """Per-residue sparse features and sequence metadata.
 
     Attributes:
         path (Path): The dataset directory.
@@ -56,8 +56,7 @@ class FeatureDataset:
         self.layer = int(meta["layer"])
         self.region = str(meta.get("region", "all"))
 
-        # CSR-style grouping of residue rows by their sequence: the rows for local sequence s
-        # are _order[_offsets[s]:_offsets[s + 1]]. Stable sort keeps row order deterministic.
+        # Sequence s occupies _order[_offsets[s]:_offsets[s + 1]].
         seq = np.asarray(self.seq_idx[:], dtype=np.int64)
         self.n_seqs = len(self.strings)
         self._order = np.argsort(seq, kind="stable").astype(np.int64)
@@ -70,9 +69,7 @@ class FeatureDataset:
         s = self.strings[int(local_seq_idx)]
         return s.decode("utf-8") if isinstance(s, bytes) else str(s)
 
-    # Rows processed per pass when streaming a memory-mapped dataset. Bounds peak RAM to
-    # ~CHUNK_ROWS * k * 8 bytes (e.g. ~256 MB at 1M rows, k=32) instead of copying the whole
-    # [N_res, k] arrays into RAM (which arr[:] does even on a memmap).
+    # Chunk reductions to bound memory use for memory-mapped datasets.
     CHUNK_ROWS = 1_000_000
 
     def _row_chunks(self):
@@ -85,7 +82,6 @@ class FeatureDataset:
             e = min(s + self.CHUNK_ROWS, n)
             yield s, np.asarray(self.top_indices[s:e]), np.asarray(self.top_values[s:e])
 
-    # --- reductions ---
     def row_activations(self, feature_id: int) -> np.ndarray:
         """Return float32 [N_res] activations, zero where feature_id was not selected."""
         f = int(feature_id)

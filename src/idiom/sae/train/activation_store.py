@@ -10,7 +10,7 @@ from idiom.model.activations import extract_activations
 
 
 class ActivationStore(IterableDataset):
-    """Iterable dataset of shuffled residual-stream batches; see __init__ for buffer settings."""
+    """Stream shuffled batches of residual activations."""
 
     def __init__(
         self,
@@ -40,18 +40,17 @@ class ActivationStore(IterableDataset):
             region: Residues to keep: "all", "idr", or "non_idr".
         """
         self.model = model.eval().to(device)
-        self.record_loader = record_loader  # yields (input, target, mask) or input tokens [B, L]
+        self.record_loader = record_loader
         self.layer = layer
         self.sae_batch_size = sae_batch_size
         self.buffer_size = buffer_size
         self.device = torch.device(device)
         self.tok = tokenizer or Tokenizer()
         self.drop_markers = drop_markers
-        self.region = region  # "all" | "idr" | "non_idr" (residues kept relative to the '2' marker)
+        self.region = region
 
     def _input_tokens(self, batch) -> torch.Tensor:
-        """Return the input token tensor from a batch, which may be a triple or a bare tensor."""
-        x = batch[0] if isinstance(batch, (tuple, list)) else batch  # RecordDataset yields a triple
+        x = batch[0] if isinstance(batch, (tuple, list)) else batch
         return x.to(self.device)
 
     @torch.no_grad()
@@ -61,7 +60,7 @@ class ActivationStore(IterableDataset):
             self.model, tokens, [self.layer], tokenizer=self.tok,
             drop_markers=self.drop_markers, region=self.region,
         )
-        return out[self.layer].values  # [N_residues, d_model]
+        return out[self.layer].values
 
     @torch.no_grad()
     def __iter__(self):
@@ -78,8 +77,7 @@ class ActivationStore(IterableDataset):
             n += buf[-1].size(0)
             if n >= self.buffer_size:
                 yield from self._drain(buf)
-                n = sum(t.size(0) for t in buf)  # _drain leaves the (< batch) remainder
-        # final flush of whatever full batches remain
+                n = sum(t.size(0) for t in buf)
         yield from self._drain(buf, final=True)
 
     def _drain(self, buf: list[torch.Tensor], *, final: bool = False):
@@ -87,14 +85,14 @@ class ActivationStore(IterableDataset):
         if not buf:
             return
         pool = torch.cat(buf, dim=0)
-        pool = pool[torch.randperm(pool.size(0), device=pool.device)]  # shuffle the buffer
+        pool = pool[torch.randperm(pool.size(0), device=pool.device)]
         full = (pool.size(0) // self.sae_batch_size) * self.sae_batch_size
         for i in range(0, full, self.sae_batch_size):
             yield pool[i : i + self.sae_batch_size]
         buf.clear()
         remainder = pool[full:]
         if not final and remainder.size(0):
-            buf.append(remainder)  # carry the tail to the next buffer fill
+            buf.append(remainder)
 
     @torch.no_grad()
     def mean_activation(self, max_batches: int = 4) -> torch.Tensor:

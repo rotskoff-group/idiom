@@ -2,13 +2,10 @@
 
 set -euo pipefail
 
-###
 # GRPO toward transcriptional activation strength, scored by PADDLE (max Z over 53-residue windows).
 # Already a Z-score, so unshaped: base +0.9 (sd 1.7), strong natural ADs 3-8. ~3 s per step.
 # Needs: 1 GPU, ~16 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-paddle"  # EDIT: run output directory
 
@@ -20,12 +17,9 @@ SCORER="uv run --script cookbook/rewards/scorers/paddle.py"
 
 export WANDB_MODE=offline
 
-# Check the scorer answers before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# The whole objective, written out: nothing is added for you and reward.terms is empty by
-# default. entropy and length keep the target from being met by a low-complexity tract or a
-# degenerate length; drop either line and it is gone.
+# Entropy and length terms discourage low-complexity or extreme-length solutions.
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

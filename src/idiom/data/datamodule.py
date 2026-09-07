@@ -13,7 +13,7 @@ from idiom.data.tokenizer import Tokenizer
 
 
 class RecordDataModule(L.LightningDataModule):
-    """Lightning DataModule serving RecordDatasets built from per-split record FASTAs.
+    """Lightning dataloaders backed by per-split record stores.
 
     Attributes:
         train_set (RecordDataset | None): The train split, built by setup().
@@ -30,12 +30,12 @@ class RecordDataModule(L.LightningDataModule):
         tokenizer: Tokenizer | None = None,
         max_len: int = 1024,
         prompted_prob: float = 0.5,
-        completion_only: bool = False,  # True for SFT (loss on the IDR completion only)
+        completion_only: bool = False,
         batch_size: int = 64,
         num_workers: int = 0,
         seed: int = 0,
     ) -> None:
-        """Configure the datamodule; the splits are built lazily in setup().
+        """Configure splits for lazy loading in setup().
 
         Args:
             train_fasta: Record FASTA for the train split.
@@ -66,8 +66,7 @@ class RecordDataModule(L.LightningDataModule):
         self.test_set: RecordDataset | None = None
 
     def _build(self, path: str | Path) -> RecordDataset:
-        # open_or_build returns a memory-mapped RecordStore (auto-built once, DDP-safe), so every
-        # rank shares one copy via the OS page cache instead of each re-parsing the FASTA into RAM.
+        # Memory mapping lets DDP ranks share record data through the OS page cache.
         return RecordDataset(
             open_or_build(path),
             self.tok,
@@ -79,7 +78,6 @@ class RecordDataModule(L.LightningDataModule):
 
     def setup(self, stage: str | None = None) -> None:
         """Build configured splits once; stage is ignored."""
-        # Idempotent: Lightning may call setup() more than once; only build each split once.
         if self.train_set is None:
             self.train_set = self._build(self.train_fasta)
         if self.val_fasta is not None and self.val_set is None:
@@ -94,7 +92,7 @@ class RecordDataModule(L.LightningDataModule):
             shuffle=shuffle,
             num_workers=self.num_workers,
             collate_fn=make_collate(self.tok.pad_id),
-            drop_last=shuffle,  # drop the ragged tail only during training
+            drop_last=shuffle,
         )
 
     def train_dataloader(self) -> DataLoader:
@@ -103,7 +101,6 @@ class RecordDataModule(L.LightningDataModule):
 
     def val_dataloader(self) -> DataLoader | None:
         """Return a DataLoader over the validation split, or None if there is no val_fasta."""
-        # None -> Lightning skips validation entirely (e.g. SFT with no held-out set)
         return self._loader(self.val_set, shuffle=False) if self.val_set is not None else None
 
     def test_dataloader(self) -> DataLoader | None:

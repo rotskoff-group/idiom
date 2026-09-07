@@ -10,13 +10,9 @@ idr = full_seq[idr_start:idr_end]. The FIM forms of a record are:
 
 from __future__ import annotations
 
-# Sentinels: 1 opens the prefix, 3 opens the suffix, 2 opens the middle (the IDR).
 PREFIX, MIDDLE, SUFFIX = "1", "2", "3"
 
-# Prompting-mode vocabulary: whether the generated IDR is conditioned on flanking context
-# ("prompted") or produced de novo ("unprompted"). NB: this is a different axis from the biological
-# IDR object (idr_start/idr_end, the _IDR_x-y header span) and from the SAE region selector
-# (all/idr/non_idr) — "idr" means something different in each, and none is derived from the others.
+# Prompting mode controls flanking context; SAE region controls residue selection.
 PROMPTED, UNPROMPTED = "prompted", "unprompted"
 
 
@@ -51,7 +47,7 @@ def fim_prompt(seq: str = "", start: int = 0, end: int = 0) -> str:
 
 
 def residue_source_positions(seq_len: int, start: int, end: int, variant: str = PROMPTED) -> list[int]:
-    """Return the index in full_seq of each residue of the FIM string, in FIM order.
+    """Map FIM-ordered residues to source-sequence positions.
 
     FIM order is the order residues appear once the 1/3/2 markers are dropped: prefix, suffix, IDR
     for "prompted", and the IDR alone for "unprompted".
@@ -70,5 +66,5 @@ def residue_source_positions(seq_len: int, start: int, end: int, variant: str = 
     """
     variant = normalize_mode(variant)
     if variant == PROMPTED:
-        return [*range(0, start), *range(end, seq_len), *range(start, end)]  # prefix, suffix, IDR
-    return list(range(start, end))  # unprompted: IDR only
+        return [*range(0, start), *range(end, seq_len), *range(start, end)]
+    return list(range(start, end))

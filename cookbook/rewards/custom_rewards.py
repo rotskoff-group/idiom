@@ -36,7 +36,7 @@ def motif_count(pattern: str = r"[VILMF]K.E") -> Reward:
     Raises:
         re.error: If pattern is invalid; checked when the factory is called.
     """
-    motif = re.compile(pattern)  # compile now, so a bad pattern fails here
+    motif = re.compile(pattern)
     return batchify(lambda idr: float(len(motif.findall(idr))))
 
 
@@ -56,7 +56,7 @@ def one_sided(*, target: float, width: float = 1.0, direction: str = "above") ->
     """
     if direction not in ("above", "below"):
         raise ValueError(f"one_sided direction must be 'above' or 'below', got {direction!r}")
-    scale = tolerance(target, width)  # keeps width a fraction of a nonzero target, absolute at 0
+    scale = tolerance(target, width)
     sign = 1.0 if direction == "above" else -1.0
 
     def shaping(value: float) -> float:

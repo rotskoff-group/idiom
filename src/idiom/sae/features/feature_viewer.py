@@ -26,19 +26,16 @@ def _parse_args() -> argparse.Namespace:
 
 @st.cache_resource
 def _load(path: str, in_memory: bool) -> FeatureDataset:
-    """Open the dataset once per session, memory-mapped unless in_memory is set."""
     return FeatureDataset(path, in_memory=in_memory)
 
 
 @st.cache_data
 def _ranking(_fd: FeatureDataset, num_latents: int):
-    """Return the per-feature maximum, total, and firing count, cached for the session."""
     return _fd.feature_ranking()
 
 
 @st.cache_data
 def _stats(_fd: FeatureDataset, feature_id: int):
-    """Return one feature's global maximum and per-sequence peak and firing fraction, cached."""
     return _fd.feature_stats(feature_id)
 
 
@@ -58,7 +55,6 @@ def _shade(seq: str, acts: np.ndarray, gmax: float) -> str:
 
 
 def main() -> None:
-    """Read the arguments, load the dataset, and draw the controls and results."""
     args = _parse_args()
     fd = _load(args.features, args.in_memory)
     n_seqs = fd.n_seqs
@@ -66,8 +62,6 @@ def main() -> None:
     st.set_page_config(layout="wide")
     st.title(f"SAE feature viewer — layer {fd.layer} · region {fd.region}")
 
-    # Order features strongest-first so the viewer opens on the most active feature rather than
-    # feature 0; never-firing features are dropped from the navigation.
     fmax, fsum, fcount = _ranking(fd, fd.num_latents)
     metric_arrays = {
         "max activation": fmax,

@@ -16,7 +16,7 @@ from idiom.train.autoreg.schedulers import warmup_cosine
 
 
 class LitAutoregressive(L.LightningModule):
-    """Next-token trainer wrapping an IDiomTransformer with a masked cross-entropy loss.
+    """Train an IDiom transformer with masked next-token cross-entropy.
 
     Uses AdamW with a warmup-cosine learning-rate schedule, and stores the ModelConfig in its
     hyperparameters.
@@ -37,7 +37,7 @@ class LitAutoregressive(L.LightningModule):
         betas: tuple[float, float] = (0.9, 0.95),
         min_lr_ratio: float = 0.1,
     ) -> None:
-        """Build the transformer and record the optimizer and schedule settings.
+        """Initialize the transformer and training settings.
 
         Args:
             cfg: Transformer architecture configuration.
@@ -50,8 +50,7 @@ class LitAutoregressive(L.LightningModule):
         """
         super().__init__()
         self.cfg = cfg
-        # Persist the architecture in the checkpoint so downstream loaders never need to
-        # re-declare it (model/io.load_pretrained reads hparams["model_cfg"]).
+        # Store the architecture so checkpoint loaders can reconstruct the model.
         self.save_hyperparameters({"model_cfg": asdict(cfg)})
         self.model = IDiomTransformer(cfg)
         self.lr = lr
@@ -63,7 +62,7 @@ class LitAutoregressive(L.LightningModule):
 
     @classmethod
     def init_from_checkpoint(cls, init_from: str, **kwargs) -> LitAutoregressive:
-        """Build a module whose weights are warm-started from a pretrained model.
+        """Initialize training from pretrained weights.
 
         The architecture is read from the artifact.
 
@@ -82,8 +81,6 @@ class LitAutoregressive(L.LightningModule):
 
     def _masked_loss(self, logits, targets, mask):
         """Return the cross-entropy averaged over the positions the mask selects."""
-        # next-token CE, averaged only over the positions the mask selects (completion for SFT,
-        # everything for pretraining); padded positions have mask=False so they never contribute.
         per_token = F.cross_entropy(
             logits.reshape(-1, logits.size(-1)), targets.reshape(-1), reduction="none"
         ).view_as(targets)
@@ -105,7 +102,6 @@ class LitAutoregressive(L.LightningModule):
 
     def on_before_optimizer_step(self, optimizer):
         """Log per-parameter and total L2 gradient norms."""
-        # grad_2.0_norm/* keys, matching the earlier IDiom pretrain logging.
         self.log_dict(grad_norm(self, norm_type=2))
 
     def configure_optimizers(self):

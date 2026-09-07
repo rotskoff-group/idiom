@@ -1,4 +1,4 @@
-"""feature-dataset tests (CPU-only): build -> read -> reduce, with residue alignment."""
+"""Feature-dataset tests: build -> read -> reduce, with residue alignment."""
 
 from idiom.data.io import Record
 from idiom.data.tokenizer import RESIDUES, Tokenizer
@@ -27,13 +27,12 @@ def test_build_and_read(tmp_path):
     assert fd.k == int(sae.k) and fd.num_latents == sae.num_latents and fd.layer == 1
     assert fd.top_indices.shape[1] == fd.k
     assert len(fd.strings) == len(RECS)
-    assert fd.sequence(0).startswith("1")  # FIM string
+    assert fd.sequence(0).startswith("1")
 
 
 def test_pos_idx_aligns_to_residues(tmp_path):
     out, _ = _build(tmp_path)
     fd = FeatureDataset(out, in_memory=True)
-    # every (seq_idx, pos_idx) must point at a real residue char in that FIM string.
     for row in range(min(20, len(fd.seq_idx))):
         s = fd.sequence(int(fd.seq_idx[row]))
         assert s[int(fd.pos_idx[row])] in RESIDUES
@@ -42,7 +41,7 @@ def test_pos_idx_aligns_to_residues(tmp_path):
 def test_reductions_run(tmp_path):
     out, _ = _build(tmp_path)
     fd = FeatureDataset(out, in_memory=True)
-    feat = int(fd.top_indices[0, 0])  # a feature that fired somewhere
+    feat = int(fd.top_indices[0, 0])
     seqs, scores = fd.top_sequences(feat, n=3, sort_by="peak")
     assert len(seqs) >= 1 and (scores > 0).all()
     pos, acts = fd.trace(int(seqs[0]), feat)

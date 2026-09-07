@@ -2,14 +2,9 @@
 
 set -euo pipefail
 
-###
-# GRPO toward TWO reward models at once: attractive interaction chemistry (FINCHES) and a condensate
-# compartment (ProtGPS). Terms compose in the order named, and each keeps its own scorer process.
-# The objective here carries entropy and no length term, to show that both are choices a run makes.
+# Combine FINCHES interaction scores and ProtGPS compartment probabilities.
 # Needs: 1 GPU, ~16 h.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-combined"  # EDIT: run output directory
 
@@ -29,13 +24,10 @@ export WANDB_MODE=offline
 export IDIOM_PROTGPS_DEVICE=cpu
 export PROTGPS_BATCH=1
 
-# Check both scorers answer before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$FINCHES"
 python -m idiom.train.grpo.reward.external --cmd "$PROTGPS"
 
-# The whole objective, written out: nothing is added for you and reward.terms is empty by default.
-# ProtGPS returns a probability and is length-sensitive on its own, so this run keeps entropy and
-# leaves length out; add a length term back if the generations drift long.
+# ProtGPS is length-sensitive; add a length term if generations drift long.
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

@@ -25,7 +25,7 @@ from idiom.utils.device import resolve_device
 
 @torch.no_grad()
 def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode=PROMPTED):
-    """Embed sequences or FASTA records into residual-stream vectors at the requested layers.
+    """Extract residual-stream embeddings from sequences or FASTA records.
 
     Records are processed one at a time, so rows appear in input order.
 
@@ -57,18 +57,18 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
 
     for record_idx, rec in enumerate(to_records(inputs)):
         fim = build(rec.full_seq, rec.idr_start, rec.idr_end)
-        tokens = torch.tensor([tok.start_id, *tok.encode(fim)], device=device)[None]  # [1, L]
+        tokens = torch.tensor([tok.start_id, *tok.encode(fim)], device=device)[None]
         acts = extract_activations(model, tokens, layers, tokenizer=tok, drop_markers=True)
         # extracted residue rows are in FIM order (markers dropped) — same order as src.
         src = residue_source_positions(len(rec.full_seq), rec.idr_start, rec.idr_end, variant)
         is_idr = np.array([rec.idr_start <= p < rec.idr_end for p in src])
 
         for layer in layers:
-            vals = acts[layer].values.cpu()  # [n_res, d]
+            vals = acts[layer].values.cpu()
             if pool == "mean":
-                out[layer]["values"].append(vals[is_idr].mean(0))  # per-sequence IDR embedding
+                out[layer]["values"].append(vals[is_idr].mean(0))
                 out[layer]["index"].append({"accession": rec.accession, "n_idr": int(is_idr.sum())})
-            else:  # per-residue
+            else:
                 ids = acts[layer].token_id
                 for i in range(vals.size(0)):
                     out[layer]["values"].append(vals[i])

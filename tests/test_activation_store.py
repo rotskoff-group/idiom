@@ -1,4 +1,4 @@
-"""SAE-streaming tests (CPU-only): ActivationStore -> LitSAE step, and region partitioning."""
+"""SAE-streaming tests: ActivationStore -> LitSAE step, and region partitioning."""
 
 import torch
 from torch.utils.data import DataLoader
@@ -28,7 +28,7 @@ def _store(sae_batch_size=8, buffer_size=8, layer=1):
 def test_store_yields_dmodel_batches():
     store = _store(sae_batch_size=8)
     batch = next(iter(store))
-    assert batch.shape == (8, TINY.d_model)  # [sae_batch_size, d_model]
+    assert batch.shape == (8, TINY.d_model)
     assert torch.isfinite(batch).all()
 
 
@@ -37,7 +37,6 @@ def test_store_exhausts_after_exact_drain_without_losing_rows():
     expected = torch.cat([store._acts(store._input_tokens(b)) for b in store.record_loader])
     actual = torch.cat(list(store))
     assert actual.shape == expected.shape
-    # Shuffling changes order, but every activation must survive exactly once.
     torch.testing.assert_close(actual.sort(dim=0).values, expected.sort(dim=0).values)
 
 
@@ -51,9 +50,8 @@ def test_mean_activation_shape():
 
 
 def test_region_split_idr_vs_non_idr():
-    """idr + non_idr partition all residues; counts match the FIM span (9 IDR + 8 flank / seq)."""
     model = IDiomTransformer(TINY)
-    ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=1.0)  # every sample is prompted
+    ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=1.0)
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
     n_all = extract_activations(model, x, [1], tokenizer=TOK, region="all")[1].values.size(0)
     n_idr = extract_activations(model, x, [1], tokenizer=TOK, region="idr")[1].values.size(0)
@@ -64,9 +62,8 @@ def test_region_split_idr_vs_non_idr():
 
 
 def test_region_on_unprompted_132_format():
-    """Unprompted '132{IDR}' has no flanks: region=idr keeps all 9 IDR/seq, non_idr keeps none."""
     model = IDiomTransformer(TINY)
-    ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=0.0)  # every sample is unprompted
+    ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=0.0)
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
     n_idr = extract_activations(model, x, [1], tokenizer=TOK, region="idr")[1].values.size(0)
     n_non = extract_activations(model, x, [1], tokenizer=TOK, region="non_idr")[1].values.size(0)
@@ -79,5 +76,4 @@ def test_lit_sae_step_on_streamed_acts():
     lit = LitSAE(d_in=TINY.d_model, k=4, expansion_factor=2, auxk_alpha=0.0, total_steps=10, warmup_steps=1)
     loss = lit.training_step(batch, 0)
     assert torch.isfinite(loss) and loss.requires_grad
-    # the SAE reconstructs d_model-dim vectors
     assert isinstance(lit.sae, SparseCoder) and lit.sae.d_in == TINY.d_model

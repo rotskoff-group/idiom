@@ -1,4 +1,4 @@
-"""smoke tests: the package imports and resolves CPU. CPU-only."""
+"""Smoke tests: the package imports and resolves CPU. CPU-only."""
 
 from idiom.utils.device import is_cpu_only, resolve_device
 
@@ -17,5 +17,4 @@ def test_explicit_cpu():
 
 
 def test_cpu_first_default():
-    # conftest sets IDIOM_DEVICE=cpu, so the default must resolve to CPU here.
     assert is_cpu_only()

@@ -45,12 +45,12 @@ def _iter_fasta_raw(path: str | Path) -> Iterator[tuple[str, str]]:
                 continue
             if line.startswith(">"):
                 if header is not None:
-                    yield header, "".join(parts)  # emit the record we just finished
+                    yield header, "".join(parts)
                 header, parts = line[1:], []
             else:
-                parts.append(line)  # sequence may span multiple wrapped lines
+                parts.append(line)
         if header is not None:
-            yield header, "".join(parts)  # emit the last record (no header follows it)
+            yield header, "".join(parts)
 
 
 def read_fasta(path: str | Path, *, drop_noncanonical: bool = True) -> list[tuple[str, str]]:
@@ -93,7 +93,7 @@ def parse_idr_header(header: str) -> tuple[str, int, int]:
     Raises:
         ValueError: If the header has no "_IDR_x-y" span or the span cannot be parsed.
     """
-    token = header.split()[0]  # ignore any free-text description after whitespace
+    token = header.split()[0]
     if "_IDR_" not in token:
         raise ValueError(f"header missing '_IDR_x-y' span: {header!r}")
     accession, span = token.rsplit("_IDR_", 1)
@@ -125,7 +125,7 @@ def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterato
         except ValueError:
             skipped += 1
             continue
-        if not 0 <= start < end <= len(seq):  # empty or out-of-bounds span
+        if not 0 <= start < end <= len(seq):
             skipped += 1
             continue
         yield Record(accession, seq, start, end)
@@ -134,18 +134,7 @@ def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterato
 
 
 def _sequence_record(seq: str, index: int) -> Record:
-    """Wrap a bare sequence as a Record whose IDR span covers the whole sequence.
-
-    Args:
-        seq: A protein/IDR sequence of canonical amino acids.
-        index: Position in the input, used to synthesize the accession "seq_{index}".
-
-    Returns:
-        A record with accession "seq_{index}" spanning the whole sequence.
-
-    Raises:
-        ValueError: If seq is empty or contains a non-canonical residue.
-    """
+    """Wrap a canonical sequence as a whole-IDR record with accession "seq_{index}"."""
     if not _TOK.is_canonical(seq):
         raise ValueError(
             f"sequence at index {index} is not canonical (only the 20 amino acids are allowed): "
@@ -157,15 +146,9 @@ def _sequence_record(seq: str, index: int) -> Record:
 def to_records(inputs, *, drop_noncanonical: bool = True) -> Iterator[Record]:
     """Normalize flexible sequence inputs into Records.
 
-    Accepts, in order of precedence:
-
-    - a single Record, passed through unchanged;
-    - a str or Path naming an existing file, parsed with read_records;
-    - a str that does not name an existing file, treated as one bare sequence;
-    - an iterable of Records and/or bare sequence strings.
-
-    A bare sequence becomes a Record spanning the whole sequence, with a synthetic accession
-    "seq_0", "seq_1", and so on.
+    Records pass through unchanged. Existing paths use read_records; other strings
+    become whole-IDR records with accessions "seq_0", "seq_1", etc. Iterables may mix
+    Records and sequence strings.
 
     Args:
         inputs (str | Path | Record | Iterable[str | Record]): The inputs to normalize.
@@ -194,7 +177,7 @@ def to_records(inputs, *, drop_noncanonical: bool = True) -> Iterator[Record]:
         elif isinstance(inputs, Path):
             raise ValueError(f"path does not exist: {inputs}")
         else:
-            yield _sequence_record(inputs, 0)  # a bare sequence string, not a file path
+            yield _sequence_record(inputs, 0)
         return
     for i, item in enumerate(inputs):
         if isinstance(item, Record):

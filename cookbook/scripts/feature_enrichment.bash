@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# Run in the environment where you pip-installed IDiom.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/enrichment"  # EDIT: new or empty directory
 cd "$REPO"

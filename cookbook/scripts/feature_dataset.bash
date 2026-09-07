@@ -2,13 +2,10 @@
 
 set -euo pipefail
 
-###
 # Build a per-residue SAE feature dataset from a record FASTA.
 # The SAE release supplies its host model, layer, and prompt format; the released SAE encodes IDRs.
 # A GPU is recommended; reduce BATCH_SIZE to use less memory.
-###
 
-# Run in the environment where you pip-installed IDiom; the clone supplies cookbook files.
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/features"  # EDIT: feature dataset directory
 

@@ -20,7 +20,6 @@ from idiom.train.grpo.reward import (
 
 FIXTURES = "tests.reward_fixtures"
 
-# Two terms a run would typically name; nothing puts them in an objective by itself.
 BASE = [
     {"reward": "entropy", "weight": 0.1, "shaping": {"name": "quadratic", "target": 3.68, "width": 0.2}},
     {"reward": "length", "weight": 0.1, "shaping": {"name": "quadratic", "target": 100, "width": 1.0}},
@@ -43,7 +42,6 @@ def test_weighted_sum_matches_explicit_arithmetic():
               + 2.0 * 1.0
               + 3.0 * 0.5)
     assert math.isclose(totals[0], expect, abs_tol=1e-12)
-    # the breakdown names every term, which is what the per-term W&B logging keys off
     assert set(breakdown[0]) == {"entropy", "entropy_raw", "length", "length_raw",
                                  "fraction_proline", "fraction_proline_raw", "half", "half_raw",
                                  "total"}
@@ -53,15 +51,15 @@ def test_weighted_sum_matches_explicit_arithmetic():
 def test_breakdown_separates_the_raw_reward_from_the_contribution():
     cfg = _cfg([{"reward": f"{FIXTURES}:fraction_alanine", "weight": 2.5}])
     _, breakdown = build_reward(cfg)(["AAAA"], 1)
-    assert breakdown[0]["fraction_alanine_raw"] == 1.0    # in its own units
-    assert breakdown[0]["fraction_alanine"] == 2.5        # weight * shaping(raw)
+    assert breakdown[0]["fraction_alanine_raw"] == 1.0
+    assert breakdown[0]["fraction_alanine"] == 2.5
 
 
 def test_shaping_is_applied_before_the_weight():
     cfg = _cfg([{"reward": {"name": f"{FIXTURES}:scaled", "residue": "P", "scale": 0.1},
                  "label": "frac", "weight": 1.0,
                  "shaping": {"name": "quadratic", "target": 0.15, "width": 1.0}}])
-    totals, _ = build_reward(cfg)(["PPP"], 1)   # raw = 0.30
+    totals, _ = build_reward(cfg)(["PPP"], 1)
     assert math.isclose(totals[0], quadratic_penalty(0.30, 0.15, 1.0), abs_tol=1e-12)
 
 
@@ -75,13 +73,10 @@ def test_zero_weight_term_is_logged_but_not_optimized():
     cfg = _cfg([{"reward": {"name": f"{FIXTURES}:scaled", "scale": 7.0}, "label": "watch",
                  "weight": 0.0}])
     totals, breakdown = build_reward(cfg)(["P"], 1)
-    assert totals == [0.0]                       # contributes nothing to the objective
-    assert breakdown[0]["watch_raw"] == 7.0      # and is still scored and logged
+    assert totals == [0.0]
+    assert breakdown[0]["watch_raw"] == 7.0
 
 
-# --- one uniform term shape ---------------------------------------------------------------------
-# A term is four keys, and its reward and shaping are named the same way: a bare name, or a mapping
-# of a name plus that factory's own arguments.
 
 
 def test_a_bare_name_and_a_mapping_are_the_same_term():
@@ -160,8 +155,6 @@ def test_duplicate_labels_are_rejected():
 
 
 def test_empty_terms_is_rejected():
-    # an objective with no terms gives every completion the same reward, so GRPO has no signal;
-    # the library adds nothing of its own, so this is a config error rather than a silent no-op
     with pytest.raises(ValueError, match="reward.terms is empty"):
         build_reward(_cfg([]))
 

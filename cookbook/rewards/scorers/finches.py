@@ -44,7 +44,7 @@ def build():
         raise SystemExit("--mode heterotypic needs --partner <sequence>")
 
     frontend = build_frontend(args.forcefield)
-    partner = args.partner if args.mode == "heterotypic" else None  # None -> self-interaction
+    partner = args.partner if args.mode == "heterotypic" else None
 
     def score_batch(sequences):
         """Return epsilon(seq, partner-or-self) for each sequence."""

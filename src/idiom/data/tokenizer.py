@@ -13,15 +13,10 @@ from collections.abc import Iterable
 
 import torch
 
-# Character-level: one residue/marker == one token (no BPE).
-# Alphabetical order fixes residue ids 0..19 — must not change once a model is trained on it.
+# Residue order fixes the trained vocabulary; changing it invalidates model weights.
 RESIDUES = "ACDEFGHIKLMNPQRSTVWY"
 RESIDUE_SET = frozenset(RESIDUES)
-# FIM markers in 1{prefix}3{suffix}2{IDR}: 1=prefix, 3=suffix, 2=middle(IDR). Real tokens,
-# but dropped for SAE/extraction.
 FIM = "123"
-# Control tokens — never inside a string, added structurally (START→input, STOP→target end,
-# PAD→batch fill / loss ignore_index, MASK→reserved).
 SPECIALS = ("<pad>", "<start>", "<stop>", "<mask>")
 
 
@@ -42,10 +37,8 @@ class Tokenizer:
     """
 
     def __init__(self) -> None:
-        """Build the id maps and expose the token-class ids as attributes."""
-        self._itos: list[str] = list(RESIDUES) + list(FIM) + list(SPECIALS)  # id -> token
-        self._stoi: dict[str, int] = {c: i for i, c in enumerate(self._itos)}  # token -> id
-        # Encodable chars only: specials never appear in a string, so they're not in here.
+        self._itos: list[str] = list(RESIDUES) + list(FIM) + list(SPECIALS)
+        self._stoi: dict[str, int] = {c: i for i, c in enumerate(self._itos)}
         self._char2id: dict[str, int] = {c: self._stoi[c] for c in RESIDUES + FIM}
 
         self.n_residues = len(RESIDUES)
@@ -55,18 +48,14 @@ class Tokenizer:
         self.start_id = self._stoi["<start>"]
         self.stop_id = self._stoi["<stop>"]
         self.mask_id = self._stoi["<mask>"]
-        # FIM marker ids (1=prefix, 2=middle/IDR opener, 3=suffix). The MIDDLE marker splits a
-        # FIM string into flanks (residues before it) and the IDR (residues after it).
         self.fim_prefix_id = self._stoi["1"]
         self.fim_middle_id = self._stoi["2"]
         self.fim_suffix_id = self._stoi["3"]
 
-    # --- validation ---
     def is_canonical(self, seq: str) -> bool:
         """Return whether seq is non-empty and contains only uppercase canonical amino acids."""
         return bool(seq) and all(c in RESIDUE_SET for c in seq)
 
-    # --- encode / decode ---
     def encode(self, s: str) -> list[int]:
         """Map a residue/FIM string to token ids, adding no control tokens.
 
@@ -92,13 +81,10 @@ class Tokenizer:
         n_seq = self.n_residues + self.n_fim
         return "".join(self._itos[int(i)] for i in ids if int(i) < n_seq)
 
-    # --- token-class predicates (used by the activation extractor) ---
     def is_residue(self, i: int) -> bool:
-        """Return True if token id i is a real amino-acid residue."""
         return int(i) < self.n_residues
 
     def is_fim(self, i: int) -> bool:
-        """Return True if token id i is a FIM marker."""
         return self.n_residues <= int(i) < self.n_residues + self.n_fim
 
     def residue_mask(self, ids: torch.Tensor) -> torch.Tensor:
@@ -132,7 +118,7 @@ class Tokenizer:
             return keep
         if region not in ("idr", "non_idr"):
             raise ValueError(f"region must be 'all', 'idr', or 'non_idr', got {region!r}")
-        middle = ids == self.fim_middle_id  # the '2' that opens the IDR
+        middle = ids == self.fim_middle_id
         has_mid = middle.any(dim=1)
         mid_pos = torch.where(  # index of the '2' per row; sentinel L (no IDR boundary) if absent
             has_mid,

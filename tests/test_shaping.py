@@ -25,25 +25,23 @@ def build_shaping(spec):
 
 
 def test_tolerance_is_relative_to_the_target_and_absolute_at_zero():
-    assert tolerance(25.0, 0.2) == 5.0        # 20% of 25
+    assert tolerance(25.0, 0.2) == 5.0
     assert tolerance(0.0, 0.5) == 0.5         # nothing to be relative to: width is absolute
-    assert tolerance(-4.0, 0.5) == 2.0        # a negative target still gives a positive scale
+    assert tolerance(-4.0, 0.5) == 2.0
     with pytest.raises(ValueError, match="width must be positive"):
-        tolerance(25.0, 0.0)                  # a zero width would divide by zero
+        tolerance(25.0, 0.0)
 
 
 def test_quadratic_penalty_is_zero_at_the_target_and_unbounded_away():
     assert quadratic_penalty(25.0, 25.0, 0.2) == 0.0
     assert quadratic_penalty(30.0, 25.0, 0.2) == pytest.approx(-1.0)   # one tolerance out
-    assert quadratic_penalty(20.0, 25.0, 0.2) == pytest.approx(-1.0)   # symmetric
+    assert quadratic_penalty(20.0, 25.0, 0.2) == pytest.approx(-1.0)
     assert quadratic_penalty(100.0, 25.0, 0.2) == pytest.approx(-225.0)  # does not saturate
 
 
 def test_gaussian_score_is_bounded():
     assert gaussian_score(25.0, 25.0, 0.2) == pytest.approx(1.0)
     assert gaussian_score(30.0, 25.0, 0.2) == pytest.approx(math.exp(-1.0))
-    # the bounded alternative to quadratic: a term far off target cannot swamp the rest of the sum
-    # -- but it flattens to 0 out there, so it carries no signal back toward the target either
     assert gaussian_score(1e6, 25.0, 0.2) == 0.0
 
 
@@ -53,7 +51,6 @@ def test_build_shaping_applies_a_spec():
 
 
 def test_build_shaping_without_a_spec_is_identity():
-    # a reward already on a sensible scale (a fraction, say) needs no shaping
     identity = build_shaping(None)
     assert [identity(v) for v in (0.25, 3.0)] == [0.25, 3.0]
 
@@ -68,11 +65,10 @@ def test_build_shaping_rejects_a_bad_spec():
     with pytest.raises(ValueError, match="bad arguments"):
         build_shaping({"name": "quadratic", "target": 1, "min": 2})  # an argument it does not take
     with pytest.raises(ValueError, match="width must be positive"):
-        build_shaping({"name": "quadratic", "target": 1, "width": 0})  # validated in the factory
+        build_shaping({"name": "quadratic", "target": 1, "width": 0})
 
 
 def test_a_term_can_name_a_shaping_rule_of_its_own(tmp_path):
-    # any importable factory works, named by its path (cookbook/rewards/custom_rewards.py:one_sided)
     mod = tmp_path / "my_shaping.py"
     mod.write_text(
         "from idiom.train.grpo.reward import tolerance\n"

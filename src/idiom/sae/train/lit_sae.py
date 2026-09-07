@@ -44,7 +44,7 @@ class LitSAE(L.LightningModule):
         dead_feature_tokens: int = 10_000_000,
         grad_clip_norm: float | None = None,
     ):
-        """Build the SparseCoder and record the optimizer and schedule settings.
+        """Initialize the SAE and training settings.
 
         Args:
             d_in: Input (residual-stream) dimension.
@@ -99,7 +99,7 @@ class LitSAE(L.LightningModule):
             self.sae.set_decoder_norm_to_unit_norm()
 
     def training_step(self, batch: t.Tensor, batch_idx: int):
-        """Run one step on a batch of activations, updating and logging the dead-latent counters.
+        """Compute SAE loss and update dead-latent counters.
 
         Args:
             batch: Activation rows of shape [n_tokens, d_in].
@@ -114,7 +114,6 @@ class LitSAE(L.LightningModule):
         out = self.sae(batch, dead_mask=dead_mask)
         loss = out.fvu + self.auxk_alpha * out.auxk_loss + out.multi_topk_fvu / 8
 
-        # dead-feature bookkeeping (in tokens)
         n_tok = batch.size(0)
         did_fire = t.zeros_like(self.num_tokens_since_fired, dtype=t.bool)
         did_fire[out.latent_indices.flatten()] = True
