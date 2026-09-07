@@ -28,8 +28,8 @@ class SteeringSpec:
         layer: Block to edit.
         feature_idx: One feature index or a sequence of indices.
         strength: Scalar or per-feature weights for plain addition and clamping. Normalized/relative
-            addition uses only the first value. Ablation requires a scalar subtraction factor; 0
-            falls back to 1.
+            addition uses only the first value. Ablation requires a scalar subtraction factor:
+            0 leaves activations unchanged, 1 removes the selected features' contributions.
         mode: "add_direction", "clamp" (SAE reconstruction), or "ablate" (subtract contribution).
         clamp_value: Clamp targets; defaults to strength. Scalars broadcast across features.
         normalize: Normalize the summed decoder direction before scaling by strength.
@@ -108,7 +108,7 @@ def build_steering_hook(sae, spec: SteeringSpec) -> Callable:
         values = _broadcast(_as_list(raw), len(feats), "clamp_value")
         return sae_edit_hook(sae, clamp_features_edit(feats, values))
     if spec.mode == "ablate":
-        scale = float(spec.strength) if spec.strength else 1.0  # strength == over-ablation factor (default 1)
+        scale = float(spec.strength)
         return subtract_contribution_hook(sae, feats, scale=scale)
     raise ValueError(f"Unknown steering mode {spec.mode!r}; use 'add_direction', 'clamp', or 'ablate'.")
 

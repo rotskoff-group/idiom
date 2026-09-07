@@ -58,6 +58,8 @@ def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 
     idx = torch.as_tensor(list(feature_idxs), dtype=torch.long)
 
     def hook(module, inputs, output):
+        if scale == 0:
+            return output
         f = sae.encode_dense(output)            # [B, L, num_latents]
         j = idx.to(output.device)
         contrib = f[..., j] @ sae.W_dec[j]      # [B, L, d_model] = sum_k act_k * W_dec[k]
