@@ -55,8 +55,80 @@ print(sequences[0])
 ```
 
 Weights download on first use. Inference supports CPU; a GPU is recommended.
-See the [notebooks](cookbook/notebooks/) for prompted generation, embeddings, and SAE analysis,
-or the [usage reference](cookbook/usage.md) for scoring and exporting models.
+`from_pretrained` accepts a Hub model ID or a released directory. Use `IDiom.load` to also
+accept a Lightning `.ckpt` file.
+
+### Generation and embeddings
+
+Generate IDRs within a length range and embed them:
+
+```python
+sequences = model.generate_unprompted(n=10, length_range=(80, 120))
+values, index = model.embed(sequences, layers=[18], pool="mean")[18]
+```
+
+Length filtering may return fewer sequences if it reaches the sampling limit. Embedding layers
+are zero-based block indices; `pool="mean"` averages IDR residues, while `pool="none"` returns
+per-residue rows.
+
+For prompted generation, supply a protein sequence and its 0-based, half-open IDR span:
+
+```python
+# seq is your full protein sequence; idr_start and idr_end mark its IDR.
+replacements = model.generate_prompted(seq, idr_start, idr_end, n=10)
+```
+
+To redesign proteins from an existing [record FASTA](#sequence-conventions):
+
+```python
+model.generate_prompted_fasta(
+    "proteins.fasta", "redesigned.fasta", n=10, return_full=True
+)
+```
+
+`return_full=True` inserts each generated IDR between its flanks and updates the FASTA span.
+For de novo FASTA output, use `model.generate_unprompted_fasta("idrs.fasta", n=100)` or:
+
+```bash
+idiom_generate unprompted --model jxliu2/idiom-300M --n 100 --out idrs.fasta
+```
+
+### SAE features and steering
+
+`IDiomSAE` loads the SAE with its recorded host model, layer, and prompt format:
+
+```python
+from idiom import IDiomSAE
+
+sae = IDiomSAE.from_pretrained("jxliu2/idiomsae-300M-L18-k32")
+features, accessions = sae.encode(sequences, pool="mean")
+steered = sae.steer_generate(feature=1234, strength=0.5, n=10)
+```
+
+Use `pool="none"` for per-residue features. The released SAE uses unprompted IDRs and accepts
+only `region="idr"` (its default). Steering supports `add_direction`, `clamp`, and `ablate`;
+see the [SAE notebook](cookbook/notebooks/sae_features.ipynb) for strength and normalization options.
+
+### Saving and publishing
+
+Export a checkpoint as `config.json` and `model.safetensors`:
+
+```python
+model = IDiom.load("/path/to/model.ckpt")
+model.save_pretrained("my-idiom")
+```
+
+After authenticating with Hugging Face, upload a release with:
+
+```python
+model.push_to_hub("your-account/my-idiom", private=True, model_card="# My IDiom model")
+```
+
+`IDiomSAE` also provides `save_pretrained` and `push_to_hub`, recording its host model for
+reloading. SAE releases contain `sae_config.json` and `sae.safetensors`.
+
+See the [notebooks](cookbook/notebooks/) for walkthroughs and the
+[usage reference](cookbook/usage.md) for perplexity and feature-dataset workflows.
 
 ## Models
 

@@ -14,7 +14,8 @@ Examples for generation, interpretation, and training. Start with the [installat
 | Train an SAE | [train_sae.bash](scripts/train_sae.bash) |
 | Pretrain IDiom | [pretrain.bash](scripts/pretrain.bash) |
 
-[Usage reference](usage.md): FASTA output, perplexity, feature datasets, and model export.
+[Core usage](../README.md#quickstart): generation, embeddings, SAE steering, and model export.
+[Usage reference](usage.md): perplexity and feature datasets.
 
 ## Running notebooks
 

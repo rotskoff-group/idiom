@@ -71,7 +71,7 @@ pythonpath = ["src"]
 packages = ["src/idiom"]
 
 [project.scripts]
-idiom_generate = "idiom.api:main"
+idiom_generate = "idiom.api.cli:main"
 idiom_train_autoreg = "idiom.train.autoreg.train_autoreg:main"
 idiom_train_grpo = "idiom.train.grpo.train_grpo:main"
 idiom_train_sae = "idiom.sae.train.train_sae:main"
