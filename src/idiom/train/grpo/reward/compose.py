@@ -66,7 +66,7 @@ def _parse_term(raw: dict, where: str) -> tuple[str, float, object, object]:
     if reward_spec is None:
         raise ValueError(f"{where}: a term needs a reward -- a shipped name, a 'module:function' "
                          f"path, or a mapping of either plus that factory's arguments")
-    # Use the factory name as the default metric label.
+    # Use the factory name as the default metric label
     label = term.get("label") or spec_name(reward_spec, f"{where}.reward")[0].rpartition(":")[2]
     weight = _finite(term.get("weight", 1.0), f"{where} ({label!r}).weight")
     return label, weight, reward_spec, term.get("shaping")

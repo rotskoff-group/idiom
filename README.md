@@ -82,7 +82,7 @@ averaged over its IDR residues; `pool="none"` returns per-residue rows. Each lay
 For prompted generation, supply a protein sequence and its 0-based, half-open IDR span:
 
 ```python
-# Toy example: replace seq[3:9], keeping the flanks.
+# Toy example: replace seq[3:9], keeping the flanks
 seq = "MEDSKVDNRPQACDEFG"
 replacements = model.generate_prompted(seq, idr_start=3, idr_end=9, n=10)
 ```

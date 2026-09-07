@@ -95,7 +95,7 @@ class SparseCoder(nn.Module):
                 f"groupmax requires num_latents ({self.num_latents}) divisible by k ({k})"
             )
 
-        # k stored as a buffer so checkpoints are self-contained.
+        # k stored as a buffer so checkpoints are self-contained
         self.register_buffer("k", torch.tensor(int(k), dtype=torch.long))
 
         self.encoder = nn.Linear(d_in, self.num_latents, device=device, dtype=dtype)
@@ -182,7 +182,7 @@ class SparseCoder(nn.Module):
         e = x - sae_out
         total_variance = (x - x.mean(0)).pow(2).sum()
 
-        # AuxK: encourage the top ~half of dead latents to predict the residual.
+        # AuxK: encourage the top ~half of dead latents to predict the residual
         if dead_mask is not None and (num_dead := int(dead_mask.sum())) > 0:
             k_aux = x.shape[-1] // 2  # heuristic from Gao et al. Appendix B.1
             scale = min(num_dead / k_aux, 1.0)

@@ -3,8 +3,8 @@
 set -euo pipefail
 
 # GRPO toward phase-separation thermodynamics, scored by PSpred. dG is transfer free energy in kT.
-# Base generations average -0.1 (sd 0.8); LAF1, a 170-residue LLPS driver, reaches -6.1.
-# Needs: 1 GPU, ~12 h.
+# Base generations average -0.1 (sd 0.8); LAF1, a 170-residue LLPS driver, reaches -6.1
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-pspred"  # EDIT: run output directory
@@ -21,7 +21,7 @@ export WANDB_MODE=offline
 
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# Entropy and length terms discourage low-complexity or extreme-length solutions.
+# Entropy and length terms discourage low-complexity or extreme-length solutions
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

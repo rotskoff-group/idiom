@@ -31,7 +31,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - run: uv venv
-      # Install CPU torch first to avoid downloading unused CUDA dependencies.
+      # Install CPU torch first to avoid downloading unused CUDA dependencies
       - run: uv pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: uv pip install -e . --group dev
       - run: uv run --no-sync pytest   # --no-sync: plain `uv run` would re-sync from uv.lock

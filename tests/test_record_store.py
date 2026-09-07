@@ -8,7 +8,7 @@ from idiom.data.dataset import RecordDataset
 from idiom.data.io import read_records
 from idiom.data.record_store import RecordStore, build_record_store, open_or_build, store_path_for
 
-# Wrapped FASTA records include valid entries, a non-canonical sequence, and invalid spans.
+# Wrapped FASTA records include valid entries, a non-canonical sequence, and invalid spans
 FASTA = """\
 >P1_IDR_2-5
 MKLVQRST
@@ -62,7 +62,7 @@ def test_dataset_parity_store_vs_list(tmp_path):
 
 def test_length_filter_parity(tmp_path):
     fasta = _write(tmp_path)
-    # max_len small enough that the 10-residue P5 record (full example = 14 positions) is dropped.
+    # max_len small enough that the 10-residue P5 record (full example = 14 positions) is dropped
     max_len = 12
     ds_list = RecordDataset(read_records(fasta), max_len=max_len)
     ds_store = RecordDataset(open_or_build(fasta), max_len=max_len)

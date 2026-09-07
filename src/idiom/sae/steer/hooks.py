@@ -150,7 +150,7 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
         def _capture(_module, args):
             tok_in = args[0]
             prev = latest.get("tokens")
-            # Prefill replaces the context; cached single-token decoding extends it.
+            # Prefill replaces the context; cached single-token decoding extends it
             if prev is None or tok_in.shape[1] > 1:
                 latest["tokens"] = tok_in
             else:

@@ -14,7 +14,7 @@ import numpy as np
 
 from idiom.data.io import Record, parse_idr_header, read_fasta
 
-# Defaults used to build the published signatures.
+# Defaults used to build the published signatures
 MIN_TOTAL_FIRE = 5
 FDR_ALPHA = 1e-3
 SMOOTH = 0.5            # Haldane-Anscombe pseudocount added to all four contingency cells

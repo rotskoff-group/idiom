@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-# GRPO toward transcriptional activation strength, scored by PADDLE (max Z over 53-residue windows).
-# Already a Z-score, so unshaped: base +0.9 (sd 1.7), strong natural ADs 3-8. ~3 s per step.
-# Needs: 1 GPU, ~16 h.
+# GRPO toward transcriptional activation strength, scored by PADDLE (max Z over 53-residue windows)
+# Already a Z-score, so unshaped: base +0.9 (sd 1.7), strong natural ADs 3-8
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-paddle"  # EDIT: run output directory
@@ -19,7 +19,7 @@ export WANDB_MODE=offline
 
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# Entropy and length terms discourage low-complexity or extreme-length solutions.
+# Entropy and length terms discourage low-complexity or extreme-length solutions
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-# Combine FINCHES interaction scores and ProtGPS compartment probabilities.
-# Needs: 1 GPU, ~16 h.
+# Combine FINCHES interaction scores and ProtGPS compartment probabilities
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-combined"  # EDIT: run output directory
@@ -20,14 +20,14 @@ FINCHES="uv run --script cookbook/rewards/scorers/finches.py --mode homotypic --
 PROTGPS="uv run --script cookbook/rewards/scorers/protgps.py --compartment $COMPARTMENT"
 
 export WANDB_MODE=offline
-# The pinned CUDA build fails on H100; batching can change a sequence's probability.
+# The pinned CUDA build fails on H100; batching can change a sequence's probability
 export IDIOM_PROTGPS_DEVICE=cpu
 export PROTGPS_BATCH=1
 
 python -m idiom.train.grpo.reward.external --cmd "$FINCHES"
 python -m idiom.train.grpo.reward.external --cmd "$PROTGPS"
 
-# ProtGPS is length-sensitive; add a length term if generations drift long.
+# ProtGPS is length-sensitive; add a length term if generations drift long
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

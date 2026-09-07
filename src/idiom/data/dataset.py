@@ -18,7 +18,7 @@ from idiom.data.io import Record
 from idiom.data.record_store import RecordStore
 from idiom.data.tokenizer import Tokenizer
 
-# Each input needs START and three FIM markers in addition to its residues.
+# Each input needs START and three FIM markers in addition to its residues
 FIM_OVERHEAD = 4
 
 
@@ -114,7 +114,7 @@ class RecordDataset(Dataset):
         variant = PROMPTED if self._rng.random() < self.prompted_prob else UNPROMPTED
         x, y = record_to_example(rec, self.tok, variant=variant)
         if self.completion_only:
-            # The final targets are the IDR residues followed by STOP.
+            # The final targets are the IDR residues followed by STOP
             idr_len = rec.idr_end - rec.idr_start
             mask = torch.zeros(y.size(0), dtype=torch.bool)
             mask[-(idr_len + 1) :] = True

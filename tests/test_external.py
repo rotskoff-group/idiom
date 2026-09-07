@@ -234,7 +234,7 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
             def FCR(self):
                 return 0.25
     """))
-    # Disable site-packages to test the protocol without IDiom or training dependencies.
+    # Disable site-packages to test the protocol without IDiom or training dependencies
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
     scorer = ScorerProcess([sys.executable, "-S", str(REPO / "cookbook/rewards/scorers/sparrow.py"),
                      "--property", "radius_of_gyration"], timeout=30)

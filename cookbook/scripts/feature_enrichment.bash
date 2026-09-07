@@ -8,9 +8,9 @@ cd "$REPO"
 SAE=jxliu2/idiomsae-300M-L18-k32
 POSITIVE=cookbook/example_data/protgps/nucleolus.fasta  # EDIT
 
-# Omitting --background downloads the held-out validation FASTA from jxliu2/idiom-data.
+# Omitting --background downloads the held-out validation FASTA from jxliu2/idiom-data
 # To use your own background, add: --background /path/to/background.fasta
-# All valid positives are used; add --max-positive 128 for a smaller run.
+# All valid positives are used; add --max-positive 128 for a smaller run
 idiom_feature_enrichment \
     --sae "$SAE" \
     --positive "$POSITIVE" \

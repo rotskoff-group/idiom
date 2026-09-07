@@ -33,7 +33,7 @@ def test_context_clamped_grpo_rollout_can_be_rescored():
     cfg = ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=8)
     lit = LitGRPO(cfg, proline_terms(), group_size=2, max_new_tokens=100,
                   temperature=0, log_samples_every=0)
-    # Equal logits force greedy residue 0, so no STOP shortens the boundary-length rollout.
+    # Equal logits force greedy residue 0, so no STOP shortens the boundary-length rollout
     with torch.no_grad():
         lit.model.lm_head.weight.zero_()
     with pytest.warns(UserWarning, match="remaining context"):

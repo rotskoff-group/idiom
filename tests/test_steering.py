@@ -22,7 +22,7 @@ def test_steering_context_only_edits_residues():
     direction = torch.ones(TINY.d_model)
     with steering(model, 0, add_direction_hook(direction, 5.0), tokenizer=TOK):
         steered = model(tokens)
-    # logits change somewhere (edit applied), but START/markers were left unsteered.
+    # logits change somewhere (edit applied), but START/markers were left unsteered
     assert not torch.allclose(base, steered)
 
 

@@ -3,21 +3,21 @@
 set -euo pipefail
 
 # GRPO toward a reward you wrote, running in this interpreter. Pick one objective below.
-# Factories are loaded by path from custom_rewards.py.
-# Use custom_scorer.bash when the reward needs a separate environment.
-# Needs: 1 GPU, ~12 h.
+# Factories are loaded by path from custom_rewards.py
+# Use custom_scorer.bash when the reward needs a separate environment
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-my-reward"  # EDIT: run output directory
 
 cd "$REPO"
 
-# Optional entropy and length terms discourage low-complexity or extreme-length solutions.
+# Optional entropy and length terms discourage low-complexity or extreme-length solutions
 # ENTROPY='{label: entropy, weight: 1.0, reward: entropy, shaping: {name: quadratic, target: 3.65, width: 0.2}}'
 # LENGTH='{label: length,  weight: 1.0, reward: length,  shaping: {name: quadratic, target: 100,  width: 1.0}}'
 
-# EDIT: pick ONE.
-# Accept charged fractions >= 0.30; penalize lower values quadratically (-1 at 0.15).
+# EDIT: pick ONE
+# Accept charged fractions >= 0.30; penalize lower values quadratically (-1 at 0.15)
 MINE="{label: fcr, \
     weight: 1.0, \
     reward: \"cookbook/rewards/custom_rewards.py:fraction_charged\", \

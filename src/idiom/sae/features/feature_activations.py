@@ -56,7 +56,7 @@ class FeatureDataset:
         self.layer = int(meta["layer"])
         self.region = str(meta.get("region", "all"))
 
-        # Sequence s occupies _order[_offsets[s]:_offsets[s + 1]].
+        # Sequence s occupies _order[_offsets[s]:_offsets[s + 1]]
         seq = np.asarray(self.seq_idx[:], dtype=np.int64)
         self.n_seqs = len(self.strings)
         self._order = np.argsort(seq, kind="stable").astype(np.int64)
@@ -69,7 +69,7 @@ class FeatureDataset:
         s = self.strings[int(local_seq_idx)]
         return s.decode("utf-8") if isinstance(s, bytes) else str(s)
 
-    # Chunk reductions to bound memory use for memory-mapped datasets.
+    # Chunk reductions to bound memory use for memory-mapped datasets
     CHUNK_ROWS = 1_000_000
 
     def _row_chunks(self):

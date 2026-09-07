@@ -4,7 +4,7 @@ set -euo pipefail
 
 # GRPO toward an SAE feature signature (RL-SAE). Scores the fraction of a signature firing in an
 # IDR; already in [0, 1], so no shaping. Run the feature_enrichment notebook first to write the signature.
-# Needs: 1 GPU, ~12 h.
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-sae"  # EDIT: run output directory
@@ -13,7 +13,7 @@ cd "$REPO"
 
 SIGNATURE=nucleolus                     # EDIT: the NAME the feature_enrichment notebook wrote
 
-# The signature JSON the feature_enrichment notebook writes.
+# The signature JSON the feature_enrichment notebook writes
 FEATURES="/path/to/signature.json"       # EDIT: notebook output
 CASE=top30                              # EDIT: the CASE the feature_enrichment notebook wrote
 
@@ -25,7 +25,7 @@ if [[ ! -f "$FEATURES" ]]; then
     exit 1
 fi
 
-# Entropy and length terms discourage low-complexity or extreme-length solutions.
+# Entropy and length terms discourage low-complexity or extreme-length solutions
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

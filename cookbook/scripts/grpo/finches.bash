@@ -3,8 +3,8 @@
 set -euo pipefail
 
 # GRPO toward attractive interaction chemistry, scored by FINCHES. Negative epsilon is attractive.
-# Base generations average +3.6 (sd 7.0); an FUS-LC-like aromatic tract is about -8.5.
-# Needs: 1 GPU, ~12 h.
+# Base generations average +3.6 (sd 7.0); an FUS-LC-like aromatic tract is about -8.5
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-finches"  # EDIT: run output directory
@@ -22,7 +22,7 @@ export WANDB_MODE=offline
 
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# Entropy and length terms discourage low-complexity or extreme-length solutions.
+# Entropy and length terms discourage low-complexity or extreme-length solutions
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

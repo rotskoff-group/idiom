@@ -94,7 +94,7 @@ launcher and use its ranks. For example, save this as a batch script and submit 
 #SBATCH --cpus-per-task=8
 set -euo pipefail
 
-# Activate the same IDiom environment on every node; use shared paths for data and output.
+# Activate the same IDiom environment on every node; use shared paths for data and output
 source /shared/path/to/idiom/.venv/bin/activate
 export WANDB_MODE=offline
 srun idiom_train_autoreg \

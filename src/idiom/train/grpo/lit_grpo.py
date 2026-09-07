@@ -144,12 +144,12 @@ class LitGRPO(L.LightningModule):
         start = torch.full((BG, 1), self.tok.start_id, dtype=torch.long, device=rep.device)
         full = torch.cat([start, rep, completions], dim=1)  # [B*G, 1+P+T]
 
-        # Align the completion mask with full[:, 1:], excluding padding.
+        # Align the completion mask with full[:, 1:], excluding padding
         mask = torch.zeros(BG, P + T, device=rep.device)
         mask[:, P:] = (completions != self.tok.pad_id).float()
 
         idrs = [self._decode_idr(completions[i]) for i in range(BG)]
-        # Score the whole step in one batch to amortize external scorer calls.
+        # Score the whole step in one batch to amortize external scorer calls
         totals, breakdown = self.reward_terms(idrs, self.group_size)
         rewards = torch.tensor(totals, device=rep.device, dtype=torch.float)
         advantages = group_advantages(rewards, self.group_size, normalize=self.normalize_advantage)
@@ -176,7 +176,7 @@ class LitGRPO(L.LightningModule):
             "train/seq_len": seq_len.mean(),
             "train/seq_entropy": seq_ent.mean(),
         }
-        # Log both raw rewards and weighted contributions to the objective.
+        # Log both raw rewards and weighted contributions to the objective
         if breakdown:
             for key in breakdown[0]:
                 if key == "total":

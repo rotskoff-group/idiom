@@ -65,7 +65,7 @@ def build():
             for w in _windows(seq):
                 flat.append(w)
                 owner.append(i)
-        # PADDLE returns a scalar for a single window.
+        # PADDLE returns a scalar for a single window
         preds = np.atleast_1d(model.predict(flat))
         best: dict[int, float] = {}
         for i, z in zip(owner, preds):

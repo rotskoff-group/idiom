@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-# Optimize STARLING ensemble dimensions.
-# Use a separate scorer GPU, or unset SCORER_CUDA_DEVICE to share one.
-# Needs: 2 GPUs, ~24 h.
+# Optimize STARLING ensemble dimensions
+# Use a separate scorer GPU, or unset SCORER_CUDA_DEVICE to share one
+# Needs: 2 GPUs
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-starling"  # EDIT: run output directory
@@ -15,7 +15,7 @@ PROPERTY=radius_of_gyration             # EDIT: radius_of_gyration | end_to_end_
 TARGET=25                               # EDIT: in angstroms
 WIDTH=0.2                               # EDIT: tolerance as a fraction of the target
 WEIGHT=1.0
-TIMEOUT=900.0                           # ~9 s per step
+TIMEOUT=900.0
 SCORER_CUDA_DEVICE=1                    # EDIT: the scorer's GPU
 SCORER="env CUDA_VISIBLE_DEVICES=$SCORER_CUDA_DEVICE uv run --script cookbook/rewards/scorers/starling.py --property $PROPERTY"
 
@@ -24,7 +24,7 @@ export CUDA_VISIBLE_DEVICES=0           # the policy keeps GPU 0
 
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# Entropy and length terms discourage low-complexity or extreme-length solutions.
+# Entropy and length terms discourage low-complexity or extreme-length solutions
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

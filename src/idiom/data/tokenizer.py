@@ -13,7 +13,7 @@ from collections.abc import Iterable
 
 import torch
 
-# Residue order fixes the trained vocabulary; changing it invalidates model weights.
+# Residue order fixes the trained vocabulary; changing it invalidates model weights
 RESIDUES = "ACDEFGHIKLMNPQRSTVWY"
 RESIDUE_SET = frozenset(RESIDUES)
 FIM = "123"

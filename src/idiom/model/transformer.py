@@ -92,7 +92,7 @@ class IDiomTransformer(nn.Module):
         if cfg.tie_embeddings:
             self.lm_head.weight = self.embed.weight
 
-        # Small initial weights limit logits; scaled output projections limit variance growth with depth.
+        # Small initial weights limit logits; scaled output projections limit variance growth with depth
         for module in self.modules():  # not self.apply(): Rope defines its own .apply(q,k,positions)
             self._init_weights(module)
         for name, p in self.named_parameters():

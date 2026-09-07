@@ -59,7 +59,7 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
         fim = build(rec.full_seq, rec.idr_start, rec.idr_end)
         tokens = torch.tensor([tok.start_id, *tok.encode(fim)], device=device)[None]
         acts = extract_activations(model, tokens, layers, tokenizer=tok, drop_markers=True)
-        # extracted residue rows are in FIM order (markers dropped) — same order as src.
+        # extracted residue rows are in FIM order (markers dropped) — same order as src
         src = residue_source_positions(len(rec.full_seq), rec.idr_start, rec.idr_end, variant)
         is_idr = np.array([rec.idr_start <= p < rec.idr_end for p in src])
 

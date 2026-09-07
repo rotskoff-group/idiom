@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-# Generate de novo IDRs and write them to a FASTA.
-# A GPU is recommended; reduce BATCH_SIZE to use less memory.
+# Generate de novo IDRs and write them to a FASTA
+# A GPU is recommended; reduce BATCH_SIZE to use less memory
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/generate"  # EDIT: output directory

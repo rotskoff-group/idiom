@@ -42,7 +42,7 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     )
     record_loader = DataLoader(
         records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id),
-        # Shuffle to avoid training only on the file head when max_steps is finite.
+        # Shuffle to avoid training only on the file head when max_steps is finite
         shuffle=cfg.data.get("shuffle", True),
     )
     store = ActivationStore(
@@ -91,7 +91,7 @@ def run(cfg: DictConfig) -> None:
         **OmegaConf.to_container(cfg.trainer, resolve=True), logger=wandb_logger, default_root_dir=out_dir
     )
     trainer.fit(lit, train_dataloaders=dl, ckpt_path=cfg.get("resume_from"))
-    # Any mixture with flanking context is recorded as prompted.
+    # Any mixture with flanking context is recorded as prompted
     fim_mode = UNPROMPTED if float(cfg.data.get("prompted_prob", 0.5)) == 0.0 else PROMPTED
     save_sae(
         lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer,

@@ -1,4 +1,4 @@
-# Stream activations from a frozen IDiom for SAE training.
+# Stream activations from a frozen IDiom for SAE training
 #   idiom_train_sae model_ckpt=jxliu2/idiom-300M data.fasta=/path/records.fasta layer=18
 seed: 0
 device: auto
@@ -36,7 +36,7 @@ trainer:
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/sae
 
-# IDIOM_OUT overrides the output root.
+# IDIOM_OUT overrides the output root
 hydra:
   run:
     dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

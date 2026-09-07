@@ -111,7 +111,7 @@ def generate(
         raise ValueError(
             f"Prompt including START has {inp.size(1)} tokens, exceeding context length {context_length}"
         )
-    # The last supported input position can predict one final token without another forward.
+    # The last supported input position can predict one final token without another forward
     available = context_length - inp.size(1) + 1
     if max_new_tokens > available:
         warnings.warn(

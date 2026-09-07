@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-# Warm-start a released model and specialize it on one curated set (completion-only loss).
-# The example set is whole-sequence IDRs with no flanks, so train unprompted (data.prompted_prob=0.0).
-# Needs: 1 GPU, ~8 h.
+# Warm-start a released model and specialize it on one curated set (completion-only loss)
+# The example set is whole-sequence IDRs with no flanks, so train unprompted (data.prompted_prob=0.0)
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/sft"  # EDIT: run output directory

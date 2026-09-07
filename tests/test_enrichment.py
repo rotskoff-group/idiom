@@ -85,7 +85,7 @@ def test_two_sided_p_matches_normal():
 def test_enrich_separates_signal_from_noise():
     n_latents = 4
     n_pos, n_neg = 100, 1000
-    # Feature 0 is enriched, feature 1 is neutral, and feature 2 has too few firings to test.
+    # Feature 0 is enriched, feature 1 is neutral, and feature 2 has too few firings to test
     a = np.array([100.0, 50.0, 1.0, 0.0])
     b = np.array([0.0, 500.0, 0.0, 0.0])
     r = enrich(a, n_pos, b, n_neg, n_latents)
@@ -109,7 +109,7 @@ def test_top_features_ranks_by_log2or(tmp_path):
 
 
 def test_boundary_features_flags_terminal_firing(tmp_path):
-    # Residues occupy FIM positions 3..17; edge=2 selects positions <=5 or >=15.
+    # Residues occupy FIM positions 3..17; edge=2 selects positions <=5 or >=15
     n_res = 15
     per_seq = [[7, 5]] * 4
     vals = []
@@ -154,7 +154,7 @@ def _rec(acc, length, start=0):
 
 
 def test_length_match_follows_the_positive_length_distribution():
-    # Length matching should prevent length-sensitive features from appearing enriched.
+    # Length matching should prevent length-sensitive features from appearing enriched
     rng = np.random.default_rng(0)
     positives = [_rec(f"p{i}", 10) for i in range(20)]
     background = [_rec(f"s{i}", 10) for i in range(100)] + [_rec(f"l{i}", 300) for i in range(100)]
@@ -164,7 +164,7 @@ def test_length_match_follows_the_positive_length_distribution():
 
 
 def test_length_match_tops_up_when_a_bin_cannot_be_filled():
-    # Underfilled length bins must draw from the remaining pool.
+    # Underfilled length bins must draw from the remaining pool
     rng = np.random.default_rng(0)
     positives = [_rec(f"p{i}", 10) for i in range(20)]
     background = [_rec(f"s{i}", 10) for i in range(5)] + [_rec(f"l{i}", 300) for i in range(100)]

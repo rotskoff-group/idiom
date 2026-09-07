@@ -67,7 +67,7 @@ def build():
     import predictor
     from predictor import X_from_seq
 
-    # Notebook pickles resolve model classes through __main__.
+    # Notebook pickles resolve model classes through __main__
     import __main__
     for name in dir(predictor):
         if not name.startswith("_") and not hasattr(__main__, name):

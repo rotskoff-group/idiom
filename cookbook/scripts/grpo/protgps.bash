@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-# Optimize ProtGPS compartment probabilities without shaping.
-# Needs: 1 GPU, ~12 h.
+# Optimize ProtGPS compartment probabilities without shaping
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-protgps"  # EDIT: run output directory
@@ -15,13 +15,13 @@ WEIGHT=1.0
 SCORER="uv run --script cookbook/rewards/scorers/protgps.py --compartment $COMPARTMENT"
 
 export WANDB_MODE=offline
-# The pinned CUDA build fails on H100; batching can change a sequence's probability.
+# The pinned CUDA build fails on H100; batching can change a sequence's probability
 export IDIOM_PROTGPS_DEVICE=cpu
 export PROTGPS_BATCH=1
 
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# ProtGPS is length-sensitive; this objective uses entropy regularization without a length term.
+# ProtGPS is length-sensitive; this objective uses entropy regularization without a length term
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

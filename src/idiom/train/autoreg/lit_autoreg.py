@@ -50,7 +50,7 @@ class LitAutoregressive(L.LightningModule):
         """
         super().__init__()
         self.cfg = cfg
-        # Store the architecture so checkpoint loaders can reconstruct the model.
+        # Store the architecture so checkpoint loaders can reconstruct the model
         self.save_hyperparameters({"model_cfg": asdict(cfg)})
         self.model = IDiomTransformer(cfg)
         self.lr = lr

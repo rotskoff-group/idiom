@@ -99,7 +99,7 @@ def test_nothing_shipped_names_a_path_outside_the_package():
 
     cfgdir = Path(idiom.configs.__file__).parent
     for yaml in sorted(cfgdir.glob("*.yaml")):
-        # Avoid resolving Hydra runtime interpolations such as ${now:...}.
+        # Avoid resolving Hydra runtime interpolations such as ${now:...}
         blob = OmegaConf.to_container(OmegaConf.load(yaml), resolve=False)
         for value in _strings(blob):
             if value.startswith("${"):

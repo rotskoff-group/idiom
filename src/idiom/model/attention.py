@@ -32,7 +32,7 @@ class KVCache:
         """
         self.k: list[Tensor | None] = [None] * n_layers
         self.v: list[Tensor | None] = [None] * n_layers
-        self.length = 0  # Advanced by the transformer once per forward.
+        self.length = 0  # Advanced by the transformer once per forward
 
     def update(self, layer: int, k: Tensor, v: Tensor) -> tuple[Tensor, Tensor]:
         """Append k and v ([B, H, L_new, head_dim]) to the selected layer in place.

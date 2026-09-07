@@ -67,7 +67,7 @@ def run(cfg: DictConfig) -> None:
         project=cfg.get("wandb_project", "idiom-grpo"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
     wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
-    # Use training steps for the W&B x-axis; its default step counts log flushes.
+    # Use training steps for the W&B x-axis; its default step counts log flushes
     try:
         wandb_logger.experiment.define_metric("trainer/global_step")
         wandb_logger.experiment.define_metric("*", step_metric="trainer/global_step")
@@ -76,7 +76,7 @@ def run(cfg: DictConfig) -> None:
     trainer_cfg = OmegaConf.to_container(cfg.trainer, resolve=True)
     ckpt_every = trainer_cfg.pop("checkpoint_every", 0)
     max_steps = trainer_cfg.get("max_steps") or None
-    # Disable epoch-end saves; checkpoint_every=0 saves only the final step.
+    # Disable epoch-end saves; checkpoint_every=0 saves only the final step
     callbacks = [ModelCheckpoint(
         dirpath=out_dir / "checkpoints",
         every_n_train_steps=ckpt_every or max_steps,

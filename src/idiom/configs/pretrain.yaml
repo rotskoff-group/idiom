@@ -47,7 +47,7 @@ trainer: # global batch 1024 = 32/GPU * 8 GPUs * accum 4
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/pretrain
 
-# IDIOM_OUT overrides the output root.
+# IDIOM_OUT overrides the output root
 hydra:
   run:
     dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

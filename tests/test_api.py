@@ -36,7 +36,7 @@ def test_generate_prompted_and_fasta(tmp_path):
     assert len(seqs) == 2
 
     in_fa = tmp_path / "in.fasta"
-    # Sample to avoid immediate greedy STOP; compare with the same-seed non-empty outputs.
+    # Sample to avoid immediate greedy STOP; compare with the same-seed non-empty outputs
     in_fa.write_text(">A_IDR_4-8\nMEDSKVDNRPQ\n")
     kw = dict(n=8, max_new_tokens=6, temperature=1.0, seed=0)
     expected = sum(bool(s) for s in m.generate_prompted("MEDSKVDNRPQ", 3, 8, **kw))
@@ -50,7 +50,7 @@ def test_generate_cli(tmp_path):
 
     _idiom().save_pretrained(tmp_path / "rel")
     out = tmp_path / "idps.fasta"
-    # Sample to avoid immediate greedy STOP after reloading.
+    # Sample to avoid immediate greedy STOP after reloading
     m = IDiom.from_pretrained(tmp_path / "rel")
     expected = sum(bool(s) for s in m.generate_unprompted(n=8, max_new_tokens=6, temperature=1.0, seed=0))
     assert expected > 0

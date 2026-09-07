@@ -10,7 +10,7 @@ import importlib
 import importlib.util
 from collections.abc import Callable
 
-# Batch rewards return one raw score per IDR in input order.
+# Batch rewards return one raw score per IDR in input order
 Reward = Callable[[list[str]], list[float]]
 
 _BUILTIN = "idiom.train.grpo.reward.builtin"

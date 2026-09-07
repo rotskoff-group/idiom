@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-# Replace annotated IDRs using their flanking protein context from the bundled DisProt FASTA.
-# Headers must end in _IDR_x-y (1-based, inclusive); preserve the full sequences and spans.
-# A GPU is recommended; reduce BATCH_SIZE to use less memory.
+# Replace annotated IDRs using their flanking protein context from the bundled DisProt FASTA
+# Headers must end in _IDR_x-y (1-based, inclusive); preserve the full sequences and spans
+# A GPU is recommended; reduce BATCH_SIZE to use less memory
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/generate-prompted"  # EDIT: output directory

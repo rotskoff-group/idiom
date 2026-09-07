@@ -19,7 +19,7 @@ def test_per_sequence_activations_regroups_rows_by_accession():
 
 
 def test_per_sequence_activations_orders_rows_by_source_position():
-    # Encoder rows may be shuffled; logo windows must follow source-residue order.
+    # Encoder rows may be shuffled; logo windows must follow source-residue order
     index = [{"accession": "A", "source_pos": 2, "residue": "V"},
              {"accession": "A", "source_pos": 0, "residue": "M"},
              {"accession": "A", "source_pos": 1, "residue": "K"}]

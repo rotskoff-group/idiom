@@ -73,7 +73,7 @@ class LitSAE(L.LightningModule):
             normalize_decoder=normalize_decoder,
         )
 
-        # LR auto-scaling from sparsify (smaller LR for wider dictionaries).
+        # LR auto-scaling from sparsify (smaller LR for wider dictionaries)
         if lr is None:
             lr = 2e-4 / (self.sae.num_latents / (2**14)) ** 0.5
         self.lr = lr

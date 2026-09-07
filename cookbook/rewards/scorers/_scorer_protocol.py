@@ -8,7 +8,7 @@ import sys
 
 def serve(build):
     """Load a scorer once and serve validated JSON batches until stdin closes."""
-    # Import this helper before removing the directory: sparrow.py must not shadow sparrow.
+    # Import this helper before removing the directory: sparrow.py must not shadow sparrow
     here = os.path.dirname(os.path.abspath(__file__))
     sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]
     out, sys.stdout = sys.stdout, sys.stderr

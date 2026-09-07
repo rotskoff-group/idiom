@@ -2,7 +2,7 @@
 
 import os
 
-# Must be set before any idiom import resolves a device.
+# Must be set before any idiom import resolves a device
 os.environ.setdefault("IDIOM_DEVICE", "cpu")
 
 import pytest

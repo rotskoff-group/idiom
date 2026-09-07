@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-# Optimize single-chain dimensions predicted by sparrow (ALBATROSS).
-# Needs: 1 GPU, ~12 h.
+# Optimize single-chain dimensions predicted by sparrow (ALBATROSS)
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-sparrow"  # EDIT: run output directory
@@ -20,7 +20,7 @@ export WANDB_MODE=offline
 
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# Entropy and length terms discourage low-complexity or extreme-length solutions.
+# Entropy and length terms discourage low-complexity or extreme-length solutions
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

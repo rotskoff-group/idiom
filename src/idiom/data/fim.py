@@ -12,7 +12,7 @@ from __future__ import annotations
 
 PREFIX, MIDDLE, SUFFIX = "1", "2", "3"
 
-# Prompting mode controls flanking context; SAE region controls residue selection.
+# Prompting mode controls flanking context; SAE region controls residue selection
 PROMPTED, UNPROMPTED = "prompted", "unprompted"
 
 

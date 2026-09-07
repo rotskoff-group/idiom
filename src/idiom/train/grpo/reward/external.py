@@ -160,7 +160,7 @@ class ScorerProcess:
         atexit.unregister(self.stop)
         if proc is None:
             return
-        # Signal the group even if its leader exited: descendants may still hold pipes or GPUs.
+        # Signal the group even if its leader exited: descendants may still hold pipes or GPUs
         try:
             os.killpg(proc.pid, signal.SIGTERM)
         except ProcessLookupError:

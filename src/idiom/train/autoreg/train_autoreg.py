@@ -78,7 +78,7 @@ def run(cfg: DictConfig) -> None:
     if not has_val:
         trainer_kw["limit_val_batches"] = 0
         trainer_kw["num_sanity_val_steps"] = 0
-    # Only the rolling callback writes last.ckpt; validation saves the three best models.
+    # Only the rolling callback writes last.ckpt; validation saves the three best models
     ckpt_dir = out_dir / "checkpoints"
     every_n = int(cfg.get("ckpt_every_n_steps", 2000))
     callbacks = [
@@ -90,7 +90,7 @@ def run(cfg: DictConfig) -> None:
             dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3,
             filename="epoch_{epoch}_step_{step}", auto_insert_metric_name=False,
         ))
-    # Spawn local ranks for single-node jobs; use launcher-provided ranks for multi-node jobs.
+    # Spawn local ranks for single-node jobs; use launcher-provided ranks for multi-node jobs
     plugins = [LightningEnvironment()] if trainer_kw.get("num_nodes", 1) == 1 else None
     trainer = L.Trainer(
         **trainer_kw,

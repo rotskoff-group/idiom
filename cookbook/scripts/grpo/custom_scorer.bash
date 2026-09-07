@@ -4,7 +4,7 @@ set -euo pipefail
 
 # GRPO toward a reward model you wrote, running in its own environment. Copy the template at
 # cookbook/rewards/scorers/custom_scorer.py. Use this only when its deps cannot coexist with IDiom's.
-# Needs: 1 GPU, ~8 h.
+# Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
 OUT="/path/to/output/grpo-my-scorer"  # EDIT: run output directory
@@ -21,7 +21,7 @@ export WANDB_MODE=offline
 
 python -m idiom.train.grpo.reward.external --cmd "$SCORER"
 
-# Entropy and length terms discourage low-complexity or extreme-length solutions.
+# Entropy and length terms discourage low-complexity or extreme-length solutions
 ENTROPY="{label: entropy, \
     weight: 1.0, \
     reward: entropy, \

@@ -22,7 +22,7 @@ def _loader(completion_only=False):
 
 
 def test_sft_mask_is_completion_only():
-    # SFT: only the IDR (idr_len residues) + STOP carry loss.
+    # SFT: only the IDR (idr_len residues) + STOP carry loss
     ds = RecordDataset(RECS, TOK, prompted_prob=1.0, completion_only=True)
     _, y, mask = ds[0]
     idr_len = RECS[0].idr_end - RECS[0].idr_start

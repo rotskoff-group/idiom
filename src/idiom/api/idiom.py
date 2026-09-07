@@ -136,7 +136,7 @@ class IDiom:
         prompt_ids = torch.tensor(self.tok.encode(prompt), device=self.device)
 
         def _batch(k: int, s: int | None) -> list[str]:
-            # Reuse the RNG across chunks; reproducibility depends on batch_size.
+            # Reuse the RNG across chunks; reproducibility depends on batch_size
             gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
             bs = 8 if batch_size is None else batch_size
             if bs <= 0:
