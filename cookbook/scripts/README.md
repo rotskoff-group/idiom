@@ -10,6 +10,7 @@ Editable Bash examples for generation, feature extraction, and training. Start w
 | [generate.bash](generate.bash) | Generate de novo IDRs to FASTA |
 | [generate_prompted.bash](generate_prompted.bash) | Replace IDRs in flanking protein context |
 | [feature_dataset.bash](feature_dataset.bash) | Build a per-residue SAE feature dataset |
+| [feature_enrichment.bash](feature_enrichment.bash) | Compare IDR sets and export an enriched SAE feature signature |
 | [sft.bash](sft.bash) | Fine-tune on a sequence set |
 | [train_sae.bash](train_sae.bash) | Train and export an SAE |
 | [pretrain.bash](pretrain.bash) | Pretrain IDiom from scratch |
@@ -18,6 +19,23 @@ Editable Bash examples for generation, feature extraction, and training. Start w
 See the [reward guide](../rewards/README.md#examples) for the GRPO objectives and scorer setup.
 Demo inputs and their provenance are described in [example_data/](../example_data/).
 The [SAE notebook](../notebooks/sae_features.ipynb) shows how to inspect a feature dataset.
+
+`idiom_feature_enrichment` accepts `--positive` and an optional local `--background` FASTA.
+Omitting the background downloads `training_sequences/validation.fasta` from `jxliu2/idiom-data`.
+Headers use `_IDR_x-y` spans; missing or unusable spans treat the whole sequence as the IDR.
+The command uses all valid positives by default, excludes exact positive IDR matches from the
+background, and samples an approximately length-matched background (default target: 10,000).
+Use `--max-positive` and `--max-background` for smaller runs; building holds records and
+activation arrays in host memory. A GPU is recommended.
+
+Use a new or empty `--out` directory. Outputs are `fd_positive/`, `fd_background/`,
+`enrichment.tsv` (all features, including selection flags), `run.json` (settings and counts),
+and `signature.json` when features pass the filters. Untested features have `nan` FDR values.
+The signature case defaults to `top<TOP_N>`; pass `--case` to override it.
+Threshold options are `--fdr-alpha`, `--log2or-floor`, `--prev-pos-floor`, and
+`--min-total-fire`; `--keep-boundary` disables the default boundary-feature filter.
+Use the [enrichment notebook](../notebooks/feature_enrichment.ipynb) for interactive plots
+and sequence logos. The demonstration settings do not reproduce the released signatures.
 
 # Running scripts
 

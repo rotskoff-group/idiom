@@ -179,6 +179,7 @@ The [reward guide](cookbook/rewards/) explains custom objectives and external sc
 | `idiom_train_grpo` | Post-train with custom rewards |
 | `idiom_train_sae` | Train a sparse autoencoder |
 | `idiom_feature_dataset` | Build a per-residue SAE feature dataset |
+| `idiom_feature_enrichment` | Compare IDR sets and export an enriched SAE feature signature |
 | `idiom_build_store` | Build a memory-mapped record store from FASTA |
 
 # Data
