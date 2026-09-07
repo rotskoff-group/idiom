@@ -3,7 +3,7 @@
 Editable Bash examples for generation, feature extraction, and training. Start with the
 [installation instructions](../../README.md#installation); each script uses your active environment.
 
-# Choose a script
+## Choose a script
 
 | Script | Task |
 |---|---|
@@ -20,24 +20,7 @@ See the [reward guide](../rewards/README.md#examples) for the GRPO objectives an
 Demo inputs and their provenance are described in [example_data/](../example_data/).
 The [SAE notebook](../notebooks/sae_features.ipynb) shows how to inspect a feature dataset.
 
-`idiom_feature_enrichment` accepts `--positive` and an optional local `--background` FASTA.
-Omitting the background downloads `training_sequences/validation.fasta` from `jxliu2/idiom-data`.
-Headers use `_IDR_x-y` spans; missing or unusable spans treat the whole sequence as the IDR.
-The command uses all valid positives by default, excludes exact positive IDR matches from the
-background, and samples an approximately length-matched background (default target: 10,000).
-Use `--max-positive` and `--max-background` for smaller runs; building holds records and
-activation arrays in host memory. A GPU is recommended.
-
-Use a new or empty `--out` directory. Outputs are `fd_positive/`, `fd_background/`,
-`enrichment.tsv` (all features, including selection flags), `run.json` (settings and counts),
-and `signature.json` when features pass the filters. Untested features have `nan` FDR values.
-The signature case defaults to `top<TOP_N>`; pass `--case` to override it.
-Threshold options are `--fdr-alpha`, `--log2or-floor`, `--prev-pos-floor`, and
-`--min-total-fire`; `--keep-boundary` disables the default boundary-feature filter.
-Use the [enrichment notebook](../notebooks/feature_enrichment.ipynb) for interactive plots
-and sequence logos. The demonstration settings do not reproduce the released signatures.
-
-# Running scripts
+## Running scripts
 
 Scripts use IDiom from your active Python environment and the clone for cookbook files.
 Either [installation workflow](../../README.md#installation) works. When installing and cloning
@@ -59,8 +42,27 @@ Most training examples use one GPU; pretraining uses eight, and the STARLING exa
 Check the selected script for resource estimates. W&B logging is offline by default; run
 `wandb login` and change the script's `WANDB_MODE` to `online` for live logging.
 
+## Feature enrichment
+
+`idiom_feature_enrichment` accepts `--positive` and an optional local `--background` FASTA.
+Omitting the background downloads `training_sequences/validation.fasta` from `jxliu2/idiom-data`.
+Headers use `_IDR_x-y` spans; missing or unusable spans treat the whole sequence as the IDR.
+The command uses all valid positives by default, excludes exact positive IDR matches from the
+background, and samples an approximately length-matched background (default target: 10,000).
+Use `--max-positive` and `--max-background` for smaller runs; building holds records and
+activation arrays in host memory. A GPU is recommended.
+
+Use a new or empty `--out` directory. Outputs are `fd_positive/`, `fd_background/`,
+`enrichment.tsv` (all features, including selection flags), `run.json` (settings and counts),
+and `signature.json` when features pass the filters. Untested features have `nan` FDR values.
+The signature case defaults to `top<TOP_N>`; pass `--case` to override it.
+Threshold options are `--fdr-alpha`, `--log2or-floor`, `--prev-pos-floor`, and
+`--min-total-fire`; `--keep-boundary` disables the default boundary-feature filter.
+Use the [enrichment notebook](../notebooks/feature_enrichment.ipynb) for interactive plots
+and sequence logos. The demonstration settings do not reproduce the released signatures.
+
 <details>
-<summary>Advanced execution: schedulers, multiple GPUs, and checkpoints</summary>
+<summary>Schedulers and multiple GPUs</summary>
 
 Submit a script with your scheduler, ensuring the job inherits the environment containing IDiom:
 
@@ -103,6 +105,10 @@ and `init_from=<model>`. Global autoregressive batch size is
 This multi-node recipe applies to autoregressive training; the GRPO and SAE cookbook examples
 cover single-node runs.
 
+</details>
+
+## Checkpoints and data
+
 Pretraining starts from scratch. SFT and GRPO load the model specified by `init_from`; SAE
 training loads a frozen host model from `model_ckpt`. These accept a Hub model ID, a released
 directory, or a Lightning checkpoint.
@@ -116,5 +122,3 @@ directory, or a Lightning checkpoint.
 
 FASTA training builds a memory-mapped `<fasta>.idiomstore/` sidecar on first use. You can also
 build it ahead of time with `idiom_build_store --fasta /path/to/corpus.fasta`.
-
-</details>

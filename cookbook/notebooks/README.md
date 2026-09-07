@@ -5,14 +5,7 @@ In Colab, select **Runtime → Change runtime type → GPU**. Edit the parameter
 model, SAE, or sequences.
 
 Run cells from top to bottom. Model weights and data are cached after the first download.
-The defaults use small batches. SAE analysis uses the full held-out validation split from
-Hugging Face; set `MAX_RECORDS` to limit memory and runtime for a smaller run.
-Generation saves FASTAs and embeddings, SAE analysis saves a feature dataset, and enrichment
-saves a signature when features pass its filters. Each notebook prints its output paths;
-use the Colab file browser to download files before the runtime is discarded.
-
-Example FASTAs, sequence conventions, and provenance are described in
-[example_data/](../example_data/). Set the notebook's input paths to use your own data.
+See [example data](../example_data/) for input conventions and provenance.
 
 | Notebook | Task | Colab |
 |---|---|---|
@@ -24,3 +17,16 @@ Use the signature exported by `feature_enrichment.ipynb` with
 [sae_features.bash](../scripts/grpo/sae_features.bash) to train toward those features. Set
 `FEATURES`, `SIGNATURE`, and `CASE` in the script to match the notebook's exported signature;
 see [scripts/](../scripts/) for execution instructions.
+
+## Run size and outputs
+
+- **Generation:** defaults to ten sequences and saves FASTAs and embeddings.
+- **SAE features:** defaults to the full validation split (approximately 271k records).
+  Set `MAX_RECORDS=1000` for a smaller first run. `BATCH_SIZE` limits GPU memory per forward;
+  `MAX_RECORDS` limits total feature-dataset size and encoding work.
+- **Enrichment:** defaults to at most 128 positives and approximately 512 background records.
+  Increase `MAX_POSITIVE` and `MAX_BACKGROUND` for a larger analysis. A signature is written only
+  when features pass the filters; these demonstration defaults do not reproduce the released signatures.
+
+Each notebook prints its output paths. Use a fresh `OUT_DIR` for a new analysis so old outputs
+cannot be mistaken for current results. In Colab, download outputs before discarding the runtime.
