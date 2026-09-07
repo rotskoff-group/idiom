@@ -182,6 +182,14 @@ The [reward guide](cookbook/rewards/) explains custom objectives and external sc
 | `idiom_feature_enrichment` | Compare IDR sets and export an enriched SAE feature signature |
 | `idiom_build_store` | Build a memory-mapped record store from FASTA |
 
+Export embeddings from a Hub model, released directory, or Lightning checkpoint:
+
+```bash
+idiom_extract --model jxliu2/idiom-300M --fasta proteins.fasta --layers 18 --pool mean --out embeddings
+```
+
+The older `--ckpt` flag remains an alias for `--model`.
+
 # Data
 
 [jxliu2/idiom-data](https://huggingface.co/datasets/jxliu2/idiom-data) contains the training FASTAs

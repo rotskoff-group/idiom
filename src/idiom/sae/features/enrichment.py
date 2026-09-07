@@ -30,7 +30,7 @@ _AA = set("ACDEFGHIKLMNPQRSTVWY")
 
 
 def feature_counts(feature_dir, keep=None) -> tuple[np.ndarray, int]:
-    """Count, per feature, the number of sequences in which it fires at least once.
+    """Count sequences with at least one strictly positive activation per feature.
 
     Args:
         feature_dir (str | Path): A feature dataset directory.
@@ -41,23 +41,25 @@ def feature_counts(feature_dir, keep=None) -> tuple[np.ndarray, int]:
     """
     d = Path(feature_dir)
     ti = np.load(d / "top_indices.npy")
+    tv = np.load(d / "top_values.npy")
     si = np.load(d / "seq_idx.npy").astype(np.int64)
     num_latents = int(json.loads((d / "meta.json").read_text())["num_latents"])
 
     if keep is not None:
         keep = np.asarray(sorted(set(int(k) for k in keep)))
         m = np.isin(si, keep)
-        ti, si = ti[m], si[m]
+        ti, tv, si = ti[m], tv[m], si[m]
         n_seq = len(keep)
     else:
-        n_seq = int(si.max()) + 1 if si.size else 0
+        n_seq = len(json.loads((d / "strings.json").read_text()))
 
     if not si.size:
         return np.zeros(num_latents), n_seq
     # count DISTINCT (feature, sequence) pairs, i.e. max-pool each feature over each sequence
     big = int(si.max()) + 1
-    feats = ti.ravel().astype(np.int64)
-    seqs = np.repeat(si, ti.shape[1])
+    active = tv.ravel() > 0
+    feats = ti.ravel()[active].astype(np.int64)
+    seqs = np.repeat(si, ti.shape[1])[active]
     pairs = np.unique(feats * big + seqs)
     return np.bincount(pairs // big, minlength=num_latents).astype(float), n_seq
 

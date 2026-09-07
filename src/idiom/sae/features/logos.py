@@ -10,15 +10,16 @@ def per_sequence_activations(feats, index) -> list[tuple[str, np.ndarray]]:
 
     Args:
         feats (np.ndarray): [N_res, num_latents] per-residue activations; unused.
-        index (list[dict]): Per-row metadata carrying accession, source_pos, and residue.
+        index (list[dict]): Per-row metadata carrying record_idx, accession, source_pos, and residue.
+            Legacy metadata without record_idx is grouped by accession.
 
     Returns:
-        One (residue_string, row_indices) per accession, in the order the accessions first appear.
+        One (residue_string, row_indices) per input record, in input order.
     """
-    order: list[str] = []
-    rows: dict[str, list[int]] = {}
+    order: list = []
+    rows: dict = {}
     for i, row in enumerate(index):
-        acc = row["accession"]
+        acc = row.get("record_idx", row["accession"])
         if acc not in rows:
             rows[acc] = []
             order.append(acc)

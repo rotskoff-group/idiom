@@ -62,6 +62,19 @@ def test_bh_fdr_monotone_and_bounded():
     assert q[0] < q[-1]
 
 
+def test_feature_counts_ignore_zero_selections_and_keep_silent_sequences(tmp_path):
+    d = _make_dataset(tmp_path, [[1, 2], [1, 3]], n_res=2,
+                      values=[[[1.0, 0.0], [2.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]])
+    strings = json.loads((d / "strings.json").read_text())
+    (d / "strings.json").write_text(json.dumps([*strings, "132"]))
+    counts, n = feature_counts(d)
+    assert n == 3 and counts[1] == 1 and counts.sum() == 1
+    counts, n = feature_counts(d, keep=[1, 2])
+    assert n == 2 and counts.sum() == 0
+    counts, n = feature_counts(d, keep=[2])
+    assert n == 1 and counts.sum() == 0
+
+
 def test_two_sided_p_matches_normal():
     from idiom.sae.features.enrichment import _two_sided_p
 

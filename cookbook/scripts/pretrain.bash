@@ -3,8 +3,10 @@
 set -euo pipefail
 
 ###
-# Pretrain IDiom 24L (~345M params) on 1024-token FIM. Global batch = 32 x 8 GPUs x 4 accum = 1024.
-# Lightning launches one process per GPU itself; do not wrap this in a launcher.
+# Pretrain IDiom 24L (~302M params) on 1024-token FIM. Global batch = 32 x 8 GPUs x 4 accum = 1024.
+# Training settings match src/idiom/configs/pretrain.yaml.
+# Single node: launch this script once; Lightning starts one process per GPU.
+# For multi-node pretraining, use the srun example in cookbook/scripts/README.md.
 # Needs: 8 GPUs, ~7 days.
 ###
 
@@ -26,7 +28,7 @@ idiom_train_autoreg \
     seed=0 \
     device=auto \
     init_from=null \
-    ckpt_every_n_steps=1000 \
+    ckpt_every_n_steps=2000 \
     wandb_project=idiom \
     run_name=pretrain_24L \
     data.train_fasta="$TRAIN_FASTA" \
@@ -34,12 +36,12 @@ idiom_train_autoreg \
     data.prompted_prob=0.5 \
     data.completion_only=false \
     data.batch_size=32 \
-    data.num_workers=4 \
+    data.num_workers=8 \
     model.n_layers=24 \
     model.d_model=1024 \
     model.n_heads=16 \
     model.max_seq_len=1024 \
-    optim.lr=3.0e-4 \
+    optim.lr=4.0e-4 \
     optim.warmup_steps=3000 \
     optim.weight_decay=0.0 \
     optim.min_lr_ratio=0.1 \
@@ -48,7 +50,7 @@ idiom_train_autoreg \
     trainer.devices=8 \
     trainer.precision=bf16-mixed \
     trainer.val_check_interval=25000 \
-    trainer.gradient_clip_val=1.0 \
+    trainer.gradient_clip_val=0.0 \
     trainer.accumulate_grad_batches=4 \
     out_dir="$OUT" \
     hydra.run.dir="$OUT/hydra"

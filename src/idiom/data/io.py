@@ -6,6 +6,7 @@ coordinates. Readers drop non-canonical sequences by default.
 
 from __future__ import annotations
 
+import errno
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -182,7 +183,13 @@ def to_records(inputs, *, drop_noncanonical: bool = True) -> Iterator[Record]:
         return
     if isinstance(inputs, (str, Path)):
         p = Path(inputs)
-        if p.exists():
+        try:
+            exists = p.exists()
+        except OSError as exc:
+            if not isinstance(inputs, str) or exc.errno != errno.ENAMETOOLONG:
+                raise
+            exists = False  # a long bare sequence is not a filesystem component
+        if exists:
             yield from read_records(p, drop_noncanonical=drop_noncanonical)
         elif isinstance(inputs, Path):
             raise ValueError(f"path does not exist: {inputs}")

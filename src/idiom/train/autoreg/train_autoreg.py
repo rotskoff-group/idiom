@@ -98,16 +98,16 @@ def run(cfg: DictConfig) -> None:
             dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3,
             filename="epoch_{epoch}_step_{step}", auto_insert_metric_name=False,
         ))
-    # Force Lightning's own subprocess launcher even under SLURM: trainer.devices=N then spawns N
-    # local ranks itself (one per GPU on this node), matching the project's direct idiom_train_autoreg
-    # invocation. Otherwise Lightning auto-detects SLURM_* and expects srun --ntasks=N to launch the
-    # ranks -> with --ntasks=1 it runs a single rank on 1 GPU. (Also disables SLURM auto-requeue.)
+    # Single-node cookbook scripts launch once and let Lightning spawn local ranks, even under
+    # SLURM. Multi-node jobs instead use an external launcher (e.g. srun, one task per GPU);
+    # retain Lightning's environment detection so it reads the launcher's global/local ranks.
+    plugins = [LightningEnvironment()] if trainer_kw.get("num_nodes", 1) == 1 else None
     trainer = L.Trainer(
         **trainer_kw,
         callbacks=callbacks,
         logger=wandb_logger,
         default_root_dir=out_dir,
-        plugins=[LightningEnvironment()],
+        plugins=plugins,
     )
     # resume_from restores optimizer state + global step + LR schedule + RNG (a true mid-run resume,
     # e.g. after preemption); distinct from init_from, which is a weights-only warm start. Mutually

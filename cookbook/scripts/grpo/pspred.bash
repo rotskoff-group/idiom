@@ -16,7 +16,7 @@ cd "$REPO"
 
 TARGET_KIND=dG                          # EDIT: dG | logcdil_mgml | cdil_mgml
 TARGET=-3.0                             # EDIT: in kT for dG
-WIDTH=1.0                               # EDIT: absolute, since dG crosses zero
+WIDTH=1.0                               # EDIT: tolerance = abs(TARGET) * WIDTH (3.0 kT here)
 WEIGHT=1.0
 SCORER="uv run --script cookbook/rewards/scorers/pspred.py --target $TARGET_KIND"
 

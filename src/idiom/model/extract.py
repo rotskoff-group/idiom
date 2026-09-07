@@ -19,7 +19,7 @@ from idiom.data.fim import (
 from idiom.data.io import to_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
-from idiom.model.io import load_pretrained
+from idiom.model.io import load_model
 from idiom.utils.device import resolve_device
 
 
@@ -43,7 +43,8 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
     Returns:
         dict[int, tuple]: Per layer, a (values, index) pair. values is an [N, d_model] array. For
             pool="mean", index holds one dict per sequence with keys accession and n_idr; for
-            pool="none", one dict per residue with keys accession, source_pos, residue, and is_idr.
+            pool="none", one dict per residue with keys record_idx, accession, source_pos, residue,
+            and is_idr. record_idx identifies the input record even when accessions repeat.
 
     Raises:
         ValueError: If fim_mode is neither "prompted" nor "unprompted", or an input sequence is
@@ -54,7 +55,7 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
     build = fim_prompted if variant == PROMPTED else fim_unprompted
     out = {layer: {"values": [], "index": []} for layer in layers}
 
-    for rec in to_records(inputs):
+    for record_idx, rec in enumerate(to_records(inputs)):
         fim = build(rec.full_seq, rec.idr_start, rec.idr_end)
         tokens = torch.tensor([tok.start_id, *tok.encode(fim)], device=device)[None]  # [1, L]
         acts = extract_activations(model, tokens, layers, tokenizer=tok, drop_markers=True)
@@ -72,6 +73,7 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
                 for i in range(vals.size(0)):
                     out[layer]["values"].append(vals[i])
                     out[layer]["index"].append({
+                        "record_idx": record_idx,
                         "accession": rec.accession,
                         "source_pos": int(src[i]),
                         "residue": tok.decode([int(ids[i])]),
@@ -98,18 +100,19 @@ def write_embeddings(embeddings: dict, out_dir: str | Path) -> None:
             writer.writerows(index)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Run the idiom_extract CLI: write residual-stream embeddings from a FASTA to a directory."""
     p = argparse.ArgumentParser(description="Export IDiom residual-stream embeddings from a FASTA.")
     p.add_argument("--fasta", required=True)
-    p.add_argument("--ckpt", required=True, help="lightning .ckpt (arch read from it)")
+    p.add_argument("--model", "--ckpt", dest="model", required=True,
+                   help="Hub model ID, released directory, or Lightning .ckpt (--ckpt is an alias)")
     p.add_argument("--layers", type=int, nargs="+", required=True)
     p.add_argument("--pool", choices=["mean", "none"], default="mean")
     p.add_argument("--out", required=True)
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
     device = resolve_device()
-    model, _ = load_pretrained(args.ckpt, device=device)
+    model, _ = load_model(args.model, device=device)
     emb = embed_fasta(model, args.fasta, args.layers, pool=args.pool, device=device)
     write_embeddings(emb, args.out)
 

@@ -16,7 +16,7 @@ cd "$REPO"
 
 MODE=homotypic                          # EDIT: homotypic, or heterotypic with --partner
 TARGET=-6.0                             # EDIT: epsilon; negative is attractive
-WIDTH=1.0                               # EDIT: absolute, since epsilon crosses zero
+WIDTH=1.0                               # EDIT: tolerance = abs(TARGET) * WIDTH (6.0 here)
 WEIGHT=1.0
 FORCEFIELD=mpipi                        # EDIT: mpipi | calvados
 SCORER="uv run --script cookbook/rewards/scorers/finches.py --mode $MODE --forcefield $FORCEFIELD"

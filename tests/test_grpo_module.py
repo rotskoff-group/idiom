@@ -26,3 +26,19 @@ def test_reference_starts_equal_to_policy():
     lit = LitGRPO(TINY, proline_terms(), group_size=2)
     for (_, a), (_, b) in zip(lit.model.state_dict().items(), lit.reference.state_dict().items()):
         assert torch.equal(a, b)
+
+
+def test_context_clamped_grpo_rollout_can_be_rescored():
+    import pytest
+
+    cfg = ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=8)
+    lit = LitGRPO(cfg, proline_terms(), group_size=2, max_new_tokens=100,
+                  temperature=0, log_samples_every=0)
+    # Equal logits force greedy residue 0, so no STOP shortens the boundary-length rollout.
+    with torch.no_grad():
+        lit.model.lm_head.weight.zero_()
+    with pytest.warns(UserWarning, match="remaining context"):
+        loss = lit.training_step(torch.tensor([TOK.encode("132")]), 0)
+    assert torch.isfinite(loss)
+    loss.backward()
+    assert all(torch.isfinite(p.grad).all() for p in lit.model.parameters() if p.grad is not None)

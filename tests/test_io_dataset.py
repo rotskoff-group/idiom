@@ -100,3 +100,14 @@ def test_to_records_noncanonical_sequence_raises():
 
     with pytest.raises(ValueError, match="canonical"):
         list(to_records("MEDSX"))  # explicit bad sequence errors (not silently dropped)
+
+
+def test_long_bare_sequence_matches_list_input():
+    seq = "ACDEFGHIKLMNPQRSTVWY" * 15
+    assert list(to_records(seq)) == list(to_records([seq]))
+
+
+def test_existing_sequence_named_file_keeps_path_precedence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "ACDE").write_text(">protein_IDR_1-4\nMKLV\n")
+    assert list(to_records("ACDE")) == [Record("protein", "MKLV", 0, 4)]

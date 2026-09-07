@@ -1,6 +1,7 @@
 """training tests (CPU-only): masked loss, SFT completion mask, warmup-cosine, fit smoke."""
 
 import lightning as L
+import pytest
 import torch
 from torch.utils.data import DataLoader
 
@@ -93,3 +94,35 @@ def test_trainer_fit_smoke(tmp_path):
     )
     trainer.fit(lit, train_dataloaders=_loader())
     assert trainer.global_step == 2
+
+
+@pytest.mark.parametrize("nodes", [1, 2])
+def test_autoreg_runner_preserves_external_launcher_for_multiple_nodes(tmp_path, monkeypatch, nodes):
+    from types import SimpleNamespace
+
+    from lightning.pytorch.plugins.environments import LightningEnvironment
+    from omegaconf import OmegaConf
+
+    from idiom.train.autoreg import train_autoreg
+
+    captured = {}
+    module, data = object(), object()
+    monkeypatch.setattr(train_autoreg, "build", lambda cfg: (module, data))
+    monkeypatch.setattr(train_autoreg, "WandbLogger", lambda **kw: SimpleNamespace(
+        log_hyperparams=lambda cfg: None))
+
+    def trainer(**kw):
+        captured.update(kw)
+        return SimpleNamespace(fit=lambda lit, **args: captured.update(lit=lit, fit_args=args))
+
+    monkeypatch.setattr(train_autoreg.L, "Trainer", trainer)
+    cfg = OmegaConf.create({"seed": 0, "out_dir": str(tmp_path), "data": {"val_fasta": None},
+                            "trainer": {"num_nodes": nodes, "devices": 4}})
+    train_autoreg.run(cfg)
+    if nodes == 1:
+        assert len(captured["plugins"]) == 1
+        assert isinstance(captured["plugins"][0], LightningEnvironment)
+    else:
+        assert captured["plugins"] is None  # Lightning can detect SLURM/torchrun ranks
+    assert captured["num_nodes"] == nodes and captured["devices"] == 4
+    assert captured["lit"] is module and captured["fit_args"]["datamodule"] is data

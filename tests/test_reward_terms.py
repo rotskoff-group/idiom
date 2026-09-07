@@ -169,3 +169,41 @@ def test_empty_terms_is_rejected():
 def test_missing_terms_key_is_rejected_like_an_empty_list():
     with pytest.raises(ValueError, match="reward.terms is empty"):
         build_terms(OmegaConf.create({}))
+
+
+@pytest.mark.parametrize("expression,match", [
+    ("[7.0]", "returned 1 scores for 2 sequences"),
+    ("[1.0, 2.0, 3.0]", "returned 3 scores for 2 sequences"),
+    ("None", "one score per sequence"),
+    ("[float('nan'), 1.0]", "raw score.*finite"),
+    ("[1.0, float('inf')]", "raw score.*finite"),
+    ("[1.0, 'invalid']", "raw score.*finite"),
+])
+def test_invalid_custom_reward_outputs_fail_with_term_context(tmp_path, expression, match):
+    module = tmp_path / "invalid_reward.py"
+    module.write_text(f"def reward(): return lambda seqs: {expression}\n")
+    reward = build_reward(_cfg([{"reward": f"{module}:reward", "label": "custom"}]))
+    with pytest.raises(ValueError, match=f"reward 'custom'.*{match}"):
+        reward(["AA", "CC"], 2)
+
+
+@pytest.mark.parametrize("weight", [float("nan"), float("inf"), "invalid"])
+def test_invalid_weight_rejected_at_build(weight):
+    with pytest.raises(ValueError, match="weight.*finite"):
+        build_reward(_cfg([{"reward": "length", "weight": weight}]))
+
+
+def test_nonfinite_shaping_and_arithmetic_fail_with_term_context(tmp_path):
+    module = tmp_path / "invalid_shaping.py"
+    module.write_text("def shaping(): return lambda value: float('nan')\n")
+    reward = build_reward(_cfg([{"reward": "length", "shaping": f"{module}:shaping"}]))
+    with pytest.raises(ValueError, match="reward 'length'.*shaped score.*finite"):
+        reward(["AA"], 1)
+    reward = build_reward(_cfg([{"reward": "length", "weight": 1e308}]))
+    with pytest.raises(ValueError, match="weighted score.*finite"):
+        reward(["AA"], 1)
+    reward = build_reward(_cfg([
+        {"reward": "length", "weight": 1e308, "label": label} for label in ("first", "second")
+    ]))
+    with pytest.raises(ValueError, match="reward 'second'.*accumulated total.*finite"):
+        reward(["A"], 1)

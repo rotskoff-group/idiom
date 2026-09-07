@@ -16,7 +16,7 @@ OUT="/path/to/output/grpo-combined"  # EDIT: run output directory
 cd "$REPO"
 
 EPS_TARGET=-6.0                         # EDIT: epsilon; negative is attractive
-EPS_WIDTH=1.0                           # EDIT: absolute, since epsilon crosses zero
+EPS_WIDTH=1.0                           # EDIT: tolerance = abs(EPS_TARGET) * EPS_WIDTH (6.0 here)
 EPS_WEIGHT=0.5                          # EDIT: two objectives share one budget; see rewards/README.md
 COMPARTMENT=nucleolus                   # EDIT: any of the 12, or max / mean
 PROTGPS_WEIGHT=1.0

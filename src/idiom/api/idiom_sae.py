@@ -159,8 +159,10 @@ class IDiomSAE:
 
         Returns:
             tuple: With pool="none", an [N_res, num_latents] array and a list of per-row metadata
-                dicts carrying accession, source_pos, residue, and is_idr. With pool="mean", an
-                [N_seq, num_latents] array and the list of accessions it corresponds to.
+                dicts carrying record_idx, accession, source_pos, residue, and is_idr. With
+                pool="mean", an [N_seq, num_latents] array and its accessions in input order;
+                repeated accessions remain separate records. Records with no selected residues
+                are omitted.
 
         Raises:
             ValueError: If region is not "idr" for an unprompted-mode SAE.
@@ -182,14 +184,15 @@ class IDiomSAE:
         if pool == "none":
             return feats, index
 
-        rows: dict[str, list[int]] = {}
+        rows: dict[int, list[int]] = {}
         for i, row in enumerate(index):
             is_idr = row.get("is_idr", True)
             if (region == "idr" and not is_idr) or (region == "non_idr" and is_idr):
                 continue
-            rows.setdefault(row["accession"], []).append(i)
-        accs = list(rows)
-        pooled = np.stack([feats[rows[a]].mean(0) for a in accs]) if accs else np.empty((0, feats.shape[1]))
+            rows.setdefault(row["record_idx"], []).append(i)
+        accs = [index[indices[0]]["accession"] for indices in rows.values()]
+        pooled = (np.stack([feats[indices].mean(0) for indices in rows.values()])
+                  if rows else np.empty((0, feats.shape[1])))
         return pooled, accs
 
     @torch.no_grad()

@@ -55,3 +55,18 @@ def test_sequence_logprobs_shape_and_values():
     ref = torch.log_softmax(model(tokens)[:, :-1].float(), -1)
     expected = ref.gather(-1, tokens[:, 1:, None]).squeeze(-1)
     assert torch.allclose(logp, expected, atol=1e-6)
+
+
+def test_sequence_logprobs_at_context_boundary_matches_prefix_scoring():
+    cfg = ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=8)
+    model = IDiomTransformer(cfg).eval()
+    tokens = torch.randint(0, cfg.vocab_size, (2, cfg.max_seq_len + 1))
+    actual = sequence_logprobs(model, tokens)
+    expected = torch.stack([
+        model(tokens[:, :i]).float().log_softmax(-1)[:, -1].gather(1, tokens[:, i:i + 1]).squeeze(1)
+        for i in range(1, tokens.size(1))
+    ], dim=1)
+    torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
+    (-actual.mean()).backward()
+    assert model.embed.weight.grad is not None
+    assert torch.isfinite(model.embed.weight.grad).all()

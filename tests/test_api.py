@@ -87,6 +87,15 @@ def test_embed_noncanonical_raises():
         _idiom().embed("MEDSX", layers=[1])
 
 
+def test_embed_long_bare_sequence():
+    cfg = ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=512)
+    model = IDiom(IDiomTransformer(cfg))
+    seq = "ACDEFGHIKLMNPQRSTVWY" * 15
+    bare, _ = model.embed(seq, layers=[0])[0]
+    listed, _ = model.embed([seq], layers=[0])[0]
+    assert (bare == listed).all()
+
+
 def _idiom_sae(host, *, region="all", fim_mode="prompted"):
     from idiom.sae import SparseCoder
 
@@ -142,6 +151,29 @@ def test_idiomsae_encode_plain_strings():
     sae = _idiom_sae(_idiom())
     feats, accs = sae.encode(["MEDSKVDN", "ACDEFGHIKL"], pool="mean")
     assert feats.shape == (2, sae.sae.num_latents) and accs == ["seq_0", "seq_1"]
+
+
+def test_sae_keeps_multiple_idrs_of_one_protein_separate(tmp_path):
+    import numpy as np
+
+    from idiom.data.io import read_records
+    from idiom.sae.features import per_sequence_activations
+
+    fasta = tmp_path / "repeated.fasta"
+    fasta.write_text(">P1_IDR_1-3\nACDEFGHIK\n>P1_IDR_6-9\nACDEFGHIK\n")
+    records = list(read_records(fasta))
+    for fim_mode in ("prompted", "unprompted"):
+        sae = _idiom_sae(_idiom(), region="idr", fim_mode=fim_mode)
+        pooled, accs = sae.encode(fasta)
+        expected = np.concatenate([sae.encode(record)[0] for record in records])
+        assert accs == ["P1", "P1"]
+        np.testing.assert_allclose(pooled, expected, atol=1e-6)
+        feats, index = sae.encode(fasta, pool="none")
+        assert {row["record_idx"] for row in index} == {0, 1}
+        groups = per_sequence_activations(feats, index)
+        assert [s for s, _ in groups] == (
+            ["ACDEFGHIK", "ACDEFGHIK"] if fim_mode == "prompted" else ["ACD", "GHIK"]
+        )
 
 
 def test_idiomsae_save_records_published_host_model(tmp_path):

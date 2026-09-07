@@ -1,6 +1,8 @@
 """extract tests (CPU-only): FASTA -> embeddings (mean + per-residue), files written."""
 
 import numpy as np
+import pytest
+import torch
 
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.model.extract import embed_fasta, write_embeddings
@@ -29,7 +31,7 @@ def test_pool_none_per_residue_with_alignment(tmp_path):
     values, index = emb[1]
     # one row per residue across both sequences; alignment metadata present.
     assert values.shape[0] == len(index) and values.shape[1] == TINY.d_model
-    assert set(index[0]) == {"accession", "source_pos", "residue", "is_idr"}
+    assert set(index[0]) == {"record_idx", "accession", "source_pos", "residue", "is_idr"}
     assert any(r["is_idr"] for r in index) and set(emb) == {0, 1}
 
 
@@ -40,3 +42,37 @@ def test_write_embeddings(tmp_path):
     arr = np.load(tmp_path / "out" / "layer_1.npy")
     assert arr.shape == (2, TINY.d_model)
     assert (tmp_path / "out" / "layer_1_index.csv").exists()
+
+
+@pytest.mark.parametrize("artifact,flag", [
+    ("release", "--model"), ("hub", "--model"), ("checkpoint", "--model"),
+    ("checkpoint", "--ckpt"),
+])
+def test_extract_cli_loads_supported_artifacts(tmp_path, monkeypatch, artifact, flag):
+    from dataclasses import asdict
+
+    from idiom import IDiom
+    from idiom.model.extract import main
+
+    model = IDiomTransformer(TINY).eval()
+    release = IDiom(model).save_pretrained(tmp_path / "release")
+    downloads = []
+
+    def download(repo):
+        downloads.append(repo)
+        return str(release)
+
+    monkeypatch.setattr("idiom.model.io.snapshot_download", download)
+    if artifact == "checkpoint":
+        path = tmp_path / "model.ckpt"
+        torch.save({"hyper_parameters": {"model_cfg": asdict(TINY)},
+                    "state_dict": {f"model.{k}": v for k, v in model.state_dict().items()}}, path)
+    else:
+        path = "test/model" if artifact == "hub" else release
+    fasta = _fasta(tmp_path)
+    out = tmp_path / "out"
+    main([flag, str(path), "--fasta", str(fasta), "--layers", "1", "--out", str(out)])
+    expected, _ = embed_fasta(model, fasta, [1])[1]
+    np.testing.assert_allclose(np.load(out / "layer_1.npy"), expected, atol=1e-6)
+    assert (out / "layer_1_index.csv").is_file()
+    assert downloads == (["test/model"] if artifact == "hub" else [])

@@ -84,6 +84,8 @@ class ActivationStore(IterableDataset):
 
     def _drain(self, buf: list[torch.Tensor], *, final: bool = False):
         """Shuffle the buffer and yield full batches, carrying any remainder unless final."""
+        if not buf:
+            return
         pool = torch.cat(buf, dim=0)
         pool = pool[torch.randperm(pool.size(0), device=pool.device)]  # shuffle the buffer
         full = (pool.size(0) // self.sae_batch_size) * self.sae_batch_size

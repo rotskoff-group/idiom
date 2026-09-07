@@ -32,6 +32,20 @@ def test_store_yields_dmodel_batches():
     assert torch.isfinite(batch).all()
 
 
+def test_store_exhausts_after_exact_drain_without_losing_rows():
+    store = _store(sae_batch_size=8, buffer_size=8)
+    expected = torch.cat([store._acts(store._input_tokens(b)) for b in store.record_loader])
+    actual = torch.cat(list(store))
+    assert actual.shape == expected.shape
+    # Shuffling changes order, but every activation must survive exactly once.
+    torch.testing.assert_close(actual.sort(dim=0).values, expected.sort(dim=0).values)
+
+
+def test_empty_activation_stream_yields_nothing():
+    store = ActivationStore(IDiomTransformer(TINY), [], 1)
+    assert list(store) == []
+
+
 def test_mean_activation_shape():
     assert _store().mean_activation(max_batches=2).shape == (TINY.d_model,)
 

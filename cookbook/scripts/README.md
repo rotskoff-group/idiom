@@ -69,9 +69,39 @@ sbatch --gpus-per-node=1 --cpus-per-task=8 --time=12:00:00 \
     --wrap "bash $PWD/cookbook/scripts/grpo/sparrow.bash"
 ```
 
-On one node, Lightning launches processes according to `trainer.devices`. For multi-node runs,
-use `srun` with one task per GPU and set `+trainer.num_nodes=<N>`. For autoregressive training,
-global batch size is `data.batch_size × devices × nodes × accumulate_grad_batches`.
+For single-node pretraining and SFT, launch the Bash script once: IDiom uses Lightning's local
+process launcher with `trainer.devices` GPUs. The GRPO and SAE examples train on one GPU;
+STARLING's second GPU runs its scorer.
+
+For multi-node pretraining or SFT, launch the training command directly with `srun`, one task
+per GPU. Set `+trainer.num_nodes` to the allocated node count and `trainer.devices` to the
+GPUs **per node**. With more than one node, IDiom allows Lightning to detect the external
+launcher and use its ranks. For example, save this as a batch script and submit with `sbatch`:
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=idiom-pretrain
+#SBATCH --nodes=2
+#SBATCH --gpus-per-node=4
+#SBATCH --ntasks-per-node=4
+#SBATCH --cpus-per-task=8
+set -euo pipefail
+
+# Activate the same IDiom environment on every node; use shared paths for data and output.
+source /shared/path/to/idiom/.venv/bin/activate
+export WANDB_MODE=offline
+srun idiom_train_autoreg \
+    data.train_fasta=/shared/path/to/train.fasta \
+    data.val_fasta=/shared/path/to/validation.fasta \
+    trainer.accelerator=gpu trainer.devices=4 +trainer.num_nodes=2 \
+    out_dir=/shared/path/to/run hydra.run.dir=/shared/path/to/run/hydra
+```
+
+Adapt partition, time, and memory requests to your cluster. For SFT, add `--config-name sft`
+and `init_from=<model>`. Global autoregressive batch size is
+`data.batch_size × devices × nodes × accumulate_grad_batches` (1,024 in this pretraining example).
+This multi-node recipe applies to autoregressive training; the GRPO and SAE cookbook examples
+cover single-node runs.
 
 Pretraining starts from scratch. SFT and GRPO load the model specified by `init_from`; SAE
 training loads a frozen host model from `model_ckpt`. These accept a Hub model ID, a released

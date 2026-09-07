@@ -5,6 +5,7 @@ Every term is explicit; zero-weight terms are still evaluated and logged.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from omegaconf import DictConfig, OmegaConf
@@ -19,6 +20,17 @@ from idiom.train.grpo.reward.resolve import (
 from idiom.train.grpo.reward.shaping import Shaping
 
 TERM_KEYS = {"reward", "shaping", "weight", "label"}
+
+
+def _finite(value, where: str) -> float:
+    """Convert a score or weight to a finite float, identifying invalid values."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"{where}: expected a finite number, got {value!r}") from None
+    if not math.isfinite(number):
+        raise ValueError(f"{where}: expected a finite number, got {value!r}")
+    return number
 
 
 @dataclass(frozen=True)
@@ -68,7 +80,8 @@ def _parse_term(raw: dict, where: str) -> tuple[str, float, object, object]:
     # The term is logged under its reward's name, taking the function from a dotted path, since the
     # whole path makes an unreadable metric key.
     label = term.get("label") or spec_name(reward_spec, f"{where}.reward")[0].rpartition(":")[2]
-    return label, float(term.get("weight", 1.0)), reward_spec, term.get("shaping")
+    weight = _finite(term.get("weight", 1.0), f"{where} ({label!r}).weight")
+    return label, weight, reward_spec, term.get("shaping")
 
 
 def _check_unique_labels(labels: list[str]) -> None:
@@ -143,11 +156,22 @@ def build_reward(rcfg: DictConfig):
         totals = [0.0] * len(idrs)
         breakdown: list[dict[str, float]] = [{} for _ in idrs]
         for term in terms:
-            for i, raw_i in enumerate(term.reward(idrs)):
-                shaped_i = term.weight * term.shaping(raw_i)
+            values = term.reward(idrs)
+            try:
+                values = list(values)
+            except TypeError:
+                raise ValueError(f"reward {term.label!r}: expected one score per sequence") from None
+            if len(values) != len(idrs):
+                raise ValueError(f"reward {term.label!r}: returned {len(values)} scores for "
+                                 f"{len(idrs)} sequences")
+            for i, value in enumerate(values):
+                where = f"reward {term.label!r}, sequence {i}"
+                raw_i = _finite(value, f"{where}, raw score")
+                shaped = _finite(term.shaping(raw_i), f"{where}, shaped score")
+                shaped_i = _finite(term.weight * shaped, f"{where}, weighted score")
                 breakdown[i][f"{term.label}_raw"] = raw_i   # the raw reward, in its own units
                 breakdown[i][term.label] = shaped_i         # its contribution to the objective
-                totals[i] += shaped_i
+                totals[i] = _finite(totals[i] + shaped_i, f"{where}, accumulated total")
         for i, total in enumerate(totals):
             breakdown[i]["total"] = total
         return totals, breakdown
