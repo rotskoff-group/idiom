@@ -145,6 +145,13 @@ First use may take time to install dependencies and download models. Set `UV_CAC
 a different cache location. GPU scorers also need memory alongside the policy; the STARLING script
 assigns a separate GPU by default.
 
+ProtGPS defaults to CPU scoring with one sequence per forward pass. Its pinned CUDA build fails
+on H100 GPUs, and scoring multiple sequences together can change their probabilities, which is
+incompatible with caching rewards by sequence. Both ProtGPS bash examples explicitly export
+`IDIOM_PROTGPS_DEVICE=cpu` and `PROTGPS_BATCH=1`; direct scorer calls use the same defaults without
+exports. Environment overrides remain available for testing, but changing these settings requires
+checking device compatibility and agreement between single-sequence and batched scores.
+
 ## Choosing targets and weights
 
 1. Score representative base-model generations to estimate each property's range.

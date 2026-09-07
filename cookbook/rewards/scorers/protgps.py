@@ -15,8 +15,9 @@
 Run with uv run --script to use the isolated dependencies in the PEP 723 header.
 --compartment selects one of 12 compartments, or "max" / "mean" across them.
 IDIOM_PROTGPS_DIR sets the checkpoint cache (default ~/.cache/idiom/protgps);
-IDIOM_PROTGPS_DEVICE selects the device (default CUDA if available, otherwise CPU).
-PROTGPS_BATCH sets sequences per forward pass (default 32). Checkpoints download on first use.
+IDIOM_PROTGPS_DEVICE selects the device (default CPU for compatibility with the pinned torch).
+PROTGPS_BATCH sets sequences per forward pass (default 1 for batch-independent rewards).
+Checkpoints download on first use.
 """
 
 import argparse
@@ -38,14 +39,12 @@ COMPARTMENTS = [
 ZENODO_URL = "https://zenodo.org/records/14795445/files/checkpoints.zip?download=1"
 _CKPT_STEM = "protgps/32bf44b16a4e770a674896b81dfb3729"
 _MAX_LEN = 1800  # ProtGPS sequence-length ceiling
-_BATCH = int(os.environ.get("PROTGPS_BATCH", "32"))
+_BATCH = int(os.environ.get("PROTGPS_BATCH", "1"))
 
 
 def _device():
-    """Return the torch device for the classifier."""
-    import torch
-
-    return os.environ.get("IDIOM_PROTGPS_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
+    """Default to CPU: the pinned CUDA build fails on H100 GPUs."""
+    return os.environ.get("IDIOM_PROTGPS_DEVICE") or "cpu"
 
 
 def _checkpoint_dir() -> Path:

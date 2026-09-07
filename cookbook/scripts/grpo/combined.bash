@@ -25,6 +25,9 @@ FINCHES="uv run --script cookbook/rewards/scorers/finches.py --mode homotypic --
 PROTGPS="uv run --script cookbook/rewards/scorers/protgps.py --compartment $COMPARTMENT"
 
 export WANDB_MODE=offline
+# The pinned CUDA build fails on H100; batching can change a sequence's probability.
+export IDIOM_PROTGPS_DEVICE=cpu
+export PROTGPS_BATCH=1
 
 # Check both scorers answer before taking the GPU.
 python -m idiom.train.grpo.reward.external --cmd "$FINCHES"
