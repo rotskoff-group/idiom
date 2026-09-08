@@ -3,21 +3,23 @@
 set -euo pipefail
 
 # Redesign one marked IDR using both flanks of a full-length protein as context.
-# The bundled P06748_IDR_119-259 record has a 141-residue IDR (1-based, inclusive).
+# The bundled P45973_IDR_79-123 record has a 45-residue hinge/linker (1-based, inclusive).
 # Only generated IDRs are scored; the native IDR is omitted from the prompt.
-# Reward: nucleolus top30 SAE coverage, composition entropy, and native IDR length.
+# Reward: linker-only ALBATROSS Rg, composition entropy, and native linker length.
+# Rg is predicted for the isolated linker, not for the full protein or domain separation.
 # Needs: 1 GPU
 
 REPO="/path/to/idiom"  # EDIT: repository checkout
-OUT="/path/to/output/grpo-prompted-sae"  # EDIT: run output directory
+OUT="/path/to/output/grpo-prompted-linker-rg"  # EDIT: run output directory
 
 cd "$REPO"
 
-FASTA="$REPO/cookbook/example_data/prompted_grpo/P06748.fasta"  # EDIT: one full protein
-TARGET_LENGTH=141                      # EDIT: y - x + 1 for your _IDR_x-y span
-SIGNATURE=nucleolus
-FEATURES="$REPO/src/idiom/train/grpo/reward/sae_signatures.json"
-CASE=top30
+FASTA="$REPO/cookbook/example_data/prompted_grpo/P45973.fasta"  # EDIT: one full protein
+TARGET_LENGTH=45                      # EDIT: y - x + 1 for your _IDR_x-y span
+TARGET_RG=25                           # EDIT: illustrative target in angstroms
+RG_WIDTH=0.2                           # quadratic reward scale = 20% of target Rg
+LENGTH_WIDTH=0.1                       # discourage reaching Rg by changing linker length
+SCORER="uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration"
 
 # Online logging when authenticated; set WANDB_MODE=offline to save records locally.
 export WANDB_MODE="${WANDB_MODE:-online}"
@@ -31,17 +33,19 @@ ENTROPY="{label: entropy, \
 LENGTH="{label: length, \
     weight: 1.0, \
     reward: length, \
-    shaping: {name: quadratic, target: $TARGET_LENGTH, width: 1.0}}"
+    shaping: {name: quadratic, target: $TARGET_LENGTH, width: $LENGTH_WIDTH}}"
 
-SAE="{label: sae, \
-    weight: 1.0, \
-    reward: {name: sae_signature, \
-        signature: $SIGNATURE, \
-        features: \"$FEATURES\", \
-        case: $CASE, \
-        sae: jxliu2/idiomsae-300M-L18-k32, \
-        device: null}, \
-    shaping: identity}"
+RG="{label: rg, \
+    weight: 0.5, \
+    reward: {name: scorer, \
+        cmd: \"$SCORER\", \
+        timeout: 300.0, \
+        maxlen: 0, \
+        cwd: null, \
+        env: null, \
+        cache_max: 100000, \
+        label: null}, \
+    shaping: {name: quadratic, target: $TARGET_RG, width: $RG_WIDTH}}"
 
 idiom_train_grpo \
     seed=0 \
@@ -49,14 +53,14 @@ idiom_train_grpo \
     init_from=jxliu2/idiom-300M \
     resume_from=null \
     wandb_project=idiom-grpo \
-    run_name=grpo-prompted-nucleolus \
+    run_name=grpo-prompted-linker-rg \
     prompts.mode=prompted \
     prompts.n=1000 \
     prompts.fasta="$FASTA" \
     prompts.n_per=1000 \
     prompts.batch_size=4 \
     grpo.group_size=8 \
-    grpo.max_new_tokens=256 \
+    grpo.max_new_tokens=96 \
     grpo.lr=5.0e-6 \
     grpo.beta_kl=0.02 \
     grpo.eps_clip=0.2 \
@@ -67,7 +71,7 @@ idiom_train_grpo \
     grpo.log_samples_every=5 \
     grpo.n_log_samples=3 \
     grpo.track_disorder=true \
-    reward.terms="[$ENTROPY, $LENGTH, $SAE]" \
+    reward.terms="[$ENTROPY, $LENGTH, $RG]" \
     trainer.max_steps=3000 \
     trainer.accelerator=auto \
     trainer.devices=1 \

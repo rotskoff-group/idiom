@@ -15,7 +15,7 @@ Editable Bash examples for generation, feature extraction, and training. Start w
 | [train_sae.bash](train_sae.bash) | Train and export an SAE |
 | [pretrain.bash](pretrain.bash) | Pretrain IDiom from scratch |
 | [grpo/](grpo/) | Post-train with feature signatures, custom rewards, or external scorers |
-| [grpo/prompted_sae.bash](grpo/prompted_sae.bash) | Optimize one marked IDR in full-protein context toward an SAE signature |
+| [grpo/prompted_linker_rg.bash](grpo/prompted_linker_rg.bash) | Redesign a marked linker toward a target Rg in full-protein context |
 
 See the [reward guide](../rewards/README.md#examples) for the GRPO objectives and scorer setup.
 Demo inputs and their provenance are described in [example_data/](../example_data/).
