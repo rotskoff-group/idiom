@@ -27,6 +27,7 @@ dependencies = [
     "streamlit>=1.30",
     "matplotlib>=3.7",
     "logomaker>=0.8",
+    "metapredict==3.0.2",
 ]
 
 [project.urls]

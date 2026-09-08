@@ -17,6 +17,7 @@ from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
 from idiom.train.grpo.core import group_advantages, grpo_loss, sequence_kl, sequence_logprobs
 from idiom.train.grpo.reward.builtin import composition_entropy
+from idiom.utils.disorder import disorder_totals
 
 
 class LitGRPO(L.LightningModule):
@@ -44,6 +45,7 @@ class LitGRPO(L.LightningModule):
         normalize_advantage: bool = True,
         log_samples_every: int = 25,
         n_log_samples: int = 3,
+        track_disorder: bool = True,
         tokenizer: Tokenizer | None = None,
     ) -> None:
         """Initialize the policy, frozen reference, and GRPO settings.
@@ -63,6 +65,7 @@ class LitGRPO(L.LightningModule):
             normalize_advantage: If True, divide advantages by their group's standard deviation.
             log_samples_every: Print example completions every this many steps; 0 disables.
             n_log_samples: Number of example completions to print.
+            track_disorder: Log metapredict V3 disorder on CPU for each optimizer step.
             tokenizer: Tokenizer; defaults to Tokenizer().
         """
         super().__init__()
@@ -85,6 +88,8 @@ class LitGRPO(L.LightningModule):
         self.normalize_advantage = normalize_advantage
         self.log_samples_every = log_samples_every
         self.n_log_samples = n_log_samples
+        self.track_disorder = track_disorder
+        self._disorder_sequences: list[str] = []
 
     @classmethod
     def init_from_checkpoint(cls, init_from, reward_terms, **kwargs) -> LitGRPO:
@@ -149,6 +154,8 @@ class LitGRPO(L.LightningModule):
         mask[:, P:] = (completions != self.tok.pad_id).float()
 
         idrs = [self._decode_idr(completions[i]) for i in range(BG)]
+        if self.track_disorder:
+            self._disorder_sequences.extend(idrs)
         # Score the whole step in one batch to amortize external scorer calls
         totals, breakdown = self.reward_terms(idrs, self.group_size)
         rewards = torch.tensor(totals, device=rep.device, dtype=torch.float)
@@ -185,6 +192,24 @@ class LitGRPO(L.LightningModule):
                 metrics[f"train/reward_{key}"] = vals.mean()
         self.log_dict(metrics, prog_bar=True, on_step=True)
         return loss
+
+    def on_before_optimizer_step(self, optimizer: torch.optim.Optimizer) -> None:
+        """Score all accumulated rollouts once, before each optimizer update.
+
+        Average residue scores within each nonempty sequence, then average sequences equally.
+        Reduce sums/counts across ranks so unequal sequence counts remain correctly weighted.
+        """
+        if not self.track_disorder or not self._disorder_sequences:
+            return
+        totals = disorder_totals(self._disorder_sequences)
+        stats = torch.tensor(totals, dtype=torch.float64, device=self.device)
+        stats = self.trainer.strategy.reduce(stats, reduce_op="sum")
+        score_sum, nonempty, total = stats.unbind()
+        self.log_dict({
+            "train/metapredict_disorder": score_sum / nonempty.clamp_min(1),
+            "train/metapredict_empty_fraction": 1 - nonempty / total.clamp_min(1),
+        }, on_step=True, on_epoch=False)
+        self._disorder_sequences.clear()
 
     def _print_samples(self, idrs: list[str], rewards: torch.Tensor) -> None:
         """Print up to n_log_samples randomly chosen completions with their rewards."""

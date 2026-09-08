@@ -175,6 +175,14 @@ and GRPO post-training. Training commands use [YAML configs](src/idiom/configs/)
 overrides; add `--cfg job` to inspect a command's configuration without starting training.
 The [reward guide](cookbook/rewards/) explains custom objectives and external scorers.
 
+GRPO logs `train/metapredict_disorder` every optimizer step using metapredict 3.0.2's V3
+network on CPU. It averages per-residue disorder scores within each generated sequence,
+then averages nonempty sequences across all gradient-accumulation microbatches and ranks.
+This diagnostic is separate from the reward. Empty completions are excluded and reported as
+`train/metapredict_empty_fraction`; an entirely empty step reports disorder 0 and empty fraction 1.
+Set `grpo.track_disorder=false` to disable prediction. Metrics use the existing Lightning/W&B
+logger (offline W&B runs still require syncing to appear online).
+
 ## Command-line tools
 
 | Command | Purpose |

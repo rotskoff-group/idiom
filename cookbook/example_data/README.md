@@ -10,6 +10,7 @@ inputs; Bash scripts use local paths.
 | [effector/](effector/) | Activation and repression domain IDRs |
 | [disprot/](disprot/) | Held-out proteins with annotated IDR spans and flanking context |
 | [sae_features/](sae_features/) | Released SAE signatures as a format reference |
+| [prompted_grpo/](prompted_grpo/) | One full-length protein with a marked IDR for prompted GRPO |
 
 ```bash
 hf download jxliu2/idiom-data --repo-type dataset --include "example_data/*"

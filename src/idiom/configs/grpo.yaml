@@ -24,6 +24,7 @@ grpo:
   normalize_advantage: true # normalize by std dev
   log_samples_every: 5 # print example generations every N steps (0 disables)
   n_log_samples: 3
+  track_disorder: true # metapredict V3 mean per-sequence disorder, every optimizer step (CPU)
 
 trainer:
   max_steps: 3000
