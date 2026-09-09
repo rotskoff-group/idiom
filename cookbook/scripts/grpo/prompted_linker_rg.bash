@@ -21,8 +21,7 @@ RG_WIDTH=0.2                           # quadratic reward scale = 20% of target 
 LENGTH_WIDTH=0.1                       # discourage reaching Rg by changing linker length
 SCORER="uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration"
 
-# Online logging when authenticated; set WANDB_MODE=offline to save records locally.
-export WANDB_MODE="${WANDB_MODE:-online}"
+export WANDB_MODE=offline
 
 # Entropy and length terms discourage low-complexity or extreme-length solutions
 ENTROPY="{label: entropy, \

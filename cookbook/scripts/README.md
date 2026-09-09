@@ -24,7 +24,7 @@ The [SAE notebook](../notebooks/sae_features.ipynb) shows how to inspect a featu
 ## Running scripts
 
 Scripts use IDiom from your active Python environment and the clone for cookbook files.
-Either [installation workflow](../../README.md#installation) works. When installing and cloning
+When installing and cloning
 separately, use the same tag or commit to keep the examples matched to the installed API.
 
 1. Activate the environment where IDiom is installed.
@@ -128,3 +128,32 @@ directory, or a Lightning checkpoint.
 
 FASTA training builds a memory-mapped `<fasta>.idiomstore/` sidecar on first use. You can also
 build it ahead of time with `idiom_build_store --fasta /path/to/corpus.fasta`.
+
+## Generation and analysis details
+
+Generation caps `max_new_tokens` at the remaining model context, accounting for flanks and FIM
+markers, and warns when reducing the requested budget. Prompts exceeding the context are rejected.
+Length filtering may return fewer sequences if it reaches the sampling limit. Use `temperature=0`
+for greedy generation; `seed` controls stochastic sampling. Invalid generation options raise `ValueError`.
+
+Generation and SAE steering use batches of eight by default. Set `batch_size` in Python
+or `--batch-size` in the generation CLI to adjust memory use. Seeded results are
+reproducible for a fixed batch size.
+
+`idiom_extract --ckpt` remains an alias for `--model`. Per-residue embedding metadata
+includes `record_idx`, `accession`, `source_pos` (0-based in the original protein),
+`residue`, and `is_idr`. Mean SAE encoding preserves separate records with repeated accessions.
+
+SAE steering supports `add_direction`, `clamp`, and `ablate`. For ablation, `strength=0`
+leaves activations unchanged and `strength=1` removes the selected features’ decoder
+contributions.
+
+## GRPO disorder monitoring
+
+GRPO logs `train/metapredict_disorder` every optimizer step using metapredict 3.0.2's V3
+network on CPU. It averages per-residue disorder scores within each generated sequence,
+then averages nonempty sequences across all gradient-accumulation microbatches and ranks.
+This diagnostic is separate from the reward. Empty completions are excluded and reported as
+`train/metapredict_empty_fraction`; an entirely empty step reports disorder 0 and empty fraction 1.
+Set `grpo.track_disorder=false` to disable prediction. Metrics use the existing Lightning/W&B
+logger (offline W&B runs still require syncing to appear online).

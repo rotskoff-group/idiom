@@ -13,7 +13,7 @@ OUT="/path/to/output/grpo-finches"  # EDIT: run output directory
 cd "$REPO"
 
 PARTNER_FASTA=cookbook/example_data/finches/h1_ctd.fasta
-PARTNER=$(awk '!/^>/ {gsub(/[[:space:]]/, ""); printf "%s", $0}' "$PARTNER_FASTA")
+PARTNER=$(tail -n +2 "$PARTNER_FASTA" | tr -d '[:space:]') # Skip header and remove whitespace
 # Approximate native ProTalpha targets, using Mpipi at 0.150 M salt.
 TARGET=-34.8
 ENTROPY_TARGET=3.14

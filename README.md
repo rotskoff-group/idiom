@@ -1,148 +1,246 @@
 # IDiom
 
-[Preprint](https://doi.org/10.64898/2026.04.10.717777) &sdot; [Models](https://huggingface.co/jxliu2) &sdot; [Data](https://huggingface.co/datasets/jxliu2/idiom-data) &sdot; [Cookbook](cookbook/)
+<p align="center">
+  <a href="https://doi.org/10.64898/2026.04.10.717777">Preprint</a>
+  |
+  <a href="https://huggingface.co/collections/jxliu2/idiom">Models and Data</a>
+  |
+  <a href="cookbook/">Cookbook</a>
+</p>
 
-IDiom is an autoregressive transformer for generating and studying intrinsically disordered protein
-regions (IDRs), trained on 54M IDRs from the AlphaFold Database. It generates sequences de novo or
-conditioned on flanking protein context, and supports fine-tuning with custom rewards.
-IDiomSAE provides sparse autoencoders for interpreting and steering the model.
+IDiom is an autoregressive protein language model trained on 54M intrinsically disordered protein regions (IDRs) curated from the AlphaFold Database. This repository supports:
+
+- Generation of de novo, standalone IDRs as well as IDRs conditioned on flanking protein context
+- Extraction of sequence- and residue-level embeddings for IDRs
+- Post-training via supervised fine-tuning and reinforcement learning with custom rewards
+- Model interpretability and steering via IDiomSAE sparse autoencoders
 
 ![IDiom](assets/github_fig.png)
 
+## Table of contents
+
+- [Installation](#installation)
+- [Sequence generation](#sequence-generation)
+- [Embeddings](#embeddings)
+- [Post-training](#post-training)
+- [SAE features and steering](#sae-features-and-steering)
+- [Sequence conventions](#sequence-conventions)
+- [Models and Data](#models-and-data)
+- [Contributing](#contributing)
+- [Citation](#citation)
+- [License](#license)
+
 ## Installation
 
-Python ≥3.10. Choose either setup.
-
-### Install into an existing environment
-
-Activate your Python environment, then install:
+Please install the `v1` release directly from GitHub (requires Python ≥3.10):
 
 ```bash
-python -m pip install git+https://github.com/rotskoff-group/idiom.git
+pip install git+https://github.com/rotskoff-group/idiom.git@v1
 ```
 
-To access the cookbook files, also clone the repository:
+To access the [cookbook examples](cookbook/), please also clone the `v1` release:
 
 ```bash
-git clone https://github.com/rotskoff-group/idiom.git
-cd idiom
+git clone --branch v1 https://github.com/rotskoff-group/idiom.git
 ```
 
-### Create an environment from the clone
+Below, we provide several Quickstart examples to get started with IDiom. More detailed examples and workflows are provided in the [IDiom cookbook](cookbook/).
 
-With `uv` installed (`python -m pip install uv`):
+## Sequence generation
 
-```bash
-git clone https://github.com/rotskoff-group/idiom.git
-cd idiom
-uv sync
-source .venv/bin/activate
-```
+IDiom enables the generation of de novo, unprompted IDRs, as well as IDRs conditioned on flanking protein context.
 
-This installs the checkout with its locked dependencies. For either setup, see
-[running cookbook scripts](cookbook/scripts/README.md#running-scripts) for paths and run settings.
+### Unprompted generation
 
-## Quickstart
-
-Generate ten IDRs:
+Generate 100 unprompted IDRs:
 
 ```python
 from idiom import IDiom
 
 model = IDiom.from_pretrained("jxliu2/idiom-300M")
-sequences = model.generate_unprompted(n=10)
+sequences = model.generate_unprompted(n=100)
 print(sequences[0])
 ```
 
-Weights download on first use. Inference supports CPU; a GPU is recommended.
-Generation and SAE steering use batches of eight by default. Set `batch_size` (CLI: `--batch-size`)
-to adjust memory use; reduce it for smaller devices. Seeded results are reproducible for a fixed batch size.
-`from_pretrained` accepts a Hub model ID or a released directory. Use `IDiom.load` to also
-accept a Lightning `.ckpt` file.
+<!-- Weights download on first use. Reduce `batch_size` if GPU memory is limited.
+`from_pretrained` accepts a Hub model ID or a released directory; `IDiom.load`
+also accepts a Lightning `.ckpt` file. -->
 
-### Generation and embeddings
-
-Generate IDRs within a length range and embed them:
+Generate 100 unprompted IDRs within a length range:
 
 ```python
-sequences = model.generate_unprompted(n=10, length_range=(80, 120))
-values, index = model.embed(sequences, layers=[18], pool="mean")[18]
+from idiom import IDiom
+
+model = IDiom.from_pretrained("jxliu2/idiom-300M")
+sequences = model.generate_unprompted(n=100, length_range=(80, 120))
+# Model oversamples until n is reached
+print(sequences[0])
 ```
 
-Generation caps `max_new_tokens` at the remaining model context, accounting for flanks and FIM
-markers, and warns when reducing the requested budget. Prompts exceeding the context are rejected.
-Length filtering may return fewer sequences if it reaches the sampling limit. Use `temperature=0`
-for greedy generation; `seed` controls stochastic sampling. Invalid generation options raise `ValueError`.
-
-Embedding layers are zero-based block indices. `pool="mean"` returns one vector per record,
-averaged over its IDR residues; `pool="none"` returns per-residue rows. Each layer maps to
-`(values, index)`: a NumPy array and matching metadata. Per-residue metadata includes `record_idx`,
-`accession`, `source_pos` (0-based in the original protein), `residue`, and `is_idr`.
-
-For prompted generation, supply a protein sequence and its 0-based, half-open IDR span:
+Sample with temperature and top-p sampling:
 
 ```python
-# Toy example: replace seq[3:9], keeping the flanks
-seq = "MEDSKVDNRPQACDEFG"
-replacements = model.generate_prompted(seq, idr_start=3, idr_end=9, n=10)
+from idiom import IDiom
+
+model = IDiom.from_pretrained("jxliu2/idiom-300M")
+sequences = model.generate_unprompted(n=100, temperature=0.8, top_p=0.9, seed=42)
+print(sequences[0])
 ```
 
-To redesign proteins from an existing [record FASTA](#sequence-conventions):
+<!-- Lower temperatures concentrate sampling on more likely residues; `top_p=0.9` restricts
+each step to the most likely residues whose cumulative probability reaches 90%.
+Use `seed` for reproducibility with a fixed batch size. Length filtering
+may return fewer sequences if it reaches the sampling limit. See the
+[generation notes](cookbook/scripts/README.md#generation-and-analysis-details) for details. -->
 
-```python
-model.generate_prompted_fasta(
-    "proteins.fasta", "redesigned.fasta", n=10, return_full=True
-)
-```
-
-`return_full=True` inserts each generated IDR between its flanks and updates the FASTA span.
 For de novo FASTA output, use `model.generate_unprompted_fasta("idrs.fasta", n=100)` or:
 
 ```bash
 idiom_generate unprompted --model jxliu2/idiom-300M --n 100 --out idrs.fasta
 ```
 
-### SAE features and steering
+### Prompted generation
 
-`IDiomSAE` loads the SAE with its recorded host model, layer, and prompt format:
+For prompted generation, supply a protein sequence and its IDR span. See [Sequence conventions](#sequence-conventions)
+for residue position indexing conventions.
+
+This example uses the flanking context around the IDR within residues 119–259 (1-based, inclusive) of human [NPM1 (UniProt P06748)](https://www.uniprot.org/uniprotkb/P06748/entry) as the prompt for generating IDRs:
+
+```python
+from idiom import IDiom
+
+model = IDiom.from_pretrained("jxliu2/idiom-300M")
+# Human NPM1 (UniProt P06748), full-length sequence
+seq = (
+    "MEDSMDMDMSPLRPQNYLFGCELKADKDYHFKVDNDENEHQLSLRTVSLGAGAKDELHIV"
+    "EAEAMNYEGSPIKVTLATLKMSVQPTVSLGGFEITPPVVLRLKCGSGPVHISGQHLVAVE"
+    "EDAESEDEEEEDVKLLSISGKRSAPGGGSKVPQKKVKLAADEDDDDDDEEDDDEDDDDDD"
+    "FDDEEAEEKAPVKKSIRDTPAKNAQKSNQNGKDSKPSSTPRSKGQESFKKQEKTPKTPKG"
+    "PSSVEDIKAKMQASIEKGGSLPKVEAKFINYVKNCFRMTDQEAIQDLWQWRKSL"
+)
+# Use flanking context around IDR residues 119–259 (1-based inclusive, following bio convention) as the prompt
+regen_sequences = model.generate_prompted(seq, idr_start=118, idr_end=259, n=100) # Standard Python indexing here
+print(regen_sequences[0]) # Returns only the generated prompted IDRs
+```
+
+To generate prompted IDRs from an existing FASTA file containing protein sequences (see [Sequence conventions](#sequence-conventions) for FASTA file requirements), run this example from the cloned repository root to use [HP1α](cookbook/example_data/prompted_grpo/P45973.fasta) as an example sequence (IDR between residues 79–123):
+
+```python
+from idiom import IDiom
+
+model = IDiom.from_pretrained("jxliu2/idiom-300M")
+model.generate_prompted_fasta(
+    "cookbook/example_data/prompted_grpo/P45973.fasta",
+    "redesigned.fasta",
+    n=10,
+    return_full=True,
+)
+# redesigned.fasta is the output
+```
+
+`return_full=True` places each generated IDR between its original prompting flanks in the output FASTA, while `return_full=False` just outputs the prompted IDRs in the FASTA.
+
+
+## Extracting model embeddings
+
+Extract sequence-level embeddings from IDR sequences:
+
+```python
+from idiom import IDiom
+
+model = IDiom.from_pretrained("jxliu2/idiom-300M")
+idr_sequences = ["MSSGQSSQSPGSGQQQQSSG", "GSGSSQPSQGQSSGSSQQPN"]
+
+values, index = model.embed(idr_sequences, layers=[18], pool="mean")[18]
+# Use pool="none" for per-residue embeddings
+# Embedding layers are 0-based Transformer block indices
+
+print(values.shape)  # (2, 1024) one IDR-averaged embedding per sequence
+print(values[0])  # Embedding vector for the first sequence
+```
+
+To export embeddings for a FASTA file of proteins with IDR regions marked, run the `idiom_extract` CLI:
+
+```bash
+idiom_extract --model jxliu2/idiom-300M \
+    --fasta cookbook/example_data/disprot/disprot_len1020_idrs.fasta \
+    --layers 18 --pool mean --out embeddings
+```
+
+See the [generation and embedding notebook](cookbook/notebooks/generate_and_embed.ipynb) for more detailed examples.
+
+
+## SAE features and steering
+
+We provide a TopK sparse autoencoder, IDiomSAE, trained on the residual stream of layer-18 of 24 in IDiom-300M. IDiomSAE has k = 32 and a latent dimension of z = 16,384.
 
 ```python
 from idiom import IDiomSAE
 
 sae = IDiomSAE.from_pretrained("jxliu2/idiomsae-300M-L18-k32")
-features, accessions = sae.encode(sequences, pool="mean")
-steered = sae.steer_generate(feature=1234, strength=0.5, n=10)
+idr_sequences = ["MSSGQSSQSPGSGQQQQSSG", "GSGSSQPSQGQSSGSSQQPN"]
+
+features, accessions = sae.encode(idr_sequences, pool="mean")
+# Use pool="none" for per-residue feature vectors
+
+print(features.shape)  # (2, 16384) one IDR-averaged feature vector per sequence
+print(features[0])  # SAE feature activations for the first sequence
 ```
 
-Use `pool="none"` for per-residue features. The released SAE uses unprompted IDRs and accepts
-only `region="idr"` (its default). Steering supports `add_direction`, `clamp`, and `ablate`.
-For ablation, `strength=0` leaves activations unchanged and `strength=1` removes the selected
-features' decoder contributions. Mean encoding preserves separate records with repeated accessions.
-See the [SAE notebook](cookbook/notebooks/sae_features.ipynb) to build feature datasets,
-rank features, and inspect activation traces.
 
-### Saving and publishing
-
-Export a checkpoint as `config.json` and `model.safetensors`:
+To steer the generation of IDRs using SAE features, run:
 
 ```python
-model = IDiom.load("/path/to/model.ckpt")
-model.save_pretrained("my-idiom")
+# Example feature ID 1234
+steered = sae.steer_generate(feature=1234, strength=0.25, n=10)
 ```
 
-After authenticating with Hugging Face, upload a release with:
+This IDiomSAE only uses unprompted IDRs and only accepts `region="idr"` (its default). Use the [SAE notebook](cookbook/notebooks/sae_features.ipynb)
+to inspect highly activating sequences and activation patterns, and use the
+[enrichment notebook](cookbook/notebooks/feature_enrichment.ipynb) to identify features
+enriched within a set of sequences.
 
-```python
-model.push_to_hub("your-account/my-idiom", private=True, model_card="# My IDiom model")
+
+
+## Sequence conventions
+
+IDiom is trained using a fill-in-the-middle (FIM) format with one token per canonical amino acid and three positional marker tokens. The markers denote the N-terminal flank `1`, IDR `2`, and C-terminal flank `3`.
+
+As an example, consider the example full protein sequence `MEDQSSGACDE` where `QSSG` is an IDR flanked by `MED` and `ACDE`. The sequence's FIM representation is `1MED3ACDE2QSSG`, and during prompted generation, the model receives `1MED3ACDE2` and generates an IDR conditioned on the flanks. During unprompted generation, the model only receives `132` and generates a de novo IDR without flanking context.
+
+The positional markers are handled automatically by IDiom, and all use cases need only to supply amino acid sequences and IDR positions. **FASTA headers use **1-based, inclusive** IDR residue positions**, following biological convention, and **Python methods use standard 0-based, end-exclusive IDR residue positions**. IDiom converts between these conventions automatically when reading and writing FASTA files.
+
+In the example `MEDQSSGACDE` with IDR `QSSG`, we have:
+
+| Interface | IDR `QSSG` in  `MEDQSSGACDE` |
+|---|---|
+| FASTA header | `>example_IDR_4-7` |
+| Python args | `idr_start=3, idr_end=7` |
+| Python slice | `seq[3:7]` |
+
+<!-- All three identify the same four residues, `QSSG`. To convert a FASTA span `_IDR_x-y` to Python,
+subtract one from the start only: `idr_start=x-1`, `idr_end=y`. -->
+
+**To interface with IDiom, FASTA headers must end with the string `_IDR_x-y`, where `x` and `y` refer to the **1-based, inclusive** indices of the IDR in that record**. A fully disordered sequence of `<length>` would for example have FASTA headers ending in `_IDR_1-<length>`.
+
+
+
+For example, a FASTA record marking `QSSG` as the IDR is:
+
+```fasta
+>example_IDR_4-7
+MEDQSSGACDE
 ```
 
-`IDiomSAE` also provides `save_pretrained` and `push_to_hub`, recording its host model for
-reloading. SAE releases contain `sae_config.json` and `sae.safetensors`.
+## Post-training
 
-See the [generation notebook](cookbook/notebooks/generate_and_embed.ipynb) for more examples,
-including perplexity scoring.
+IDiom can be post-trained with supervised fine-tuning and GRPO-based reinforcement learning with custom rewards.
 
-## Models
+Please see the [cookbook](cookbook/) for detailed examples!
+
+
+
+## Models and Data
 
 | Model | Parameters | Architecture |
 |---|---|---|
@@ -151,84 +249,36 @@ including perplexity scoring.
 | [idiom-20M](https://huggingface.co/jxliu2/idiom-20M) | 18.9M | 6 layers, width 512 |
 | [idiomsae-300M-L18-k32](https://huggingface.co/jxliu2/idiomsae-300M-L18-k32) | — | SAE on layer 18 of idiom-300M; 16,384 latents, k=32 |
 
-## Sequence conventions
+Training sequences, generated sequences, and cookbook example data are available in FASTA format
+on Hugging Face at [jxliu2/idiom-data](https://huggingface.co/datasets/jxliu2/idiom-data).
+The training split contains 53.6M records (23.6 GB), and the validation and test splits contain
+271k records each (128 MB each).
 
-IDiom uses fill-in-the-middle formatting, which requires an IDR span. Incorrect spans can produce
-off-distribution output even when the input is accepted.
-
-- FASTA headers end with `_IDR_x-y`, using 1-based inclusive coordinates:
-  `>P06748_IDR_119-242`. For a fully disordered sequence, use `_IDR_1-<length>`.
-- Python coordinates are 0-based and half-open: `idr = seq[idr_start:idr_end]`.
-  A bare sequence string is treated as an unprompted IDR.
-  Prompted generation requires `0 <= idr_start < idr_end <= len(seq)`.
-- Use the 20 canonical amino acids. Non-canonical FASTA entries are dropped with a logged count;
-  explicitly supplied non-canonical sequences raise an error.
-
-Record FASTA readers skip missing, malformed, or out-of-range spans with a logged count.
-The enrichment workflow instead treats missing or unusable spans as whole-sequence IDRs;
-check annotations when supplying full proteins.
-
-## Training
-
-The [cookbook](cookbook/) includes scripts for pretraining, supervised fine-tuning, SAE training,
-and GRPO post-training. Training commands use [YAML configs](src/idiom/configs/) with command-line
-overrides; add `--cfg job` to inspect a command's configuration without starting training.
-The [reward guide](cookbook/rewards/) explains custom objectives and external scorers.
-
-GRPO logs `train/metapredict_disorder` every optimizer step using metapredict 3.0.2's V3
-network on CPU. It averages per-residue disorder scores within each generated sequence,
-then averages nonempty sequences across all gradient-accumulation microbatches and ranks.
-This diagnostic is separate from the reward. Empty completions are excluded and reported as
-`train/metapredict_empty_fraction`; an entirely empty step reports disorder 0 and empty fraction 1.
-Set `grpo.track_disorder=false` to disable prediction. Metrics use the existing Lightning/W&B
-logger (offline W&B runs still require syncing to appear online).
-
-## Command-line tools
-
-| Command | Purpose |
-|---|---|
-| `idiom_generate` | Generate unprompted or prompted IDRs to FASTA |
-| `idiom_extract` | Export residual-stream embeddings |
-| `idiom_train_autoreg` | Pretrain, or fine-tune with `--config-name sft` |
-| `idiom_train_grpo` | Post-train with custom rewards |
-| `idiom_train_sae` | Train a sparse autoencoder |
-| `idiom_feature_dataset` | Build a per-residue SAE feature dataset |
-| `idiom_feature_enrichment` | Compare IDR sets and export an enriched SAE feature signature |
-| `idiom_build_store` | Build a memory-mapped record store from FASTA |
-
-Export embeddings from a Hub model, released directory, or Lightning checkpoint:
+To download these data:
 
 ```bash
-idiom_extract --model jxliu2/idiom-300M --fasta proteins.fasta --layers 18 --pool mean --out embeddings
-```
-
-The older `--ckpt` flag remains an alias for `--model`.
-
-## Data
-
-[jxliu2/idiom-data](https://huggingface.co/datasets/jxliu2/idiom-data) contains the training FASTAs
-and cookbook example data. The training split contains 53.6M records (23.6 GB); validation and test
-contain approximately 271k records each.
-
-```bash
+# Download all training, validation, and test splits
 hf download jxliu2/idiom-data --repo-type dataset --include "training_sequences/*"
+
+# Download only the validation split
+hf download jxliu2/idiom-data --repo-type dataset --include "training_sequences/validation.fasta"
 ```
 
-See the [cookbook data notes](cookbook/example_data/) for demo datasets and provenance.
 
 ## Contributing
 
-Issues, reward examples, and pull requests are welcome.
-
-From a clone, install the development dependencies and run the checks:
+We welcome any contributions to this open source project. For development, clone the repository and install the package with its development dependencies (Python ≥3.10):
 
 ```bash
+pip install uv
+git clone https://github.com/rotskoff-group/idiom.git
+cd idiom
 uv sync --group dev
-uv run pytest
-uv run ruff check .
+source .venv/bin/activate
 ```
 
-Optionally run `uv run pre-commit install` to enable the commit hooks.
+
+If you have any questions please feel free to open an issue or email [jxliu2@stanford.edu](mailto:jxliu2@stanford.edu).
 
 ## Citation
 
@@ -245,6 +295,4 @@ Optionally run `uv run pre-commit install` to enable the commit hooks.
 
 ## License
 
-Code is released under the [MIT License](LICENSE). The pretraining corpus is CC BY 4.0, inherited
-from AlphaFold DB / UniProt. Data in [cookbook/example_data/](cookbook/example_data/) retains the
-licenses of its original sources.
+MIT license. The pretraining corpus is CC BY 4.0, from AFDB/UniProt. Data examples follow the licenses of their original sources.
