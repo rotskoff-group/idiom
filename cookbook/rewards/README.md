@@ -16,10 +16,9 @@ Clone the repository to access these scripts and their scorer files.
 | [sae_features.bash](../scripts/grpo/sae_features.bash) | Match an SAE feature signature |
 | [custom_reward.bash](../scripts/grpo/custom_reward.bash) | Use a Python reward in IDiom's environment |
 | [sparrow.bash](../scripts/grpo/sparrow.bash) | Target radius of gyration or another sequence property |
-| [finches.bash](../scripts/grpo/finches.bash) | Target self- or partner-interaction epsilon |
+| [finches.bash](../scripts/grpo/finches.bash) | Design a ProTalpha-like IDR matching native interaction epsilon with H1.0 CTD |
 | [protgps.bash](../scripts/grpo/protgps.bash) | Increase a compartment probability |
 | [paddle.bash](../scripts/grpo/paddle.bash) | Increase predicted activation strength |
-| [pspred.bash](../scripts/grpo/pspred.bash) | Target phase-separation free energy or saturation concentration |
 | [starling.bash](../scripts/grpo/starling.bash) | Target ensemble radius of gyration or end-to-end distance |
 | [custom_scorer.bash](../scripts/grpo/custom_scorer.bash) | Use a scorer in a separate environment |
 | [combined.bash](../scripts/grpo/combined.bash) | Combine FINCHES and ProtGPS |
@@ -128,7 +127,6 @@ and `timeout` covers writing the request and waiting for its response, including
 |---|---|---|
 | [sparrow.py](scorers/sparrow.py) | Radius of gyration, asphericity, scaling exponent, FCR, kappa | [sparrow](https://github.com/idptools/sparrow) |
 | [finches.py](scorers/finches.py) | Self- or partner-interaction epsilon | [FINCHES](https://github.com/idptools/finches) |
-| [pspred.py](scorers/pspred.py) | Free energy (kT) or saturation concentration | [PSpred](https://github.com/KULL-Centre/_2024_buelow_PSpred) |
 | [protgps.py](scorers/protgps.py) | Compartment probabilities | [ProtGPS](https://github.com/pgmikhael/protgps) |
 | [paddle.py](scorers/paddle.py) | Activation strength (max-Z) | [PADDLE](https://github.com/asanborn/PADDLE) |
 | [starling.py](scorers/starling.py) | Ensemble radius of gyration or end-to-end distance | [STARLING](https://github.com/idptools/starling) |
@@ -178,7 +176,6 @@ These measurements are starting points for calibration; check them on your own s
 | Radius of gyration (sparrow) | 26.9 ± 15.7 Å |
 | Fraction charged | 0.243 |
 | Self-interaction epsilon (FINCHES) | +3.6 ± 7.0 |
-| Transfer free energy (PSpred) | −0.12 ± 0.83 kT |
 | Activation strength (PADDLE) | +0.94 ± 1.68 Z |
 | Predicted disorder (metapredict) | 0.665 |
 

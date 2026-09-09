@@ -11,6 +11,7 @@ inputs; Bash scripts use local paths.
 | [disprot/](disprot/) | Held-out proteins with annotated IDR spans and flanking context |
 | [sae_features/](sae_features/) | Released SAE signatures as a format reference |
 | [prompted_grpo/](prompted_grpo/) | One full-length protein with a marked IDR for prompted GRPO |
+| [finches/](finches/) | ProTalpha and H1.0 C-terminal constructs from the FINCHES paper |
 
 ```bash
 hf download jxliu2/idiom-data --repo-type dataset --include "example_data/*"
