@@ -21,10 +21,10 @@ IDiom is an autoregressive protein language model trained on 54M intrinsically d
 
 - [Installation](#installation)
 - [Sequence generation](#sequence-generation)
-- [Embeddings](#embeddings)
-- [Post-training](#post-training)
+- [Extracting model embeddings](#extracting-model-embeddings)
 - [SAE features and steering](#sae-features-and-steering)
 - [Sequence conventions](#sequence-conventions)
+- [Post-training](#post-training)
 - [Models and Data](#models-and-data)
 - [Contributing](#contributing)
 - [Citation](#citation)
@@ -38,13 +38,13 @@ Please install the `v1` release directly from GitHub (requires Python ≥3.10):
 pip install git+https://github.com/rotskoff-group/idiom.git@v1
 ```
 
-To access the [cookbook examples](cookbook/), please also clone the `v1` release:
+To access the [cookbook](cookbook/), please also clone the `v1` release:
 
 ```bash
 git clone --branch v1 https://github.com/rotskoff-group/idiom.git
 ```
 
-Below, we provide several Quickstart examples to get started with IDiom. More detailed examples and workflows are provided in the [IDiom cookbook](cookbook/).
+Below, we provide several Quickstart examples to get started with IDiom. More detailed examples and workflows are provided in the [cookbook](cookbook/).
 
 ## Sequence generation
 
