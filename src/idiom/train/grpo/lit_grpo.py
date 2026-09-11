@@ -136,7 +136,7 @@ class LitGRPO(L.LightningModule):
             torch.Tensor: The scalar GRPO loss.
         """
         prompts = batch
-        rep = prompts.repeat_interleave(self.group_size, dim=0)  # [B*G, P]
+        rep = prompts.repeat_interleave(self.group_size, dim=0) # [B*G, P]
         BG, P = rep.shape
 
         with torch.no_grad():
@@ -147,7 +147,7 @@ class LitGRPO(L.LightningModule):
         T = completions.size(1)
 
         start = torch.full((BG, 1), self.tok.start_id, dtype=torch.long, device=rep.device)
-        full = torch.cat([start, rep, completions], dim=1)  # [B*G, 1+P+T]
+        full = torch.cat([start, rep, completions], dim=1) # [B*G, 1+P+T]
 
         # Align the completion mask with full[:, 1:], excluding padding
         mask = torch.zeros(BG, P + T, device=rep.device)

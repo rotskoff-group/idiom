@@ -25,9 +25,9 @@ def _filter_top_p(logits: Tensor, p: float | None) -> Tensor:
     sorted_logits, sorted_idx = torch.sort(logits, descending=True, dim=-1)
     cum = sorted_logits.softmax(-1).cumsum(-1)
     remove = cum > p
-    remove[..., 1:] = remove[..., :-1].clone()  # shift so the token that crosses p is kept
+    remove[..., 1:] = remove[..., :-1].clone() # shift so the token that crosses p is kept
     remove[..., 0] = False
-    remove = torch.zeros_like(remove).scatter(-1, sorted_idx, remove)  # back to original order
+    remove = torch.zeros_like(remove).scatter(-1, sorted_idx, remove) # back to original order
     return logits.masked_fill(remove, float("-inf"))
 
 

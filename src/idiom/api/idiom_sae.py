@@ -72,7 +72,8 @@ class IDiomSAE:
         Args:
             name_or_path (str | Path): A released SAE directory, or a Hub repo id to download.
             model: The host model; loaded from the host_model recorded in the SAE config if None.
-            device (str): Device; "auto" uses resolve_device.
+            device (str): Device; "auto" uses IDIOM_DEVICE if set, otherwise CUDA when
+                available or CPU. An explicitly supplied model determines the final device.
 
         Returns:
             The loaded SAE wrapper.
@@ -136,6 +137,11 @@ class IDiomSAE:
     def encode(self, inputs, *, pool: str = "mean", region: str | None = None):
         """Compute SAE feature activations for the residues of each record.
 
+        FASTA inputs skip records with missing, malformed, or out-of-range IDR spans,
+        or noncanonical sequences, with logged counts. Bare sequence inputs must be
+        non-empty and contain only the 20 uppercase canonical amino acids; otherwise
+        they raise ValueError.
+
         Args:
             inputs: A FASTA path, Record, sequence, or iterable accepted by to_records.
             pool: "none" for per-residue rows, or "mean" to average over each record's residues
@@ -182,6 +188,10 @@ class IDiomSAE:
     @torch.no_grad()
     def build_feature_dataset(self, inputs, out_dir, *, batch_size: int = 16) -> Path:
         """Write the per-residue feature-activation dataset for these inputs.
+
+        FASTA inputs skip records with missing, malformed, or out-of-range IDR spans,
+        or noncanonical sequences, with logged counts. Empty or noncanonical bare
+        sequence inputs raise ValueError; only uppercase canonical amino acids are accepted.
 
         Args:
             inputs (str | Path | list[str]): A record FASTA path, a bare sequence string, or an

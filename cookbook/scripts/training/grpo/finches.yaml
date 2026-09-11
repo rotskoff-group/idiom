@@ -1,0 +1,36 @@
+# Reward terms for finches.bash. Edit scorer commands, targets, shaping, and weights here
+# ${oc.env:...} references values exported by the Bash script
+# Native ProTalpha targets with Mpipi at 0.150 M salt. Recalculate if changing force field
+reward:
+  terms:
+    - label: entropy
+      weight: 1.0
+      reward:
+        name: entropy
+      shaping:
+        name: quadratic
+        target: 3.14
+        width: 0.2
+    - label: length
+      weight: 1.0
+      reward:
+        name: length
+      shaping:
+        name: quadratic
+        target: 111
+        width: 0.1
+    - label: eps
+      weight: 1.0
+      reward:
+        name: external_scorer
+        cmd: uv run --script cookbook/rewards/scorers/finches.py --mode heterotypic --partner ${oc.env:PARTNER} --forcefield mpipi
+        timeout: 300.0
+        maxlen: 0
+        cwd: null
+        env: null
+        cache_max: 100000
+        label: null
+      shaping:
+        name: quadratic
+        target: -34.8
+        width: 0.2

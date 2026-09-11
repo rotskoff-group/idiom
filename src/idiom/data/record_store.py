@@ -21,7 +21,7 @@ from idiom.data.io import Record, read_records
 STORE_SUFFIX = ".idiomstore"
 _VERSION = 1
 _META = "meta.json"
-_OFF_DTYPE = np.int64       # CSR offsets into the byte buffers (file can exceed 2 GB)
+_OFF_DTYPE = np.int64 # CSR offsets into the byte buffers (file can exceed 2 GB)
 _COORD_DTYPE = np.int32
 _BYTE_DTYPE = np.uint8
 
@@ -59,7 +59,7 @@ def build_record_store(
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
 
-    seq_off = array.array("q", [0])  # int64; seq i = seq_data[seq_off[i]:seq_off[i+1]]
+    seq_off = array.array("q", [0]) # int64; seq i = seq_data[seq_off[i]:seq_off[i+1]]
     acc_off = array.array("q", [0])
     idr_start = array.array("i")
     idr_end = array.array("i")
@@ -90,7 +90,7 @@ def build_record_store(
 
     if store_dir.exists():
         shutil.rmtree(store_dir)
-    os.replace(tmp, store_dir)  # atomic on the same filesystem
+    os.replace(tmp, store_dir) # atomic on the same filesystem
     log.info(f"built record store: {n:,} records -> {store_dir}")
     return store_dir
 
@@ -120,7 +120,7 @@ class RecordStore:
         self._idr_end = self._mmap("idr_end.bin", _COORD_DTYPE, n)
 
     def _mmap(self, name: str, dtype, count: int) -> np.ndarray:
-        if count == 0:  # np.memmap rejects empty files
+        if count == 0: # np.memmap rejects empty files
             return np.empty(0, dtype=dtype)
         return np.memmap(self.dir / name, dtype=dtype, mode="r", shape=(count,))
 
@@ -184,7 +184,7 @@ def open_or_build(
         try:
             fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
-            try:  # break a stale lock from a crashed builder
+            try: # break a stale lock from a crashed builder
                 if time.time() - lock.stat().st_mtime > lock_timeout:
                     lock.unlink(missing_ok=True)
                     continue

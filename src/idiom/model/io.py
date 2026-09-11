@@ -84,7 +84,7 @@ def load_released(
     d = Path(path)
     cfg = ModelConfig(**json.loads((d / CONFIG_FILE).read_text()))
     model = IDiomTransformer(cfg)
-    _safetensors_load_model(model, str(d / WEIGHTS_FILE))  # handles the tied embedding
+    _safetensors_load_model(model, str(d / WEIGHTS_FILE)) # handles the tied embedding
     if eval_mode:
         model.eval()
     return model.to(device), cfg

@@ -18,7 +18,7 @@ _BUILTIN = "idiom.train.grpo.reward.builtin"
 REWARD_ALIASES: dict[str, str] = {
     "entropy": f"{_BUILTIN}:entropy",
     "length": f"{_BUILTIN}:length",
-    "scorer": "idiom.train.grpo.reward.external:scorer",
+    "external_scorer": "idiom.train.grpo.reward.external:scorer",
     "sae_signature": "idiom.train.grpo.reward.sae_feature:sae_signature",
 }
 

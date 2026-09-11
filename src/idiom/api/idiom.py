@@ -48,7 +48,9 @@ class IDiom:
         """Load a checkpoint file, release directory, or Hub repository.
 
         Existing files are read as Lightning checkpoints; other inputs use from_pretrained.
-        The returned wrapper is in eval mode; device="auto" uses resolve_device.
+        The returned wrapper is in eval mode. With device="auto", IDIOM_DEVICE takes
+        precedence, followed by CUDA if available, otherwise CPU. Pass an explicit
+        device such as "cpu" or "cuda:0" to override automatic selection.
         """
         if Path(name_or_path).is_file():
             return cls.from_lightning_checkpoint(name_or_path, device=device)
@@ -58,12 +60,14 @@ class IDiom:
     def from_pretrained(cls, name_or_path: str | Path, *, device="auto") -> IDiom:
         """Load config.json and model.safetensors from a directory or Hub repository.
 
-        The returned wrapper is in eval mode; device="auto" uses resolve_device.
+        Hub artifacts are downloaded and cached on first use. The returned wrapper is in
+        eval mode. With device="auto", IDIOM_DEVICE takes precedence, followed by CUDA if
+        available, otherwise CPU. Pass "cpu" or "cuda:0" to select a device explicitly.
         """
         d = _resolve(name_or_path)
         cfg = ModelConfig(**json.loads((d / CONFIG_FILE).read_text()))
         model = IDiomTransformer(cfg)
-        load_model(model, str(d / WEIGHTS_FILE))  # handles the tied embedding
+        load_model(model, str(d / WEIGHTS_FILE)) # handles the tied embedding
         return cls(model, device=resolve_device(device))
 
     def save_pretrained(self, out_dir: str | Path, *, model_card: str | None = None) -> Path:
@@ -224,6 +228,8 @@ class IDiom:
         """Generate IDRs for each input FASTA record; skip empty generations.
 
         Headers use "{source_accession}_{marker}_gen{i}" plus the generated IDR span.
+        Input records with missing, malformed, or out-of-range IDR spans, or sequences
+        outside the 20 uppercase canonical amino acids, are skipped with logged counts.
 
         Args:
             in_fasta (str | Path): Input proteins with "_IDR_x-y" headers.
@@ -252,7 +258,12 @@ class IDiom:
         return _write_fasta(rows, out_fasta)
 
     def embed(self, inputs, layers: list[int], *, pool: str = "mean"):
-        """Extract residual-stream embeddings; see embed_fasta for the output schema.
+        """Extract residual-stream embeddings for IDRs and their flanking context.
+
+        FASTA inputs skip records with missing, malformed, or out-of-range IDR spans,
+        or noncanonical sequences, with logged counts. Bare sequence inputs must be
+        non-empty and contain only the 20 uppercase canonical amino acids; otherwise
+        they raise ValueError.
 
         Args:
             inputs: A FASTA path, Record, sequence, or iterable accepted by to_records.
@@ -260,7 +271,19 @@ class IDiom:
             pool: "mean" averages IDR residues; "none" returns per-residue rows.
 
         Returns:
-            A mapping from layer index to (values, index).
+            A mapping from layer index to (values, index), where values is a NumPy array
+            and index is a list of metadata dicts, one per row. Records appear in input order.
+            With pool="mean", values has shape [N_records, d_model], averaging only IDR
+            residues; each metadata dict contains accession and n_idr (the IDR residue count).
+            With pool="none", values has shape [N_residues, d_model] and includes both flanks
+            and the IDR, with marker tokens excluded. Within each record, rows follow FIM
+            order: N-terminal flank, C-terminal flank, then IDR. For example, MED|QSSG|ACDE
+            with IDR QSSG yields rows for MED|ACDE|QSSG, not original protein order.
+            Each per-residue metadata dict contains record_idx (0-based input record index),
+            accession, source_pos (0-based position in the original full protein), residue,
+            and is_idr. Use record_idx and source_pos to align rows to input proteins, and
+            is_idr to select IDR rows. Bare sequences are treated as entirely IDR, so their
+            rows retain sequence order. N_records and N_residues count accepted inputs only.
         """
         return embed_fasta(self.model, inputs, layers, pool=pool, tokenizer=self.tok, device=self.device)
 

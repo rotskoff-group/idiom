@@ -53,11 +53,11 @@ def test_logs_once_per_optimizer_step_with_accumulation(tmp_path, monkeypatch, e
 
     def score(seqs):
         calls.append(list(seqs))
-        # Empty sequences excluded; A has mean disorder .2, GG has .8.
+        # Empty sequences excluded; A has mean disorder .2, GG has .8
         return sum({"": 0, "A": .2, "GG": .8}[s] for s in seqs), sum(bool(s) for s in seqs), len(seqs)
 
     monkeypatch.setattr(module, "disorder_totals", score)
-    # Two sequences per microbatch; optimizer steps see 4, 4, then 2 sequences.
+    # Two sequences per microbatch; optimizer steps see 4, 4, then 2 sequences
     decoded = iter(["A", "", "GG", "GG", "", "", "", "", "A", "GG"])
     lit = LitGRPO(TINY, proline_terms(), group_size=2, max_new_tokens=3,
                   log_samples_every=0, track_disorder=enabled)

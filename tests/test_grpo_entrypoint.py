@@ -45,7 +45,7 @@ def _reward_cfg(**over):
 
 def test_build_reward_composes():
     terms = build_reward(_reward_cfg())
-    idr = "P" * 100  # 100% proline, and length exactly on the target
+    idr = "P" * 100 # 100% proline, and length exactly on the target
     totals, _ = terms([idr], 1)
     assert abs(totals[0] - 1.0) < 1e-6
 
@@ -53,7 +53,7 @@ def test_build_reward_composes():
 def test_the_shipped_aliases_are_the_whole_menu():
     from idiom.train.grpo.reward import REWARD_ALIASES, SHAPING_ALIASES, entropy, length
 
-    assert set(REWARD_ALIASES) == {"entropy", "length", "scorer", "sae_signature"}
+    assert set(REWARD_ALIASES) == {"entropy", "length", "external_scorer", "sae_signature"}
     assert set(SHAPING_ALIASES) == {"quadratic", "gaussian", "identity"}
     assert entropy()(["AAAA"]) == [0.0] and length()(["AAAA"]) == [4.0]
 
@@ -103,7 +103,7 @@ def test_nothing_shipped_names_a_path_outside_the_package():
         blob = OmegaConf.to_container(OmegaConf.load(yaml), resolve=False)
         for value in _strings(blob):
             if value.startswith("${"):
-                continue  # an env/oc interpolation, not a path
+                continue # an env/oc interpolation, not a path
             assert "cookbook" not in value, f"{yaml.name} names repository material: {value!r}"
             assert not re.search(r"(^|\s)[./]*/?[\w./-]+\.py(\s|$)", value), \
                 f"{yaml.name} names a script path: {value!r}"

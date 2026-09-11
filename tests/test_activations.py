@@ -21,7 +21,7 @@ def test_residue_only_selection_and_alignment():
     out = extract_activations(model, tokens, layers=[1])
     act = out[1]
     assert act.values.shape == (4, TINY.d_model)
-    assert act.pos_idx.tolist() == [2, 3, 5, 7]  # positions of A, C, D, E in the sequence
+    assert act.pos_idx.tolist() == [2, 3, 5, 7] # positions of A, C, D, E in the sequence
     assert act.token_id.tolist() == TOK.encode("ACDE")
     assert "".join(TOK.decode([i]) for i in act.token_id.tolist()) == "ACDE"
     assert (act.token_id < TOK.n_residues).all()

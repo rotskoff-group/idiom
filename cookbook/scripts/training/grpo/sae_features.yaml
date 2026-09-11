@@ -1,0 +1,31 @@
+# Reward terms for sae_features.bash. Edit targets, shaping, and weights here
+# ${oc.env:...} references values exported by the Bash script
+reward:
+  terms:
+    - label: entropy
+      weight: 1.0
+      reward:
+        name: entropy
+      shaping:
+        name: quadratic
+        target: 3.65
+        width: 0.2
+    - label: length
+      weight: 1.0
+      reward:
+        name: length
+      shaping:
+        name: quadratic
+        target: 100
+        width: 1.0
+    - label: sae
+      weight: 1.0
+      reward:
+        name: sae_signature
+        signature: nucleolus
+        features: ${oc.env:FEATURES}
+        case: top30
+        sae: jxliu2/idiomsae-300M-L18-k32
+        device: null
+      shaping:
+        name: identity

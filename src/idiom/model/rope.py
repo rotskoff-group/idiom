@@ -25,8 +25,8 @@ class Rope(nn.Module):
         super().__init__()
         inv_freq = 1.0 / (base ** (torch.arange(0, head_dim, 2).float() / head_dim))
         t = torch.arange(max_seq_len).float()
-        freqs = torch.outer(t, inv_freq)  # [max_seq_len, head_dim/2]
-        emb = torch.cat((freqs, freqs), dim=-1)  # [max_seq_len, head_dim] (duplicated for rotate-half)
+        freqs = torch.outer(t, inv_freq) # [max_seq_len, head_dim/2]
+        emb = torch.cat((freqs, freqs), dim=-1) # [max_seq_len, head_dim] (duplicated for rotate-half)
         self.register_buffer("cos", emb.cos(), persistent=False)
         self.register_buffer("sin", emb.sin(), persistent=False)
 
@@ -35,7 +35,7 @@ class Rope(nn.Module):
 
         Return (rotated_q, rotated_k) with unchanged shapes.
         """
-        cos = self.cos[positions].to(q.dtype)[None, None]  # [1, 1, L, head_dim] -> broadcasts over B, H
+        cos = self.cos[positions].to(q.dtype)[None, None] # [1, 1, L, head_dim] -> broadcasts over B, H
         sin = self.sin[positions].to(q.dtype)[None, None]
         q_rot = q * cos + _rotate_half(q) * sin
         k_rot = k * cos + _rotate_half(k) * sin

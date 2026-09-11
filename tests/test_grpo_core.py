@@ -21,7 +21,7 @@ def test_rewards():
 
 
 def test_group_advantages():
-    rewards = torch.tensor([1.0, 3.0, 0.0, 2.0])  # two groups of 2
+    rewards = torch.tensor([1.0, 3.0, 0.0, 2.0]) # two groups of 2
     adv = group_advantages(rewards, group_size=2, normalize=False)
     assert adv.tolist() == [-1.0, 1.0, -1.0, 1.0]
     norm = group_advantages(rewards, group_size=2, normalize=True)

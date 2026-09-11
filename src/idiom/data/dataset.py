@@ -83,7 +83,7 @@ class RecordDataset(Dataset):
         self.completion_only = bool(completion_only)
         self._rng = random.Random(seed)
 
-        keep = max_protein_len(self.max_len)  # filter on the full-context length so any sample fits
+        keep = max_protein_len(self.max_len) # filter on the full-context length so any sample fits
         if isinstance(records, RecordStore):
             self.store: RecordStore | None = records
             self.records = None

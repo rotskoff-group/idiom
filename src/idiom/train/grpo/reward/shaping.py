@@ -56,7 +56,7 @@ def quadratic(*, target: float, width: float = 1.0) -> Shaping:
     Raises:
         ValueError: If width is not positive.
     """
-    tolerance(target, width)  # validate now, not on the first training step
+    tolerance(target, width) # validate now, not on the first training step
     return lambda value: quadratic_penalty(value, target, width)
 
 
@@ -73,5 +73,5 @@ def gaussian(*, target: float, width: float = 1.0) -> Shaping:
     Raises:
         ValueError: If width is not positive.
     """
-    tolerance(target, width)  # validate now, not on the first training step
+    tolerance(target, width) # validate now, not on the first training step
     return lambda value: gaussian_score(value, target, width)

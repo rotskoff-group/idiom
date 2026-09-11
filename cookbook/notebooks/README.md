@@ -1,5 +1,9 @@
 # Notebooks
 
+
+See the [cookbook](../README.md#notebooks) for details.
+
+
 | Notebook | Task | Colab |
 |---|---|---|
 | [`generate_and_embed.ipynb`](generate_and_embed.ipynb) | Generate IDRs, extract embeddings, and score perplexity | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/generate_and_embed.ipynb) |

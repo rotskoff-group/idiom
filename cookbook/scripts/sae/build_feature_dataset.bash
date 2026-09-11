@@ -6,14 +6,14 @@ set -euo pipefail
 # The SAE release supplies its host model, layer, and prompt format; the released SAE encodes IDRs
 # A GPU is recommended; reduce BATCH_SIZE to use less memory
 
-REPO="/path/to/idiom"  # EDIT: repository checkout
-OUT="/path/to/output/features"  # EDIT: feature dataset directory
+REPO="/path/to/idiom" # EDIT: repository checkout
+OUT="/path/to/output/features" # EDIT: feature dataset directory
 
 cd "$REPO"
 
-SAE=jxliu2/idiomsae-300M-L18-k32         # EDIT: Hub ID or released SAE directory
-FASTA=cookbook/example_data/protgps/nucleolus.fasta  # EDIT: headers end in _IDR_x-y
-BATCH_SIZE=16                         # EDIT: records per model forward
+SAE=jxliu2/idiomsae-300M-L18-k32 # EDIT: Hub ID or released SAE directory
+FASTA=cookbook/example_data/protgps/nucleolus.fasta # EDIT: headers end in _IDR_x-y
+BATCH_SIZE=16 # EDIT: records per model forward
 
 idiom_feature_dataset \
     --sae "$SAE" \

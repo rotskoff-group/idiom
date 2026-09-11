@@ -149,7 +149,7 @@ class SparseCoder(nn.Module):
         Returns:
             The reconstruction of shape [..., d_in].
         """
-        chosen = self.W_dec[top_indices]  # [..., k, d_in]
+        chosen = self.W_dec[top_indices] # [..., k, d_in]
         return (top_acts.unsqueeze(-1) * chosen).sum(dim=-2) + self.b_dec
 
     def encode_dense(self, x: Tensor) -> Tensor:
@@ -184,7 +184,7 @@ class SparseCoder(nn.Module):
 
         # AuxK: encourage the top ~half of dead latents to predict the residual
         if dead_mask is not None and (num_dead := int(dead_mask.sum())) > 0:
-            k_aux = x.shape[-1] // 2  # heuristic from Gao et al. Appendix B.1
+            k_aux = x.shape[-1] // 2 # heuristic from Gao et al. Appendix B.1
             scale = min(num_dead / k_aux, 1.0)
             k_aux = min(k_aux, num_dead)
 

@@ -38,7 +38,7 @@ COMPARTMENTS = [
 
 ZENODO_URL = "https://zenodo.org/records/14795445/files/checkpoints.zip?download=1"
 _CKPT_STEM = "protgps/32bf44b16a4e770a674896b81dfb3729"
-_MAX_LEN = 1800  # ProtGPS sequence-length ceiling
+_MAX_LEN = 1800 # ProtGPS sequence-length ceiling
 _BATCH = int(os.environ.get("PROTGPS_BATCH", "1"))
 
 
@@ -83,7 +83,7 @@ def _load_model():
     parent = _checkpoint_dir()
     args = Namespace(**pickle.load(open(parent / f"{_CKPT_STEM}.args", "rb")))
     args.model_path = str(parent / f"{_CKPT_STEM}epoch=26.ckpt")
-    args.pretrained_hub_dir = str(parent / "esm_models/esm2")  # torch.hub cache for the backbone
+    args.pretrained_hub_dir = str(parent / "esm_models/esm2") # torch.hub cache for the backbone
     Path(args.pretrained_hub_dir).mkdir(parents=True, exist_ok=True)
 
     model = get_object(args.lightning_name, "lightning")(args)

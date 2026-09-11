@@ -6,11 +6,11 @@ set -euo pipefail
 # layer must be < n_layers; expansion_factor=32 gives 32 x d_model latents
 # Needs: 1 GPU
 
-REPO="/path/to/idiom"  # EDIT: repository checkout
-OUT="/path/to/output/sae"  # EDIT: run output directory
+REPO="/path/to/idiom" # EDIT: repository checkout
+OUT="/path/to/output/sae" # EDIT: run output directory
 
 cd "$REPO"
-FASTA=/path/to/records.fasta            # EDIT
+FASTA=/path/to/records.fasta # EDIT
 
 export WANDB_MODE=offline
 

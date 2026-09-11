@@ -17,7 +17,7 @@ from idiom.data.io import Record, parse_idr_header, read_fasta
 # Defaults used to build the published signatures
 MIN_TOTAL_FIRE = 5
 FDR_ALPHA = 1e-3
-SMOOTH = 0.5            # Haldane-Anscombe pseudocount added to all four contingency cells
+SMOOTH = 0.5 # Haldane-Anscombe pseudocount added to all four contingency cells
 LOG2OR_FLOOR = 1.0
 PREV_POS_FLOOR = 0.05
 
@@ -311,7 +311,7 @@ def length_match(positives, background, *, n, rng, bin_width=20):
             idx = rng.choice(len(pool), size=take, replace=False)
             picked.extend(pool[i] for i in idx)
         shortfall += want - take
-    if shortfall > 0:  # bins the background could not fill: top up from anywhere
+    if shortfall > 0: # bins the background could not fill: top up from anywhere
         chosen = {id(r) for r in picked}
         rest = [r for r in background if id(r) not in chosen]
         if rest:

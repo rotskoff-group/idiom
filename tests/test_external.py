@@ -125,7 +125,7 @@ def test_scorer_restarts_after_the_child_dies(tmp_path):
     try:
         assert s.score(["AAA"]) == [3.0]
         with pytest.raises(BrokenPipeError):
-            s.score(["DIE"])  # restart happens, then the same batch kills it again
+            s.score(["DIE"]) # restart happens, then the same batch kills it again
         assert s.score(["AAAA"]) == [4.0]
     finally:
         s.stop()
@@ -188,8 +188,8 @@ def test_scorer_batches_dedups_and_caches(tmp_path):
     assert reward(["AAA", "GG"]) == [3.0, 2.0]
 
     batches = [line for line in counter.read_text().splitlines() if line]
-    assert batches[0] == '["AAA", "CCCCC"]'  # deduped, empty dropped
-    assert batches[1] == '["GG"]'            # only the uncached sequence
+    assert batches[0] == '["AAA", "CCCCC"]' # deduped, empty dropped
+    assert batches[1] == '["GG"]' # only the uncached sequence
 
 
 def test_scorer_returns_the_raw_value(tmp_path):
@@ -197,12 +197,29 @@ def test_scorer_returns_the_raw_value(tmp_path):
     assert reward(["AAA", "AAAAA"]) == [3.0, 5.0]
 
 
+def test_external_scorer_config_applies_shaping_and_weight(tmp_path):
+    from idiom.train.grpo.reward import build_reward
+
+    reward = build_reward({"terms": [{
+        "label": "external_length",
+        "reward": {
+            "name": "external_scorer",
+            "cmd": [sys.executable, str(_scorer_path(tmp_path))],
+        },
+        "shaping": {"name": "quadratic", "target": 4, "width": 0.25},
+        "weight": 2.0,
+    }]})
+    totals, breakdown = reward(["AAA", "AAAA", "AAAAA"], 1)
+    assert totals == [-2.0, 0.0, -2.0]
+    assert [row["external_length_raw"] for row in breakdown] == [3.0, 4.0, 5.0]
+
+
 def test_two_scorers_are_independent(tmp_path):
     m1 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
     m2 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path),
                                maxlen=2)
     assert m1(["AAAAA"])[0] == pytest.approx(5.0)
-    assert m2(["AAAAA"])[0] == pytest.approx(2.0)  # truncated before it was sent
+    assert m2(["AAAAA"])[0] == pytest.approx(2.0) # truncated before it was sent
 
 
 def test_a_command_can_be_given_as_an_argument_list(tmp_path):

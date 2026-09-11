@@ -7,7 +7,7 @@ Validate settings in the factory. See cookbook/rewards/README.md for configurati
 
 import re
 
-from idiom.train.grpo.reward import Reward, Shaping, batchify, tolerance
+from idiom.train.grpo.reward import Reward, Shaping, batchify
 
 
 def net_charge_fraction() -> Reward:
@@ -39,28 +39,8 @@ def motif_count(pattern: str = r"[VILMF]K.E") -> Reward:
     motif = re.compile(pattern)
     return batchify(lambda idr: float(len(motif.findall(idr))))
 
+# Reward shaping example
 
-def one_sided(*, target: float, width: float = 1.0, direction: str = "above") -> Shaping:
-    """Return a quadratic penalty outside an acceptable threshold.
-
-    Args:
-        target: Threshold where the penalty reaches 0.
-        width: Positive fractional tolerance; absolute when target is 0.
-        direction: "above" accepts values >= target; "below" accepts values <= target.
-
-    Returns:
-        A function scoring 0 on the accepted side and -1 one tolerance outside it.
-
-    Raises:
-        ValueError: If direction is invalid or width is not positive.
-    """
-    if direction not in ("above", "below"):
-        raise ValueError(f"one_sided direction must be 'above' or 'below', got {direction!r}")
-    scale = tolerance(target, width)
-    sign = 1.0 if direction == "above" else -1.0
-
-    def shaping(value: float) -> float:
-        deficit = sign * (target - value)  # positive only on the wrong side
-        return -((deficit / scale) ** 2) if deficit > 0 else 0.0
-
-    return shaping
+def absolute_error(*, target: float) -> Shaping:
+    """Return -abs(value - target): zero at the target, negative elsewhere."""
+    return lambda value: -abs(value - target)

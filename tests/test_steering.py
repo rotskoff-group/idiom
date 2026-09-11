@@ -40,8 +40,8 @@ def test_ablation_respects_scalar_strength(strength):
     with torch.no_grad():
         sae.encoder.weight.zero_()
         sae.encoder.bias.zero_()
-        sae.encoder.bias[0] = 2.0  # feature 0 is always active
-        sae.W_dec[0].fill_(0.25)  # its contribution is 0.5 in every dimension
+        sae.encoder.bias[0] = 2.0 # feature 0 is always active
+        sae.W_dec[0].fill_(0.25) # its contribution is 0.5 in every dimension
     residual = torch.ones(2, 3, 4)
     hook = build_steering_hook(sae, SteeringSpec(0, 0, strength, mode="ablate"))
     actual = hook(None, None, residual)

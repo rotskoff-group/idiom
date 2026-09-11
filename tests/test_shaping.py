@@ -26,7 +26,7 @@ def build_shaping(spec):
 
 def test_tolerance_is_relative_to_the_target_and_absolute_at_zero():
     assert tolerance(25.0, 0.2) == 5.0
-    assert tolerance(0.0, 0.5) == 0.5         # nothing to be relative to: width is absolute
+    assert tolerance(0.0, 0.5) == 0.5 # nothing to be relative to: width is absolute
     assert tolerance(-4.0, 0.5) == 2.0
     with pytest.raises(ValueError, match="width must be positive"):
         tolerance(25.0, 0.0)
@@ -34,9 +34,9 @@ def test_tolerance_is_relative_to_the_target_and_absolute_at_zero():
 
 def test_quadratic_penalty_is_zero_at_the_target_and_unbounded_away():
     assert quadratic_penalty(25.0, 25.0, 0.2) == 0.0
-    assert quadratic_penalty(30.0, 25.0, 0.2) == pytest.approx(-1.0)   # one tolerance out
+    assert quadratic_penalty(30.0, 25.0, 0.2) == pytest.approx(-1.0) # one tolerance out
     assert quadratic_penalty(20.0, 25.0, 0.2) == pytest.approx(-1.0)
-    assert quadratic_penalty(100.0, 25.0, 0.2) == pytest.approx(-225.0)  # does not saturate
+    assert quadratic_penalty(100.0, 25.0, 0.2) == pytest.approx(-225.0) # does not saturate
 
 
 def test_gaussian_score_is_bounded():
@@ -61,9 +61,9 @@ def test_build_shaping_rejects_a_bad_spec():
     with pytest.raises(ValueError, match="needs a name"):
         build_shaping({"target": 1})
     with pytest.raises(ValueError, match="bad arguments"):
-        build_shaping({"name": "quadratic"})               # quadratic without a target
+        build_shaping({"name": "quadratic"}) # quadratic without a target
     with pytest.raises(ValueError, match="bad arguments"):
-        build_shaping({"name": "quadratic", "target": 1, "min": 2})  # an argument it does not take
+        build_shaping({"name": "quadratic", "target": 1, "min": 2}) # an argument it does not take
     with pytest.raises(ValueError, match="width must be positive"):
         build_shaping({"name": "quadratic", "target": 1, "width": 0})
 
@@ -81,4 +81,12 @@ def test_a_term_can_name_a_shaping_rule_of_its_own(tmp_path):
          "shaping": {"name": f"{mod}:one_sided", "target": 10, "width": 0.5}},
     ]})
     totals, _ = build_reward(cfg)(["A" * 20, "A" * 10, "A" * 5], 1)
-    assert totals == [0.0, 0.0, pytest.approx(-1.0)]  # flat above the threshold, penalized below
+    assert totals == [0.0, 0.0, pytest.approx(-1.0)] # flat above the threshold, penalized below
+
+
+def test_custom_reward_example_penalizes_distance_on_both_sides():
+    cfg = OmegaConf.load("cookbook/scripts/training/grpo/custom_reward.yaml")
+    reward = build_reward(cfg.reward)
+    sequences = ["D" * n + "A" * (20 - n) for n in (6, 3, 9)]
+    totals, _ = reward(sequences, 1)
+    assert totals == pytest.approx([0.0, -0.15, -0.15])

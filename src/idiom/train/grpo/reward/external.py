@@ -129,7 +129,7 @@ class ScorerProcess:
             self.proc = subprocess.Popen(
                 self.argv, cwd=self.cwd, env=self.env, text=True, bufsize=1,
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                start_new_session=True,  # so a timeout can kill the whole process group
+                start_new_session=True, # so a timeout can kill the whole process group
             )
         except OSError as e:
             raise RuntimeError(f"could not run scorer command {self.argv!r}: {e}") from e

@@ -101,7 +101,7 @@ def build_terms(rcfg: DictConfig) -> list[Term]:
         raise ValueError(
             "reward.terms is empty; a run names every term it optimizes. Pass the whole objective "
             "at launch, e.g. reward.terms='[{reward: entropy, weight: 1.0, shaping: {name: "
-            "quadratic, target: 3.65, width: 0.2}}]'; see cookbook/scripts/grpo/ for a ready-to-"
+            "quadratic, target: 3.65, width: 0.2}}]'; see cookbook/scripts/training/grpo/ for a ready-to-"
             "submit script per objective.")
 
     parsed = [_parse_term(t, f"reward.terms[{i}]") for i, t in enumerate(raw_terms)]

@@ -16,7 +16,7 @@ def _tiny_model():
 def test_rmsnorm_unit_scale():
     norm = RMSNorm(8)
     x = torch.randn(4, 8) * 5.0
-    out = norm(x)  # weight initialized to ones -> output rows have RMS ~1
+    out = norm(x) # weight initialized to ones -> output rows have RMS ~1
     rms = out.pow(2).mean(-1).sqrt()
     assert torch.allclose(rms, torch.ones(4), atol=1e-3)
 

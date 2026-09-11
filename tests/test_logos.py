@@ -36,8 +36,8 @@ def _feats(n_res, peaks):
 
 
 def test_top_windows_centres_on_the_peak_and_ranks_by_activation():
-    seqs = [("A", "AAAAKWAAAA"), ("B", "CCCCPYCCCC")]      # each peaks on its 6th residue
-    feats = _feats(20, {5: 1.0, 15: 9.0})                   # B activates harder
+    seqs = [("A", "AAAAKWAAAA"), ("B", "CCCCPYCCCC")] # each peaks on its 6th residue
+    feats = _feats(20, {5: 1.0, 15: 9.0}) # B activates harder
     per_seq = per_sequence_activations(feats, _index(seqs))
     # 5-residue windows centred on the peak residue (W, Y), most-active sequence first
     assert top_windows(0, feats, per_seq, half_width=2) == ["CPYCC", "AKWAA"]
@@ -47,7 +47,7 @@ def test_top_windows_clamps_a_peak_at_the_edge():
     seqs = [("A", "WAAAA")]
     feats = _feats(5, {0: 1.0})
     per_seq = per_sequence_activations(feats, _index(seqs))
-    assert top_windows(0, feats, per_seq, half_width=1) == ["WAA"]   # clamped, still full width
+    assert top_windows(0, feats, per_seq, half_width=1) == ["WAA"] # clamped, still full width
 
 
 def test_top_windows_skips_short_sequences_and_silent_features():

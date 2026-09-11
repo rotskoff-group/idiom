@@ -60,9 +60,9 @@ def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 
     def hook(module, inputs, output):
         if scale == 0:
             return output
-        f = sae.encode_dense(output)            # [B, L, num_latents]
+        f = sae.encode_dense(output) # [B, L, num_latents]
         j = idx.to(output.device)
-        contrib = f[..., j] @ sae.W_dec[j]      # [B, L, d_model] = sum_k act_k * W_dec[k]
+        contrib = f[..., j] @ sae.W_dec[j] # [B, L, d_model] = sum_k act_k * W_dec[k]
         return output - scale * contrib.to(output.dtype)
 
     return hook
@@ -164,7 +164,7 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
             tokens = latest.get("tokens")
             n = output.shape[1]
             if tokens is None or tokens.shape[1] < n:
-                return edited  # can't align tokens to positions; fall back to unmasked edit
+                return edited # can't align tokens to positions; fall back to unmasked edit
             mask = tokenizer.region_mask(tokens, region=region)[:, -n:]
             return torch.where(mask.unsqueeze(-1).to(output.device), edited, output)
 

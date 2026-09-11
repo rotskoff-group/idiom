@@ -35,7 +35,7 @@ def test_weighted_sum_matches_explicit_arithmetic():
     cfg = _cfg(BASE + [{"reward": f"{FIXTURES}:fraction_proline", "weight": 2.0},
                        {"reward": {"name": f"{FIXTURES}:scaled", "residue": "P", "scale": 0.005},
                         "label": "half", "weight": 3.0}])
-    idr = "P" * 100  # fraction_proline = 1.0, scaled = 0.5, length sits exactly on the target
+    idr = "P" * 100 # fraction_proline = 1.0, scaled = 0.5, length sits exactly on the target
     totals, breakdown = build_reward(cfg)([idr], 1)
     expect = (0.1 * quadratic_penalty(entropy()([idr])[0], 3.68, 0.2)
               + 0.1 * quadratic_penalty(100.0, 100, 1.0)
@@ -111,7 +111,7 @@ def test_unknown_term_key_is_rejected():
 def test_a_reward_setting_left_at_the_term_level_is_rejected():
     # timeout belongs inside reward, next to the scorer's name
     with pytest.raises(ValueError, match=r"unknown key\(s\) \['timeout'\]"):
-        build_terms(_cfg([{"reward": {"name": "scorer", "cmd": "true"}, "label": "x",
+        build_terms(_cfg([{"reward": {"name": "external_scorer", "cmd": "true"}, "label": "x",
                            "timeout": 30.0, "weight": 1.0}]))
 
 

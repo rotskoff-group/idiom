@@ -18,9 +18,9 @@ from pathlib import Path
 from _scorer_protocol import serve
 
 REPO_URL = "https://github.com/asanborn/PADDLE.git"
-WINDOW = 53          # PADDLE-noSS scores a fixed 53-residue window
+WINDOW = 53 # PADDLE-noSS scores a fixed 53-residue window
 _STRIDE = int(os.environ.get("PADDLE_STRIDE", "5"))
-_PAD = "G"           # neutral flank when a sequence is shorter than one window
+_PAD = "G" # neutral flank when a sequence is shorter than one window
 
 
 def _paddle_dir() -> Path:
@@ -52,7 +52,7 @@ def build():
     """Clone PADDLE if needed, load the model, and return the max-Z window scorer."""
     d = _paddle_dir()
     sys.path.insert(0, str(d))
-    os.chdir(d)  # paddle.load_models resolves models/ relative to the working directory
+    os.chdir(d) # paddle.load_models resolves models/ relative to the working directory
     import numpy as np
     import paddle as paddle_module
 

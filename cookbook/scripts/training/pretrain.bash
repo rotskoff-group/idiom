@@ -2,18 +2,18 @@
 
 set -euo pipefail
 
-# Pretrain IDiom 24L (~302M params) on 1024-token FIM. Global batch = 32 x 8 GPUs x 4 accum = 1024.
+# Pretrain IDiom 24L (~302M params) on 1024-token FIM. Global batch = 32 x 8 GPUs x 4 accum = 1024
 # Training settings match src/idiom/configs/pretrain.yaml
 # Single node: launch this script once; Lightning starts one process per GPU
 # For multi-node pretraining, use the srun example in cookbook/scripts/README.md
 # Needs: 8 GPUs
 
-REPO="/path/to/idiom"  # EDIT: repository checkout
-OUT="/path/to/output/pretrain"  # EDIT: run output directory
+REPO="/path/to/idiom" # EDIT: repository checkout
+OUT="/path/to/output/pretrain" # EDIT: run output directory
 
 cd "$REPO"
-TRAIN_FASTA=/path/to/train.fasta        # EDIT
-VAL_FASTA=/path/to/validation.fasta     # EDIT
+TRAIN_FASTA=/path/to/train.fasta # EDIT
+VAL_FASTA=/path/to/validation.fasta # EDIT
 
 export WANDB_MODE=offline
 

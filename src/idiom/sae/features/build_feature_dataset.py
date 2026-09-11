@@ -72,8 +72,8 @@ def build_feature_dataset(
 
         top_idx_parts.append(top_ix.cpu().to(torch.int32).numpy())
         top_val_parts.append(top_val.cpu().to(torch.float32).numpy())
-        seq_parts.append(acts.seq_idx.cpu().numpy().astype(np.int32) + start)  # batch-local -> global
-        pos_parts.append(acts.pos_idx.cpu().numpy().astype(np.int32) - 1)  # fed pos -> FIM-string pos
+        seq_parts.append(acts.seq_idx.cpu().numpy().astype(np.int32) + start) # batch-local -> global
+        pos_parts.append(acts.pos_idx.cpu().numpy().astype(np.int32) - 1) # fed pos -> FIM-string pos
         strings.extend(seqs)
 
     out = Path(out_dir)
@@ -94,7 +94,8 @@ def build_feature_dataset(
 
 def main() -> None:
     """Run the idiom_feature_dataset CLI: build a feature dataset from a FASTA and an SAE."""
-    from idiom import IDiomSAE  # deferred: idiom/__init__ imports this module's package
+    # deferred: idiom/__init__ imports this module's package
+    from idiom import IDiomSAE
 
     p = argparse.ArgumentParser(description="Build an SAE feature-activation dataset from a FASTA.")
     p.add_argument("--sae", required=True, help="trained SAE release dir (host model + layer read from it)")

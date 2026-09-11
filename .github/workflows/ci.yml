@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v7
-      - run: uvx ruff@0.16.6 check .   # keep in step with .pre-commit-config.yaml
+      - run: uvx ruff@0.16.6 check . # keep in step with .pre-commit-config.yaml
 
   test:
     runs-on: ubuntu-latest
@@ -34,4 +34,4 @@ jobs:
       # Install CPU torch first to avoid downloading unused CUDA dependencies
       - run: uv pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: uv pip install -e . --group dev
-      - run: uv run --no-sync pytest   # --no-sync: plain `uv run` would re-sync from uv.lock
+      - run: uv run --no-sync pytest # --no-sync: plain `uv run` would re-sync from uv.lock

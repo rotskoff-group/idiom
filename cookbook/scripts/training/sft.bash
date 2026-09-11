@@ -6,11 +6,11 @@ set -euo pipefail
 # The example set is whole-sequence IDRs with no flanks, so train unprompted (data.prompted_prob=0.0)
 # Needs: 1 GPU
 
-REPO="/path/to/idiom"  # EDIT: repository checkout
-OUT="/path/to/output/sft"  # EDIT: run output directory
+REPO="/path/to/idiom" # EDIT: cloned repository location
+OUT="/path/to/output/sft" # EDIT: run output directory
 
 cd "$REPO"
-TRAIN_FASTA=cookbook/example_data/protgps/nucleolus.fasta   # EDIT
+TRAIN_FASTA=cookbook/example_data/protgps/nucleolus.fasta # EDIT
 
 export WANDB_MODE=offline
 

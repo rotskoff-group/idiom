@@ -1,12 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO="/path/to/idiom"  # EDIT: repository checkout
-OUT="/path/to/output/enrichment"  # EDIT: new or empty directory
+REPO="/path/to/idiom" # EDIT: repository checkout
+OUT="/path/to/output/enrichment" # EDIT: new or empty directory
 cd "$REPO"
 
 SAE=jxliu2/idiomsae-300M-L18-k32
-POSITIVE=cookbook/example_data/protgps/nucleolus.fasta  # EDIT
+POSITIVE=cookbook/example_data/protgps/nucleolus.fasta # EDIT
 
 # Omitting --background downloads the held-out validation FASTA from jxliu2/idiom-data
 # To use your own background, add: --background /path/to/background.fasta

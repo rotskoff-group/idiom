@@ -93,7 +93,7 @@ class IDiomTransformer(nn.Module):
             self.lm_head.weight = self.embed.weight
 
         # Small initial weights limit logits; scaled output projections limit variance growth with depth
-        for module in self.modules():  # not self.apply(): Rope defines its own .apply(q,k,positions)
+        for module in self.modules(): # not self.apply(): Rope defines its own .apply(q,k,positions)
             self._init_weights(module)
         for name, p in self.named_parameters():
             if name.endswith("wo.weight") or name.endswith("w_down.weight"):
@@ -134,7 +134,7 @@ class IDiomTransformer(nn.Module):
                 hidden.append(x)
 
         if cache is not None:
-            cache.length += L  # advance once per forward, after every layer has appended
+            cache.length += L # advance once per forward, after every layer has appended
 
         logits = self.lm_head(self.final_norm(x))
         return (logits, hidden) if return_hidden_states else logits

@@ -82,7 +82,7 @@ def run(cfg: DictConfig) -> None:
     lit, store = build(cfg)
     if cfg.init_b_dec_from_mean:
         lit.init_b_dec_from_mean(store.mean_activation())
-    dl = DataLoader(store, batch_size=None)  # the store already yields [B, d_model] batches
+    dl = DataLoader(store, batch_size=None) # the store already yields [B, d_model] batches
     wandb_logger = WandbLogger(
         project=cfg.get("wandb_project", "idiom-sae"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
