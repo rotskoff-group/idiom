@@ -94,7 +94,7 @@ In `cookbook/scripts/`, we provide the following Bash scripts. Details are provi
 |---|---|
 | [sft.bash](scripts/training/sft.bash) | Supervised fine-tuning on a set of sequences |
 | [pretrain.bash](scripts/training/pretrain.bash) | Pretrain IDiom from scratch |
-| `cookbook/scripts/training/grpo/` | Reinforcement learning with custom rewards, SAE features, or external scorers |
+| [cookbook/scripts/training/grpo/](cookbook/scripts/training/grpo/) | Reinforcement learning with custom rewards, SAE features, or external scorers |
 
 
 
@@ -179,6 +179,8 @@ YAML file (for example, `custom_reward.bash` loads `custom_reward.yaml`). Edit r
 scorer commands, shaping, and weights in YAML; edit training settings and runtime paths
 in Bash. No Hydra `defaults` section is needed in the reward YAML.
 
+<br>
+
 ### Configuring reward terms
 
 | Field | Choices |
@@ -189,6 +191,8 @@ in Bash. No Hydra `defaults` section is needed in the reward YAML.
 | `shaping` | A mapping with `name` and any arguments: a built-in (`identity`, `quadratic`, or `gaussian`) or a custom Python factory, defaults to `identity`. |
 
 Below are several examples of reward terms that can be employed.
+
+<br>
 
 ### Built-in reward and shaping
 
@@ -219,6 +223,8 @@ reward:
       weight: 1.0
 ```
 
+<br>
+
 ### Custom reward with built-in shaping
 
 The `fraction_charged` reward factory (returns a function) in [custom_rewards_shapings.py](rewards/custom_rewards_shapings.py) measures
@@ -243,6 +249,7 @@ produces one finite score per input sequence, in order, including empty sequence
 
 More information is provided in [custom_rewards_shapings.py](rewards/custom_rewards_shapings.py).
 
+<br>
 
 ### Custom reward and shaping
 
@@ -263,6 +270,8 @@ reward:
 ```
 
 Information on how to add your own custom reward shaping is also provided in [custom_rewards_shapings.py](rewards/custom_rewards_shapings.py).
+
+<br>
 
 ### External scorer with built-in shaping
 
@@ -288,6 +297,8 @@ reward:
 
 Other provided scorers include SPARROW, ProtGPS, PADDLE, and STARLING in
 `cookbook/rewards/scorers/`. To add your own, see [custom_scorer.py](rewards/scorers/custom_scorer.py) and point `cmd` to your script. That template includes detailed setup, scoring, communication, and testing instructions.
+
+<br>
 
 ### Combining multiple reward terms
 

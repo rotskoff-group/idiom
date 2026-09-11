@@ -17,6 +17,10 @@ IDiom is an autoregressive protein language model trained on 54M intrinsically d
 
 ![IDiom](assets/github_fig.png)
 
+## Updates
+
+- **2026-09-XX:** IDiom v1 release, new preprint.
+- **2026-04-11:** IDiom v0 release, [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777), presented at ICML GenBio Workshop 2026.
 
 
 ## Table of Contents

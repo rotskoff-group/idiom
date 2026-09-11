@@ -1,15 +1,15 @@
 # Bash scripts
 
-See the [cookbook](../README.md#bash-workflows) for details.
+See the [cookbook](../README.md#bash-scripts) for details.
 
-## Generation
+## IDR generation
 
 | Script | Task |
 |---|---|
 | [generate_unprompted.bash](generation/generate_unprompted.bash) | Generate unprompted IDRs |
 | [generate_prompted.bash](generation/generate_prompted.bash) | Generate IDRs prompted with provided flanking contexts |
 
-## SAE
+## SAE analysis
 
 | Script | Task |
 |---|---|
@@ -23,7 +23,7 @@ See the [cookbook](../README.md#bash-workflows) for details.
 |---|---|
 | [sft.bash](training/sft.bash) | Supervised fine-tuning on a set of sequences |
 | [pretrain.bash](training/pretrain.bash) | Pretrain IDiom from scratch |
-| `cookbook/scripts/training/grpo/` | Train with custom rewards, SAE features, or external scorers |
+| [cookbook/scripts/training/grpo/](training/grpo/) | Reinforcement learning with custom rewards, SAE features, or external scorers |
 
 ### GRPO examples
 
@@ -35,9 +35,9 @@ in YAML and pass the loaded terms as a Hydra command-line override.
 
 | Script | Reward |
 |---|---|
-| [sae_features.bash](training/grpo/sae_features.bash) | Reinforcement learning with sparse autoencoder features |
-| [custom_reward.bash](training/grpo/custom_reward.bash) | Use a custom Python reward |
-| [custom_scorer.bash](training/grpo/custom_scorer.bash) | Run a custom scorer as a subprocess in a separate environment |
+| [sae_features.bash](training/grpo/sae_features.bash) | Reinforcement learning with sparse autoencoder features (RL-SAE) |
+| [custom_reward.bash](training/grpo/custom_reward.bash) | Use a custom defined reward |
+| [custom_scorer.bash](training/grpo/custom_scorer.bash) | Run a custom external scorer as a subprocess in a separate environment |
 | [sparrow.bash](training/grpo/sparrow.bash) | Target an IDR sequence property such as radius of gyration using [SPARROW](https://github.com/idptools/sparrow) |
 | [finches.bash](training/grpo/finches.bash) | Match ProTalpha interaction strength with H1.0 CTD using [FINCHES](https://github.com/idptools/finches) |
 | [protgps.bash](training/grpo/protgps.bash) | Increase compartment localization probability using [ProtGPS](https://github.com/pgmikhael/protgps) |
