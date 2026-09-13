@@ -17,4 +17,3 @@ The adapters in `cookbook/rewards/scorers/` run scorers as subprocesses in separ
 | [finches.py](scorers/finches.py) | [FINCHES](https://github.com/idptools/finches): self- or partner-interaction epsilon |
 | [protgps.py](scorers/protgps.py) | [ProtGPS](https://github.com/pgmikhael/protgps): compartment localization probabilities |
 | [paddle.py](scorers/paddle.py) | [PADDLE](https://github.com/asanborn/PADDLE): predicted transcriptional activation strength |
-| [starling.py](scorers/starling.py) | [STARLING](https://github.com/idptools/starling/): predicted ensemble dimensions, including radius of gyration or end-to-end distance |

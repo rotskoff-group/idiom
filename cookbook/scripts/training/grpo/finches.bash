@@ -3,7 +3,6 @@
 set -euo pipefail
 
 # Design a ProTalpha-like IDR with the native ProTalpha:H1.0 CTD interaction epsilon
-# Reference constructs: Ginell et al., Science 2025, Fig. 5 (see example_data/finches)
 # FINCHES frontends default to 0.150 M salt, as in the paper's notebook
 # Needs: 1 GPU
 

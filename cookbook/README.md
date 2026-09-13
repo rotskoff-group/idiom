@@ -160,7 +160,6 @@ In this cookbook, we provide several packaged examples for running GRPO training
 | [finches.bash](scripts/training/grpo/finches.bash) | Match ProTalpha interaction strength with H1.0 CTD using [FINCHES](https://github.com/idptools/finches) |
 | [protgps.bash](scripts/training/grpo/protgps.bash) | Increase compartment localization probability using [ProtGPS](https://github.com/pgmikhael/protgps) |
 | [paddle.bash](scripts/training/grpo/paddle.bash) | Increase predicted transcriptional activation strength using [PADDLE](https://github.com/asanborn/PADDLE) |
-| [starling.bash](scripts/training/grpo/starling.bash) | Target predicted ensemble dimensions using [STARLING](https://github.com/idptools/starling/) |
 | [prompted_linker_rg.bash](scripts/training/grpo/prompted_linker_rg.bash) | Target linker dimensions within fixed flanks |
 | [combined.bash](scripts/training/grpo/combined.bash) | Combine FINCHES and ProtGPS |
 
@@ -295,7 +294,7 @@ reward:
       weight: 1.0
 ```
 
-Other provided scorers include SPARROW, ProtGPS, PADDLE, and STARLING in
+Other provided scorers include SPARROW, ProtGPS, and PADDLE in
 `cookbook/rewards/scorers/`. To add your own, see [custom_scorer.py](rewards/scorers/custom_scorer.py) and point `cmd` to your script. That template includes detailed setup, scoring, communication, and testing instructions.
 
 <br>
@@ -303,7 +302,7 @@ Other provided scorers include SPARROW, ProtGPS, PADDLE, and STARLING in
 ### Combining multiple reward terms
 
 Add multiple entries to `reward.terms` to combine objectives. This example targets composition
-entropy of 3.65 bits, length of 100 residues, and STARLING ensemble radius of gyration of 25 Å:
+entropy of 3.65 bits, length of 100 residues, and SPARROW-predicted radius of gyration of 25 Å:
 
 ```yaml
 reward:
@@ -324,12 +323,11 @@ reward:
         target: 100
         width: 1.0
       weight: 1.0
-    - label: rg_ens
+    - label: radius_of_gyration
       reward:
         name: external_scorer
-        cmd: "env CUDA_VISIBLE_DEVICES=1 uv run --script cookbook/rewards/scorers/starling.py --property radius_of_gyration"
-        timeout: 900
-        cache_max: 0
+        cmd: "uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration"
+        timeout: 300
       shaping:
         name: quadratic
         target: 25

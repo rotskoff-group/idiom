@@ -273,7 +273,7 @@ The cookbook in `cookbook/` provides detailed examples and workflows for using a
 
 - Notebooks in `cookbook/notebooks/`: generate IDRs, extract embeddings, and explore SAE features and enrichment, locally or in Colab.
 - Scripts in `cookbook/scripts/`: run supervised fine-tuning and GRPO-based reinforcement learning with custom rewards, and run additional SAE workflows.
-- Rewards in `cookbook/rewards/`: define custom reinforcement learning rewards and connect external scorers such as SPARROW, FINCHES, ProtGPS, PADDLE, STARLING, or custom code.
+- Rewards in `cookbook/rewards/`: define custom reinforcement learning rewards and connect external scorers such as SPARROW, FINCHES, ProtGPS, PADDLE, or custom code.
 
 <br>
 

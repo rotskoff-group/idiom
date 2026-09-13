@@ -42,6 +42,5 @@ in YAML and pass the loaded terms as a Hydra command-line override.
 | [finches.bash](training/grpo/finches.bash) | Match ProTalpha interaction strength with H1.0 CTD using [FINCHES](https://github.com/idptools/finches) |
 | [protgps.bash](training/grpo/protgps.bash) | Increase compartment localization probability using [ProtGPS](https://github.com/pgmikhael/protgps) |
 | [paddle.bash](training/grpo/paddle.bash) | Increase predicted transcriptional activation strength using [PADDLE](https://github.com/asanborn/PADDLE) |
-| [starling.bash](training/grpo/starling.bash) | Target predicted ensemble dimensions using [STARLING](https://github.com/idptools/starling/) |
 | [prompted_linker_rg.bash](training/grpo/prompted_linker_rg.bash) | Target linker dimensions within fixed flanks |
 | [combined.bash](training/grpo/combined.bash) | Combine FINCHES and ProtGPS |
