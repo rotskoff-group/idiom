@@ -14,6 +14,7 @@ OUT="/path/to/output/grpo-prompted-linker-rg" # EDIT: run output directory
 
 cd "$REPO"
 
+# Only one prompt is supported: redesign one protein using a FASTA with exactly one record.
 FASTA="$REPO/cookbook/example_data/prompted_grpo/P45973.fasta" # EDIT: one full protein
 
 export WANDB_MODE=offline

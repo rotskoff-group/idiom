@@ -30,7 +30,7 @@ model: # the released idiom-300M; idiom-85M = 12L/768/12, idiom-20M = 6L/512/8
   tie_embeddings: true
 
 optim: # paper recipe: AdamW, no weight decay, warmup 3k then cosine to 10%
-  lr: 4.0e-4
+  lr: 3.0e-4
   warmup_steps: 3000
   weight_decay: 0.0
   betas: [0.9, 0.95]
@@ -42,7 +42,7 @@ trainer: # global batch 1024 = 32/GPU * 8 GPUs * accum 4
   devices: 8
   precision: bf16-mixed
   val_check_interval: 25000
-  gradient_clip_val: 0.0 # paper: no gradient clipping
+  gradient_clip_val: 1.0 # original 302M pretraining run
   accumulate_grad_batches: 4
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/pretrain

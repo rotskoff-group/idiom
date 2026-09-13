@@ -44,7 +44,7 @@ idiom_train_autoreg \
     model.norm_eps=1.0e-5 \
     model.qk_norm=true \
     model.tie_embeddings=true \
-    optim.lr=4.0e-4 \
+    optim.lr=3.0e-4 \
     optim.warmup_steps=3000 \
     optim.weight_decay=0.0 \
     'optim.betas=[0.9,0.95]' \
@@ -54,7 +54,7 @@ idiom_train_autoreg \
     trainer.devices=8 \
     trainer.precision=bf16-mixed \
     trainer.val_check_interval=25000 \
-    trainer.gradient_clip_val=0.0 \
+    trainer.gradient_clip_val=1.0 \
     trainer.accumulate_grad_batches=4 \
     out_dir="$OUT" \
     hydra.run.dir="$OUT/hydra" \

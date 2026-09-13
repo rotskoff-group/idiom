@@ -24,7 +24,7 @@ reward:
         name: sae_signature
         signature: nucleolus
         features: ${oc.env:FEATURES}
-        case: top30
+        case: top30 # Use private30 for the original top-30 private feature targets.
         sae: jxliu2/idiomsae-300M-L18-k32
         device: null
       shaping:

@@ -40,7 +40,7 @@ Demo inputs are included in `cookbook/example_data`.
 | `cookbook/example_data/protgps/` | IDRs associated with six subcellular compartments |
 | `cookbook/example_data/effector/` | Experimentally measured activation and repression domain IDRs |
 | `cookbook/example_data/disprot/` | Held-out proteins with annotated IDRs and flanking context |
-| `cookbook/example_data/sae_features/` | Example SAE signatures |
+| [`cookbook/example_data/sae_features/`](example_data/sae_features/README.md) | Enriched top-30 and original private-30 SAE targets |
 | `cookbook/example_data/prompted_grpo/` | HP1α (P45973), IDR residues 79–123 |
 | `cookbook/example_data/finches/` | ProTalpha and H1.0 C-terminal reference constructs |
 
