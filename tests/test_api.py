@@ -105,6 +105,7 @@ def test_idiomsae_save_and_from_pretrained_roundtrip(tmp_path):
     sdir = tmp_path / "sae_rel"
     sae.save_pretrained(sdir, host_model=str(tmp_path / "rel"))
     assert (sdir / "sae_config.json").exists() and (sdir / "sae.safetensors").exists()
+    assert (sdir / "config.json").read_bytes() == (sdir / "sae_config.json").read_bytes()
 
     loaded = IDiomSAE.from_pretrained(sdir)
     assert loaded.layer == 1

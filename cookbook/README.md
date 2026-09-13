@@ -295,7 +295,7 @@ reward:
 ```
 
 Other provided scorers include SPARROW, ProtGPS, and PADDLE in
-`cookbook/rewards/scorers/`. To add your own, see [custom_scorer.py](rewards/scorers/custom_scorer.py) and point `cmd` to your script. That template includes detailed setup, scoring, communication, and testing instructions.
+`cookbook/rewards/scorers/`. To add your own scorer, adapt [custom_scorer.py](rewards/scorers/custom_scorer.py), which documents setup, scoring, communication, and testing. See [custom_scorer.yaml](scripts/training/grpo/custom_scorer.yaml) for reward configuration and [custom_scorer.bash](scripts/training/grpo/custom_scorer.bash) for running training.
 
 <br>
 

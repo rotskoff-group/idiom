@@ -54,6 +54,8 @@ def save_sae(
         "multi_topk": bool(sae.multi_topk),
     }
     (d / SAE_CONFIG_FILE).write_text(json.dumps(cfg, indent=2))
+    # Hugging Face counts downloads of config.json; SAE loading still uses sae_config.json.
+    (d / "config.json").write_bytes((d / SAE_CONFIG_FILE).read_bytes())
     save_model(sae, str(d / SAE_WEIGHTS_FILE))
     return d
 
