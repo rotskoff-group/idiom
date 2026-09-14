@@ -55,7 +55,7 @@ def test_cli_downloads_background_and_exports(tmp_path, monkeypatch, inputs):
     out = tmp_path / "out"
     main(["--sae", "fake", "--positive", str(positive), "--out", str(out), "--name", "demo"])
     assert downloads == [
-        (("jxliu2/idiom-data", "training_sequences/validation.fasta"), {"repo_type": "dataset"})
+        (("jxliu2/idiom-db", "idiom-db/idiom-db-v1_validation.fasta"), {"repo_type": "dataset"})
     ]
     assert len(seen[1]) == 60
     assert all(r.accession != "overlap" for r in seen[1])

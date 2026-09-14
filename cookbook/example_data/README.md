@@ -12,7 +12,7 @@ See the [cookbook](../README.md#example-data) for details.
 | `cookbook/example_data/finches/` | ProTalpha and H1.0 C-terminal reference constructs |
 
 
-These data are also available on [Hugging Face](https://huggingface.co/datasets/jxliu2/idiom-data).
+These data are also available on [Hugging Face](https://huggingface.co/datasets/jxliu2/idiom-db).
 
 FASTA headers use `_IDR_x-y` (1-based, inclusive) to denote the IDR span. ProtGPS and transcriptional effector sequences are isolated
 IDRs. DisProt sequences include flanks and may have repeat accessions with different spans. For more information on the IDR indexing conventions, see [sequence conventions](../../README.md#sequence-conventions).

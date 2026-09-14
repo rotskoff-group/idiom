@@ -25,8 +25,8 @@ from idiom.sae.features.enrichment import (
     write_signature,
 )
 
-DATA_REPO = "jxliu2/idiom-data"
-VALIDATION_FASTA = "training_sequences/validation.fasta"
+DATA_REPO = "jxliu2/idiom-db"
+VALIDATION_FASTA = "idiom-db/idiom-db-v1_validation.fasta"
 
 
 def _positive_int(value: str) -> int:

@@ -35,5 +35,5 @@ must also match the experiment to reproduce its results.
 The JSON's `_provenance.private30_source` records the archived source filename,
 full-file SHA-256, and source key. The package default at
 `src/idiom/train/grpo/reward/sae_signatures.json` and this cookbook copy must
-remain byte-identical. On `jxliu2/idiom-data`, publish this JSON and README under
-`example_data/sae_features/`.
+remain byte-identical. On `jxliu2/idiom-db`, publish this JSON and README under
+`other/example_data/sae_features/`.

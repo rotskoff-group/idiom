@@ -3,7 +3,9 @@
 <p align="center">
   <a href="https://doi.org/10.64898/2026.04.10.717777">Preprint</a>
   |
-  <a href="https://huggingface.co/collections/jxliu2/idiom">Models and Data</a>
+  <a href="https://huggingface.co/collections/jxliu2/idiom">Models</a>
+  |
+  <a href="https://huggingface.co/datasets/jxliu2/idiom-db">Data</a>
   |
   <a href="cookbook/">Cookbook</a>
 </p>
@@ -32,7 +34,8 @@ IDiom is an autoregressive protein language model trained on 54M intrinsically d
   - [IDiomSAE](#idiomsae)
 - [Sequence conventions](#sequence-conventions)
 - [Cookbook: notebooks, scripts, and rewards](#cookbook-notebooks-post-training-and-rewards)
-- [Models and Data](#models-and-data)
+- [Models](#models)
+- [Data](#data)
 - [Citation](#citation)
 - [License](#license)
 
@@ -277,9 +280,9 @@ The cookbook in `cookbook/` provides detailed examples and workflows for using a
 
 <br>
 
-## Models and Data
+## Models
 
-IDiom models and data are hosted in our [Hugging Face collection](https://huggingface.co/collections/jxliu2/idiom).
+IDiom models are hosted in our [Hugging Face collection](https://huggingface.co/collections/jxliu2/idiom).
 
 | Model | Parameters | Architecture |
 |---|---|---|
@@ -288,19 +291,30 @@ IDiom models and data are hosted in our [Hugging Face collection](https://huggin
 | [idiom-20M](https://huggingface.co/jxliu2/idiom-20M) | 18.9M | 6 layers, width 512 |
 | [idiomsae-300M-L18-k32](https://huggingface.co/jxliu2/idiomsae-300M-L18-k32) | — | SAE on layer 18 of idiom-300M; 16,384 latents, k=32 |
 
-Training sequences, generated sequences, and cookbook example data are available in FASTA format
-on Hugging Face at [jxliu2/idiom-data](https://huggingface.co/datasets/jxliu2/idiom-data).
+<br>
+
+## Data
+
+**IDiom-DB** contains the curated IDR corpus in `idiom-db/`, with generated sequences,
+reference sequences, and cookbook example data under `other/`. Download the FASTA files
+from [jxliu2/idiom-db](https://huggingface.co/datasets/jxliu2/idiom-db).
 The training split contains 53.6M records (23.6 GB), and the validation and test splits contain
 271k records each (128 MB each).
+
+**Pre-release:** IDiom-DB is being prepared for the forthcoming ICLR preprint.
+Downloads currently use `main`; the `idiom-db-v1` tag will be created before public
+release. The previous dataset is available as
+[idiom-db-v0](https://huggingface.co/datasets/jxliu2/idiom-datasets) in its original
+repository; this legacy link does not pin a specific revision.
 
 To download these data:
 
 ```bash
 # Download all training, validation, and test splits
-hf download jxliu2/idiom-data --repo-type dataset --include "training_sequences/*"
+hf download jxliu2/idiom-db --repo-type dataset --include "idiom-db/*"
 
 # Download only the validation split
-hf download jxliu2/idiom-data --repo-type dataset --include "training_sequences/validation.fasta"
+hf download jxliu2/idiom-db --repo-type dataset --include "idiom-db/idiom-db-v1_validation.fasta"
 ```
 
 <br>
