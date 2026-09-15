@@ -10,7 +10,7 @@
   <a href="cookbook/">Cookbook</a>
 </p>
 
-IDiom is an autoregressive protein language model trained on 54M intrinsically disordered protein regions (IDRs) curated from the AlphaFold Database. IDiom is trained in three model sizes, with 20M, 85M, and 300M parameters. This repository supports:
+IDiom is an autoregressive protein language model trained on IDiom-DB, a dataset of 54M intrinsically disordered protein regions (IDRs) curated from the AlphaFold Database. IDiom is trained in three model sizes, with 20M, 85M, and 300M parameters. This repository supports:
 
 - **Generation** of standalone unprompted IDRs as well as IDRs conditioned on flanking protein context
 - **Extraction** of sequence- and residue-level embeddings for IDRs
@@ -295,19 +295,10 @@ IDiom models are hosted in our [Hugging Face collection](https://huggingface.co/
 
 ## Data
 
-**IDiom-DB** contains the curated IDR corpus in `idiom-db/`, with generated sequences,
-reference sequences, and cookbook example data under `other/`. Download the FASTA files
-from [jxliu2/idiom-db](https://huggingface.co/datasets/jxliu2/idiom-db).
-The training split contains 53.6M records (23.6 GB), and the validation and test splits contain
+IDiom-DB is a dataset of 54M IDRs curated from the AlphaFold Database (curation details are provided in the manuscript). IDiom-DB can be found on Hugging Face at [jxliu2/idiom-db](https://huggingface.co/datasets/jxliu2/idiom-db). The training split contains 53.6M records (23.6 GB), and the validation and test splits contain
 271k records each (128 MB each).
 
-**Pre-release:** IDiom-DB is being prepared for the forthcoming ICLR preprint.
-Downloads currently use `main`; the `idiom-db-v1` tag will be created before public
-release. The previous dataset is available as
-[idiom-db-v0](https://huggingface.co/datasets/jxliu2/idiom-datasets) in its original
-repository; this legacy link does not pin a specific revision.
-
-To download these data:
+Quick download instructions (for details see the Hugging Face repository):
 
 ```bash
 # Download all training, validation, and test splits

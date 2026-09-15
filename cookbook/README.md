@@ -107,7 +107,7 @@ are reproducible for a fixed batch size. Consult each script and the command's `
 ### Feature enrichment
 
 Edit the positive FASTA and optional background in [feature_enrichment.bash](scripts/sae/feature_enrichment.bash)
-If you omit the background, the command downloads the held-out validation FASTA from
+If you omit the background, the command downloads the held-out IDiom-DB validation FASTA from
 `jxliu2/idiom-db`. Use a fresh output directory. The run writes feature datasets, `enrichment.tsv`, `run.json`,
 and `signature.json` if features pass the filters. Set `FEATURES` in
 [sae_features.bash](scripts/training/grpo/sae_features.bash) and `signature` and `case` in

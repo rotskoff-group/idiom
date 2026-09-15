@@ -19,6 +19,7 @@ def perplexity(
     model, fasta: str, *, tokenizer: Tokenizer | None = None, max_len: int = 1024,
     prompted_prob: float = 0.5, batch_size: int = 32, num_workers: int = 4,
     device: str = "cuda", max_records: int | None = None, seed: int = 0,
+    completion_only: bool = False,
 ) -> dict[str, float]:
     """Compute mean per-token NLL and perplexity over a record FASTA.
 
@@ -35,6 +36,8 @@ def perplexity(
         device: Device to run the model on.
         max_records: If set, evaluate only the first this many records.
         seed: Seed for FIM variant selection.
+        completion_only: If True, score only IDR residues and the final STOP token,
+            excluding flanks and FIM markers. Defaults to the full-token objective.
 
     Returns:
         "nll", the mean per-token NLL in nats; "perplexity", its exponential; and "n_tokens", the
@@ -45,7 +48,7 @@ def perplexity(
     if max_records is not None:
         records = itertools.islice(records, max_records)
     ds = RecordDataset(records, tok, max_len=max_len, prompted_prob=prompted_prob,
-                       completion_only=False, seed=seed)
+                       completion_only=completion_only, seed=seed)
     dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers,
                     collate_fn=make_collate(tok.pad_id))
     model.eval()
