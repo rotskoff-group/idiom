@@ -30,8 +30,6 @@ def extract_embeddings(
     layers,
     *,
     pool="mean",
-    region="idr",
-    order="sequence",
     tokenizer=None,
     device="cpu",
     fim_mode=PROMPTED,
@@ -45,42 +43,38 @@ def extract_embeddings(
     Args:
         model: Transformer on the same device as the input tokens.
         inputs: FASTA path, Record, bare sequence, or iterable of Records and sequences.
-            Empty per-residue selections return an array with zero rows.
+            Each supplied record must have a nonempty, valid IDR span.
         layers: Zero-based transformer block indices.
-        pool: "mean" averages selected residues; "none" returns per-residue vectors.
-        region: "idr", "non_idr", or "all"; selection does not change model context.
-        order: "sequence" for original protein order, or "fim" for model input order.
-            Only affects per-residue output.
+        pool: "mean" averages IDR residues; "none" returns each IDR residue;
+            "last" returns the final IDR residue, excluding EOS and markers.
         tokenizer: Tokenizer to use, or None for the default vocabulary.
         device: Device for input tokens; the model is not moved.
         fim_mode: "prompted" includes flanks; "unprompted" encodes only the IDR.
 
     Returns:
         A dictionary mapping each layer to (values, index). values is a NumPy array
-        with shape [N_records, d_model] for mean pooling or [N_residues, d_model]
+        with shape [N_records, d_model] for mean/last pooling or [N_residues, d_model]
         otherwise. index contains one metadata dictionary per row.
-        Mean-pooled metadata contains accession, n_idr, n_residues, and record_idx. Per-residue metadata
+        Pooled metadata contains accession, n_idr, n_residues, and record_idx. Per-residue metadata
         contains record_idx, accession, source_pos, residue, and is_idr. Residue rows
-        follow order, excluding markers and START;
+        follow original IDR sequence order, excluding markers and START;
         source_pos is the zero-based original protein position.
 
     Raises:
         ValueError: If fim_mode is invalid, a bare sequence is noncanonical, or a
-            supplied Path does not exist, an option is invalid, or a mean selection is empty.
+            supplied Path does not exist, an option is invalid, or an IDR span is empty or invalid.
         IndexError: If a FASTA entry reaching span parsing has an empty header.
     """
-    if pool not in ("mean", "none"):
+    if pool not in ("mean", "none", "last"):
         raise ValueError(f"invalid pool: {pool!r}")
-    if region not in ("idr", "non_idr", "all"):
-        raise ValueError(f"invalid region: {region!r}")
-    if order not in ("sequence", "fim"):
-        raise ValueError(f"invalid order: {order!r}")
     tok = tokenizer or Tokenizer()
     variant = normalize_mode(fim_mode)
     build = fim_prompted if variant == PROMPTED else fim_unprompted
     out = {layer: {"values": [], "index": []} for layer in layers}
 
     for record_idx, rec in enumerate(to_records(inputs)):
+        if not 0 <= rec.idr_start < rec.idr_end <= len(rec.full_seq):
+            raise ValueError(f"record {record_idx} ({rec.accession!r}) has an empty or invalid IDR span")
         fim = build(rec.full_seq, rec.idr_start, rec.idr_end)
         tokens = torch.tensor([tok.start_id, *tok.encode(fim)], device=device)[None]
         acts = extract_activations(model, tokens, layers, tokenizer=tok, drop_markers=True)
@@ -88,18 +82,13 @@ def extract_embeddings(
         src = residue_source_positions(len(rec.full_seq), rec.idr_start, rec.idr_end, variant)
         is_idr = np.array([rec.idr_start <= p < rec.idr_end for p in src])
 
-        selected = np.flatnonzero(
-            is_idr if region == "idr" else ~is_idr if region == "non_idr" else np.ones_like(is_idr)
-        )
-        if pool == "mean" and not len(selected):
-            raise ValueError(f"record {record_idx} ({rec.accession!r}) has no residues in region={region!r}")
-        if pool == "none" and order == "sequence":
-            selected = selected[np.argsort(np.asarray(src)[selected])]
+        selected = np.flatnonzero(is_idr)
 
         for layer in layers:
             vals = acts[layer].values.cpu()
-            if pool == "mean":
-                out[layer]["values"].append(vals[selected].mean(0))
+            if pool != "none":
+                value = vals[selected].mean(0) if pool == "mean" else vals[selected[-1]]
+                out[layer]["values"].append(value)
                 out[layer]["index"].append(
                     {
                         "accession": rec.accession,
@@ -162,17 +151,13 @@ def main(argv: list[str] | None = None) -> None:
         help="Hub model ID, released directory, or Lightning .ckpt (--ckpt is an alias)",
     )
     p.add_argument("--layers", type=int, nargs="+", required=True)
-    p.add_argument("--pool", choices=["mean", "none"], default="mean")
-    p.add_argument("--region", choices=["idr", "non_idr", "all"], default="idr")
-    p.add_argument("--order", choices=["sequence", "fim"], default="sequence")
+    p.add_argument("--pool", choices=["mean", "none", "last"], default="mean")
     p.add_argument("--out", required=True)
     args = p.parse_args(argv)
 
     device = resolve_device()
     model, _ = load_model(args.model, device=device)
-    emb = extract_embeddings(
-        model, args.fasta, args.layers, pool=args.pool, region=args.region, order=args.order, device=device
-    )
+    emb = extract_embeddings(model, args.fasta, args.layers, pool=args.pool, device=device)
     write_embeddings(emb, args.out)
 
 

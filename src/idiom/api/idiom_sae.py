@@ -11,7 +11,7 @@ from huggingface_hub import HfApi
 
 from idiom.api._shared import _oversample, _resolve
 from idiom.api.idiom import IDiom
-from idiom.data.fim import UNPROMPTED, normalize_mode
+from idiom.data.fim import normalize_mode
 from idiom.data.io import to_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.extract import extract_embeddings
@@ -171,86 +171,54 @@ class IDiomSAE:
         return f"https://huggingface.co/{repo_id}"
 
     @torch.no_grad()
-    def encode(self, inputs, *, pool: str = "mean", region: str | None = None, order: str = "fim"):
-        """Compute SAE feature activations for the residues of each record.
+    def encode(self, inputs, *, pool: str = "mean"):
+        """Encode IDR residues using the SAE's saved prompt format and layer.
 
-        Invalid FASTA sequences and spans in nonempty headers are skipped with logged
-        counts. Bare sequences must be nonempty and contain only uppercase canonical
-        amino acids. Supplied Records must already have valid sequences and spans.
+        Prompted SAEs retain flanks as context; unprompted SAEs use only the IDR.
+        Bare sequences are treated as entirely IDR. FASTA input normalization follows
+        to_records; supplied Records must have nonempty, valid IDR spans.
 
         Args:
-            inputs: A FASTA path, Record, sequence, or iterable accepted by to_records.
-            pool: "none" for per-residue rows, or "mean" to average over each record's residues
-                within region.
-            region: "all", "idr", or "non_idr"; the SAE's training region if None. An
-                unprompted-mode SAE accepts only "idr". Filters mean pooling only;
-                pool="none" returns all encoded residues.
-            order: "fim" (default) preserves model input order; "sequence" returns
-                per-residue features in original protein order. Does not affect pooling.
+            inputs: FASTA path, Record, bare sequence, or iterable of records/sequences.
+            pool: "none" returns each IDR residue's features; "mean" averages them;
+                "max" takes each feature's maximum over the IDR. Pooling follows encoding.
 
         Returns:
-            tuple: With pool="none", an [N_res, num_latents] array and a list of per-row metadata
-                dicts carrying record_idx, accession, source_pos, residue, and is_idr. With
-                pool="mean", an [N_seq, num_latents] array and its accessions in input order;
-                repeated accessions remain separate records. Records with no selected residues
-                are omitted.
+            With "none", an [N_IDR_residues, num_latents] array and metadata containing
+            record_idx, accession, source_pos, residue, and is_idr in original IDR order.
+            With "mean" or "max", an [N_records, num_latents] array and accessions in
+            input order. Repeated accessions remain separate records. Max values > 0
+            indicate features active anywhere in the IDR.
 
         Raises:
-            ValueError: If region is not "idr" for an unprompted-mode SAE.
-                Also raised for empty or noncanonical bare sequences.
-            IndexError: If a FASTA entry reaching span parsing has an empty header.
-            RuntimeError: If no residue rows are available to encode.
+            ValueError: If pool is invalid, the SAE was trained only on non-IDR residues,
+                or a supplied sequence/span is invalid or empty.
+            RuntimeError: If no IDR residue rows are available to encode.
         """
-        if pool not in ("mean", "none"):
+        if pool not in ("mean", "none", "max"):
             raise ValueError(f"invalid pool: {pool!r}")
-        if order not in ("sequence", "fim"):
-            raise ValueError(f"invalid order: {order!r}")
-        region = self.region if region is None else region
-        if region not in ("all", "idr", "non_idr"):
-            raise ValueError(f"invalid region: {region!r}")
-        if self.fim_mode == UNPROMPTED and region != "idr":
-            raise ValueError(
-                f"region={region!r} is not available from this SAE: it was trained in unprompted "
-                f"mode ('132{{IDR}}'), so only IDR residues are encoded and there are no flanking "
-                f"residues to select. Use region='idr', or an SAE trained with fim_mode='prompted'."
-            )
-        emb = extract_embeddings(
+        if self.region not in ("idr", "all"):
+            raise ValueError("IDR encoding requires an SAE trained on IDR residues, not non_idr only")
+        values, index = extract_embeddings(
             self.model,
             inputs,
             [self.layer],
             pool="none",
-            region="all",
-            order="fim",
             tokenizer=self.tok,
             device=self.device,
             fim_mode=self.fim_mode,
-        )
-        values, index = emb[self.layer]
+        )[self.layer]
         if not len(values):
-            raise RuntimeError("no residue rows are available to encode")
-        x = torch.from_numpy(values).to(self.device)
-        feats = self.sae.encode_dense(x).cpu().numpy()
+            raise RuntimeError("no IDR residue rows are available to encode")
+        feats = self.sae.encode_dense(torch.from_numpy(values).to(self.device)).cpu().numpy()
         if pool == "none":
-            if order == "sequence":
-                indices = sorted(
-                    range(len(index)), key=lambda i: (index[i]["record_idx"], index[i]["source_pos"])
-                )
-                return feats[indices], [index[i] for i in indices]
             return feats, index
-
         rows: dict[int, list[int]] = {}
         for i, row in enumerate(index):
-            is_idr = row.get("is_idr", True)
-            if (region == "idr" and not is_idr) or (region == "non_idr" and is_idr):
-                continue
             rows.setdefault(row["record_idx"], []).append(i)
         accs = [index[indices[0]]["accession"] for indices in rows.values()]
-        pooled = (
-            np.stack([feats[indices].mean(0) for indices in rows.values()])
-            if rows
-            else np.empty((0, feats.shape[1]))
-        )
-        return pooled, accs
+        reduce = np.mean if pool == "mean" else np.max
+        return np.stack([reduce(feats[indices], axis=0) for indices in rows.values()]), accs
 
     @torch.no_grad()
     def build_feature_dataset(self, inputs, out_dir, *, batch_size: int = 16) -> Path:

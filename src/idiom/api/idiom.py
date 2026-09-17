@@ -335,10 +335,8 @@ class IDiom:
         layers: list[int],
         *,
         pool: str = "mean",
-        region: str = "idr",
-        order: str = "sequence",
     ):
-        """Extract residual-stream embeddings for IDRs and their flanks.
+        """Extract IDR embeddings using both flanks as FIM context.
 
         Invalid FASTA sequences and spans in nonempty headers are skipped with logged
         counts. Bare sequences must contain only uppercase canonical residues. Supplied
@@ -346,15 +344,14 @@ class IDiom:
 
         Args:
             inputs: FASTA path, Record, bare sequence, or iterable accepted by to_records.
-                Empty per-residue selections return zero rows.
+                Supplied records must have nonempty, valid IDR spans.
             layers: Zero-based transformer block indices.
-            pool: "mean" averages selected residues; "none" returns per-residue vectors.
-            region: "idr" (default), "non_idr", or "all". Flanks remain model context.
-            order: "sequence" (default) or "fim", for per-residue output.
+            pool: "mean" averages IDR residues; "none" returns each IDR residue;
+                "last" returns the final IDR residue representation, excluding EOS.
 
         Returns:
             A dictionary mapping each layer to (values, index), with a NumPy array and
-            one metadata dictionary per row. Mean pooling returns [N_records, d_model]
+            one metadata dictionary per row. Mean/last pooling returns [N_records, d_model]
             values and metadata containing accession, n_idr, n_residues, and record_idx.
             Per-residue output has shape [N_residues, d_model] and metadata containing record_idx, accession,
             source_pos, residue, and is_idr.
@@ -364,7 +361,7 @@ class IDiom:
 
         Raises:
             ValueError: If a bare sequence is empty or noncanonical, a Path is missing,
-                an option is invalid, or a mean selection is empty.
+                an option is invalid, or an IDR span is empty or invalid.
             IndexError: If a FASTA entry reaching span parsing has an empty header.
         """
         return extract_embeddings(
@@ -372,8 +369,6 @@ class IDiom:
             inputs,
             layers,
             pool=pool,
-            region=region,
-            order=order,
             tokenizer=self.tok,
             device=self.device,
         )

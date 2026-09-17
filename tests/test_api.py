@@ -151,16 +151,15 @@ def test_idiomsae_encode_and_steer(tmp_path):
     assert len(seqs) == 2 and all(isinstance(s, str) for s in seqs)
 
 
-def test_idiomsae_encode_rejects_a_region_an_unprompted_sae_cannot_produce():
-    """Verify that an unprompted SAE accepts IDRs and rejects flank regions."""
-    import pytest
+def test_idiomsae_unprompted_encodes_only_idrs():
+    """Full protein inputs use only their marked IDRs for an unprompted SAE."""
+    from idiom.data.io import Record
 
-    sae = _idiom_sae(_idiom(), fim_mode="unprompted")
-    for region in ("all", "non_idr"):
-        with pytest.raises(ValueError, match="trained in unprompted mode"):
-            sae.encode(["MEDSKVDN"], pool="mean", region=region)
-    feats, _ = sae.encode(["MEDSKVDN"], pool="mean", region="idr")
-    assert feats.shape == (1, sae.sae.num_latents)
+    sae = _idiom_sae(_idiom(), region="idr", fim_mode="unprompted")
+    feats, index = sae.encode(Record("p", "MEDQSSGACDE", 3, 7), pool="none")
+    bare, _ = sae.encode("QSSG", pool="none")
+    assert (feats == bare).all()
+    assert [r["source_pos"] for r in index] == [3, 4, 5, 6]
 
 
 def test_idiomsae_repr_shows_the_training_distribution():
@@ -195,9 +194,7 @@ def test_sae_keeps_multiple_idrs_of_one_protein_separate(tmp_path):
         feats, index = sae.encode(fasta, pool="none")
         assert {row["record_idx"] for row in index} == {0, 1}
         groups = per_sequence_activations(feats, index)
-        assert [s for s, _ in groups] == (
-            ["ACDEFGHIK", "ACDEFGHIK"] if fim_mode == "prompted" else ["ACD", "GHIK"]
-        )
+        assert [s for s, _ in groups] == ["ACD", "GHIK"]
 
 
 def test_idiomsae_save_records_published_host_model(tmp_path):

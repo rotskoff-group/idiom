@@ -8,7 +8,7 @@ from idiom import IDiom, IDiomSAE
 from idiom.data.fim import fim_prompted, fim_unprompted, residue_source_positions
 from idiom.data.io import Record
 from idiom.model import IDiomTransformer, ModelConfig
-from idiom.model.extract import extract_embeddings, write_embeddings
+from idiom.model.extract import extract_embeddings
 from idiom.sae import SparseCoder
 
 CFG = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=64)
@@ -26,99 +26,95 @@ def direct_rows(host, record, mode):
     return hidden[1][0, tokens[0] < host.tok.n_residues]
 
 
-@pytest.mark.parametrize("region", ["idr", "non_idr", "all"])
-@pytest.mark.parametrize("order", ["sequence", "fim"])
-def test_embeddings_match_direct_model_rows(region, order):
+@pytest.mark.parametrize("mode", ["prompted", "unprompted"])
+def test_idr_embeddings_and_pooling_match_direct_model(mode):
     host = IDiom(IDiomTransformer(CFG).eval())
-    values, index = host.embed(RECORDS, [1], pool="none", region=region, order=order)[1]
+    values, index = extract_embeddings(host.model, RECORDS, [1], pool="none", fim_mode=mode)[1]
     expected = []
     for ri, record in enumerate(RECORDS):
-        src = residue_source_positions(len(record.full_seq), record.idr_start, record.idr_end, "prompted")
-        selected = [
-            i
-            for i, p in enumerate(src)
-            if region == "all" or ((record.idr_start <= p < record.idr_end) == (region == "idr"))
-        ]
-        if order == "sequence":
-            selected.sort(key=lambda i: src[i])
-        expected.append(direct_rows(host, record, "prompted")[selected].numpy())
+        src = residue_source_positions(len(record.full_seq), record.idr_start, record.idr_end, mode)
+        selected = [i for i, p in enumerate(src) if record.idr_start <= p < record.idr_end]
+        expected.append(direct_rows(host, record, mode)[selected].numpy())
         rows = [r for r in index if r["record_idx"] == ri]
-        assert [r["source_pos"] for r in rows] == [src[i] for i in selected]
-        assert [r["residue"] for r in rows] == [record.full_seq[src[i]] for i in selected]
+        assert [r["source_pos"] for r in rows] == list(range(record.idr_start, record.idr_end))
+        assert "".join(r["residue"] for r in rows) == record.full_seq[record.idr_start : record.idr_end]
+        assert all(r["is_idr"] for r in rows)
     np.testing.assert_array_equal(values, np.concatenate(expected))
-    pooled, meta = host.embed(RECORDS, [1], region=region)[1]
-    np.testing.assert_allclose(pooled, np.stack([x.mean(0) for x in expected]), atol=1e-7)
-    assert [r["n_residues"] for r in meta] == [len(x) for x in expected]
+    for pool in ("mean", "last"):
+        pooled, meta = extract_embeddings(host.model, RECORDS, [1], pool=pool, fim_mode=mode)[1]
+        reference = [x.mean(0) if pool == "mean" else x[-1] for x in expected]
+        np.testing.assert_allclose(pooled, np.stack(reference), atol=1e-7)
+        assert [r["n_idr"] for r in meta] == [len(x) for x in expected]
+    if mode == "prompted":
+        public, _ = host.embed(RECORDS, [1], pool="none")[1]
+        np.testing.assert_array_equal(public, values)
+        # Removing flanks changes the causal representations, despite IDR-only output.
+        bare, _ = host.embed("QSSG", [1], pool="none")[1]
+        assert not np.allclose(bare, expected[0])
 
 
 @pytest.mark.parametrize("activation", ["topk", "groupmax"])
-@pytest.mark.parametrize(
-    "mode,region", [("prompted", "idr"), ("prompted", "non_idr"), ("prompted", "all"), ("unprompted", "idr")]
-)
-def test_sae_preserves_legacy_features_pooling_and_order(mode, region, activation):
+@pytest.mark.parametrize("mode,region", [("prompted", "idr"), ("prompted", "all"), ("unprompted", "idr")])
+def test_sae_idr_features_and_pooling(mode, region, activation, tmp_path):
+    from idiom.sae.features.enrichment import feature_counts
+
     host = IDiom(IDiomTransformer(CFG).eval())
     coder = SparseCoder(CFG.d_model, num_latents=64, k=8, activation=activation)
     lens = IDiomSAE(coder, host, layer=1, region=region, fim_mode=mode)
-    # Independent reference reproduces the original encode-then-pool computation.
+    # Encode all original residue activations before selecting the IDR reference.
     raw = [direct_rows(host, rec, mode) for rec in RECORDS]
     with torch.no_grad():
-        expected = coder.encode_dense(torch.cat(raw)).numpy()
-    actual, index = lens.encode(RECORDS, pool="none")
-    np.testing.assert_array_equal(actual, expected)
-    pooled_expected = []
+        original = coder.encode_dense(torch.cat(raw)).numpy()
+    expected = []
     offset = 0
-    for ri, rec in enumerate(RECORDS):
+    for rec, x in zip(RECORDS, raw):
         src = residue_source_positions(len(rec.full_seq), rec.idr_start, rec.idr_end, mode)
-        rows = [r for r in index if r["record_idx"] == ri]
-        assert [r["source_pos"] for r in rows] == src
-        selected = [
-            offset + i
-            for i, p in enumerate(src)
-            if region == "all" or ((rec.idr_start <= p < rec.idr_end) == (region == "idr"))
-        ]
-        pooled_expected.append(expected[selected].mean(0))
-        offset += len(src)
-    for order in ("fim", "sequence"):
-        pooled, accs = lens.encode(RECORDS, order=order)
+        selected = [offset + i for i, p in enumerate(src) if rec.idr_start <= p < rec.idr_end]
+        expected.append(original[selected])
+        offset += len(x)
+    actual, index = lens.encode(RECORDS, pool="none")
+    np.testing.assert_allclose(actual, np.concatenate(expected), atol=1e-7)
+    assert all(r["is_idr"] for r in index)
+    for pool in ("mean", "max"):
+        pooled, accs = lens.encode(RECORDS, pool=pool)
         assert accs == ["same", "same"]
-        np.testing.assert_array_equal(pooled, np.stack(pooled_expected))
-    reordered, metadata = lens.encode(RECORDS, pool="none", order="sequence")
-    permutation = sorted(range(len(index)), key=lambda i: (index[i]["record_idx"], index[i]["source_pos"]))
-    np.testing.assert_array_equal(reordered, expected[permutation])
-    assert metadata == [index[i] for i in permutation]
-    # Explicit region keeps its historical meaning for per-residue SAE output.
-    explicit, _ = lens.encode(RECORDS, pool="none", region=region)
-    np.testing.assert_array_equal(explicit, expected)
+        reference = [x.mean(0) if pool == "mean" else x.max(0) for x in expected]
+        np.testing.assert_allclose(pooled, np.stack(reference), atol=1e-7)
+    if mode == "unprompted":
+        bare, _ = lens.encode([r.full_seq[r.idr_start : r.idr_end] for r in RECORDS], pool="none")
+        np.testing.assert_array_equal(actual, bare)
+    if region == "idr":
+        directory = lens.build_feature_dataset(RECORDS, tmp_path / "features", batch_size=1)
+        counts, n = feature_counts(directory)
+        np.testing.assert_array_equal(counts, (pooled > 0).sum(0))
+        assert n == 2
 
 
-def test_empty_selection(tmp_path):
+@pytest.mark.parametrize("pool", ["none", "mean", "last"])
+def test_empty_idrs_rejected(pool):
     host = IDiom(IDiomTransformer(CFG).eval())
-    values, index = host.embed("ACDE", [1], pool="none", region="non_idr")[1]
-    assert values.shape == (0, CFG.d_model) and index == []
-    write_embeddings({1: (values, index)}, tmp_path)
-    assert np.load(tmp_path / "layer_1.npy").shape == values.shape
-    with pytest.raises(ValueError, match="no residues"):
-        host.embed("ACDE", [1], region="non_idr")
+    with pytest.raises(ValueError, match="IDR span"):
+        host.embed(Record("empty", "ACDE", 2, 2), [1], pool=pool)
 
 
-@pytest.mark.parametrize("options", [{"pool": "bad"}, {"region": "bad"}, {"order": "bad"}])
-def test_invalid_embedding_options(options):
-    with pytest.raises(ValueError):
-        extract_embeddings(IDiomTransformer(CFG).eval(), RECORDS, [1], **options)
-
-
-def test_sae_preserves_empty_region_pooling():
+def test_invalid_options_and_non_idr_sae():
     host = IDiom(IDiomTransformer(CFG).eval())
     lens = IDiomSAE(SparseCoder(CFG.d_model, num_latents=64, k=8), host, layer=1, region="non_idr")
-    feats, accs = lens.encode("ACDE")
-    assert feats.shape == (0, 64) and accs == []
-    feats, index = lens.encode("ACDE", pool="none")
-    assert feats.shape == (4, 64) and len(index) == 4
-    with pytest.raises(RuntimeError, match="no residue rows"):
-        lens.encode([])
+    with pytest.raises(ValueError, match="non_idr"):
+        lens.encode(RECORDS)
+    with pytest.raises(ValueError, match="pool"):
+        host.embed(RECORDS, [1], pool="max")
+    with pytest.raises(ValueError, match="pool"):
+        lens.encode(RECORDS, pool="last")
+    for option in ({"region": "all"}, {"order": "fim"}):
+        with pytest.raises(TypeError):
+            host.embed(RECORDS, [1], **option)
+        with pytest.raises(TypeError):
+            lens.encode(RECORDS, **option)
 
 
-def test_cli_region_and_order(tmp_path):
+@pytest.mark.parametrize("pool", ["none", "mean", "last"])
+def test_cli_idr_pooling(tmp_path, pool):
     from idiom.model.extract import main
 
     host = IDiom(IDiomTransformer(CFG).eval())
@@ -135,14 +131,10 @@ def test_cli_region_and_order(tmp_path):
             "--layers",
             "1",
             "--pool",
-            "none",
-            "--region",
-            "all",
-            "--order",
-            "sequence",
+            pool,
             "--out",
             str(output),
         ]
     )
-    values, _ = host.embed(fasta, [1], pool="none", region="all")[1]
+    values, _ = host.embed(fasta, [1], pool=pool)[1]
     np.testing.assert_array_equal(np.load(output / "layer_1.npy"), values)

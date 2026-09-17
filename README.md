@@ -191,26 +191,26 @@ print(values.shape)  # (2, 1024) one IDR-averaged embedding per sequence
 print(values)  # Embedding vector
 ```
 
-Both pooling modes default to `region="idr"`. For full-protein per-residue embeddings, use:
+Embedding extraction returns only IDR representations. Inputs can be annotated FASTA paths,
+`Record` objects with zero-based, end-exclusive IDR coordinates, bare sequences, or iterables
+of records/sequences. Bare sequences are treated as entirely IDR.
 
 ```python
-values, index = model.embed(records, layers=[18], pool="none", region="all")[18]
+from idiom.data.io import Record
+
+record = Record("protein1", "MEDQSSGACDE", idr_start=3, idr_end=7)  # QSSG
+values, index = model.embed(record, layers=[18], pool="none")[18]  # Four IDR residue rows
+last, index = model.embed(record, layers=[18], pool="last")[18]  # Final IDR residue vector
 ```
 
-Here `records` can be a FASTA path, a `Record`, or an iterable of records or bare sequences.
-`region="non_idr"` selects both flanks. Selection does not remove context from the model input.
-Per-residue rows default to original protein order within each input record; use `order="fim"`
-for model input order. Metadata includes `record_idx`, `source_pos` (zero-based original position),
-`residue`, `accession`, and `is_idr`. Mean pooling reports `n_residues` selected and the record's
-`n_idr`; selecting no residues raises an error for mean pooling and returns zero rows for per-residue output.
-
-The underlying function is `idiom.model.extract.extract_embeddings`.
-Use `region="all", order="fim"` to return every residue in model input order.
-
-SAE behavior is preserved: `sae.encode(..., pool="none")` returns all encoded residues in FIM
-order, and its `region` argument continues to affect mean pooling only. Use `order="sequence"`
-to align per-residue SAE features with original protein positions. Mean pooling still encodes
-each residue before averaging features, using the SAE's training region by default.
+`pool="mean"` averages IDR residue vectors; `"none"` returns them individually; `"last"`
+returns the final IDR residue's representation, excluding EOS and markers. Full-protein
+inputs retain both flanks in the regular FIM computation, but flank embeddings are never
+returned. Per-residue rows follow original IDR sequence order within each input record.
+Metadata includes `record_idx`, `source_pos` (zero-based original protein position),
+`residue`, `accession`, and `is_idr`. Pooled metadata includes `record_idx`, `accession`,
+`n_idr`, and `n_residues` (both counts equal the IDR length). Empty or invalid supplied IDR
+spans raise an error. The underlying function is `idiom.model.extract.extract_embeddings`.
 
 To export embeddings for a FASTA file of proteins with IDR regions marked, run the `idiom_extract` CLI:
 
@@ -236,7 +236,8 @@ sae = IDiomSAE.from_pretrained("jxliu2/idiomsae-300M-L18-k32")
 idr_sequences = ["MSSGQSSQSPGSGQQQQSSG", "GSGSSQPSQGQSSGSSQQPN"]
 
 features, accessions = sae.encode(idr_sequences, pool="mean")
-# Use pool="none" for per-residue feature vectors
+# Use pool="none" for per-IDR-residue feature vectors
+# Use pool="max" for each feature's strongest activation anywhere in the IDR
 
 print(features.shape)  # (2, 16384) one IDR-averaged feature vector per sequence
 print(features)  # SAE feature activations
@@ -250,7 +251,19 @@ To steer the generation of IDRs using SAE features, run:
 steered = sae.steer_generate(feature=1234, strength=0.25, n=10)
 ```
 
-This IDiomSAE only uses unprompted IDRs and only accepts `region="idr"` (its default). Use the [SAE inspection notebook](cookbook/notebooks/inspect_sae_features.ipynb)
+SAE encoding always returns IDR features. Pooling happens after encoding each residue:
+`"mean"` averages features, while `"max"` takes each feature's maximum over the IDR.
+Testing max-pooled values with `features > 0` gives the same “active anywhere” presence
+criterion used in feature enrichment. `"none"` returns rows in original IDR order with
+source-position metadata. Repeated accessions remain separate input records.
+
+This released IDiomSAE uses only unprompted IDRs. Full-protein inputs with marked IDRs
+are accepted, but their flanks are excluded from the SAE's model input. Its saved prompt
+mode controls this automatically. Future prompted SAEs can retain flanks as context while
+returning only IDR features. The public encoding interface rejects SAEs trained exclusively
+on non-IDR residues; internal training and analysis retain region-aware extraction.
+
+Use the [SAE inspection notebook](cookbook/notebooks/inspect_sae_features.ipynb)
 to inspect highly activating sequences and activation patterns, and use the
 [enrichment notebook](cookbook/notebooks/feature_enrichment.ipynb) to identify features
 enriched within a set of sequences. The [steering notebook](cookbook/notebooks/steer_generation.ipynb)

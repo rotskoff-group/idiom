@@ -30,7 +30,7 @@ def test_pool_mean_one_vector_per_sequence(tmp_path):
 def test_pool_none_per_residue_with_alignment(tmp_path):
     """Verify per-residue embedding shapes and alignment metadata."""
     model = IDiomTransformer(TINY).eval()
-    emb = extract_embeddings(model, _fasta(tmp_path), layers=[0, 1], pool="none", region="all")
+    emb = extract_embeddings(model, _fasta(tmp_path), layers=[0, 1], pool="none")
     values, index = emb[1]
     assert values.shape[0] == len(index) and values.shape[1] == TINY.d_model
     assert set(index[0]) == {"record_idx", "accession", "source_pos", "residue", "is_idr"}
