@@ -15,8 +15,8 @@ def per_sequence_activations(feats, index) -> list[tuple[str, np.ndarray]]:
 
     Returns:
         A list of (residue_string, row_indices) pairs in input-record order. Within
-        each record, residues and indices are sorted by source_pos to restore
-        original protein order from FIM order.
+        each record, IDR residues and indices are sorted by source_pos. Public SAE
+        encoding already returns IDR rows in this order.
     """
     order: list = []
     rows: dict = {}

@@ -32,6 +32,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/rotskoff-group/idiom"
+"Hugging Face" = "https://huggingface.co/collections/jxliu2/idiom"
 
 [tool.hatch.build.targets.sdist]
 include = [

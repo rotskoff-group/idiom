@@ -47,18 +47,21 @@ def test_input_audit_and_roundtrip(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "name",
+    "name,use_flanks,pool",
     [
-        "analyze_sequences",
-        "generate_sequences",
-        "inspect_sae_features",
-        "feature_enrichment",
-        "feature_enrichment_gallery",
-        "compare_sequence_sets",
-        "steer_generation",
+        ("analyze_sequences", False, "mean"),
+        ("analyze_sequences", True, "mean"),
+        ("analyze_sequences", False, "last"),
+        ("analyze_sequences", True, "last"),
+        ("generate_sequences", False, "mean"),
+        ("inspect_sae_features", False, "mean"),
+        ("feature_enrichment", False, "mean"),
+        ("feature_enrichment_gallery", False, "mean"),
+        ("compare_sequence_sets", False, "mean"),
+        ("steer_generation", False, "mean"),
     ],
 )
-def test_notebook_execution(name, tmp_path, monkeypatch):
+def test_notebook_execution(name, use_flanks, pool, tmp_path, monkeypatch):
     """Execute cookbook notebooks with local fixtures and verify their outputs."""
     import matplotlib
 
@@ -108,6 +111,8 @@ def test_notebook_execution(name, tmp_path, monkeypatch):
                 namespace.update(
                     OUT_DIR=tmp_path / "outputs",
                     DEVICE="cpu",
+                    USE_FLANKS=use_flanks,
+                    POOL=pool,
                     LAYER=1,
                     INPUT_FASTA=positive,
                     INPUT_MODE="annotated",
@@ -136,7 +141,17 @@ def test_notebook_execution(name, tmp_path, monkeypatch):
         assert list(out.glob("*.csv")) and list(out.glob("*.png"))
         if name == "analyze_sequences":
             assert np.load(out / "embeddings.npy").shape == (8, 16)
-            assert namespace["residue_table"].protein_position_1based.min() == 3
+            table = namespace["residue_table"]
+            assert table.protein_position_1based.tolist() == list(range(3, 19))
+            assert table.source_pos.tolist() == list(range(2, 18) if use_flanks else range(16))
+            assert table.is_idr.all()
+            assert "".join(table.residue) == "Q" * 8 + "S" * 8
+            residue_values = np.load(out / "first_sequence_residue_embeddings.npy")
+            assert residue_values.shape == (16, 16)
+            expected = residue_values.mean(0) if pool == "mean" else residue_values[-1]
+            np.testing.assert_allclose(np.load(out / "embeddings.npy")[0], expected, atol=1e-7)
+            assert run["settings"]["pool"] == pool
+            assert run["settings"]["use_flanks"] == use_flanks
         if name == "generate_sequences":
             redesigned = list(read_records(out / "redesigned_proteins.fasta"))
             assert redesigned and all(r.idr_start == 2 for r in redesigned)

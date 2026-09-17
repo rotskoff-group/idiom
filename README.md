@@ -251,6 +251,13 @@ To steer the generation of IDRs using SAE features, run:
 steered = sae.steer_generate(feature=1234, strength=0.25, n=10)
 ```
 
+To test whether each feature activates anywhere in each IDR:
+
+```python
+peak_features, accessions = sae.encode(idr_sequences, pool="max")
+present = peak_features > 0  # [N_IDRs, num_latents] boolean feature presence
+```
+
 SAE encoding always returns IDR features. Pooling happens after encoding each residue:
 `"mean"` averages features, while `"max"` takes each feature's maximum over the IDR.
 Testing max-pooled values with `features > 0` gives the same “active anywhere” presence
