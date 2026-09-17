@@ -148,8 +148,10 @@ seq = (
     "PSSVEDIKAKMQASIEKGGSLPKVEAKFINYVKNCFRMTDQEAIQDLWQWRKSL"
 )
 # Use flanking context around IDR residues 119–259 (1-based inclusive, following bio convention) as the prompt
-regen_sequences = model.generate_prompted(seq, idr_start=118, idr_end=259, n=10) # Standard Python indexing here
-print(regen_sequences) # Returns only the generated prompted IDRs
+regen_sequences = model.generate_prompted(
+    seq, idr_start=118, idr_end=259, n=10
+)  # Standard Python indexing here
+print(regen_sequences)  # Returns only the generated prompted IDRs
 ```
 
 To generate prompted IDRs from an existing FASTA file containing protein sequences (see [Sequence conventions](#sequence-conventions) for FASTA file requirements), run this example from the cloned repository root to use [HP1α](cookbook/example_data/prompted_grpo/P45973.fasta) as an example sequence (IDR between residues 79–123):
@@ -185,8 +187,8 @@ values, index = model.embed(idr_sequences, layers=[18], pool="mean")[18]
 # Use pool="none" for per-residue embeddings
 # Embedding layers are 0-based Transformer block indices
 
-print(values.shape) # (2, 1024) one IDR-averaged embedding per sequence
-print(values) # Embedding vector
+print(values.shape)  # (2, 1024) one IDR-averaged embedding per sequence
+print(values)  # Embedding vector
 ```
 
 To export embeddings for a FASTA file of proteins with IDR regions marked, run the `idiom_extract` CLI:
@@ -197,7 +199,8 @@ idiom_extract --model jxliu2/idiom-300M \
     --layers 18 --pool mean --out embeddings
 ```
 
-See the [generation and embedding notebook](cookbook/notebooks/generate_and_embed.ipynb) for more detailed examples.
+Start with [Analyze your sequences](cookbook/notebooks/analyze_sequences.ipynb) for embeddings and similarity analysis,
+or use [Generate sequences](cookbook/notebooks/generate_sequences.ipynb) for de novo and prompted generation.
 
 <br>
 
@@ -214,8 +217,8 @@ idr_sequences = ["MSSGQSSQSPGSGQQQQSSG", "GSGSSQPSQGQSSGSSQQPN"]
 features, accessions = sae.encode(idr_sequences, pool="mean")
 # Use pool="none" for per-residue feature vectors
 
-print(features.shape) # (2, 16384) one IDR-averaged feature vector per sequence
-print(features) # SAE feature activations
+print(features.shape)  # (2, 16384) one IDR-averaged feature vector per sequence
+print(features)  # SAE feature activations
 ```
 
 
@@ -226,10 +229,11 @@ To steer the generation of IDRs using SAE features, run:
 steered = sae.steer_generate(feature=1234, strength=0.25, n=10)
 ```
 
-This IDiomSAE only uses unprompted IDRs and only accepts `region="idr"` (its default). Use the [SAE notebook](cookbook/notebooks/sae_features.ipynb)
+This IDiomSAE only uses unprompted IDRs and only accepts `region="idr"` (its default). Use the [SAE inspection notebook](cookbook/notebooks/inspect_sae_features.ipynb)
 to inspect highly activating sequences and activation patterns, and use the
 [enrichment notebook](cookbook/notebooks/feature_enrichment.ipynb) to identify features
-enriched within a set of sequences.
+enriched within a set of sequences. The [steering notebook](cookbook/notebooks/steer_generation.ipynb)
+compares feature interventions against an unsteered baseline.
 
 <br>
 
@@ -274,7 +278,7 @@ MEDQSSGACDE
 
 The cookbook in `cookbook/` provides detailed examples and workflows for using and post-training IDiom. Detailed information can be found in the [cookbook readme](cookbook/README.md).
 
-- Notebooks in `cookbook/notebooks/`: generate IDRs, extract embeddings, and explore SAE features and enrichment, locally or in Colab.
+- [Six independent notebooks](cookbook/notebooks/README.md): analyze your sequences, generate IDRs, inspect SAE features, test enrichment, compare sequence sets (including optional perplexity), and steer generation. Start with [sequence analysis](cookbook/notebooks/analyze_sequences.ipynb), locally or in Colab.
 - Scripts in `cookbook/scripts/`: run supervised fine-tuning and GRPO-based reinforcement learning with custom rewards, and run additional SAE workflows.
 - Rewards in `cookbook/rewards/`: define custom reinforcement learning rewards and connect external scorers such as SPARROW, FINCHES, ProtGPS, PADDLE, or custom code.
 

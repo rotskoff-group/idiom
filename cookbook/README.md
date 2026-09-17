@@ -54,13 +54,19 @@ See the main README's [sequence conventions](../README.md#sequence-conventions) 
 
 ## Notebooks
 
-In `cookbook/notebooks/`, we provide three examples for generating and embedding sequences as well as sparse autoencoder analysis. Notebooks can be run locally or in Colab.
+Start with **[Analyze your sequences](notebooks/analyze_sequences.ipynb)**, then choose a
+workflow below. Each runs independently with a small demo, configurable FASTA inputs,
+validation reports, and exported results. See the [notebook guide](notebooks/README.md) for
+installation, input conventions, hardware guidance, and output details.
 
-| Notebook | Task | Colab |
+| Notebook | Workflow | Colab |
 |---|---|---|
-| [`generate_and_embed.ipynb`](notebooks/generate_and_embed.ipynb) | Generate IDRs, extract embeddings, and score perplexity | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/generate_and_embed.ipynb) |
-| [`sae_features.ipynb`](notebooks/sae_features.ipynb) | Build feature datasets and browse feature activation patterns | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/sae_features.ipynb) |
-| [`feature_enrichment.ipynb`](notebooks/feature_enrichment.ipynb) | Find enriched features within a set of sequences | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/feature_enrichment.ipynb) |
+| [`analyze_sequences.ipynb`](notebooks/analyze_sequences.ipynb) | Start here: validate your IDRs, embed, find neighbors, and export results | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/analyze_sequences.ipynb) |
+| [`generate_sequences.ipynb`](notebooks/generate_sequences.ipynb) | Generate de novo IDRs or replace an annotated protein region | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/generate_sequences.ipynb) |
+| [`inspect_sae_features.ipynb`](notebooks/inspect_sae_features.ipynb) | Rank features in your sequences and plot residue activations | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/inspect_sae_features.ipynb) |
+| [`feature_enrichment.ipynb`](notebooks/feature_enrichment.ipynb) | Compare feature prevalence with a length-matched background | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/feature_enrichment.ipynb) |
+| [`compare_sequence_sets.ipynb`](notebooks/compare_sequence_sets.ipynb) | Compare candidates and references; optionally score perplexity | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/compare_sequence_sets.ipynb) |
+| [`steer_generation.ipynb`](notebooks/steer_generation.ipynb) | Compare feature steering strengths with an unsteered baseline | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/steer_generation.ipynb) |
 
 <br>
 
@@ -94,7 +100,7 @@ In `cookbook/scripts/`, we provide the following Bash scripts. Details are provi
 |---|---|
 | [sft.bash](scripts/training/sft.bash) | Supervised fine-tuning on a set of sequences |
 | [pretrain.bash](scripts/training/pretrain.bash) | Pretrain IDiom from scratch |
-| [cookbook/scripts/training/grpo/](cookbook/scripts/training/grpo/) | Reinforcement learning with custom rewards, SAE features, or external scorers |
+| [cookbook/scripts/training/grpo/](scripts/training/grpo/) | Reinforcement learning with custom rewards, SAE features, or external scorers |
 
 
 
