@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from idiom.data.dataset import RecordDataset, make_collate
-from idiom.data.io import read_records
+from idiom.data.records import read_records
 from idiom.data.tokenizer import Tokenizer
 
 

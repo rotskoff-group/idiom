@@ -159,7 +159,7 @@ def test_load_sequences_ignores_an_out_of_range_span(tmp_path):
 
 def _rec(acc, length, start=0):
     """Create an alanine record with the requested IDR length and starting offset."""
-    from idiom.data.io import Record
+    from idiom.data.records import Record
 
     return Record(acc, "A" * (start + length), start, start + length)
 

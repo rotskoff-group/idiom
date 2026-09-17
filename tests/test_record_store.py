@@ -5,8 +5,8 @@ from __future__ import annotations
 import torch
 
 from idiom.data.dataset import RecordDataset
-from idiom.data.io import read_records
 from idiom.data.record_store import RecordStore, build_record_store, open_or_build, store_path_for
+from idiom.data.records import read_records
 
 # Wrapped FASTA records include valid entries, a non-canonical sequence, and invalid spans
 FASTA = """\

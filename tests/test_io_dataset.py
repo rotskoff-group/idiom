@@ -3,7 +3,7 @@
 import torch
 
 from idiom.data.dataset import RecordDataset, make_collate, max_protein_len, record_to_example
-from idiom.data.io import Record, parse_idr_header, read_fasta, read_records, to_records
+from idiom.data.records import Record, parse_idr_header, read_fasta, read_records, to_records
 from idiom.data.tokenizer import Tokenizer
 
 TOK = Tokenizer()

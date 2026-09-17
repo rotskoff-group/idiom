@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from idiom.data.io import Record
+from idiom.data.records import Record
 from idiom.data.tokenizer import Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.sae import SparseCoder

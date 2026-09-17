@@ -6,7 +6,7 @@ import torch
 
 from idiom import IDiom, IDiomSAE
 from idiom.data.fim import fim_prompted, fim_unprompted, residue_source_positions
-from idiom.data.io import Record
+from idiom.data.records import Record
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.model.extract import extract_embeddings
 from idiom.sae import SparseCoder

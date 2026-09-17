@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from idiom import IDiom, IDiomSAE, ModelConfig
-from idiom.data.io import read_records
+from idiom.data.records import read_records
 from idiom.model import IDiomTransformer
 from idiom.sae import SparseCoder
 

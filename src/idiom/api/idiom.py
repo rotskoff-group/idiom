@@ -13,7 +13,7 @@ from safetensors.torch import load_model, save_model
 
 from idiom.api._shared import _oversample, _resolve
 from idiom.data.fim import fim_prompt
-from idiom.data.io import read_records
+from idiom.data.records import read_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.config import ModelConfig
 from idiom.model.extract import extract_embeddings

@@ -14,8 +14,8 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 
 from idiom.data.fim import PROMPTED, UNPROMPTED, fim_prompted, fim_unprompted, normalize_mode
-from idiom.data.io import Record
 from idiom.data.record_store import RecordStore
+from idiom.data.records import Record
 from idiom.data.tokenizer import Tokenizer
 
 # Each input needs START and three FIM markers in addition to its residues

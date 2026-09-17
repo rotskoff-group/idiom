@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 
 from idiom.data.fim import fim_prompt
-from idiom.data.io import read_records
+from idiom.data.records import read_records
 from idiom.data.tokenizer import Tokenizer
 
 

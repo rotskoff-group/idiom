@@ -153,7 +153,7 @@ def test_idiomsae_encode_and_steer(tmp_path):
 
 def test_idiomsae_unprompted_encodes_only_idrs():
     """Full protein inputs use only their marked IDRs for an unprompted SAE."""
-    from idiom.data.io import Record
+    from idiom.data.records import Record
 
     sae = _idiom_sae(_idiom(), region="idr", fim_mode="unprompted")
     feats, index = sae.encode(Record("p", "MEDQSSGACDE", 3, 7), pool="none")
@@ -179,7 +179,7 @@ def test_sae_keeps_multiple_idrs_of_one_protein_separate(tmp_path):
     """Verify that repeated accessions retain separate IDR records and feature rows."""
     import numpy as np
 
-    from idiom.data.io import read_records
+    from idiom.data.records import read_records
     from idiom.sae.features import per_sequence_activations
 
     fasta = tmp_path / "repeated.fasta"

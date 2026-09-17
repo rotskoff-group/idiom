@@ -1,6 +1,6 @@
 """Feature-dataset tests: build -> read -> reduce, with residue alignment."""
 
-from idiom.data.io import Record
+from idiom.data.records import Record
 from idiom.data.tokenizer import RESIDUES, Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.sae import SparseCoder

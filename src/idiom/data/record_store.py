@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 from loguru import logger as log
 
-from idiom.data.io import Record, read_records
+from idiom.data.records import Record, read_records
 
 STORE_SUFFIX = ".idiomstore"
 _VERSION = 1

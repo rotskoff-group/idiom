@@ -196,7 +196,7 @@ Embedding extraction returns only IDR representations. Inputs can be annotated F
 of records/sequences. Bare sequences are treated as entirely IDR.
 
 ```python
-from idiom.data.io import Record
+from idiom.data.records import Record
 
 record = Record("protein1", "MEDQSSGACDE", idr_start=3, idr_end=7)  # QSSG
 values, index = model.embed(record, layers=[18], pool="none")[18]  # Four IDR residue rows

@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from idiom.data.dataset import RecordDataset, make_collate
-from idiom.data.io import Record
+from idiom.data.records import Record
 from idiom.data.tokenizer import Tokenizer
 from idiom.model import IDiomTransformer, ModelConfig
 from idiom.model.activations import extract_activations

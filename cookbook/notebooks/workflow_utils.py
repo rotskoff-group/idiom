@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from idiom.data.io import Record, parse_idr_header, read_fasta
+from idiom.data.records import Record, parse_idr_header, read_fasta
 
 AA = "ACDEFGHIKLMNPQRSTVWY"
 DEMO = [

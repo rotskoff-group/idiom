@@ -12,7 +12,7 @@ from huggingface_hub import HfApi
 from idiom.api._shared import _oversample, _resolve
 from idiom.api.idiom import IDiom
 from idiom.data.fim import normalize_mode
-from idiom.data.io import to_records
+from idiom.data.records import to_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.extract import extract_embeddings
 from idiom.model.transformer import IDiomTransformer

@@ -16,7 +16,7 @@ from idiom.data.fim import (
     normalize_mode,
     residue_source_positions,
 )
-from idiom.data.io import to_records
+from idiom.data.records import to_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.activations import extract_activations
 from idiom.model.io import load_model

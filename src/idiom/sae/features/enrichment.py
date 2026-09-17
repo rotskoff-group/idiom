@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-from idiom.data.io import Record, parse_idr_header, read_fasta
+from idiom.data.records import Record, parse_idr_header, read_fasta
 
 # Defaults used to build the published signatures
 MIN_TOTAL_FIRE = 5
