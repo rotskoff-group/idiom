@@ -16,7 +16,7 @@ from idiom.data.fim import fim_prompt
 from idiom.data.io import read_records
 from idiom.data.tokenizer import Tokenizer
 from idiom.model.config import ModelConfig
-from idiom.model.extract import embed_fasta
+from idiom.model.extract import extract_embeddings
 from idiom.model.io import load_pretrained
 from idiom.model.sampling import generate
 from idiom.model.transformer import IDiomTransformer
@@ -329,7 +329,15 @@ class IDiom:
                     rows.append((_idr_header(acc, s), s))
         return _write_fasta(rows, out_fasta)
 
-    def embed(self, inputs, layers: list[int], *, pool: str = "mean"):
+    def embed(
+        self,
+        inputs,
+        layers: list[int],
+        *,
+        pool: str = "mean",
+        region: str = "idr",
+        order: str = "sequence",
+    ):
         """Extract residual-stream embeddings for IDRs and their flanks.
 
         Invalid FASTA sequences and spans in nonempty headers are skipped with logged
@@ -338,26 +346,37 @@ class IDiom:
 
         Args:
             inputs: FASTA path, Record, bare sequence, or iterable accepted by to_records.
-                At least one accepted record must contribute residues.
+                Empty per-residue selections return zero rows.
             layers: Zero-based transformer block indices.
-            pool: "mean" averages IDR residues; "none" returns every encoded residue.
+            pool: "mean" averages selected residues; "none" returns per-residue vectors.
+            region: "idr" (default), "non_idr", or "all". Flanks remain model context.
+            order: "sequence" (default) or "fim", for per-residue output.
 
         Returns:
             A dictionary mapping each layer to (values, index), with a NumPy array and
             one metadata dictionary per row. Mean pooling returns [N_records, d_model]
-            values and metadata containing accession and n_idr. Per-residue output has
-            shape [N_residues, d_model] and metadata containing record_idx, accession,
+            values and metadata containing accession, n_idr, n_residues, and record_idx.
+            Per-residue output has shape [N_residues, d_model] and metadata containing record_idx, accession,
             source_pos, residue, and is_idr.
-            Residue rows follow FIM order (prefix, suffix, IDR), without markers.
+            Residue rows follow original protein order by default, without markers.
             record_idx identifies the accepted input record; source_pos is its zero-based
             protein position. Bare sequences are treated as entirely IDR.
 
         Raises:
-            ValueError: If a bare sequence is empty or noncanonical, or a Path is missing.
+            ValueError: If a bare sequence is empty or noncanonical, a Path is missing,
+                an option is invalid, or a mean selection is empty.
             IndexError: If a FASTA entry reaching span parsing has an empty header.
-            RuntimeError: If a requested layer has no output rows to stack.
         """
-        return embed_fasta(self.model, inputs, layers, pool=pool, tokenizer=self.tok, device=self.device)
+        return extract_embeddings(
+            self.model,
+            inputs,
+            layers,
+            pool=pool,
+            region=region,
+            order=order,
+            tokenizer=self.tok,
+            device=self.device,
+        )
 
 
 def _idr_header(accession: str, seq: str) -> str:

@@ -191,6 +191,27 @@ print(values.shape)  # (2, 1024) one IDR-averaged embedding per sequence
 print(values)  # Embedding vector
 ```
 
+Both pooling modes default to `region="idr"`. For full-protein per-residue embeddings, use:
+
+```python
+values, index = model.embed(records, layers=[18], pool="none", region="all")[18]
+```
+
+Here `records` can be a FASTA path, a `Record`, or an iterable of records or bare sequences.
+`region="non_idr"` selects both flanks. Selection does not remove context from the model input.
+Per-residue rows default to original protein order within each input record; use `order="fim"`
+for model input order. Metadata includes `record_idx`, `source_pos` (zero-based original position),
+`residue`, `accession`, and `is_idr`. Mean pooling reports `n_residues` selected and the record's
+`n_idr`; selecting no residues raises an error for mean pooling and returns zero rows for per-residue output.
+
+The underlying function is `idiom.model.extract.extract_embeddings`.
+Use `region="all", order="fim"` to return every residue in model input order.
+
+SAE behavior is preserved: `sae.encode(..., pool="none")` returns all encoded residues in FIM
+order, and its `region` argument continues to affect mean pooling only. Use `order="sequence"`
+to align per-residue SAE features with original protein positions. Mean pooling still encodes
+each residue before averaging features, using the SAE's training region by default.
+
 To export embeddings for a FASTA file of proteins with IDR regions marked, run the `idiom_extract` CLI:
 
 ```bash

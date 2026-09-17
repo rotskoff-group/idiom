@@ -14,7 +14,7 @@ from idiom.api.idiom import IDiom
 from idiom.data.fim import UNPROMPTED, normalize_mode
 from idiom.data.io import to_records
 from idiom.data.tokenizer import Tokenizer
-from idiom.model.extract import embed_fasta
+from idiom.model.extract import extract_embeddings
 from idiom.model.transformer import IDiomTransformer
 from idiom.sae.features.build_feature_dataset import build_feature_dataset as _build_feature_dataset
 from idiom.sae.model.io import load_sae, save_sae
@@ -171,7 +171,7 @@ class IDiomSAE:
         return f"https://huggingface.co/{repo_id}"
 
     @torch.no_grad()
-    def encode(self, inputs, *, pool: str = "mean", region: str | None = None):
+    def encode(self, inputs, *, pool: str = "mean", region: str | None = None, order: str = "fim"):
         """Compute SAE feature activations for the residues of each record.
 
         Invalid FASTA sequences and spans in nonempty headers are skipped with logged
@@ -185,6 +185,8 @@ class IDiomSAE:
             region: "all", "idr", or "non_idr"; the SAE's training region if None. An
                 unprompted-mode SAE accepts only "idr". Filters mean pooling only;
                 pool="none" returns all encoded residues.
+            order: "fim" (default) preserves model input order; "sequence" returns
+                per-residue features in original protein order. Does not affect pooling.
 
         Returns:
             tuple: With pool="none", an [N_res, num_latents] array and a list of per-row metadata
@@ -199,26 +201,41 @@ class IDiomSAE:
             IndexError: If a FASTA entry reaching span parsing has an empty header.
             RuntimeError: If no residue rows are available to encode.
         """
-        region = region or self.region
+        if pool not in ("mean", "none"):
+            raise ValueError(f"invalid pool: {pool!r}")
+        if order not in ("sequence", "fim"):
+            raise ValueError(f"invalid order: {order!r}")
+        region = self.region if region is None else region
+        if region not in ("all", "idr", "non_idr"):
+            raise ValueError(f"invalid region: {region!r}")
         if self.fim_mode == UNPROMPTED and region != "idr":
             raise ValueError(
                 f"region={region!r} is not available from this SAE: it was trained in unprompted "
                 f"mode ('132{{IDR}}'), so only IDR residues are encoded and there are no flanking "
                 f"residues to select. Use region='idr', or an SAE trained with fim_mode='prompted'."
             )
-        emb = embed_fasta(
+        emb = extract_embeddings(
             self.model,
             inputs,
             [self.layer],
             pool="none",
+            region="all",
+            order="fim",
             tokenizer=self.tok,
             device=self.device,
             fim_mode=self.fim_mode,
         )
         values, index = emb[self.layer]
+        if not len(values):
+            raise RuntimeError("no residue rows are available to encode")
         x = torch.from_numpy(values).to(self.device)
         feats = self.sae.encode_dense(x).cpu().numpy()
         if pool == "none":
+            if order == "sequence":
+                indices = sorted(
+                    range(len(index)), key=lambda i: (index[i]["record_idx"], index[i]["source_pos"])
+                )
+                return feats[indices], [index[i] for i in indices]
             return feats, index
 
         rows: dict[int, list[int]] = {}
