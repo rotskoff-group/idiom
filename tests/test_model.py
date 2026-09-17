@@ -15,7 +15,7 @@ def _tiny_model():
 
 
 def test_rmsnorm_unit_scale():
-    """Verify RMSNorm unit scale."""
+    """Verify unit RMS after normalization with the initial scale."""
     norm = RMSNorm(8)
     x = torch.randn(4, 8) * 5.0
     out = norm(x)  # weight initialized to ones -> output rows have RMS ~1
@@ -24,7 +24,7 @@ def test_rmsnorm_unit_scale():
 
 
 def test_rope_is_norm_preserving():
-    """Verify RoPE is norm preserving."""
+    """Verify query-norm preservation and unchanged query/key shapes under RoPE."""
     rope = Rope(head_dim=8, max_seq_len=16)
     q = torch.randn(1, 2, 5, 8)
     k = torch.randn(1, 2, 5, 8)
@@ -35,7 +35,7 @@ def test_rope_is_norm_preserving():
 
 
 def test_forward_shapes_and_tied_embeddings():
-    """Verify forward shapes and tied embeddings."""
+    """Verify logits, hidden-state shapes, and shared embedding/output weights."""
     model = _tiny_model()
     tokens = torch.randint(0, TINY.vocab_size, (2, 6))
     logits = model(tokens)
@@ -47,7 +47,7 @@ def test_forward_shapes_and_tied_embeddings():
 
 @torch.no_grad()
 def test_kv_cache_matches_full_forward():
-    """Verify KV cache matches full forward."""
+    """Verify that cached decoding matches a full-sequence forward pass."""
     model = _tiny_model()
     tokens = torch.randint(0, TINY.vocab_size, (1, 7))
 

@@ -122,7 +122,8 @@ class SparseCoder(nn.Module):
             x: Input activations of shape [..., d_in].
 
         Returns:
-            The selected activations and indices, unsorted, and the pre-selection activations.
+            An EncoderOutput containing selected activations and indices, unsorted,
+            and post-ReLU activations before selection.
         """
         pre_acts = F.relu(self.encoder(x - self.b_dec))
         k = int(self.k)
@@ -171,8 +172,8 @@ class SparseCoder(nn.Module):
                 AuxK loss fits those latents to the reconstruction residual.
 
         Returns:
-            The reconstruction, the selected latents, and the FVU, AuxK, and Multi-TopK losses; the
-            last two are 0 when not applicable.
+            A ForwardOutput containing the reconstruction, selected activations and indices,
+            and scalar FVU, AuxK, and Multi-TopK losses. Auxiliary losses are 0 when unused.
         """
         top_acts, top_indices, pre_acts = self.encode(x)
         sae_out = self.decode(top_acts, top_indices)

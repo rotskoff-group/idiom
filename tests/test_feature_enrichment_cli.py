@@ -20,6 +20,8 @@ def inputs(tmp_path, monkeypatch):
     seen = []
 
     class FakeSAE:
+        """Write deterministic feature datasets without loading a trained SAE."""
+
         fim_mode = "unprompted"
         region = "idr"
         host_model = "fake-host"
@@ -45,7 +47,7 @@ def inputs(tmp_path, monkeypatch):
 
 
 def test_cli_downloads_background_and_exports(tmp_path, monkeypatch, inputs):
-    """Verify CLI downloads background and exports."""
+    """Verify background download, overlap removal, and enrichment exports."""
     positive, background, seen = inputs
     downloads = []
 
@@ -72,7 +74,7 @@ def test_cli_downloads_background_and_exports(tmp_path, monkeypatch, inputs):
 
 
 def test_cli_local_background_no_signature_and_no_stale_rerun(tmp_path, monkeypatch, inputs):
-    """Verify CLI local background no signature and no stale rerun."""
+    """Verify local-background use, optional signatures, and rejection of stale output reuse."""
     positive, background, _ = inputs
     monkeypatch.setattr(
         "huggingface_hub.hf_hub_download", lambda *a, **kw: pytest.fail("unexpected download")
@@ -102,7 +104,7 @@ def test_cli_local_background_no_signature_and_no_stale_rerun(tmp_path, monkeypa
 
 
 def test_cli_rejects_empty_background(tmp_path, inputs):
-    """Verify CLI rejects empty background."""
+    """Verify that an empty background is rejected before feature extraction."""
     positive, _, seen = inputs
     with pytest.raises(SystemExit):
         main(

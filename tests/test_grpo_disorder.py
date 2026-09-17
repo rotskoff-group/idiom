@@ -16,7 +16,7 @@ from tests.test_grpo_module import TINY, TOK
 
 
 def test_real_v3_batch_and_rng():
-    """Verify real v3 batch and RNG."""
+    """Verify real V3 disorder scores and preservation of the PyTorch random state."""
     before = torch.random.get_rng_state().clone()
     total, count, size = disorder_totals(["GSPQEKGSPQEK", "", "LLLLVVVVFFFF"])
     assert count == 2 and size == 3 and 0 < total < 2
@@ -29,7 +29,7 @@ def test_real_v3_batch_and_rng():
 
 
 def test_disorder_averages_sequences_not_residues(monkeypatch):
-    """Verify disorder averages sequences not residues."""
+    """Verify equal weighting of nonempty sequences in disorder summaries."""
     import metapredict
 
     monkeypatch.setattr(
@@ -45,7 +45,7 @@ def test_disorder_averages_sequences_not_residues(monkeypatch):
 
 @pytest.mark.parametrize("scores", [np.array([float("nan")]), np.array([1.2]), np.array([])])
 def test_disorder_rejects_bad_predictions(monkeypatch, scores):
-    """Verify disorder rejects bad predictions."""
+    """Verify rejection of invalid or misaligned disorder predictions."""
     import metapredict
 
     monkeypatch.setattr(metapredict, "predict_disorder_batch", lambda seqs, **kw: [["A", scores]])
@@ -55,7 +55,7 @@ def test_disorder_rejects_bad_predictions(monkeypatch, scores):
 
 @pytest.mark.parametrize("enabled", [True, False])
 def test_logs_once_per_optimizer_step_with_accumulation(tmp_path, monkeypatch, enabled):
-    """Verify logs once per optimizer step with accumulation."""
+    """Verify disorder logging once per optimizer step with accumulated rollouts."""
     import idiom.train.grpo.lit_grpo as module
 
     calls = []

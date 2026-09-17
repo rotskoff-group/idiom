@@ -51,7 +51,8 @@ def quadratic(*, target: float, width: float = 1.0) -> Shaping:
         width: Tolerance as a fraction of the target, absolute when the target is 0.
 
     Returns:
-        See quadratic_penalty.
+        A callable mapping a raw scalar value to its quadratic penalty. The result
+        is 0 at target and -1 one tolerance away.
 
     Raises:
         ValueError: If width is not positive.
@@ -68,7 +69,7 @@ def gaussian(*, target: float, width: float = 1.0) -> Shaping:
         width: Tolerance as a fraction of the target, absolute when the target is 0.
 
     Returns:
-        See gaussian_score.
+        A callable mapping a raw scalar value to a score in [0, 1], peaking at target.
 
     Raises:
         ValueError: If width is not positive.

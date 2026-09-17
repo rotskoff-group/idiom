@@ -105,8 +105,8 @@ def enrich(
         min_total_fire: Minimum pooled firing count for a feature to be tested.
 
     Returns:
-        The counts a and b, the sizes n_pos and n_neg, and the per-feature arrays log2or, z, p, fdr,
-        active, prev_pos, and prev_neg.
+        A dictionary containing scalar n_pos and n_neg and per-feature arrays a, b,
+        log2or, z, p, fdr, active, prev_pos, and prev_neg.
     """
     a = np.pad(np.asarray(a, float), (0, num_latents - len(a)))
     b = np.pad(np.asarray(b, float), (0, num_latents - len(b)))
@@ -176,8 +176,9 @@ def boundary_features(
     Args:
         feature_dir (str | Path): A feature dataset directory.
         feature_ids (Iterable[int]): Candidate features to test.
-        edge: Number of residues from either end that count as a boundary.
-        frac_thresh: Fraction of top firings at a boundary above which a feature is flagged.
+        edge: Inclusive FIM-index distance from the first or last residue position.
+            For example, 2 includes the endpoint and positions up to two indices away.
+        frac_thresh: Minimum fraction of top firings at a boundary needed to flag a feature.
         top_windows: Number of top-activating firings per feature to examine.
 
     Returns:
@@ -319,7 +320,8 @@ def load_sequences(path) -> list[Record]:
 def length_match(positives, background, *, n, rng, bin_width=20):
     """Sample a background whose IDR-length distribution follows the positive set's.
 
-    Fill undersupplied length bins from the remaining pool; return at most n records.
+    Fill undersupplied bins from the remaining pool. Rounded bin allocations can make
+    the result larger or smaller than n; the available background also limits its size.
 
     Args:
         positives (list[Record]): Positive records.
@@ -329,7 +331,7 @@ def length_match(positives, background, *, n, rng, bin_width=20):
         bin_width (int): Length-bin width in residues.
 
     Returns:
-        list[Record]: The sampled background.
+        The sampled background records, without replacement within each bin.
     """
 
     def _bin(r):

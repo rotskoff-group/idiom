@@ -7,7 +7,19 @@ import sys
 
 
 def serve(build):
-    """Load a scorer once and serve validated JSON batches until stdin closes."""
+    """Serve newline-delimited JSON requests until stdin closes.
+
+    Requests contain {"sequences": [str, ...]}. Responses contain either
+    {"scores": [float, ...]} or {"error": str}. Empty sequences receive zero without
+    being scored. Invalid requests and scoring errors produce error responses;
+    startup errors propagate.
+
+    Redirect library stdout to stderr while serving, then restore it on exit.
+
+    Args:
+        build: Zero-argument factory returning a callable that accepts nonempty
+            sequences and returns one finite numeric score per sequence, in order.
+    """
     # Import this helper before removing the directory: sparrow.py must not shadow sparrow
     here = os.path.dirname(os.path.abspath(__file__))
     sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != here]

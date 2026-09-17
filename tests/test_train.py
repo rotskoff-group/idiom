@@ -24,7 +24,7 @@ def _loader(completion_only=False):
 
 def test_sft_mask_is_completion_only():
     # SFT: only the IDR (idr_len residues) + STOP carry loss
-    """Verify SFT mask is completion only."""
+    """Verify that the SFT loss mask includes only IDR residues and STOP."""
     ds = RecordDataset(RECS, TOK, prompted_prob=1.0, completion_only=True)
     _, y, mask = ds[0]
     idr_len = RECS[0].idr_end - RECS[0].idr_start
@@ -33,7 +33,7 @@ def test_sft_mask_is_completion_only():
 
 
 def test_training_step_finite_grad():
-    """Verify training step finite grad."""
+    """Verify that the training step returns a finite, differentiable loss."""
     lit = LitAutoregressive(TINY, warmup_steps=1, max_steps=10)
     batch = next(iter(_loader()))
     loss = lit.training_step(batch, 0)
@@ -54,7 +54,7 @@ def test_warmup_cosine_shape():
 
 
 def test_init_from_checkpoint_roundtrip(tmp_path):
-    """Verify init from checkpoint roundtrip."""
+    """Verify that training initialization preserves checkpoint configuration and weights."""
     lit = LitAutoregressive(TINY)
     ckpt = tmp_path / "pre.ckpt"
     torch.save(
@@ -71,7 +71,7 @@ def test_init_from_checkpoint_roundtrip(tmp_path):
 
 
 def test_build_wires_pretrain_and_sft(tmp_path):
-    """Verify build wires pretrain and SFT."""
+    """Verify model, schedule, and completion-mask settings from training configuration."""
     from omegaconf import OmegaConf
 
     from idiom.train.autoreg.train_autoreg import build
@@ -98,7 +98,7 @@ def test_build_wires_pretrain_and_sft(tmp_path):
 
 
 def test_trainer_fit_smoke(tmp_path):
-    """Verify trainer fit smoke."""
+    """Verify that a short training run completes the requested optimizer steps."""
     lit = LitAutoregressive(TINY, warmup_steps=1, max_steps=2)
     trainer = L.Trainer(
         max_steps=2,
@@ -115,7 +115,7 @@ def test_trainer_fit_smoke(tmp_path):
 
 @pytest.mark.parametrize("nodes", [1, 2])
 def test_autoreg_runner_preserves_external_launcher_for_multiple_nodes(tmp_path, monkeypatch, nodes):
-    """Verify autoreg runner preserves external launcher for multiple nodes."""
+    """Verify launcher selection for single-node and multi-node training."""
     from types import SimpleNamespace
 
     from lightning.pytorch.plugins.environments import LightningEnvironment

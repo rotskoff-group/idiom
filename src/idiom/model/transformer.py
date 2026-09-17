@@ -76,7 +76,8 @@ class IDiomTransformer(nn.Module):
     def __init__(self, cfg: ModelConfig) -> None:
         """Initialize the transformer.
 
-        Linear and embedding weights are drawn from N(0, 0.02); the residual-stream output
+        Linear and embedding weights use a normal distribution with mean 0 and standard
+        deviation 0.02; the residual-stream output
         projections (attention wo and SwiGLU w_down) are rescaled by 1 / sqrt(2 * n_layers).
 
         Args:
@@ -120,8 +121,8 @@ class IDiomTransformer(nn.Module):
             return_hidden_states: If True, also return each block's residual-stream output.
 
         Returns:
-            Tensor | tuple[Tensor, list[Tensor]]: Logits [B, L, vocab_size], or (logits, hidden)
-                where hidden[i] is the residual stream after block i.
+            Raw next-token logits of shape [B, L, vocab_size], or (logits, hidden) when
+            requested. hidden[i] is block i's residual output before final normalization.
         """
         B, L = tokens.shape
         past = cache.length if cache is not None else 0

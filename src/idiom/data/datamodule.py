@@ -66,8 +66,8 @@ class RecordDataModule(L.LightningDataModule):
         self.test_set: RecordDataset | None = None
 
     def _build(self, path: str | Path) -> RecordDataset:
-        # Memory mapping lets DDP ranks share record data through the OS page cache
         """Build a record dataset from a cached store using the configured FIM options."""
+        # Memory mapping lets DDP ranks share record data through the OS page cache
         return RecordDataset(
             open_or_build(path),
             self.tok,

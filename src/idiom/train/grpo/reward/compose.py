@@ -91,7 +91,7 @@ def build_terms(rcfg: DictConfig) -> list[Term]:
     """Validate all term specs and labels before importing their factories.
 
     Args:
-        rcfg: The reward config: a terms list.
+        rcfg: A config or mapping containing a "terms" list, such as {"terms": [...]}.
 
     Returns:
         One built term per config entry, in order.
@@ -131,13 +131,13 @@ def build_reward(rcfg: DictConfig):
     """Build the total reward from a reward config.
 
     Args:
-        rcfg: The reward config: a terms list (see configs/grpo.yaml).
+        rcfg: A config or mapping containing a "terms" list, such as {"terms": [...]}.
 
     Returns:
         Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]]: Maps (idrs,
             group_size) to the per-idr totals and a matching breakdown. Each breakdown dict holds
             every term's weighted contribution under its label, its raw reward under "<label>_raw",
-            and the total.
+            and the total. group_size is accepted for compatibility but is unused.
 
     Raises:
         ValueError: If the config does not validate; see build_terms.

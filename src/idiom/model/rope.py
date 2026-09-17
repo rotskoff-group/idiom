@@ -20,7 +20,7 @@ class Rope(nn.Module):
 
         Args:
             head_dim: Per-head dimension; must be even.
-            max_seq_len: Largest position the tables cover.
+            max_seq_len: Number of positions to precompute, covering indices 0 through max_seq_len - 1.
             base: Base of the inverse-frequency geometric progression.
         """
         super().__init__()

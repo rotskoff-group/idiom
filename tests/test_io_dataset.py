@@ -33,7 +33,7 @@ def test_read_fasta_drops_noncanonical(tmp_path):
 
 
 def test_parse_idr_header():
-    """Verify parsing of IDR header coordinates and rejection of malformed headers."""
+    """Verify conversion of valid FASTA spans to zero-based half-open coordinates."""
     assert parse_idr_header("P06748_IDR_119-242") == ("P06748", 118, 242)
     assert parse_idr_header("P00001_IDR_3-6 trailing") == ("P00001", 2, 6)
 
@@ -47,7 +47,7 @@ def test_read_records(tmp_path):
 
 
 def test_record_to_example_shift():
-    """Verify record to example shift."""
+    """Verify shifted training inputs and targets with START and STOP tokens."""
     rec = Record("P0", "MEDSKVDNRPQ", 4, 8)  # IDR = seq[4:8] = "KVDN" (half-open)
     x, y = record_to_example(rec, TOK, variant="prompted")
     assert x.shape == y.shape
@@ -57,7 +57,7 @@ def test_record_to_example_shift():
 
 
 def test_dataset_len_filter_and_getitem():
-    """Verify dataset len filter and getitem."""
+    """Verify full-sequence length filtering and retrieval of encoded training examples."""
     keep = max_protein_len(16)
     recs = [
         Record("ok", "MEDSKVDNRPQ", 2, 5),
@@ -71,7 +71,7 @@ def test_dataset_len_filter_and_getitem():
 
 
 def test_collate_pads():
-    """Verify collate pads."""
+    """Verify matching batch shapes and padding of variable-length examples."""
     recs = [Record("a", "MEDSKVDNRPQ", 2, 5), Record("b", "ACDEFGHIKL", 1, 8)]
     ds = RecordDataset(recs, TOK, max_len=64, prompted_prob=1.0)
     collate = make_collate(TOK.pad_id)
@@ -81,7 +81,7 @@ def test_collate_pads():
 
 
 def test_to_records_normalizes_inputs(tmp_path):
-    """Verify to records normalizes inputs."""
+    """Verify normalization of bare sequences, Records, iterables, and FASTA paths."""
     recs = list(to_records("MEDSKVDN"))
     assert len(recs) == 1
     assert (recs[0].accession, recs[0].idr_start, recs[0].idr_end) == ("seq_0", 0, 8)
@@ -96,7 +96,7 @@ def test_to_records_normalizes_inputs(tmp_path):
 
 
 def test_to_records_noncanonical_sequence_raises():
-    """Verify normalization of supported sequence, record, and FASTA inputs."""
+    """Verify that record normalization rejects noncanonical bare sequences."""
     import pytest
 
     with pytest.raises(ValueError, match="canonical"):
@@ -104,13 +104,13 @@ def test_to_records_noncanonical_sequence_raises():
 
 
 def test_long_bare_sequence_matches_list_input():
-    """Verify long bare sequence matches list input."""
+    """Verify identical record normalization for long strings and single-item lists."""
     seq = "ACDEFGHIKLMNPQRSTVWY" * 15
     assert list(to_records(seq)) == list(to_records([seq]))
 
 
 def test_existing_sequence_named_file_keeps_path_precedence(tmp_path, monkeypatch):
-    """Verify existing sequence named file keeps path precedence."""
+    """Verify that an existing file takes precedence over a sequence-like path string."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "ACDE").write_text(">protein_IDR_1-4\nMKLV\n")
     assert list(to_records("ACDE")) == [Record("protein", "MKLV", 0, 4)]

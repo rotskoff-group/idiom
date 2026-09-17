@@ -52,7 +52,7 @@ def test_fim_transforms():
 
 
 def test_normalize_mode_validates():
-    """Verify normalize mode validates."""
+    """Verify that prompting-mode validation accepts only the supported names."""
     import pytest
 
     from idiom.data.fim import normalize_mode
@@ -65,7 +65,7 @@ def test_normalize_mode_validates():
 
 
 def test_marker_drop_alignment_prompted():
-    """Verify marker drop alignment prompted."""
+    """Verify residue-to-source alignment after removing prompted FIM markers."""
     seq, start, end = "MEDSKVDNRPQ", 4, 8
     fim = fim_prompted(seq, start, end)
     residues = "".join(c for c in fim if c not in "123")
@@ -75,7 +75,7 @@ def test_marker_drop_alignment_prompted():
 
 
 def test_marker_drop_alignment_unprompted():
-    """Verify marker drop alignment unprompted."""
+    """Verify that unprompted residue positions map to the original IDR."""
     seq, start, end = "MEDSKVDNRPQ", 4, 8
     pos = residue_source_positions(len(seq), start, end, "unprompted")
     assert "".join(seq[p] for p in pos) == "KVDN"

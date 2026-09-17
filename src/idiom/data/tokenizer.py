@@ -78,12 +78,12 @@ class Tokenizer:
             ) from None
 
     def decode(self, ids: Iterable[int]) -> str:
-        """Decode token ids to a residue/FIM string, omitting control tokens."""
+        """Decode valid nonnegative token IDs to a residue/FIM string, omitting control tokens."""
         n_seq = self.n_residues + self.n_fim
         return "".join(self._itos[int(i)] for i in ids if int(i) < n_seq)
 
     def is_residue(self, i: int) -> bool:
-        """Check whether a token ID lies below the residue vocabulary boundary."""
+        """Return whether a valid nonnegative token ID represents a residue."""
         return int(i) < self.n_residues
 
     def is_fim(self, i: int) -> bool:
@@ -91,7 +91,7 @@ class Tokenizer:
         return self.n_residues <= int(i) < self.n_residues + self.n_fim
 
     def residue_mask(self, ids: torch.Tensor) -> torch.Tensor:
-        """Return a boolean mask of residue positions, with the same shape as ids."""
+        """Return a residue mask with the same shape as the valid nonnegative token IDs."""
         return self.region_mask(ids)
 
     def region_mask(
@@ -103,10 +103,11 @@ class Tokenizer:
         "2" marker that opens the IDR.
 
         Args:
-            ids: Token ids, shape [B, L].
+            ids: Valid nonnegative token IDs, shape [B, L].
             region: Which kept positions to select: "all" for every kept position, "idr" for only
-                those after the "2" marker, "non_idr" for only those before it. A row with no "2"
-                marker contributes nothing to "idr" or "non_idr".
+                those after the first "2" marker, or "non_idr" for those before it. The marker
+                itself is included in "non_idr" when drop_markers=False. Rows without "2"
+                contribute nothing to either region.
             drop_markers: If True, keep only real residues; if False, also keep FIM markers.
 
         Returns:

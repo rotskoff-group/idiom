@@ -83,7 +83,8 @@ def parse_idr_header(header: str) -> tuple[str, int, int]:
     """Parse an "_IDR_x-y" header into an accession and 0-indexed half-open IDR coordinates.
 
     Free text after the first whitespace is ignored, and the split is on the last "_IDR_", so an
-    accession may itself contain underscores.
+    accession may itself contain underscores. Coordinates are converted but not validated
+    against a sequence length.
 
     Args:
         header: The FASTA header, whose first token ends in "_IDR_x-y".
@@ -92,7 +93,8 @@ def parse_idr_header(header: str) -> tuple[str, int, int]:
         The accession, the 0-based start, and the exclusive end.
 
     Raises:
-        ValueError: If the header has no "_IDR_x-y" span or the span cannot be parsed.
+        ValueError: If a nonempty header has no span or the span cannot be parsed.
+        IndexError: If the header is empty or contains only whitespace.
     """
     token = header.split()[0]
     if "_IDR_" not in token:
@@ -109,7 +111,8 @@ def parse_idr_header(header: str) -> tuple[str, int, int]:
 def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterator[Record]:
     """Parse a FASTA into Records.
 
-    Entries with a missing, malformed, or out-of-range "_IDR_x-y" span are skipped.
+    Entries with nonempty headers and missing, malformed, or out-of-range spans are
+    skipped. Empty headers raise IndexError.
 
     Args:
         path: Path to the FASTA file.
@@ -117,7 +120,10 @@ def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterato
             acids.
 
     Yields:
-        One record per valid entry.
+        One record per accepted entry.
+
+    Raises:
+        IndexError: If an entry reaching span parsing has an empty header.
     """
     skipped = 0
     for header, seq in read_fasta(path, drop_noncanonical=drop_noncanonical):
@@ -155,7 +161,7 @@ def to_records(inputs, *, drop_noncanonical: bool = True) -> Iterator[Record]:
         drop_noncanonical: Passed through to read_records for the FASTA-path case.
 
     Yields:
-        One record per input sequence or FASTA entry.
+        One record per accepted sequence or FASTA entry; filtered entries are omitted.
 
     Raises:
         ValueError: If a Path does not exist, or a bare sequence is non-canonical.

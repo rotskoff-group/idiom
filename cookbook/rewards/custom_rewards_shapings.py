@@ -57,6 +57,6 @@ def motif_count(pattern: str = r"[VILMF]K.E") -> Reward:
 
 
 def absolute_error(*, target: float) -> Shaping:
-    """Return -abs(value - target): zero at the target, negative elsewhere."""
+    """Return a shaping callable mapping each value to -abs(value - target)."""
     # target comes from shaping.target; the returned function receives each raw reward
     return lambda value: -abs(value - target)  # Highest score is 0; either side of the target is penalized

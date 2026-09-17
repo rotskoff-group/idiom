@@ -30,7 +30,7 @@ def test_datamodule_batches(tmp_path):
 
 
 def test_no_val_fasta_skips_validation(tmp_path):
-    """Verify no val FASTA skips validation."""
+    """Verify that omitting validation FASTA disables its dataset and loader."""
     tr = tmp_path / "train.fasta"
     tr.write_text(TRAIN)
     dm = RecordDataModule(tr, None, tokenizer=TOK, batch_size=2, max_len=64, num_workers=0)

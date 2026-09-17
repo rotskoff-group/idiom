@@ -9,7 +9,10 @@ from idiom.sae.model.sparse_coder import SparseCoder
 
 
 def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None):
-    """Build the LambdaLR multiplier: linear warmup, then optional linear decay to zero."""
+    """Build a warmup/decay multiplier for steps from zero through total_steps.
+
+    Optional linear decay reaches zero at total_steps and is not clamped afterward.
+    """
 
     def fn(step: int) -> float:
         """Return the learning-rate multiplier for linear warmup and optional linear decay."""
@@ -96,7 +99,7 @@ class LitSAE(L.LightningModule):
         self.sae.b_dec.data = mean_activation.to(self.sae.b_dec.device, self.sae.b_dec.dtype)
 
     def on_train_batch_start(self, *args, **kwargs):
-        """Renormalize the decoder rows to unit norm before each training batch."""
+        """Renormalize decoder rows before each batch when decoder normalization is enabled."""
         if self.sae.normalize_decoder:
             self.sae.set_decoder_norm_to_unit_norm()
 
@@ -140,7 +143,7 @@ class LitSAE(L.LightningModule):
         return loss
 
     def configure_gradient_clipping(self, optimizer, gradient_clip_val=None, gradient_clip_algorithm=None):
-        """Project decoder gradients off their rows, then apply grad_clip_norm if set.
+        """Project existing decoder gradients when normalization is enabled, then clip if configured.
 
         Lightning's gradient_clip_val and gradient_clip_algorithm are ignored.
         """

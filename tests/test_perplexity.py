@@ -1,3 +1,5 @@
+"""Checks for completion-only perplexity and token masking."""
+
 import math
 
 import pytest
@@ -10,12 +12,14 @@ from idiom.utils.perplexity import perplexity
 @pytest.mark.parametrize("prompted_prob", [0.0, 1.0])
 @pytest.mark.parametrize("batch_size", [1, 2])
 def test_completion_perplexity_excludes_context_and_padding(tmp_path, prompted_prob, batch_size):
-    """Verify completion perplexity excludes context and padding."""
+    """Verify completion-only perplexity and exclusion of flank and padding tokens."""
     fasta = tmp_path / "records.fasta"
     fasta.write_text(">first_IDR_3-4\nCCAACC\n>second_IDR_4-6\nCCCAAACC\n")
     tok = Tokenizer()
 
     class ConstantModel(torch.nn.Module):
+        """Return fixed token scores for checking perplexity calculations."""
+
         def forward(self, x):
             """Return fixed logits favoring alanine and STOP for perplexity checks."""
             logits = torch.zeros(*x.shape, tok.vocab_size)

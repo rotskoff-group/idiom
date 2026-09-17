@@ -32,7 +32,7 @@ def _write(tmp_path):
 
 
 def test_store_matches_read_records(tmp_path):
-    """Verify store matches read records."""
+    """Verify that stored records match FASTA parsing results."""
     fasta = _write(tmp_path)
     expected = list(read_records(fasta))
     store = RecordStore(build_record_store(fasta))
@@ -48,14 +48,14 @@ def test_store_matches_read_records(tmp_path):
 
 
 def test_seq_lengths_vectorized(tmp_path):
-    """Verify seq lengths vectorized."""
+    """Verify vectorized full-sequence lengths from the record store."""
     fasta = _write(tmp_path)
     store = RecordStore(build_record_store(fasta))
     assert store.seq_lengths().tolist() == [len(r.full_seq) for r in read_records(fasta)]
 
 
 def test_dataset_parity_store_vs_list(tmp_path):
-    """Verify dataset parity store vs list."""
+    """Verify identical examples from stored and in-memory records."""
     fasta = _write(tmp_path)
     for completion_only in (False, True):
         ds_list = RecordDataset(read_records(fasta), seed=7, completion_only=completion_only)
@@ -68,7 +68,7 @@ def test_dataset_parity_store_vs_list(tmp_path):
 
 
 def test_length_filter_parity(tmp_path):
-    """Verify length filter parity."""
+    """Verify identical length filtering for stored and in-memory records."""
     fasta = _write(tmp_path)
     # max_len small enough that the 10-residue P5 record (full example = 14 positions) is dropped
     max_len = 12
@@ -78,7 +78,7 @@ def test_length_filter_parity(tmp_path):
 
 
 def test_open_or_build_caches_and_rebuilds_on_change(tmp_path):
-    """Verify open or build caches and rebuilds on change."""
+    """Verify cache reuse and rebuilding after the source FASTA changes."""
     fasta = _write(tmp_path)
     store_dir = store_path_for(fasta)
     s1 = open_or_build(fasta)

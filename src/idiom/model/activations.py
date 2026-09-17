@@ -50,8 +50,8 @@ def extract_activations(
         region: Positions to keep: "all", "idr", or "non_idr".
 
     Returns:
-        One LayerActivations per requested layer, each holding the same selected positions in the
-        same order.
+        A dictionary mapping each requested layer index to a LayerActivations object.
+        Each object holds the same selected positions in the same order.
 
     Raises:
         ValueError: If region is not "all", "idr", or "non_idr".

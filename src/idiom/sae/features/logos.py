@@ -14,7 +14,9 @@ def per_sequence_activations(feats, index) -> list[tuple[str, np.ndarray]]:
             Legacy metadata without record_idx is grouped by accession.
 
     Returns:
-        One (residue_string, row_indices) per input record, in input order.
+        A list of (residue_string, row_indices) pairs in input-record order. Within
+        each record, residues and indices are sorted by source_pos to restore
+        original protein order from FIM order.
     """
     order: list = []
     rows: dict = {}

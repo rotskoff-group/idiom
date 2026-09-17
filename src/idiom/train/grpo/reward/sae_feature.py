@@ -113,7 +113,8 @@ def sae_signature(
         device: Torch device for the lens; cuda when available if None.
 
     Returns:
-        A raw reward in [0, 1] per IDR.
+        A batch-scoring callable returning one feature-match fraction in [0, 1]
+        per IDR, in input order. Empty strings score 0.
 
     Raises:
         ValueError: If the signature file cannot be read, or holds neither the case nor the

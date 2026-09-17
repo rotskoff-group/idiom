@@ -25,30 +25,36 @@ from idiom.utils.device import resolve_device
 
 @torch.no_grad()
 def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="cpu", fim_mode=PROMPTED):
-    """Extract residual-stream embeddings from sequences or FASTA records.
+    """Extract residual-stream embeddings in input-record order.
 
-    Records are processed one at a time, so rows appear in input order.
+    FASTA entries with invalid sequences or nonempty malformed headers are skipped;
+    noncanonical bare sequences raise ValueError. Record objects pass through input
+    normalization unchanged and must contain valid sequences and spans.
 
     Args:
-        model: The transformer to run.
-        inputs (str | Path | Record | Iterable[str | Record]): A record FASTA path, a bare sequence
-            string, or an iterable of sequences and/or Records; see idiom.data.io.to_records.
-        layers (list[int]): Zero-based block indices.
-        pool (str): "mean" for one vector per sequence, averaged over its IDR residues, or "none"
-            for one row per residue.
-        tokenizer (Tokenizer | None): Defaults to Tokenizer().
-        device (str | torch.device): Device to run the model on.
-        fim_mode (str): Prompt format the activations are taken under, "prompted" or "unprompted".
+        model: Transformer on the same device as the input tokens.
+        inputs: FASTA path, Record, bare sequence, or iterable of Records and sequences.
+            At least one accepted record must contribute rows to each requested layer.
+        layers: Zero-based transformer block indices.
+        pool: "mean" averages IDR residues; "none" returns every encoded residue.
+        tokenizer: Tokenizer to use, or None for the default vocabulary.
+        device: Device for input tokens; the model is not moved.
+        fim_mode: "prompted" includes flanks; "unprompted" encodes only the IDR.
 
     Returns:
-        dict[int, tuple]: Per layer, a (values, index) pair. values is an [N, d_model] array. For
-            pool="mean", index holds one dict per sequence with keys accession and n_idr; for
-            pool="none", one dict per residue with keys record_idx, accession, source_pos, residue,
-            and is_idr. record_idx identifies the input record even when accessions repeat.
+        A dictionary mapping each layer to (values, index). values is a NumPy array
+        with shape [N_records, d_model] for mean pooling or [N_residues, d_model]
+        otherwise. index contains one metadata dictionary per row.
+        Mean-pooled metadata contains accession and n_idr. Per-residue metadata
+        contains record_idx, accession, source_pos, residue, and is_idr. Residue rows
+        follow FIM order (prefix, suffix, IDR), excluding markers and START;
+        source_pos is the zero-based original protein position.
 
     Raises:
-        ValueError: If fim_mode is neither "prompted" nor "unprompted", or an input sequence is
-            non-canonical.
+        ValueError: If fim_mode is invalid, a bare sequence is noncanonical, or a
+            supplied Path does not exist.
+        IndexError: If a FASTA entry reaching span parsing has an empty header.
+        RuntimeError: If a requested layer has no output rows to stack.
     """
     tok = tokenizer or Tokenizer()
     variant = normalize_mode(fim_mode)

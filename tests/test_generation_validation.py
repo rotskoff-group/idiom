@@ -52,7 +52,7 @@ def model():
     ],
 )
 def test_invalid_options_rejected_by_generation_and_steering(model, kw):
-    """Verify invalid options rejected by generation and steering."""
+    """Verify that generation and steering reject invalid sampling options."""
     sae = IDiomSAE(SparseCoder(16, num_latents=32, k=4), model, layer=0)
     for call in (model.generate_unprompted, lambda **opts: sae.steer_generate(0, 0.5, **opts)):
         with pytest.raises(ValueError):
@@ -61,20 +61,20 @@ def test_invalid_options_rejected_by_generation_and_steering(model, kw):
 
 @pytest.mark.parametrize("start,end", [(-1, 2), (2, 1), (2, 2), (0, 7), (0.5, 2), (False, 2)])
 def test_invalid_spans(model, start, end):
-    """Verify invalid spans."""
+    """Verify rejection of invalid IDR coordinates."""
     with pytest.raises(ValueError):
         model.generate_prompted("ACDEFG", start, end)
 
 
 @pytest.mark.parametrize("seq", ["", "ACXEFG", "AC1EFG", "acdefg"])
 def test_noncanonical_sequence_rejected_even_inside_replaced_region(model, seq):
-    """Verify noncanonical sequence rejected even inside replaced region."""
+    """Verify that noncanonical residues are rejected even inside the replaced IDR."""
     with pytest.raises(ValueError, match="canonical"):
         model.generate_prompted(seq, 0, len(seq))
 
 
 def test_zero_count_is_empty_and_full_sequence_span_is_valid(model):
-    """Verify zero count is empty and full sequence span is valid."""
+    """Verify empty results for zero-count requests, including whole-protein IDR spans."""
     assert model.generate_unprompted(n=0) == []
     assert model.generate_prompted("ACDEFG", 0, 6, n=0) == []
     sae = IDiomSAE(SparseCoder(16, num_latents=32, k=4), model, layer=0)
@@ -83,7 +83,7 @@ def test_zero_count_is_empty_and_full_sequence_span_is_valid(model):
 
 @pytest.mark.parametrize("args", [["--min-len", "0"], ["--top-p", "nan"], ["--n", "-1"]])
 def test_cli_validates_before_loading(monkeypatch, args):
-    """Verify CLI validates before loading."""
+    """Verify that invalid CLI options fail before model loading."""
     from idiom.api.cli import main
 
     monkeypatch.setattr(IDiom, "load", lambda *a, **kw: pytest.fail("loaded model"))
@@ -93,7 +93,7 @@ def test_cli_validates_before_loading(monkeypatch, args):
 
 
 def test_empty_fasta_still_validates_options(model, tmp_path):
-    """Verify empty FASTA still validates options."""
+    """Verify generation-option validation even when the FASTA has no records."""
     fasta = tmp_path / "empty.fasta"
     fasta.write_text("")
     with pytest.raises(ValueError, match="temperature"):

@@ -34,7 +34,7 @@ def _ref_greedy(model, prompt, n_new):
 
 
 def test_greedy_matches_uncached_reference():
-    """Verify greedy matches uncached reference."""
+    """Verify that cached greedy decoding matches an uncached reference."""
     model = _model()
     prompt = torch.tensor(TOK.encode("132")).unsqueeze(0)
     cached = generate(model, prompt, max_new_tokens=8, temperature=0, stop_id=None)
@@ -43,7 +43,7 @@ def test_greedy_matches_uncached_reference():
 
 
 def test_greedy_is_deterministic():
-    """Verify greedy is deterministic."""
+    """Verify repeatable greedy generation."""
     model = _model()
     prompt = torch.tensor(TOK.encode("132")).unsqueeze(0)
     a = generate(model, prompt, max_new_tokens=6, temperature=0, stop_id=None)
@@ -52,7 +52,7 @@ def test_greedy_is_deterministic():
 
 
 def test_sampling_in_range_and_seeded():
-    """Verify sampling in range and seeded."""
+    """Verify valid token IDs and repeatability with a fixed sampling seed."""
     model = _model()
     prompt = torch.tensor([TOK.encode("132"), TOK.encode("132")])
     g1 = torch.Generator().manual_seed(0)
@@ -65,7 +65,7 @@ def test_sampling_in_range_and_seeded():
 
 
 def test_context_boundary_matches_reference_without_extra_forward():
-    """Verify context boundary matches reference without extra forward."""
+    """Verify context-limited sampling without an unnecessary final forward pass."""
     import pytest
 
     model = _model()
@@ -82,7 +82,7 @@ def test_context_boundary_matches_reference_without_extra_forward():
 
 
 def test_oversized_prompt_rejected_before_forward():
-    """Verify oversized prompt rejected before forward."""
+    """Verify that oversized prompts fail before model execution."""
     import pytest
 
     model = _model()

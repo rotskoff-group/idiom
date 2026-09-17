@@ -1,4 +1,8 @@
-"""Write per-residue SAE features with positions in the FIM string, including markers."""
+"""Write residue feature rows with positions in stored FIM strings.
+
+Position indices include FIM markers in their coordinate system but exclude START.
+The activation rows themselves contain residues only.
+"""
 
 from __future__ import annotations
 
@@ -29,19 +33,19 @@ def build_feature_dataset(
     region: str = "all",
     fim_mode: str = "prompted",
 ) -> Path:
-    """Write per-residue top-k features; see FeatureDataset for the file schema.
+    """Write per-residue top-k features using the feature_activations module file schema.
 
     Move both models to device in eval mode. Positions index FIM strings without START.
 
     Args:
         model: The host transformer.
         sae: The trained SparseCoder to encode activations with.
-        records: Iterable of records to encode.
+        records: Nonempty iterable of valid records to encode.
         layer: Zero-based block index to extract.
         out_dir: Directory to write the dataset into; created if needed.
         tokenizer: Tokenizer for encoding and region masking; a default if None.
         device: Device to run extraction and encoding on.
-        batch_size: Number of records per forward batch.
+        batch_size: Positive number of records per forward batch.
         region: Residues to keep: "all", "idr", or "non_idr".
         fim_mode: Prompt format: "prompted" or "unprompted".
 

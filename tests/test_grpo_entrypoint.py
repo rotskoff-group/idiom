@@ -49,7 +49,7 @@ def _reward_cfg(**over):
 
 
 def test_build_reward_composes():
-    """Verify build reward composes."""
+    """Verify a composed reward built from configuration."""
     terms = build_reward(_reward_cfg())
     idr = "P" * 100  # 100% proline, and length exactly on the target
     totals, _ = terms([idr], 1)
@@ -57,7 +57,7 @@ def test_build_reward_composes():
 
 
 def test_the_shipped_aliases_are_the_whole_menu():
-    """Verify the shipped aliases are the whole menu."""
+    """Verify the supported reward and shaping aliases."""
     from idiom.train.grpo.reward import REWARD_ALIASES, SHAPING_ALIASES, entropy, length
 
     assert set(REWARD_ALIASES) == {"entropy", "length", "external_scorer", "sae_signature"}
@@ -66,7 +66,7 @@ def test_the_shipped_aliases_are_the_whole_menu():
 
 
 def test_every_alias_resolves_to_a_factory():
-    """Verify every alias resolves to a factory."""
+    """Verify that every shipped alias resolves to a callable factory."""
     from idiom.train.grpo.reward import REWARD_ALIASES, SHAPING_ALIASES, load_callable
 
     for name, path in {**REWARD_ALIASES, **SHAPING_ALIASES}.items():
@@ -74,7 +74,7 @@ def test_every_alias_resolves_to_a_factory():
 
 
 def test_build_wires_module_and_prompts(tmp_path):
-    """Verify build wires module and prompts."""
+    """Verify GRPO model settings and the configured prompt dataset."""
     cfg = OmegaConf.create(
         {
             "seed": 0,
@@ -100,7 +100,7 @@ def test_build_wires_module_and_prompts(tmp_path):
 
 
 def test_build_rejects_unknown_prompt_mode(tmp_path):
-    """Verify build rejects unknown prompt mode."""
+    """Verify rejection of unsupported GRPO prompting modes."""
     import pytest
 
     cfg = OmegaConf.create(
@@ -117,7 +117,7 @@ def test_build_rejects_unknown_prompt_mode(tmp_path):
 
 
 def test_nothing_shipped_names_a_path_outside_the_package():
-    """Verify nothing shipped names a path outside the package."""
+    """Verify that shipped configs do not depend on repository-only scripts."""
     import idiom.configs
 
     cfgdir = Path(idiom.configs.__file__).parent
@@ -146,7 +146,7 @@ def _strings(obj):
 
 
 def test_the_sae_reward_ships_with_its_signatures():
-    """Verify the SAE reward ships with its signatures."""
+    """Verify that packaged SAE signatures are present and readable."""
     from idiom.train.grpo.reward import sae_feature
 
     assert (Path(sae_feature.__file__).parent / "sae_signatures.json").is_file()
@@ -157,7 +157,7 @@ def test_the_sae_reward_ships_with_its_signatures():
 
 
 def test_the_shipped_objective_is_empty():
-    """Verify the shipped objective is empty."""
+    """Verify that the default GRPO config leaves reward terms unspecified."""
     import idiom.configs
 
     cfg = OmegaConf.load(Path(idiom.configs.__file__).parent / "grpo.yaml")
@@ -168,7 +168,7 @@ def test_the_shipped_objective_is_empty():
 
 
 def test_the_rewards_the_library_registers_need_no_repository(tmp_path, monkeypatch):
-    """Verify the rewards the library registers need no repository."""
+    """Verify that registered rewards can run without repository helper files."""
     monkeypatch.chdir(tmp_path)
     terms = [
         {"reward": "entropy", "weight": 1.0, "shaping": {"name": "quadratic", "target": 3.65, "width": 0.2}},

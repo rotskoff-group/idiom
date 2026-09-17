@@ -43,43 +43,43 @@ def test_parse_response_happy():
 
 
 def test_parse_response_rejects_length_mismatch():
-    """Verify parse response rejects length mismatch."""
+    """Verify rejection of responses with the wrong number of scores."""
     with pytest.raises(ValueError, match="2 scores for 3 sequences"):
         parse_response('{"scores": [1, 2]}', 3)
 
 
 def test_parse_response_rejects_non_finite():
-    """Verify parse response rejects non finite."""
+    """Verify rejection of nonfinite scorer outputs."""
     with pytest.raises(ValueError, match="not finite"):
         parse_response('{"scores": [1, NaN]}', 2)
 
 
 def test_parse_response_rejects_non_numeric():
-    """Verify parse response rejects non numeric."""
+    """Verify rejection of nonnumeric scorer outputs."""
     with pytest.raises(ValueError, match="not a number"):
         parse_response('{"scores": ["a", 2]}', 2)
 
 
 def test_parse_response_surfaces_scorer_error():
-    """Verify parse response surfaces scorer error."""
+    """Verify that scorer error responses raise RuntimeError."""
     with pytest.raises(RuntimeError, match="CUDA out of memory"):
         parse_response('{"error": "CUDA out of memory"}', 2)
 
 
 def test_parse_response_rejects_garbage():
-    """Verify parse response rejects garbage."""
+    """Verify rejection of responses that are not valid JSON."""
     with pytest.raises(ValueError, match="non-JSON"):
         parse_response("Traceback (most recent call last):", 1)
 
 
 def test_parse_response_rejects_missing_scores():
-    """Verify parse response rejects missing scores."""
+    """Verify rejection of responses without a scores list."""
     with pytest.raises(ValueError, match="no 'scores' list"):
         parse_response('{"result": [1]}', 1)
 
 
 def test_label_defaults_to_the_script_basename(tmp_path):
-    """Verify label defaults to the script basename."""
+    """Verify default scorer labels derived from script or executable names."""
     assert _label_from_argv(["uv", "run", "--script", "a/b/finches.py", "--mode", "x"]) == "finches"
     assert _label_from_argv(["/usr/bin/python", "/tmp/foo.py"]) == "foo"
     assert _label_from_argv(["mycmd", "--flag"]) == "mycmd"
@@ -97,14 +97,14 @@ def test_scorer_roundtrip(tmp_path):
 
 
 def test_scorer_fails_on_bad_command(tmp_path):
-    """Verify scorer fails on bad command."""
+    """Verify that a failing scorer command reports its exit."""
     s = ScorerProcess(f"{sys.executable} {tmp_path / 'does_not_exist.py'}", cwd=str(tmp_path), timeout=30)
     with pytest.raises(BrokenPipeError, match="exited"):
         s.score(["AAA"])
 
 
 def test_scorer_rejects_garbage(tmp_path):
-    """Verify scorer rejects garbage."""
+    """Verify that the subprocess client rejects invalid JSON output."""
     s = _scorer(
         tmp_path,
         """
@@ -120,7 +120,7 @@ def test_scorer_rejects_garbage(tmp_path):
 
 def test_scorer_restarts_after_the_child_dies(tmp_path):
     # the child exits on the batch containing "DIE"; the adapter must restart and re-serve
-    """Verify scorer restarts after the child dies."""
+    """Verify that a dead scorer is restarted and can serve subsequent requests."""
     s = _scorer(
         tmp_path,
         """
@@ -144,7 +144,7 @@ def test_scorer_restarts_after_the_child_dies(tmp_path):
 
 
 def test_scorer_times_out_instead_of_hanging(tmp_path):
-    """Verify scorer times out instead of hanging."""
+    """Verify that a stalled scorer times out and is stopped."""
     s = _scorer(
         tmp_path,
         """
@@ -160,7 +160,7 @@ def test_scorer_times_out_instead_of_hanging(tmp_path):
 
 
 def test_scorer_error_response_propagates(tmp_path):
-    """Verify scorer error response propagates."""
+    """Verify that scorer errors propagate without preventing later requests."""
     s = _scorer(
         tmp_path,
         """
@@ -184,7 +184,7 @@ def test_scorer_error_response_propagates(tmp_path):
 
 
 def _batched_scorer_file(tmp_path, counter):
-    """A scorer that returns len(seq) and appends each batch it receives to a counter file."""
+    """Write a length-scoring script that logs received batches and return its path."""
     path = tmp_path / "count_scorer.py"
     path.write_text(
         textwrap.dedent(f"""
@@ -202,7 +202,7 @@ def _batched_scorer_file(tmp_path, counter):
 
 
 def test_scorer_batches_dedups_and_caches(tmp_path):
-    """Verify scorer batches dedups and caches."""
+    """Verify batch scoring, duplicate removal, caching, and zero scores for empty inputs."""
     counter = tmp_path / "calls.txt"
     path = _batched_scorer_file(tmp_path, counter)
     reward = scorer(f"{sys.executable} {path}", cwd=str(tmp_path))
@@ -215,13 +215,13 @@ def test_scorer_batches_dedups_and_caches(tmp_path):
 
 
 def test_scorer_returns_the_raw_value(tmp_path):
-    """Verify scorer returns the raw value."""
+    """Verify that the scorer adapter returns unshaped values."""
     reward = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
     assert reward(["AAA", "AAAAA"]) == [3.0, 5.0]
 
 
 def test_external_scorer_config_applies_shaping_and_weight(tmp_path):
-    """Verify external scorer config applies shaping and weight."""
+    """Verify shaping and weighting of external scores through reward configuration."""
     from idiom.train.grpo.reward import build_reward
 
     reward = build_reward(
@@ -245,7 +245,7 @@ def test_external_scorer_config_applies_shaping_and_weight(tmp_path):
 
 
 def test_two_scorers_are_independent(tmp_path):
-    """Verify two scorers are independent."""
+    """Verify that separate scorer instances return their own results."""
     m1 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
     m2 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path), maxlen=2)
     assert m1(["AAAAA"])[0] == pytest.approx(5.0)
@@ -253,7 +253,7 @@ def test_two_scorers_are_independent(tmp_path):
 
 
 def test_a_command_can_be_given_as_an_argument_list(tmp_path):
-    """Verify a command can be given as an argument list."""
+    """Verify that scorer commands accept an argument list."""
     path = _scorer_path(tmp_path, name="len scorer.py")
     reward = scorer([sys.executable, str(path)], cwd=str(tmp_path))
     assert reward(["AAA"]) == [3.0]
@@ -310,7 +310,7 @@ SERVE = (
 
 
 def test_serve_scores_a_batch_and_zeros_empties(tmp_path):
-    """Verify serve scores a batch and zeros empties."""
+    """Verify ordered batch scores and zero scores for empty sequences."""
     (tmp_path / "s.py").write_text(
         "import json, os, sys\ndef build():\n    return lambda seqs: [len(s) for s in seqs]\n" + SERVE
     )
@@ -322,7 +322,7 @@ def test_serve_scores_a_batch_and_zeros_empties(tmp_path):
 
 
 def test_serve_turns_a_scorer_exception_into_an_error_response(tmp_path):
-    """Verify serve turns a scorer exception into an error response."""
+    """Verify that scoring exceptions become protocol error responses."""
     (tmp_path / "s.py").write_text(
         "import json, os, sys\n"
         "def build():\n"
@@ -337,14 +337,14 @@ def test_serve_turns_a_scorer_exception_into_an_error_response(tmp_path):
 
 
 def test_cache_eviction_preserves_current_batch(tmp_path):
-    """Verify cache eviction preserves current batch."""
+    """Verify that cache eviction preserves scores needed by the current batch."""
     reward = scorer([sys.executable, str(_scorer_path(tmp_path))], cache_max=1)
     assert reward(["AAA", "CCCCC"]) == [3.0, 5.0]
     assert reward(["AAA", "GG"]) == [3.0, 2.0]
 
 
 def test_cache_can_be_disabled(tmp_path):
-    """Verify cache can be disabled."""
+    """Verify that disabling caching causes repeated requests to reach the scorer."""
     counter = tmp_path / "calls.txt"
     reward = scorer([sys.executable, str(_batched_scorer_file(tmp_path, counter))], cache_max=0)
     assert reward(["AAA", "AAA"]) == [3.0, 3.0]
@@ -354,7 +354,7 @@ def test_cache_can_be_disabled(tmp_path):
 
 @pytest.mark.parametrize("values", ["[7]", "[7, 8, 9]", "[float('nan'), 8]", "[float('inf'), 8]"])
 def test_serve_rejects_invalid_model_output(tmp_path, values):
-    """Verify serve rejects invalid model output."""
+    """Verify that invalid score values produce protocol errors."""
     path = tmp_path / "invalid.py"
     path.write_text(f"def build(): return lambda seqs: {values}\n" + SERVE)
     sc = ScorerProcess([sys.executable, str(path)], timeout=5)
@@ -366,7 +366,7 @@ def test_serve_rejects_invalid_model_output(tmp_path, values):
 
 
 def test_serve_validates_requests_and_preserves_protocol(tmp_path):
-    """Verify serve validates requests and preserves protocol."""
+    """Verify request validation and separation of JSON output from library logs."""
     import json
     import subprocess
 
@@ -394,7 +394,7 @@ def test_serve_validates_requests_and_preserves_protocol(tmp_path):
 
 
 def test_timeout_covers_blocked_request_write(tmp_path):
-    """Verify timeout covers blocked request write."""
+    """Verify that a blocked request write times out and stops the scorer."""
     sc = _scorer(tmp_path, "import time\ntime.sleep(60)", timeout=0.2)
     try:
         with pytest.raises(TimeoutError):
@@ -405,7 +405,7 @@ def test_timeout_covers_blocked_request_write(tmp_path):
 
 
 def test_stop_kills_and_reaps_uncooperative_child(tmp_path):
-    """Verify stop kills and reaps uncooperative child."""
+    """Verify that stopping an uncooperative scorer reaps it and closes its pipes."""
     sc = _scorer(
         tmp_path,
         """

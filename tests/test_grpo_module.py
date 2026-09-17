@@ -12,7 +12,7 @@ TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len
 
 
 def test_grpo_step_runs_and_backprops():
-    """Verify GRPO step runs and backprops."""
+    """Verify a differentiable GRPO step with a frozen reference model."""
     lit = LitGRPO(TINY, proline_terms(), group_size=2, max_new_tokens=6, beta_kl=0.02)
     prompts = torch.tensor([TOK.encode("132")])
     loss = lit.training_step(prompts, 0)
@@ -23,14 +23,14 @@ def test_grpo_step_runs_and_backprops():
 
 
 def test_reference_starts_equal_to_policy():
-    """Verify reference starts equal to policy."""
+    """Verify that policy and reference parameters match at initialization."""
     lit = LitGRPO(TINY, proline_terms(), group_size=2)
     for (_, a), (_, b) in zip(lit.model.state_dict().items(), lit.reference.state_dict().items()):
         assert torch.equal(a, b)
 
 
 def test_context_clamped_grpo_rollout_can_be_rescored():
-    """Verify context clamped GRPO rollout can be rescored."""
+    """Verify finite GRPO loss and gradients for context-limited rollouts."""
     import pytest
 
     cfg = ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=8)

@@ -40,7 +40,10 @@ def _paddle_dir() -> Path:
 
 
 def _windows(seq: str) -> list[str]:
-    """Tile a sequence into 53-residue windows, padding a short sequence to one window."""
+    """Return 53-residue windows using the configured stride and including the final window.
+
+    Pad shorter sequences with glycine on both sides to form one window.
+    """
     if len(seq) < WINDOW:
         short = WINDOW - len(seq)
         left = short // 2
@@ -52,7 +55,11 @@ def _windows(seq: str) -> list[str]:
 
 
 def build():
-    """Clone PADDLE if needed, load the model, and return the max-Z window scorer."""
+    """Load PADDLE and return a callable scoring the strongest window in each sequence.
+
+    Clone the checkout if needed, prepend it to sys.path, and change the process
+    working directory to it so model files resolve correctly.
+    """
     d = _paddle_dir()
     sys.path.insert(0, str(d))
     os.chdir(d)  # paddle.load_models resolves models/ relative to the working directory

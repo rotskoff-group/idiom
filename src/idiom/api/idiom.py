@@ -45,12 +45,15 @@ class IDiom:
 
     @classmethod
     def load(cls, name_or_path: str | Path, *, device="auto") -> IDiom:
-        """Load a checkpoint file, release directory, or Hub repository.
+        """Load a Lightning checkpoint, release directory, or Hub repository.
 
-        Existing files are read as Lightning checkpoints; other inputs use from_pretrained.
-        The returned wrapper is in eval mode. With device="auto", IDIOM_DEVICE takes
-        precedence, followed by CUDA if available, otherwise CPU. Pass an explicit
-        device such as "cpu" or "cuda:0" to override automatic selection.
+        Args:
+            name_or_path: Checkpoint file, local release directory, or Hub repository ID.
+                Existing files use from_lightning_checkpoint; other inputs use from_pretrained.
+            device: Target device. "auto" uses IDIOM_DEVICE, then CUDA if available, else CPU.
+
+        Returns:
+            An IDiom wrapper with the loaded transformer in evaluation mode.
         """
         if Path(name_or_path).is_file():
             return cls.from_lightning_checkpoint(name_or_path, device=device)
@@ -58,11 +61,16 @@ class IDiom:
 
     @classmethod
     def from_pretrained(cls, name_or_path: str | Path, *, device="auto") -> IDiom:
-        """Load config.json and model.safetensors from a directory or Hub repository.
+        """Load config.json and model.safetensors from a local or Hub release.
 
-        Hub artifacts are downloaded and cached on first use. The returned wrapper is in
-        eval mode. With device="auto", IDIOM_DEVICE takes precedence, followed by CUDA if
-        available, otherwise CPU. Pass "cpu" or "cuda:0" to select a device explicitly.
+        Hub artifacts are downloaded and cached on first use.
+
+        Args:
+            name_or_path: Local release directory or Hub repository ID.
+            device: Target device. "auto" uses IDIOM_DEVICE, then CUDA if available, else CPU.
+
+        Returns:
+            An IDiom wrapper with the loaded transformer in evaluation mode.
         """
         d = _resolve(name_or_path)
         cfg = ModelConfig(**json.loads((d / CONFIG_FILE).read_text()))
@@ -123,10 +131,17 @@ class IDiom:
 
     @classmethod
     def from_lightning_checkpoint(cls, ckpt_path, *, device="auto") -> IDiom:
-        """Load a model in eval mode using the checkpoint's stored architecture.
+        """Load a Lightning checkpoint using its stored architecture.
+
+        Args:
+            ckpt_path: Path to the checkpoint file.
+            device: Target device. "auto" uses IDIOM_DEVICE, then CUDA if available, else CPU.
+
+        Returns:
+            An IDiom wrapper with the loaded transformer in evaluation mode.
 
         Raises:
-            ValueError: If the checkpoint has no ModelConfig.
+            ValueError: If the checkpoint has no stored ModelConfig.
         """
         dev = resolve_device(device)
         model, _ = load_pretrained(ckpt_path, device=dev)
@@ -161,8 +176,8 @@ class IDiom:
         prompt_ids = torch.tensor(self.tok.encode(prompt), device=self.device)
 
         def _batch(k: int, s: int | None) -> list[str]:
-            # Reuse the RNG across chunks; reproducibility depends on batch_size
             """Generate k decoded IDRs in bounded batches using an optional shared random seed."""
+            # Reuse the RNG across chunks; reproducibility depends on batch_size
             gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
             bs = 8 if batch_size is None else batch_size
             if bs <= 0:
@@ -193,18 +208,23 @@ class IDiom:
 
         Args:
             n: Number of IDRs to return.
-            max_new_tokens: Maximum tokens to generate per sequence.
+            max_new_tokens: Maximum sampled tokens per sequence, including STOP; limited by context size.
             temperature: Sampling temperature; 0 selects the argmax.
             top_k: Top-k sampling cutoff, or None.
             top_p: Nucleus sampling cutoff, or None.
-            seed: Seed for reproducible sampling, or None.
-            length_range: Inclusive (lo, hi) length filter; sequences are redrawn until n fall in
-                range or the oversampling cap is reached.
+            seed: Random seed, or None. Reproduction requires the same batch size and settings.
+            length_range: Inclusive (lo, hi) bounds on decoded residue counts. Redraw until
+                n sequences pass or the oversampling cap is reached.
             max_oversample: Cap on total draws, as a multiple of n, when length_range is set.
             batch_size: Maximum sequences per model forward; None uses eight.
 
         Returns:
-            The generated IDR residue strings, at most n of them.
+            Up to n decoded IDR strings, possibly empty without a length filter.
+            Returns an empty list for n=0 and may return fewer than n strings if the
+            length-filter draw cap is reached.
+
+        Raises:
+            ValueError: If generation options are invalid; see validate_generation.
         """
         kw = dict(
             max_new_tokens=max_new_tokens,
@@ -230,7 +250,12 @@ class IDiom:
             **kw: Sampling and length options; see generate_unprompted.
 
         Returns:
-            The generated IDR residue strings, at most n of them.
+            Up to n decoded IDR strings, without flanks. Empty strings and length-filter
+            limits follow generate_unprompted.
+
+        Raises:
+            ValueError: If the sequence, IDR coordinates, or generation options are invalid,
+                or the flank prompt exceeds the context limit.
         """
         if not isinstance(seq, str) or not self.tok.is_canonical(seq):
             raise ValueError("seq must be a non-empty string of canonical amino acids")
@@ -275,8 +300,8 @@ class IDiom:
         """Generate IDRs for each input FASTA record; skip empty generations.
 
         Headers use "{source_accession}_{marker}_gen{i}" plus the generated IDR span.
-        Input records with missing, malformed, or out-of-range IDR spans, or sequences
-        outside the 20 uppercase canonical amino acids, are skipped with logged counts.
+        Invalid sequences and IDR spans in nonempty headers are skipped with logged
+        counts. Empty headers raise IndexError when they reach span parsing.
 
         Args:
             in_fasta (str | Path): Input proteins with "_IDR_x-y" headers.
@@ -305,32 +330,32 @@ class IDiom:
         return _write_fasta(rows, out_fasta)
 
     def embed(self, inputs, layers: list[int], *, pool: str = "mean"):
-        """Extract residual-stream embeddings for IDRs and their flanking context.
+        """Extract residual-stream embeddings for IDRs and their flanks.
 
-        FASTA inputs skip records with missing, malformed, or out-of-range IDR spans,
-        or noncanonical sequences, with logged counts. Bare sequence inputs must be
-        non-empty and contain only the 20 uppercase canonical amino acids; otherwise
-        they raise ValueError.
+        Invalid FASTA sequences and spans in nonempty headers are skipped with logged
+        counts. Bare sequences must contain only uppercase canonical residues. Supplied
+        Records must already have valid sequences and spans.
 
         Args:
-            inputs: A FASTA path, Record, sequence, or iterable accepted by to_records.
+            inputs: FASTA path, Record, bare sequence, or iterable accepted by to_records.
+                At least one accepted record must contribute residues.
             layers: Zero-based transformer block indices.
-            pool: "mean" averages IDR residues; "none" returns per-residue rows.
+            pool: "mean" averages IDR residues; "none" returns every encoded residue.
 
         Returns:
-            A mapping from layer index to (values, index), where values is a NumPy array
-            and index is a list of metadata dicts, one per row. Records appear in input order.
-            With pool="mean", values has shape [N_records, d_model], averaging only IDR
-            residues; each metadata dict contains accession and n_idr (the IDR residue count).
-            With pool="none", values has shape [N_residues, d_model] and includes both flanks
-            and the IDR, with marker tokens excluded. Within each record, rows follow FIM
-            order: N-terminal flank, C-terminal flank, then IDR. For example, MED|QSSG|ACDE
-            with IDR QSSG yields rows for MED|ACDE|QSSG, not original protein order.
-            Each per-residue metadata dict contains record_idx (0-based input record index),
-            accession, source_pos (0-based position in the original full protein), residue,
-            and is_idr. Use record_idx and source_pos to align rows to input proteins, and
-            is_idr to select IDR rows. Bare sequences are treated as entirely IDR, so their
-            rows retain sequence order. N_records and N_residues count accepted inputs only.
+            A dictionary mapping each layer to (values, index), with a NumPy array and
+            one metadata dictionary per row. Mean pooling returns [N_records, d_model]
+            values and metadata containing accession and n_idr. Per-residue output has
+            shape [N_residues, d_model] and metadata containing record_idx, accession,
+            source_pos, residue, and is_idr.
+            Residue rows follow FIM order (prefix, suffix, IDR), without markers.
+            record_idx identifies the accepted input record; source_pos is its zero-based
+            protein position. Bare sequences are treated as entirely IDR.
+
+        Raises:
+            ValueError: If a bare sequence is empty or noncanonical, or a Path is missing.
+            IndexError: If a FASTA entry reaching span parsing has an empty header.
+            RuntimeError: If a requested layer has no output rows to stack.
         """
         return embed_fasta(self.model, inputs, layers, pool=pool, tokenizer=self.tok, device=self.device)
 

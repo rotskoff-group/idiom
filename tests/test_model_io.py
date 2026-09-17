@@ -23,20 +23,20 @@ def _ckpt(tmp_path, cfg=CFG, *, with_cfg=True):
 
 
 def test_config_from_checkpoint_reads_hparams(tmp_path):
-    """Verify config from checkpoint reads hparams."""
+    """Verify recovery of model configuration from checkpoint hyperparameters."""
     _, ckpt = _ckpt(tmp_path)
     assert config_from_checkpoint(ckpt) == CFG
 
 
 def test_config_from_checkpoint_errors_without_stored_cfg(tmp_path):
-    """Verify config from checkpoint errors without stored cfg."""
+    """Verify rejection of checkpoints without a stored model configuration."""
     _, ckpt = _ckpt(tmp_path, with_cfg=False)
     with pytest.raises(ValueError, match="no stored ModelConfig"):
         config_from_checkpoint(ckpt)
 
 
 def test_load_pretrained_reads_arch_from_checkpoint(tmp_path):
-    """Verify load pretrained reads arch from checkpoint."""
+    """Verify checkpoint architecture, weights, and evaluation mode after loading."""
     m, ckpt = _ckpt(tmp_path)
     loaded, cfg = load_pretrained(ckpt)
     assert loaded.cfg == CFG
@@ -47,7 +47,7 @@ def test_load_pretrained_reads_arch_from_checkpoint(tmp_path):
 
 
 def test_load_model_dispatches_ckpt_and_dir(tmp_path):
-    """Verify load model dispatches ckpt and dir."""
+    """Verify loading from both Lightning checkpoints and release directories."""
     from idiom import IDiom
 
     _, ckpt = _ckpt(tmp_path)
@@ -63,7 +63,7 @@ def test_load_model_dispatches_ckpt_and_dir(tmp_path):
 
 
 def test_lit_modules_persist_model_cfg():
-    """Verify lit modules persist model cfg."""
+    """Verify that training modules store their model configuration in hyperparameters."""
     from idiom.train.autoreg.lit_autoreg import LitAutoregressive
     from idiom.train.grpo.lit_grpo import LitGRPO
 

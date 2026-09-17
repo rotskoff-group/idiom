@@ -32,7 +32,7 @@ def test_group_advantages():
 
 
 def test_grpo_loss_grad_flows():
-    """Verify GRPO loss grad flows."""
+    """Verify finite GRPO loss and finite gradients through policy log-probabilities."""
     B, T = 2, 4
     policy = torch.randn(B, T, requires_grad=True)
     ref = torch.randn(B, T)
@@ -45,7 +45,7 @@ def test_grpo_loss_grad_flows():
 
 
 def test_sequence_logprobs_shape_and_values():
-    """Verify sequence logprobs shape and values."""
+    """Verify next-token log-probabilities against direct indexing of model outputs."""
     cfg = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len=16)
     model = IDiomTransformer(cfg).eval()
     tokens = torch.randint(0, cfg.vocab_size, (1, 5))
@@ -57,7 +57,7 @@ def test_sequence_logprobs_shape_and_values():
 
 
 def test_sequence_logprobs_at_context_boundary_matches_prefix_scoring():
-    """Verify sequence logprobs at context boundary matches prefix scoring."""
+    """Verify context-boundary log-probabilities against prefix scoring and check gradients."""
     cfg = ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=8)
     model = IDiomTransformer(cfg).eval()
     tokens = torch.randint(0, cfg.vocab_size, (2, cfg.max_seq_len + 1))

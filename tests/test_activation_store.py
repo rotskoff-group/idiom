@@ -28,7 +28,7 @@ def _store(sae_batch_size=8, buffer_size=8, layer=1):
 
 
 def test_store_yields_dmodel_batches():
-    """Verify store yields dmodel batches."""
+    """Verify that activation batches have the expected shape and finite values."""
     store = _store(sae_batch_size=8)
     batch = next(iter(store))
     assert batch.shape == (8, TINY.d_model)
@@ -36,7 +36,7 @@ def test_store_yields_dmodel_batches():
 
 
 def test_store_exhausts_after_exact_drain_without_losing_rows():
-    """Verify store exhausts after exact drain without losing rows."""
+    """Verify that an exact buffer drain preserves every activation row."""
     store = _store(sae_batch_size=8, buffer_size=8)
     expected = torch.cat([store._acts(store._input_tokens(b)) for b in store.record_loader])
     actual = torch.cat(list(store))
@@ -45,7 +45,7 @@ def test_store_exhausts_after_exact_drain_without_losing_rows():
 
 
 def test_empty_activation_stream_yields_nothing():
-    """Verify empty activation stream yields nothing."""
+    """Verify that an empty activation stream produces no batches."""
     store = ActivationStore(IDiomTransformer(TINY), [], 1)
     assert list(store) == []
 
@@ -56,7 +56,7 @@ def test_mean_activation_shape():
 
 
 def test_region_split_idr_vs_non_idr():
-    """Verify region split IDR vs non IDR."""
+    """Verify that IDR and flank selections partition the residue activations."""
     model = IDiomTransformer(TINY)
     ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=1.0)
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
@@ -69,7 +69,7 @@ def test_region_split_idr_vs_non_idr():
 
 
 def test_region_on_unprompted_132_format():
-    """Verify region on unprompted 132 format."""
+    """Verify that unprompted inputs contain IDR activations and no flank activations."""
     model = IDiomTransformer(TINY)
     ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=0.0)
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
@@ -79,7 +79,7 @@ def test_region_on_unprompted_132_format():
 
 
 def test_lit_sae_step_on_streamed_acts():
-    """Verify lit SAE step on streamed acts."""
+    """Verify that streamed activations produce a finite, differentiable SAE loss."""
     store = _store(sae_batch_size=8)
     batch = next(iter(store))
     lit = LitSAE(d_in=TINY.d_model, k=4, expansion_factor=2, auxk_alpha=0.0, total_steps=10, warmup_steps=1)

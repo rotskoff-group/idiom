@@ -19,7 +19,7 @@ def _fasta(tmp_path):
 
 
 def test_pool_mean_one_vector_per_sequence(tmp_path):
-    """Verify pool mean one vector per sequence."""
+    """Verify one mean-pooled embedding and metadata row per sequence."""
     model = IDiomTransformer(TINY).eval()
     emb = embed_fasta(model, _fasta(tmp_path), layers=[1], pool="mean")
     values, index = emb[1]
@@ -28,7 +28,7 @@ def test_pool_mean_one_vector_per_sequence(tmp_path):
 
 
 def test_pool_none_per_residue_with_alignment(tmp_path):
-    """Verify pool none per residue with alignment."""
+    """Verify per-residue embedding shapes and alignment metadata."""
     model = IDiomTransformer(TINY).eval()
     emb = embed_fasta(model, _fasta(tmp_path), layers=[0, 1], pool="none")
     values, index = emb[1]
@@ -38,7 +38,7 @@ def test_pool_none_per_residue_with_alignment(tmp_path):
 
 
 def test_write_embeddings(tmp_path):
-    """Verify write embeddings."""
+    """Verify saved embedding arrays and metadata CSV files."""
     model = IDiomTransformer(TINY).eval()
     emb = embed_fasta(model, _fasta(tmp_path), layers=[1], pool="mean")
     write_embeddings(emb, tmp_path / "out")
@@ -57,7 +57,7 @@ def test_write_embeddings(tmp_path):
     ],
 )
 def test_extract_cli_loads_supported_artifacts(tmp_path, monkeypatch, artifact, flag):
-    """Verify extract CLI loads supported artifacts."""
+    """Verify CLI extraction from checkpoints, local releases, and Hub artifacts."""
     from dataclasses import asdict
 
     from idiom import IDiom

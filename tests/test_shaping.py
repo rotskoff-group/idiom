@@ -25,7 +25,7 @@ def build_shaping(spec):
 
 
 def test_tolerance_is_relative_to_the_target_and_absolute_at_zero():
-    """Verify tolerance is relative to the target and absolute at zero."""
+    """Verify relative tolerance for nonzero targets and absolute tolerance at zero."""
     assert tolerance(25.0, 0.2) == 5.0
     assert tolerance(0.0, 0.5) == 0.5  # nothing to be relative to: width is absolute
     assert tolerance(-4.0, 0.5) == 2.0
@@ -34,7 +34,7 @@ def test_tolerance_is_relative_to_the_target_and_absolute_at_zero():
 
 
 def test_quadratic_penalty_is_zero_at_the_target_and_unbounded_away():
-    """Verify quadratic penalty is zero at the target and unbounded away."""
+    """Verify zero penalty at the target and quadratic growth in either direction."""
     assert quadratic_penalty(25.0, 25.0, 0.2) == 0.0
     assert quadratic_penalty(30.0, 25.0, 0.2) == pytest.approx(-1.0)  # one tolerance out
     assert quadratic_penalty(20.0, 25.0, 0.2) == pytest.approx(-1.0)
@@ -42,26 +42,26 @@ def test_quadratic_penalty_is_zero_at_the_target_and_unbounded_away():
 
 
 def test_gaussian_score_is_bounded():
-    """Verify gaussian score is bounded."""
+    """Verify a unit peak and decay toward zero for Gaussian shaping."""
     assert gaussian_score(25.0, 25.0, 0.2) == pytest.approx(1.0)
     assert gaussian_score(30.0, 25.0, 0.2) == pytest.approx(math.exp(-1.0))
     assert gaussian_score(1e6, 25.0, 0.2) == 0.0
 
 
 def test_build_shaping_applies_a_spec():
-    """Verify build shaping applies a spec."""
+    """Verify shaping constructed from a configured rule and arguments."""
     shaping = build_shaping({"name": "quadratic", "target": 100, "width": 1.0})
     assert [shaping(v) for v in (100.0, 200.0)] == [0.0, pytest.approx(-1.0)]
 
 
 def test_build_shaping_without_a_spec_is_identity():
-    """Verify build shaping without a spec is identity."""
+    """Verify identity shaping when the specification is omitted."""
     identity = build_shaping(None)
     assert [identity(v) for v in (0.25, 3.0)] == [0.25, 3.0]
 
 
 def test_build_shaping_rejects_a_bad_spec():
-    """Verify build shaping rejects a bad spec."""
+    """Verify rejection of invalid shaping names, arguments, and widths."""
     with pytest.raises(ValueError, match=r"unknown shaping 'quadratik'.*gaussian"):
         build_shaping({"name": "quadratik", "target": 1})
     with pytest.raises(ValueError, match="needs a name"):
@@ -75,7 +75,7 @@ def test_build_shaping_rejects_a_bad_spec():
 
 
 def test_a_term_can_name_a_shaping_rule_of_its_own(tmp_path):
-    """Verify a term can name a shaping rule of its own."""
+    """Verify reward composition with a custom shaping factory."""
     mod = tmp_path / "my_shaping.py"
     mod.write_text(
         "from idiom.train.grpo.reward import tolerance\n"
@@ -99,7 +99,7 @@ def test_a_term_can_name_a_shaping_rule_of_its_own(tmp_path):
 
 
 def test_custom_reward_example_penalizes_distance_on_both_sides():
-    """Verify custom reward example penalizes distance on both sides."""
+    """Verify equal penalties for deviations on either side of the target."""
     cfg = OmegaConf.load("cookbook/scripts/training/grpo/custom_reward.yaml")
     reward = build_reward(cfg.reward)
     sequences = ["D" * n + "A" * (20 - n) for n in (6, 3, 9)]

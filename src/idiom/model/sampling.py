@@ -21,7 +21,7 @@ def _filter_top_k(logits: Tensor, k: int | None) -> Tensor:
 
 
 def _filter_top_p(logits: Tensor, p: float | None) -> Tensor:
-    """Keep the smallest descending-probability prefix whose cumulative mass reaches p."""
+    """Keep the descending-probability prefix through the first token that exceeds mass p."""
     if p is None or p >= 1.0:
         return logits
     sorted_logits, sorted_idx = torch.sort(logits, descending=True, dim=-1)
@@ -48,13 +48,16 @@ def sample_next_token(
     Args:
         logits: Logits of shape [B, V].
         temperature: Sampling temperature; 0 selects the argmax.
-        top_k: If set, restrict sampling to the top_k highest-logit tokens.
+        top_k: Keep tokens at or above the kth-largest logit; ties may retain more than k.
         top_p: If set, restrict sampling to the smallest set of tokens whose cumulative probability
             exceeds top_p.
         generator: RNG for reproducible sampling.
 
     Returns:
-        One sampled token id per row, shape [B].
+        One sampled token ID per row, shape [B].
+
+    Raises:
+        ValueError: If temperature, top_k, or top_p is invalid.
     """
     validate_sampling(temperature, top_k, top_p)
     if temperature == 0:
@@ -84,7 +87,7 @@ def generate(
     Args:
         model: The transformer to sample from.
         prompt_tokens: Prompt token ids of shape [B, P]; START is prepended internally.
-        max_new_tokens: Maximum tokens to generate, capped by the remaining model context.
+        max_new_tokens: Maximum sampled tokens, including STOP, capped by the remaining context.
         temperature: Sampling temperature; 0 selects the argmax.
         top_k: Top-k filtering cutoff, or None.
         top_p: Top-p (nucleus) filtering cutoff, or None.
@@ -94,7 +97,11 @@ def generate(
         generator: RNG for reproducible sampling.
 
     Returns:
-        Generated token ids of shape [B, T], where T <= max_new_tokens.
+        Generated token IDs of shape [B, T], excluding the prompt and START.
+        STOP is retained and finished rows are padded; T <= max_new_tokens.
+
+    Raises:
+        ValueError: If sampling options are invalid or the prompt exceeds the context.
     """
     integer_at_least("max_new_tokens", max_new_tokens, 1)
     validate_sampling(temperature, top_k, top_p)

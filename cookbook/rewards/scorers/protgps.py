@@ -52,7 +52,7 @@ _BATCH = int(os.environ.get("PROTGPS_BATCH", "1"))
 
 
 def _device():
-    """Default to CPU: the pinned CUDA build fails on H100 GPUs."""
+    """Return IDIOM_PROTGPS_DEVICE when set, otherwise CPU."""
     return os.environ.get("IDIOM_PROTGPS_DEVICE") or "cpu"
 
 
@@ -105,7 +105,11 @@ def _load_model():
 
 
 def build():
-    """Parse --compartment, load the classifier, and return the compartment-probability scorer."""
+    """Build a scorer for a named compartment or the max/mean across all compartments.
+
+    Parse --compartment, load the classifier, and truncate each sequence to its first
+    1,800 residues before prediction. Return one probability or aggregate per sequence.
+    """
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--compartment", default="nucleolus", help="one of the 12 compartments, or max / mean over them"
@@ -120,7 +124,7 @@ def build():
 
     @torch.no_grad()
     def score_batch(sequences):
-        """Return the compartment probability for each sequence."""
+        """Return compartment or aggregate probabilities for sequences truncated to 1,800 residues."""
         scores = [0.0] * len(sequences)
         for start in range(0, len(sequences), _BATCH):
             chunk = sequences[start : start + _BATCH]

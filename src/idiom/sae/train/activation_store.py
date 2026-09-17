@@ -56,7 +56,7 @@ class ActivationStore(IterableDataset):
 
     @torch.no_grad()
     def _acts(self, tokens: torch.Tensor) -> torch.Tensor:
-        """Return the [N_residues, d_model] activations for one batch of token sequences."""
+        """Return [N_selected, d_model] activations, including FIM markers if configured."""
         out = extract_activations(
             self.model,
             tokens,
@@ -101,7 +101,11 @@ class ActivationStore(IterableDataset):
 
     @torch.no_grad()
     def mean_activation(self, max_batches: int = 4) -> torch.Tensor:
-        """Return the CPU [d_model] mean over residues in the first max_batches record batches."""
+        """Return the CPU [d_model] mean over selected token positions.
+
+        Use the first max_batches record batches. They must contain at least one selected
+        position. Selection follows region and drop_markers, so FIM markers may contribute.
+        """
         total, count = None, 0
         for i, batch in enumerate(self.record_loader):
             acts = self._acts(self._input_tokens(batch))

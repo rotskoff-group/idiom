@@ -174,10 +174,9 @@ class IDiomSAE:
     def encode(self, inputs, *, pool: str = "mean", region: str | None = None):
         """Compute SAE feature activations for the residues of each record.
 
-        FASTA inputs skip records with missing, malformed, or out-of-range IDR spans,
-        or noncanonical sequences, with logged counts. Bare sequence inputs must be
-        non-empty and contain only the 20 uppercase canonical amino acids; otherwise
-        they raise ValueError.
+        Invalid FASTA sequences and spans in nonempty headers are skipped with logged
+        counts. Bare sequences must be nonempty and contain only uppercase canonical
+        amino acids. Supplied Records must already have valid sequences and spans.
 
         Args:
             inputs: A FASTA path, Record, sequence, or iterable accepted by to_records.
@@ -196,6 +195,9 @@ class IDiomSAE:
 
         Raises:
             ValueError: If region is not "idr" for an unprompted-mode SAE.
+                Also raised for empty or noncanonical bare sequences.
+            IndexError: If a FASTA entry reaching span parsing has an empty header.
+            RuntimeError: If no residue rows are available to encode.
         """
         region = region or self.region
         if self.fim_mode == UNPROMPTED and region != "idr":
@@ -237,15 +239,15 @@ class IDiomSAE:
     def build_feature_dataset(self, inputs, out_dir, *, batch_size: int = 16) -> Path:
         """Write the per-residue feature-activation dataset for these inputs.
 
-        FASTA inputs skip records with missing, malformed, or out-of-range IDR spans,
-        or noncanonical sequences, with logged counts. Empty or noncanonical bare
-        sequence inputs raise ValueError; only uppercase canonical amino acids are accepted.
+        Invalid FASTA sequences and spans in nonempty headers are skipped with logged
+        counts. Empty or noncanonical bare sequences raise ValueError; empty FASTA
+        headers raise IndexError when they reach span parsing.
 
         Args:
-            inputs (str | Path | list[str]): A record FASTA path, a bare sequence string, or an
-                iterable of sequences and/or Records.
+            inputs: A FASTA path, Record, bare sequence, or iterable of sequences and Records.
+                At least one valid record is required.
             out_dir (str | Path): Directory to write the feature dataset into.
-            batch_size: Records per forward pass.
+            batch_size: Positive number of records per forward pass.
 
         Returns:
             The output directory.
@@ -288,24 +290,26 @@ class IDiomSAE:
 
         Args:
             feature (int | list[int]): Feature index or indices to steer.
-            strength (float | list[float]): Steering strength, or one value per feature.
+            strength (float | list[float]): Scalar or per-feature strength for plain addition and clamping.
+                Normalized/relative addition uses the first value; ablation requires a scalar.
             n: Number of IDRs to return.
             mode: "add_direction", "clamp", or "ablate".
             normalize: Scale the summed decoder rows to unit norm before applying strength.
             relative: Scale the push by each position's residual norm.
             preserve_norm: Restore residual norms after relative addition only.
             prompt: Prompt string to steer from; the "132" prompt if None.
-            max_new_tokens: Maximum tokens to generate per sequence.
+            max_new_tokens: Maximum sampled tokens, including STOP; limited by the remaining context.
             temperature: Sampling temperature; 0 selects the argmax.
             top_k: Top-k sampling cutoff, or None.
             top_p: Nucleus sampling cutoff, or None.
-            seed: Seed for reproducible sampling, or None.
+            seed: Random seed, or None. Reproduction requires the same batch size and settings.
             length_range: Inclusive (lo, hi) length filter, as in generate_unprompted.
             max_oversample: Cap on total draws, as a multiple of n, when length_range is set.
             batch_size: Maximum sequences per model forward; None uses eight.
 
         Returns:
-            The steered IDR residue strings, at most n of them.
+            Up to n decoded IDR strings, possibly empty without a length filter.
+            Returns an empty list for n=0; the draw cap may produce fewer than n strings.
         """
         validate_generation(
             n,

@@ -19,7 +19,25 @@ DEMO = [
 
 
 def load_inputs(path, mode="idr", limit=32):
-    """Validate isolated or annotated FASTA records and retain an audit of every entry."""
+    """Load valid FASTA records and audit every input entry.
+
+    Assign unique record_<row> IDs, preserving original accessions in the audit.
+    Invalid entries are recorded and skipped rather than aborting the load.
+
+    Args:
+        path: FASTA path, or None for the built-in examples.
+        mode: "idr" for isolated sequences or "annotated" for proteins with IDR spans.
+            In isolated mode, any supplied span must cover the whole sequence.
+        limit: Maximum accepted records, or None to retain all valid entries.
+
+    Returns:
+        A (records, audit) tuple containing Records and a pandas DataFrame with
+        record_id, accession, header, idr_start_1based, idr_end_1based, and status.
+        Audit spans use one-based inclusive coordinates.
+
+    Raises:
+        ValueError: If mode is unknown or limit is below one.
+    """
     if mode not in {"idr", "annotated"}:
         raise ValueError("INPUT_MODE must be 'idr' or 'annotated'.")
     if limit is not None and limit < 1:
@@ -73,7 +91,16 @@ def isolated(records):
 
 
 def check_context(records, max_length, include_flanks=False):
-    """Check residue lengths plus START and the three FIM markers."""
+    """Check that each selected sequence fits the model context.
+
+    Args:
+        records: Records with valid IDR spans.
+        max_length: Maximum tokens, including START and three FIM markers.
+        include_flanks: Check full proteins if True, otherwise only their IDRs.
+
+    Raises:
+        ValueError: If any sequence plus four control tokens exceeds max_length.
+    """
     bad = [
         r.accession
         for r in records
@@ -84,7 +111,17 @@ def check_context(records, max_length, include_flanks=False):
 
 
 def summaries(records, audit):
-    """Summarize composition and retain original accessions and coordinates."""
+    """Return a DataFrame of IDR composition and original record metadata.
+
+    Args:
+        records: Records with nonempty IDRs and unique accessions used as record IDs.
+        audit: Input audit with matching record_id values.
+
+    Returns:
+        A DataFrame with record_id, sequence, length, charged_fraction,
+        net_charge_per_residue, fraction_<AA> columns, original accession, and
+        one-based inclusive idr_start_1based and idr_end_1based coordinates.
+    """
     rows = []
     for r in records:
         s = idr_sequence(r)
@@ -107,7 +144,10 @@ def summaries(records, audit):
 
 
 def write_fasta(records, path):
-    """Export full records with 1-based inclusive IDR spans."""
+    """Write full records with one-based inclusive IDR spans and return the output Path.
+
+    Overwrite an existing file. The parent directory must already exist.
+    """
     Path(path).write_text(
         "".join(f">{r.accession}_IDR_{r.idr_start + 1}-{r.idr_end}\n{r.full_seq}\n" for r in records)
     )
@@ -115,7 +155,10 @@ def write_fasta(records, path):
 
 
 def save_run(out, settings, *, elapsed=None):
-    """Save settings, dependency versions, and measured runtime."""
+    """Write settings, dependency versions, and optional elapsed seconds to run.json.
+
+    Create the output directory if needed and overwrite an existing run.json.
+    """
     import importlib.metadata
 
     out.mkdir(parents=True, exist_ok=True)

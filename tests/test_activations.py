@@ -17,7 +17,7 @@ def _tokens():
 
 
 def test_residue_only_selection_and_alignment():
-    """Verify residue only selection and alignment."""
+    """Verify that extracted rows align with residue tokens and their positions."""
     model = IDiomTransformer(TINY).eval()
     tokens = _tokens()
     out = extract_activations(model, tokens, layers=[1])
@@ -30,7 +30,7 @@ def test_residue_only_selection_and_alignment():
 
 
 def test_keep_markers_option():
-    """Verify keep markers option."""
+    """Verify that extraction can retain FIM marker positions."""
     model = IDiomTransformer(TINY).eval()
     out = extract_activations(model, _tokens(), layers=[0], drop_markers=False)
     # residues (4) + FIM markers (3) = 7; START + PAD still dropped

@@ -7,13 +7,31 @@ from numbers import Integral, Real
 
 
 def integer_at_least(name, value, minimum):
-    """Require an integer (excluding booleans) at or above minimum."""
+    """Require an integer at or above a lower bound.
+
+    Args:
+        name: Option name used in error messages.
+        value: Integer to check; booleans are rejected.
+        minimum: Inclusive lower bound.
+
+    Raises:
+        ValueError: If value is not an integer or is below minimum.
+    """
     if isinstance(value, bool) or not isinstance(value, Integral) or value < minimum:
         raise ValueError(f"{name} must be an integer >= {minimum}")
 
 
 def validate_sampling(temperature=1.0, top_k=None, top_p=None):
-    """Validate temperature and optional top-k and nucleus cutoffs."""
+    """Validate sampling options, returning None on success.
+
+    Args:
+        temperature: Finite nonnegative number; zero selects greedy decoding.
+        top_k: Positive integer cutoff, or None.
+        top_p: Finite probability in (0, 1], or None.
+
+    Raises:
+        ValueError: If an option is outside its valid range or is a boolean.
+    """
     if (
         isinstance(temperature, bool)
         or not isinstance(temperature, Real)
@@ -44,7 +62,25 @@ def validate_generation(
     max_oversample=20,
     seed=None,
 ):
-    """Validate generation options; zero sequences is a valid empty request."""
+    """Validate generation options, returning None on success.
+
+    Booleans are rejected for numeric options. A zero sequence count is valid.
+
+    Args:
+        n: Nonnegative integer sequence count.
+        max_new_tokens: Positive integer token budget per sequence.
+        temperature: Finite nonnegative sampling temperature.
+        top_k: Positive integer cutoff, or None.
+        top_p: Finite nucleus cutoff in (0, 1], or None.
+        batch_size: Positive integer batch size, or None.
+        length_range: Optional pair of positive integer residue bounds (lo, hi),
+            inclusive, with lo <= hi and lo <= max_new_tokens.
+        max_oversample: Positive integer multiplier limiting length-filter draws.
+        seed: Integer in [0, 2**64), or None.
+
+    Raises:
+        ValueError: If an option has an invalid type or value.
+    """
     integer_at_least("n", n, 0)
     integer_at_least("max_new_tokens", max_new_tokens, 1)
     integer_at_least("max_oversample", max_oversample, 1)

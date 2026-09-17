@@ -54,7 +54,7 @@ def test_feature_counts(tmp_path):
 
 
 def test_bh_fdr_monotone_and_bounded():
-    """Verify BH FDR monotone and bounded."""
+    """Verify monotonic, bounded FDR values for sorted input p-values."""
     q = bh_fdr(np.array([0.001, 0.01, 0.5, 0.9]))
     assert np.all((q >= 0) & (q <= 1))
     assert np.all(np.diff(q) >= -1e-12)
@@ -62,7 +62,7 @@ def test_bh_fdr_monotone_and_bounded():
 
 
 def test_feature_counts_ignore_zero_selections_and_keep_silent_sequences(tmp_path):
-    """Verify feature counts ignore zero selections and keep silent sequences."""
+    """Verify that zero activations are excluded while silent sequences remain counted."""
     d = _make_dataset(
         tmp_path, [[1, 2], [1, 3]], n_res=2, values=[[[1.0, 0.0], [2.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]]
     )
@@ -77,7 +77,7 @@ def test_feature_counts_ignore_zero_selections_and_keep_silent_sequences(tmp_pat
 
 
 def test_two_sided_p_matches_normal():
-    """Verify two sided p matches normal."""
+    """Verify two-sided normal p-values at known reference points."""
     from idiom.sae.features.enrichment import _two_sided_p
 
     # erfc(|z|/sqrt2) == 2 * normal survival function
@@ -86,7 +86,7 @@ def test_two_sided_p_matches_normal():
 
 
 def test_enrich_separates_signal_from_noise():
-    """Verify enrich separates signal from noise."""
+    """Verify enrichment of a strong feature and rejection of background features."""
     n_latents = 4
     n_pos, n_neg = 100, 1000
     # Feature 0 is enriched, feature 1 is neutral, and feature 2 has too few firings to test
@@ -103,7 +103,7 @@ def test_enrich_separates_signal_from_noise():
 
 
 def test_top_features_ranks_by_log2or(tmp_path):
-    """Verify top features ranks by log2or."""
+    """Verify that selected features are ordered by descending log odds ratio."""
     n_latents = 5
     a = np.array([90.0, 100.0, 60.0, 0.0, 0.0])
     b = np.array([10.0, 300.0, 5.0, 0.0, 0.0])
@@ -115,7 +115,7 @@ def test_top_features_ranks_by_log2or(tmp_path):
 
 def test_boundary_features_flags_terminal_firing(tmp_path):
     # Residues occupy FIM positions 3..17; edge=2 selects positions <=5 or >=15
-    """Verify boundary features flags terminal firing."""
+    """Verify that boundary filtering flags terminal peaks but retains interior peaks."""
     n_res = 15
     per_seq = [[7, 5]] * 4
     vals = []
@@ -130,7 +130,7 @@ def test_boundary_features_flags_terminal_firing(tmp_path):
 
 
 def test_write_signature_roundtrip(tmp_path):
-    """Verify write signature roundtrip."""
+    """Verify that signature updates preserve other cases and provenance."""
     p = tmp_path / "sig.json"
     write_signature(p, {"my_set": [3, 1, 2]}, case="top30", provenance={"sae": "test"})
     write_signature(p, {"my_set": [3]}, case="private30")
@@ -141,7 +141,7 @@ def test_write_signature_roundtrip(tmp_path):
 
 
 def test_load_sequences_reads_spans_and_falls_back_to_whole_sequence(tmp_path):
-    """Verify load sequences reads spans and falls back to whole sequence."""
+    """Verify parsed IDR spans and whole-sequence fallback for unannotated inputs."""
     fa = tmp_path / "in.fasta"
     fa.write_text(">P1_IDR_2-5\nACDEFGHI\n>plain some description here\nMKVGSDEQ\n")
     recs = load_sequences(fa)
@@ -150,7 +150,7 @@ def test_load_sequences_reads_spans_and_falls_back_to_whole_sequence(tmp_path):
 
 
 def test_load_sequences_ignores_an_out_of_range_span(tmp_path):
-    """Verify load sequences ignores an out of range span."""
+    """Verify whole-sequence fallback for an out-of-range IDR span."""
     fa = tmp_path / "bad.fasta"
     fa.write_text(">P2_IDR_0-999\nACDE\n")
     (rec,) = load_sequences(fa)
@@ -166,7 +166,7 @@ def _rec(acc, length, start=0):
 
 def test_length_match_follows_the_positive_length_distribution():
     # Length matching should prevent length-sensitive features from appearing enriched
-    """Verify length match follows the positive length distribution."""
+    """Verify that background sampling follows the positive-set length distribution."""
     rng = np.random.default_rng(0)
     positives = [_rec(f"p{i}", 10) for i in range(20)]
     background = [_rec(f"s{i}", 10) for i in range(100)] + [_rec(f"l{i}", 300) for i in range(100)]
@@ -177,7 +177,7 @@ def test_length_match_follows_the_positive_length_distribution():
 
 def test_length_match_tops_up_when_a_bin_cannot_be_filled():
     # Underfilled length bins must draw from the remaining pool
-    """Verify length match tops up when a bin cannot be filled."""
+    """Verify that other length bins fill a sampling shortfall."""
     rng = np.random.default_rng(0)
     positives = [_rec(f"p{i}", 10) for i in range(20)]
     background = [_rec(f"s{i}", 10) for i in range(5)] + [_rec(f"l{i}", 300) for i in range(100)]

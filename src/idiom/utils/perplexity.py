@@ -31,7 +31,8 @@ def perplexity(
 ) -> dict[str, float]:
     """Compute mean per-token NLL and perplexity over a record FASTA.
 
-    Padded and masked-out positions are excluded from both the loss and the token count.
+    Padded and masked-out positions are excluded. The model is put in evaluation mode
+    but is not moved to device or restored to its previous mode.
 
     Args:
         model: The model to evaluate, called as model(input_ids) -> logits.
@@ -48,8 +49,9 @@ def perplexity(
             excluding flanks and FIM markers. Defaults to the full-token objective.
 
     Returns:
-        "nll", the mean per-token NLL in nats; "perplexity", its exponential; and "n_tokens", the
-        number of scored tokens.
+        A dictionary with "nll" (mean token NLL in nats), "perplexity" (its
+        exponential), and "n_tokens" (scored-token count). With no scored tokens,
+        these values are 0, 1, and 0, respectively.
     """
     tok = tokenizer or Tokenizer()
     records = read_records(fasta)

@@ -90,7 +90,7 @@ class ScorerProcess:
     Attributes:
         argv (list[str]): The scorer command, as arguments.
         cwd (str): Working directory for the child process.
-        timeout (float): Seconds to wait for a single response.
+        timeout (float): Deadline in seconds for writing one request and receiving its response.
         env (dict | None): Full environment for the child, or None to inherit this process's.
         label (str): Tag prefixed to the child's forwarded stderr; the script basename by default.
         proc (subprocess.Popen | None): The running child, or None when not started.
@@ -110,10 +110,13 @@ class ScorerProcess:
         Args:
             cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
             cwd: Working directory for the child; the current directory if None.
-            timeout: Seconds to wait for a single response.
+            timeout: Deadline in seconds for writing one request and receiving its response.
             env: Environment variables for the child, layered over this process's own environment;
                 None passes it through unchanged.
             label: Prefix for child stderr; defaults to the script basename.
+
+        Raises:
+            ValueError: If timeout is not positive and finite.
         """
         self.argv = _argv(cmd)
         self.cwd = cwd or os.getcwd()
@@ -205,7 +208,8 @@ class ScorerProcess:
             One score per sequence, in order.
 
         Raises:
-            TimeoutError: If no response arrives within the timeout; the child is stopped.
+            TimeoutError: If writing the request or receiving its response exceeds the shared
+                deadline; the child is stopped.
             BrokenPipeError: If the child's stdin is closed, or it exits without responding.
             ValueError: If the response is malformed.
             RuntimeError: If the scorer reports an error.
@@ -262,6 +266,8 @@ class ScorerProcess:
         Raises:
             RuntimeError: If the child cannot be started or reports an error.
             BrokenPipeError: If the child dies again after the restart.
+            TimeoutError: If a request/response exchange exceeds the deadline.
+            ValueError: If the response is malformed or contains invalid scores.
         """
         if self.proc is None or self.proc.poll() is not None:
             self.stop()
@@ -292,7 +298,7 @@ def scorer(
 
     Args:
         cmd (str | list[str]): Command that runs the scorer, shell-quoted or an argument list.
-        timeout: Seconds to wait for one response.
+        timeout: Deadline in seconds for writing one request and receiving its response.
         maxlen: Truncate sequences to this length before sending; 0 sends them whole.
         cwd: Working directory for the child; the current directory if None.
         env: Environment variables set for the child, over this process's own.
@@ -300,7 +306,10 @@ def scorer(
         label: Prefix for child stderr; defaults to the script basename.
 
     Returns:
-        Maps a step's IDRs to the scorer's raw rewards, in order.
+        A callable mapping a list of IDRs to raw scores in the same order.
+
+    Raises:
+        ValueError: If timeout is not positive and finite, or cache_max is negative.
     """
     child = ScorerProcess(cmd, cwd=cwd, timeout=timeout, env=env, label=label)
     if cache_max < 0:

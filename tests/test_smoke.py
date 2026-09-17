@@ -14,10 +14,10 @@ def test_package_skeleton_imports():
 
 
 def test_explicit_cpu():
-    """Verify that explicit CPU selection overrides automatic device choice."""
+    """Verify that explicit CPU selection returns a CPU device."""
     assert resolve_device("cpu").type == "cpu"
 
 
 def test_cpu_first_default():
-    """Verify the default CPU device used by the API wrapper."""
+    """Verify that device resolution selects CPU in the test environment."""
     assert is_cpu_only()

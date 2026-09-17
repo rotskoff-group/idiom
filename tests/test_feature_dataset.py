@@ -33,7 +33,7 @@ def test_build_and_read(tmp_path):
 
 
 def test_pos_idx_aligns_to_residues(tmp_path):
-    """Verify pos idx aligns to residues."""
+    """Verify that stored feature positions point to residues in FIM strings."""
     out, _ = _build(tmp_path)
     fd = FeatureDataset(out, in_memory=True)
     for row in range(min(20, len(fd.seq_idx))):
