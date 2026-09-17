@@ -30,9 +30,14 @@ def test_real_v3_batch_and_rng():
 def test_disorder_averages_sequences_not_residues(monkeypatch):
     import metapredict
 
-    monkeypatch.setattr(metapredict, "predict_disorder_batch", lambda seqs, **kw: [
-        ["A", np.array([0.2])], ["GGG", np.array([0.6, 0.8, 1.0])],
-    ])
+    monkeypatch.setattr(
+        metapredict,
+        "predict_disorder_batch",
+        lambda seqs, **kw: [
+            ["A", np.array([0.2])],
+            ["GGG", np.array([0.6, 0.8, 1.0])],
+        ],
+    )
     assert disorder_totals(["A", "", "GGG"]) == pytest.approx((1.0, 2, 3))
 
 
@@ -54,18 +59,28 @@ def test_logs_once_per_optimizer_step_with_accumulation(tmp_path, monkeypatch, e
     def score(seqs):
         calls.append(list(seqs))
         # Empty sequences excluded; A has mean disorder .2, GG has .8
-        return sum({"": 0, "A": .2, "GG": .8}[s] for s in seqs), sum(bool(s) for s in seqs), len(seqs)
+        return sum({"": 0, "A": 0.2, "GG": 0.8}[s] for s in seqs), sum(bool(s) for s in seqs), len(seqs)
 
     monkeypatch.setattr(module, "disorder_totals", score)
     # Two sequences per microbatch; optimizer steps see 4, 4, then 2 sequences
     decoded = iter(["A", "", "GG", "GG", "", "", "", "", "A", "GG"])
-    lit = LitGRPO(TINY, proline_terms(), group_size=2, max_new_tokens=3,
-                  log_samples_every=0, track_disorder=enabled)
+    lit = LitGRPO(
+        TINY, proline_terms(), group_size=2, max_new_tokens=3, log_samples_every=0, track_disorder=enabled
+    )
     monkeypatch.setattr(lit, "_decode_idr", lambda completion: next(decoded))
     logger = CSVLogger(tmp_path, name="metrics")
-    trainer = L.Trainer(accelerator="cpu", devices=1, max_epochs=1, max_steps=3,
-                        accumulate_grad_batches=2, log_every_n_steps=1, logger=logger,
-                        enable_checkpointing=False, enable_progress_bar=False, enable_model_summary=False)
+    trainer = L.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=1,
+        max_steps=3,
+        accumulate_grad_batches=2,
+        log_every_n_steps=1,
+        logger=logger,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+    )
     prompts = torch.tensor([TOK.encode("132")] * 5)
     trainer.fit(lit, train_dataloaders=DataLoader(prompts, batch_size=1))
     with open(f"{logger.log_dir}/metrics.csv") as f:
@@ -73,8 +88,8 @@ def test_logs_once_per_optimizer_step_with_accumulation(tmp_path, monkeypatch, e
     if enabled:
         assert [len(c) for c in calls] == [4, 4, 2]
         assert len(rows) == 3
-        assert [float(r["train/metapredict_disorder"]) for r in rows] == pytest.approx([.6, 0, .5])
-        assert [float(r["train/metapredict_empty_fraction"]) for r in rows] == pytest.approx([.25, 1, 0])
+        assert [float(r["train/metapredict_disorder"]) for r in rows] == pytest.approx([0.6, 0, 0.5])
+        assert [float(r["train/metapredict_empty_fraction"]) for r in rows] == pytest.approx([0.25, 1, 0])
         assert [int(r["step"]) for r in rows] == [0, 1, 2]
         assert not lit._disorder_sequences
     else:

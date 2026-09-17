@@ -25,9 +25,7 @@ def _load_checkpoint(ckpt_path: str | Path) -> tuple[ModelConfig, dict]:
     obj = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     cfg_dict = (obj.get("hyper_parameters") or {}).get("model_cfg") if isinstance(obj, dict) else None
     if not cfg_dict:
-        raise ValueError(
-            f"{ckpt_path} carries no stored ModelConfig — not an IDiom training checkpoint."
-        )
+        raise ValueError(f"{ckpt_path} carries no stored ModelConfig — not an IDiom training checkpoint.")
     sd = obj["state_dict"] if isinstance(obj, dict) and "state_dict" in obj else obj
     return ModelConfig(**cfg_dict), sd
 
@@ -84,7 +82,7 @@ def load_released(
     d = Path(path)
     cfg = ModelConfig(**json.loads((d / CONFIG_FILE).read_text()))
     model = IDiomTransformer(cfg)
-    _safetensors_load_model(model, str(d / WEIGHTS_FILE)) # handles the tied embedding
+    _safetensors_load_model(model, str(d / WEIGHTS_FILE))  # handles the tied embedding
     if eval_mode:
         model.eval()
     return model.to(device), cfg

@@ -86,10 +86,17 @@ def run(cfg: DictConfig) -> None:
         LearningRateMonitor(logging_interval="step"),
     ]
     if has_val:
-        callbacks.insert(0, ModelCheckpoint(
-            dirpath=ckpt_dir, monitor="val/loss", mode="min", save_top_k=3,
-            filename="epoch_{epoch}_step_{step}", auto_insert_metric_name=False,
-        ))
+        callbacks.insert(
+            0,
+            ModelCheckpoint(
+                dirpath=ckpt_dir,
+                monitor="val/loss",
+                mode="min",
+                save_top_k=3,
+                filename="epoch_{epoch}_step_{step}",
+                auto_insert_metric_name=False,
+            ),
+        )
     # Spawn local ranks for single-node jobs; use launcher-provided ranks for multi-node jobs
     plugins = [LightningEnvironment()] if trainer_kw.get("num_nodes", 1) == 1 else None
     trainer = L.Trainer(

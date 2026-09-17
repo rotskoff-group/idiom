@@ -25,20 +25,29 @@ def build_frontend(forcefield):
     """
     if forcefield == "calvados":
         from finches import CALVADOS_frontend
+
         return CALVADOS_frontend()
     from finches import Mpipi_frontend
+
     return Mpipi_frontend()
 
 
 def build():
     """Parse arguments and return the epsilon scorer for the chosen mode and force field."""
     ap = argparse.ArgumentParser(description="FINCHES epsilon as an IDiom external reward.")
-    ap.add_argument("--mode", default="homotypic", choices=("homotypic", "heterotypic"),
-                    help="self-interaction, or interaction with --partner")
-    ap.add_argument("--partner", default=None,
-                    help="partner residue string, required for --mode heterotypic")
-    ap.add_argument("--forcefield", default="mpipi", choices=("mpipi", "calvados"),
-                    help="coarse-grained force field epsilon is derived from")
+    ap.add_argument(
+        "--mode",
+        default="homotypic",
+        choices=("homotypic", "heterotypic"),
+        help="self-interaction, or interaction with --partner",
+    )
+    ap.add_argument("--partner", default=None, help="partner residue string, required for --mode heterotypic")
+    ap.add_argument(
+        "--forcefield",
+        default="mpipi",
+        choices=("mpipi", "calvados"),
+        help="coarse-grained force field epsilon is derived from",
+    )
     args = ap.parse_args()
     if args.mode == "heterotypic" and not args.partner:
         raise SystemExit("--mode heterotypic needs --partner <sequence>")

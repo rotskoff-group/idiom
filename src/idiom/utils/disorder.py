@@ -19,8 +19,13 @@ def disorder_totals(sequences: list[str]) -> tuple[float, int, int]:
         import metapredict
 
         predictions = metapredict.predict_disorder_batch(
-            nonempty, version="V3", device="cpu", normalized=True, round_values=False,
-            return_numpy=True, show_progress_bar=False,
+            nonempty,
+            version="V3",
+            device="cpu",
+            normalized=True,
+            round_values=False,
+            return_numpy=True,
+            show_progress_bar=False,
         )
     if len(predictions) != len(nonempty):
         raise ValueError("metapredict returned the wrong number of predictions")

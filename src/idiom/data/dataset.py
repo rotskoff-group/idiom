@@ -83,7 +83,7 @@ class RecordDataset(Dataset):
         self.completion_only = bool(completion_only)
         self._rng = random.Random(seed)
 
-        keep = max_protein_len(self.max_len) # filter on the full-context length so any sample fits
+        keep = max_protein_len(self.max_len)  # filter on the full-context length so any sample fits
         if isinstance(records, RecordStore):
             self.store: RecordStore | None = records
             self.records = None
@@ -98,8 +98,9 @@ class RecordDataset(Dataset):
             n_total = len(records)
             n_kept = len(self.records)
         if n_total - n_kept:
-            log.info(f"RecordDataset: dropped {n_total - n_kept} record(s) longer than "
-                     f"max_len={self.max_len}")
+            log.info(
+                f"RecordDataset: dropped {n_total - n_kept} record(s) longer than max_len={self.max_len}"
+            )
 
     def __len__(self) -> int:
         return len(self._keep) if self.store is not None else len(self.records)

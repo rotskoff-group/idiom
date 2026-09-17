@@ -22,5 +22,6 @@ def scaled(residue: str = "P", scale: float = 1.0) -> Reward:
 
 def proline_terms():
     """Build a composite reward over fraction_proline alone, for LitGRPO's reward_terms."""
-    return build_reward(OmegaConf.create(
-        {"terms": [{"reward": "tests.reward_fixtures:fraction_proline", "weight": 1.0}]}))
+    return build_reward(
+        OmegaConf.create({"terms": [{"reward": "tests.reward_fixtures:fraction_proline", "weight": 1.0}]})
+    )

@@ -62,5 +62,5 @@ def top_windows(feature_id, feats, per_seq, *, n_windows=60, half_width=7) -> li
         if act <= 0:
             break
         start = min(max(p - half_width, 0), len(residues) - length)
-        windows.append(residues[start:start + length])
+        windows.append(residues[start : start + length])
     return windows

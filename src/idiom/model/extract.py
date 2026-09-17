@@ -72,13 +72,15 @@ def embed_fasta(model, inputs, layers, *, pool="mean", tokenizer=None, device="c
                 ids = acts[layer].token_id
                 for i in range(vals.size(0)):
                     out[layer]["values"].append(vals[i])
-                    out[layer]["index"].append({
-                        "record_idx": record_idx,
-                        "accession": rec.accession,
-                        "source_pos": int(src[i]),
-                        "residue": tok.decode([int(ids[i])]),
-                        "is_idr": bool(is_idr[i]),
-                    })
+                    out[layer]["index"].append(
+                        {
+                            "record_idx": record_idx,
+                            "accession": rec.accession,
+                            "source_pos": int(src[i]),
+                            "residue": tok.decode([int(ids[i])]),
+                            "is_idr": bool(is_idr[i]),
+                        }
+                    )
 
     return {layer: (torch.stack(d["values"]).numpy(), d["index"]) for layer, d in out.items()}
 
@@ -104,8 +106,13 @@ def main(argv: list[str] | None = None) -> None:
     """Run the idiom_extract CLI: write residual-stream embeddings from a FASTA to a directory."""
     p = argparse.ArgumentParser(description="Export IDiom residual-stream embeddings from a FASTA.")
     p.add_argument("--fasta", required=True)
-    p.add_argument("--model", "--ckpt", dest="model", required=True,
-                   help="Hub model ID, released directory, or Lightning .ckpt (--ckpt is an alias)")
+    p.add_argument(
+        "--model",
+        "--ckpt",
+        dest="model",
+        required=True,
+        help="Hub model ID, released directory, or Lightning .ckpt (--ckpt is an alias)",
+    )
     p.add_argument("--layers", type=int, nargs="+", required=True)
     p.add_argument("--pool", choices=["mean", "none"], default="mean")
     p.add_argument("--out", required=True)

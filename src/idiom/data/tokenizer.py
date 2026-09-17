@@ -120,7 +120,7 @@ class Tokenizer:
             raise ValueError(f"region must be 'all', 'idr', or 'non_idr', got {region!r}")
         middle = ids == self.fim_middle_id
         has_mid = middle.any(dim=1)
-        mid_pos = torch.where( # index of the '2' per row; sentinel L (no IDR boundary) if absent
+        mid_pos = torch.where(  # index of the '2' per row; sentinel L (no IDR boundary) if absent
             has_mid,
             middle.int().argmax(dim=1),
             torch.full((ids.size(0),), ids.size(1), device=ids.device, dtype=torch.long),

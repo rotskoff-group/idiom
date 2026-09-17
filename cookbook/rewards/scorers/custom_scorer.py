@@ -29,9 +29,10 @@ def build():
     """Load dependencies once and return a batch scorer; serve() redirects library output to stderr."""
     # EDIT: expose the settings your scorer needs as command-line arguments
     ap = argparse.ArgumentParser()
-    ap.add_argument("--property", default="isoelectric_point",
-                    choices=["isoelectric_point", "molecular_weight"])
-    prop = ap.parse_args().property # Options come from the YAML cmd field
+    ap.add_argument(
+        "--property", default="isoelectric_point", choices=["isoelectric_point", "molecular_weight"]
+    )
+    prop = ap.parse_args().property  # Options come from the YAML cmd field
 
     # EDIT: import dependencies and load model weights here, once per process rather than per batch
     from Bio.SeqUtils.ProtParam import ProteinAnalysis
@@ -43,11 +44,12 @@ def build():
         out = []
         for seq in sequences:
             analysis = ProteinAnalysis(seq)
-            out.append(analysis.isoelectric_point() if prop == "isoelectric_point"
-                       else analysis.molecular_weight())
-        return out # Raise on invalid inputs rather than returning NaN or dropping results
+            out.append(
+                analysis.isoelectric_point() if prop == "isoelectric_point" else analysis.molecular_weight()
+            )
+        return out  # Raise on invalid inputs rather than returning NaN or dropping results
 
-    return score_batch # Return the function itself; serve() calls it for each incoming batch
+    return score_batch  # Return the function itself; serve() calls it for each incoming batch
 
 
 if __name__ == "__main__":

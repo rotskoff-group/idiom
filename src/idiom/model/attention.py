@@ -32,7 +32,7 @@ class KVCache:
         """
         self.k: list[Tensor | None] = [None] * n_layers
         self.v: list[Tensor | None] = [None] * n_layers
-        self.length = 0 # Advanced by the transformer once per forward
+        self.length = 0  # Advanced by the transformer once per forward
 
     def update(self, layer: int, k: Tensor, v: Tensor) -> tuple[Tensor, Tensor]:
         """Append k and v ([B, H, L_new, head_dim]) to the selected layer in place.
@@ -86,7 +86,7 @@ class Attention(nn.Module):
         """
         B, L, _ = x.shape
         qkv = self.wqkv(x).view(B, L, 3, self.n_heads, self.head_dim)
-        q, k, v = (t.transpose(1, 2) for t in qkv.unbind(2)) # each [B, H, L, head_dim]
+        q, k, v = (t.transpose(1, 2) for t in qkv.unbind(2))  # each [B, H, L, head_dim]
 
         q, k = self.q_norm(q), self.k_norm(k)
         q, k = rope.apply(q, k, positions)

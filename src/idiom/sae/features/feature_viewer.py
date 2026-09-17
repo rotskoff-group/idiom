@@ -17,9 +17,12 @@ from idiom.sae.features.feature_activations import FeatureDataset
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--features", required=True, help="Path to a feature-activation dataset dir")
-    p.add_argument("--in-memory", action="store_true",
-                   help="pull the whole dataset into RAM (faster per-feature, needs ~N_res*8*k bytes; "
-                        "default streams the memory-mapped arrays in chunks)")
+    p.add_argument(
+        "--in-memory",
+        action="store_true",
+        help="pull the whole dataset into RAM (faster per-feature, needs ~N_res*8*k bytes; "
+        "default streams the memory-mapped arrays in chunks)",
+    )
     args, _ = p.parse_known_args()
     return args
 
@@ -44,10 +47,7 @@ def _shade(seq: str, acts: np.ndarray, gmax: float) -> str:
     parts = []
     for ch, a in zip(seq, acts):
         alpha = float(a) / gmax if gmax > 0 else 0.0
-        parts.append(
-            f"<span style='background:rgba(255,140,0,{alpha:.3f})'>"
-            f"{html.escape(ch)}</span>"
-        )
+        parts.append(f"<span style='background:rgba(255,140,0,{alpha:.3f})'>{html.escape(ch)}</span>")
     return (
         "<div style='font-family:monospace;font-size:13px;"
         "word-break:break-all;line-height:1.4'>" + "".join(parts) + "</div>"
@@ -75,12 +75,14 @@ def main() -> None:
     n_alive = int((fscore > 0).sum())
     feature_order = np.argsort(-fscore, kind="stable")[:n_alive]
 
-    rank = int(col2.number_input(
-        "Rank (0 = strongest)", min_value=0, max_value=max(n_alive - 1, 0), value=0, step=1
-    ))
-    override = int(col3.number_input(
-        "Jump to feature (-1 = use rank)", min_value=-1, max_value=fd.num_latents - 1, value=-1, step=1
-    ))
+    rank = int(
+        col2.number_input("Rank (0 = strongest)", min_value=0, max_value=max(n_alive - 1, 0), value=0, step=1)
+    )
+    override = int(
+        col3.number_input(
+            "Jump to feature (-1 = use rank)", min_value=-1, max_value=fd.num_latents - 1, value=-1, step=1
+        )
+    )
     n_top = int(col4.slider("Top sequences", 5, 200, 100, step=5))
     sort_by = st.radio("Sort sequences by", ["peak", "fraction"], horizontal=True)
 

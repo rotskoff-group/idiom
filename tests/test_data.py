@@ -40,7 +40,7 @@ def test_canonical_and_drop_policy():
 
 
 def test_fim_transforms():
-    seq, start, end = "MEDSKVDNRPQ", 4, 8 # IDR = seq[4:8] = "KVDN" (half-open)
+    seq, start, end = "MEDSKVDNRPQ", 4, 8  # IDR = seq[4:8] = "KVDN" (half-open)
     assert seq[start:end] == "KVDN"
     assert fim_prompted(seq, start, end) == "1MEDS3RPQ2KVDN"
     assert fim_unprompted(seq, start, end) == "132KVDN"

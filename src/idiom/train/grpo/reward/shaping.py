@@ -27,7 +27,7 @@ def quadratic_penalty(value: float, target: float, width: float = 1.0) -> float:
 
     The score is 0 at the target and -1 one tolerance away. Width must be positive.
     """
-    return -((value - target) / tolerance(target, width)) ** 2
+    return -(((value - target) / tolerance(target, width)) ** 2)
 
 
 def gaussian_score(value: float, target: float, width: float = 1.0) -> float:
@@ -35,7 +35,7 @@ def gaussian_score(value: float, target: float, width: float = 1.0) -> float:
 
     The score is 1 at the target and approaches 0 away from it. Width must be positive.
     """
-    return math.exp(-((value - target) / tolerance(target, width)) ** 2)
+    return math.exp(-(((value - target) / tolerance(target, width)) ** 2))
 
 
 def identity() -> Shaping:
@@ -56,7 +56,7 @@ def quadratic(*, target: float, width: float = 1.0) -> Shaping:
     Raises:
         ValueError: If width is not positive.
     """
-    tolerance(target, width) # validate now, not on the first training step
+    tolerance(target, width)  # validate now, not on the first training step
     return lambda value: quadratic_penalty(value, target, width)
 
 
@@ -73,5 +73,5 @@ def gaussian(*, target: float, width: float = 1.0) -> Shaping:
     Raises:
         ValueError: If width is not positive.
     """
-    tolerance(target, width) # validate now, not on the first training step
+    tolerance(target, width)  # validate now, not on the first training step
     return lambda value: gaussian_score(value, target, width)

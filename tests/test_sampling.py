@@ -24,7 +24,7 @@ def _ref_greedy(model, prompt, n_new):
     seq = torch.cat([torch.full((prompt.size(0), 1), TOK.start_id), prompt], dim=1)
     out = []
     for _ in range(n_new):
-        nxt = model(seq)[:, -1].argmax(-1) # full forward, no cache
+        nxt = model(seq)[:, -1].argmax(-1)  # full forward, no cache
         out.append(nxt)
         seq = torch.cat([seq, nxt[:, None]], dim=1)
     return torch.stack(out, dim=1)
@@ -63,7 +63,7 @@ def test_context_boundary_matches_reference_without_extra_forward():
 
     model = _model()
     prompt = torch.tensor([TOK.encode("132")])
-    available = TINY.max_seq_len - prompt.size(1) # includes the final next-token prediction
+    available = TINY.max_seq_len - prompt.size(1)  # includes the final next-token prediction
     calls = []
     handle = model.register_forward_pre_hook(lambda module, args: calls.append(args[0].shape[1]))
     with pytest.warns(UserWarning, match="remaining context"):

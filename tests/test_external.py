@@ -37,8 +37,6 @@ ECHO_LENGTHS = """
 """
 
 
-
-
 def test_parse_response_happy():
     assert parse_response('{"scores": [1, 2.5]}', 2) == [1.0, 2.5]
 
@@ -73,15 +71,11 @@ def test_parse_response_rejects_missing_scores():
         parse_response('{"result": [1]}', 1)
 
 
-
-
 def test_label_defaults_to_the_script_basename(tmp_path):
     assert _label_from_argv(["uv", "run", "--script", "a/b/finches.py", "--mode", "x"]) == "finches"
     assert _label_from_argv(["/usr/bin/python", "/tmp/foo.py"]) == "foo"
     assert _label_from_argv(["mycmd", "--flag"]) == "mycmd"
     assert ScorerProcess("uv run --script x/protgps.py --compartment nucleolus").label == "protgps"
-
-
 
 
 def test_scorer_roundtrip(tmp_path):
@@ -100,11 +94,14 @@ def test_scorer_fails_on_bad_command(tmp_path):
 
 
 def test_scorer_rejects_garbage(tmp_path):
-    s = _scorer(tmp_path, """
+    s = _scorer(
+        tmp_path,
+        """
         import sys
         for line in sys.stdin:
             print("not json at all", flush=True)
-    """)
+    """,
+    )
     with pytest.raises(ValueError, match="non-JSON"):
         s.score(["AAA"])
     s.stop()
@@ -112,7 +109,9 @@ def test_scorer_rejects_garbage(tmp_path):
 
 def test_scorer_restarts_after_the_child_dies(tmp_path):
     # the child exits on the batch containing "DIE"; the adapter must restart and re-serve
-    s = _scorer(tmp_path, """
+    s = _scorer(
+        tmp_path,
+        """
         import json, sys
         for line in sys.stdin:
             if not line.strip():
@@ -121,29 +120,36 @@ def test_scorer_restarts_after_the_child_dies(tmp_path):
             if "DIE" in seqs:
                 sys.exit(1)
             print(json.dumps({"scores": [float(len(x)) for x in seqs]}), flush=True)
-    """)
+    """,
+    )
     try:
         assert s.score(["AAA"]) == [3.0]
         with pytest.raises(BrokenPipeError):
-            s.score(["DIE"]) # restart happens, then the same batch kills it again
+            s.score(["DIE"])  # restart happens, then the same batch kills it again
         assert s.score(["AAAA"]) == [4.0]
     finally:
         s.stop()
 
 
 def test_scorer_times_out_instead_of_hanging(tmp_path):
-    s = _scorer(tmp_path, """
+    s = _scorer(
+        tmp_path,
+        """
         import sys, time
         for line in sys.stdin:
             time.sleep(60)
-    """, timeout=1.0)
+    """,
+        timeout=1.0,
+    )
     with pytest.raises(TimeoutError, match="round trip exceeded"):
         s.score(["AAA"])
     assert s.proc is None
 
 
 def test_scorer_error_response_propagates(tmp_path):
-    s = _scorer(tmp_path, """
+    s = _scorer(
+        tmp_path,
+        """
         import json, sys
         for line in sys.stdin:
             if not line.strip():
@@ -153,7 +159,8 @@ def test_scorer_error_response_propagates(tmp_path):
                 print(json.dumps({"error": "unsupported residue"}), flush=True)
             else:
                 print(json.dumps({"scores": [0.0] * len(seqs)}), flush=True)
-    """)
+    """,
+    )
     try:
         with pytest.raises(RuntimeError, match="unsupported residue"):
             s.score(["BAD"])
@@ -162,12 +169,11 @@ def test_scorer_error_response_propagates(tmp_path):
         s.stop()
 
 
-
-
 def _batched_scorer_file(tmp_path, counter):
     """A scorer that returns len(seq) and appends each batch it receives to a counter file."""
     path = tmp_path / "count_scorer.py"
-    path.write_text(textwrap.dedent(f"""
+    path.write_text(
+        textwrap.dedent(f"""
         import json, sys
         for line in sys.stdin:
             if not line.strip():
@@ -176,7 +182,8 @@ def _batched_scorer_file(tmp_path, counter):
             with open({str(counter)!r}, "a") as fh:
                 fh.write(json.dumps(seqs) + chr(10))
             print(json.dumps({{"scores": [float(len(x)) for x in seqs]}}), flush=True)
-    """))
+    """)
+    )
     return path
 
 
@@ -188,8 +195,8 @@ def test_scorer_batches_dedups_and_caches(tmp_path):
     assert reward(["AAA", "GG"]) == [3.0, 2.0]
 
     batches = [line for line in counter.read_text().splitlines() if line]
-    assert batches[0] == '["AAA", "CCCCC"]' # deduped, empty dropped
-    assert batches[1] == '["GG"]' # only the uncached sequence
+    assert batches[0] == '["AAA", "CCCCC"]'  # deduped, empty dropped
+    assert batches[1] == '["GG"]'  # only the uncached sequence
 
 
 def test_scorer_returns_the_raw_value(tmp_path):
@@ -200,15 +207,21 @@ def test_scorer_returns_the_raw_value(tmp_path):
 def test_external_scorer_config_applies_shaping_and_weight(tmp_path):
     from idiom.train.grpo.reward import build_reward
 
-    reward = build_reward({"terms": [{
-        "label": "external_length",
-        "reward": {
-            "name": "external_scorer",
-            "cmd": [sys.executable, str(_scorer_path(tmp_path))],
-        },
-        "shaping": {"name": "quadratic", "target": 4, "width": 0.25},
-        "weight": 2.0,
-    }]})
+    reward = build_reward(
+        {
+            "terms": [
+                {
+                    "label": "external_length",
+                    "reward": {
+                        "name": "external_scorer",
+                        "cmd": [sys.executable, str(_scorer_path(tmp_path))],
+                    },
+                    "shaping": {"name": "quadratic", "target": 4, "width": 0.25},
+                    "weight": 2.0,
+                }
+            ]
+        }
+    )
     totals, breakdown = reward(["AAA", "AAAA", "AAAAA"], 1)
     assert totals == [-2.0, 0.0, -2.0]
     assert [row["external_length_raw"] for row in breakdown] == [3.0, 4.0, 5.0]
@@ -216,10 +229,9 @@ def test_external_scorer_config_applies_shaping_and_weight(tmp_path):
 
 def test_two_scorers_are_independent(tmp_path):
     m1 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path))
-    m2 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path),
-                               maxlen=2)
+    m2 = scorer(f"{sys.executable} {_scorer_path(tmp_path)}", cwd=str(tmp_path), maxlen=2)
     assert m1(["AAAAA"])[0] == pytest.approx(5.0)
-    assert m2(["AAAAA"])[0] == pytest.approx(2.0) # truncated before it was sent
+    assert m2(["AAAAA"])[0] == pytest.approx(2.0)  # truncated before it was sent
 
 
 def test_a_command_can_be_given_as_an_argument_list(tmp_path):
@@ -236,7 +248,8 @@ def _scorer_path(tmp_path, name="len_scorer.py"):
 
 def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
     """Test the real scorer protocol with a stub sparrow package to avoid heavy dependencies."""
-    (tmp_path / "sparrow.py").write_text(textwrap.dedent("""
+    (tmp_path / "sparrow.py").write_text(
+        textwrap.dedent("""
         class _Predictor:
             def __init__(self, seq):
                 self.seq = seq
@@ -250,17 +263,24 @@ def test_shipped_sparrow_scorer_speaks_the_protocol(tmp_path, monkeypatch):
             @property
             def FCR(self):
                 return 0.25
-    """))
+    """)
+    )
     # Disable site-packages to test the protocol without IDiom or training dependencies
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
-    scorer = ScorerProcess([sys.executable, "-S", str(REPO / "cookbook/rewards/scorers/sparrow.py"),
-                     "--property", "radius_of_gyration"], timeout=30)
+    scorer = ScorerProcess(
+        [
+            sys.executable,
+            "-S",
+            str(REPO / "cookbook/rewards/scorers/sparrow.py"),
+            "--property",
+            "radius_of_gyration",
+        ],
+        timeout=30,
+    )
     try:
         assert scorer.score(["FWY", "AAAAA", ""]) == [6.0, 10.0, 0.0]
     finally:
         scorer.stop()
-
-
 
 
 SERVE = (
@@ -271,10 +291,7 @@ SERVE = (
 
 def test_serve_scores_a_batch_and_zeros_empties(tmp_path):
     (tmp_path / "s.py").write_text(
-        "import json, os, sys\n"
-        "def build():\n"
-        "    return lambda seqs: [len(s) for s in seqs]\n"
-        + SERVE
+        "import json, os, sys\ndef build():\n    return lambda seqs: [len(s) for s in seqs]\n" + SERVE
     )
     sc = ScorerProcess(f"{sys.executable} {tmp_path / 's.py'}", cwd=str(tmp_path), timeout=30)
     try:
@@ -289,8 +306,7 @@ def test_serve_turns_a_scorer_exception_into_an_error_response(tmp_path):
         "def build():\n"
         "    def score_batch(seqs):\n"
         "        raise ValueError('bad seq')\n"
-        "    return score_batch\n"
-        + SERVE
+        "    return score_batch\n" + SERVE
     )
     sc = ScorerProcess(f"{sys.executable} {tmp_path / 's.py'}", cwd=str(tmp_path), timeout=30)
     with pytest.raises(RuntimeError, match="bad seq"):
@@ -340,7 +356,10 @@ def test_serve_validates_requests_and_preserves_protocol(tmp_path):
     result = subprocess.run(
         [sys.executable, str(path)],
         input='{"sequences":"AAA"}\n{"sequences":[1]}\n{"sequences":["AAA",""]}\n',
-        capture_output=True, text=True, check=True, timeout=5,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
     )
     responses = [json.loads(line) for line in result.stdout.splitlines()]
     assert "error" in responses[0] and "error" in responses[1]
@@ -359,13 +378,16 @@ def test_timeout_covers_blocked_request_write(tmp_path):
 
 
 def test_stop_kills_and_reaps_uncooperative_child(tmp_path):
-    sc = _scorer(tmp_path, """
+    sc = _scorer(
+        tmp_path,
+        """
         import json, signal, sys, time
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         for line in sys.stdin:
             seqs = json.loads(line)["sequences"]
             print(json.dumps({"scores": [1] * len(seqs)}), flush=True)
-    """)
+    """,
+    )
     try:
         assert sc.score(["AAA"]) == [1.0]
         proc = sc.proc

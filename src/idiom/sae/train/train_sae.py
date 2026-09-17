@@ -37,17 +37,26 @@ def build(cfg: DictConfig) -> tuple[LitSAE, ActivationStore]:
     model, model_cfg = load_model(cfg.model_ckpt, device=device)
 
     records = RecordDataset(
-        open_or_build(cfg.data.fasta), tok, max_len=model_cfg.max_seq_len,
+        open_or_build(cfg.data.fasta),
+        tok,
+        max_len=model_cfg.max_seq_len,
         prompted_prob=cfg.data.get("prompted_prob", 0.5),
     )
     record_loader = DataLoader(
-        records, batch_size=cfg.data.record_batch_size, collate_fn=make_collate(tok.pad_id),
+        records,
+        batch_size=cfg.data.record_batch_size,
+        collate_fn=make_collate(tok.pad_id),
         # Shuffle to avoid training only on the file head when max_steps is finite
         shuffle=cfg.data.get("shuffle", True),
     )
     store = ActivationStore(
-        model, record_loader, cfg.layer, sae_batch_size=cfg.sae_batch_size,
-        buffer_size=cfg.buffer_size, device=device, tokenizer=tok,
+        model,
+        record_loader,
+        cfg.layer,
+        sae_batch_size=cfg.sae_batch_size,
+        buffer_size=cfg.buffer_size,
+        device=device,
+        tokenizer=tok,
         region=cfg.get("region", "all"),
     )
     lit = LitSAE(
@@ -82,7 +91,7 @@ def run(cfg: DictConfig) -> None:
     lit, store = build(cfg)
     if cfg.init_b_dec_from_mean:
         lit.init_b_dec_from_mean(store.mean_activation())
-    dl = DataLoader(store, batch_size=None) # the store already yields [B, d_model] batches
+    dl = DataLoader(store, batch_size=None)  # the store already yields [B, d_model] batches
     wandb_logger = WandbLogger(
         project=cfg.get("wandb_project", "idiom-sae"), name=cfg.get("run_name"), save_dir=str(out_dir)
     )
@@ -94,8 +103,12 @@ def run(cfg: DictConfig) -> None:
     # Any mixture with flanking context is recorded as prompted
     fim_mode = UNPROMPTED if float(cfg.data.get("prompted_prob", 0.5)) == 0.0 else PROMPTED
     save_sae(
-        lit.sae, out_dir, host_model=str(cfg.model_ckpt), layer=cfg.layer,
-        region=cfg.get("region", "all"), fim_mode=fim_mode,
+        lit.sae,
+        out_dir,
+        host_model=str(cfg.model_ckpt),
+        layer=cfg.layer,
+        region=cfg.get("region", "all"),
+        fim_mode=fim_mode,
     )
 
 

@@ -17,7 +17,7 @@ from idiom.data.io import Record, parse_idr_header, read_fasta
 # Defaults used to build the published signatures
 MIN_TOTAL_FIRE = 5
 FDR_ALPHA = 1e-3
-SMOOTH = 0.5 # Haldane-Anscombe pseudocount added to all four contingency cells
+SMOOTH = 0.5  # Haldane-Anscombe pseudocount added to all four contingency cells
 LOG2OR_FLOOR = 1.0
 PREV_POS_FLOOR = 0.05
 
@@ -80,8 +80,16 @@ def _two_sided_p(z: np.ndarray) -> np.ndarray:
     return np.array([math.erfc(abs(float(v)) / math.sqrt(2.0)) for v in z])
 
 
-def enrich(a: np.ndarray, n_pos: int, b: np.ndarray, n_neg: int, num_latents: int, *,
-           smooth: float = SMOOTH, min_total_fire: int = MIN_TOTAL_FIRE) -> dict:
+def enrich(
+    a: np.ndarray,
+    n_pos: int,
+    b: np.ndarray,
+    n_neg: int,
+    num_latents: int,
+    *,
+    smooth: float = SMOOTH,
+    min_total_fire: int = MIN_TOTAL_FIRE,
+) -> dict:
     """Score every feature for over-representation in the positive set against the background.
 
     Features whose pooled firing count is below min_total_fire are marked inactive and excluded
@@ -107,7 +115,7 @@ def enrich(a: np.ndarray, n_pos: int, b: np.ndarray, n_neg: int, num_latents: in
 
     log2or = np.log2(((a + smooth) * (n_neg - b + smooth)) / ((b + smooth) * (n_pos - a + smooth)))
     mu = n_pos * k / total
-    var = k * (total - k) * n_pos * (total - n_pos) / (total ** 2 * (total - 1))
+    var = k * (total - k) * n_pos * (total - n_pos) / (total**2 * (total - 1))
     z = np.where(var > 0, (a - mu) / np.sqrt(np.maximum(var, 1e-12)), 0.0)
     p = _two_sided_p(z)
 
@@ -115,13 +123,28 @@ def enrich(a: np.ndarray, n_pos: int, b: np.ndarray, n_neg: int, num_latents: in
     fdr = np.full(num_latents, np.nan)
     if active.any():
         fdr[active] = bh_fdr(p[active])
-    return dict(a=a, b=b, n_pos=n_pos, n_neg=n_neg, log2or=log2or, z=z, p=p, fdr=fdr,
-                active=active, prev_pos=a / max(n_pos, 1), prev_neg=b / max(n_neg, 1))
+    return dict(
+        a=a,
+        b=b,
+        n_pos=n_pos,
+        n_neg=n_neg,
+        log2or=log2or,
+        z=z,
+        p=p,
+        fdr=fdr,
+        active=active,
+        prev_pos=a / max(n_pos, 1),
+        prev_neg=b / max(n_neg, 1),
+    )
 
 
-def enriched_mask(result: dict, *, fdr_alpha: float = FDR_ALPHA,
-                  log2or_floor: float = LOG2OR_FLOOR,
-                  prev_pos_floor: float = PREV_POS_FLOOR) -> np.ndarray:
+def enriched_mask(
+    result: dict,
+    *,
+    fdr_alpha: float = FDR_ALPHA,
+    log2or_floor: float = LOG2OR_FLOOR,
+    prev_pos_floor: float = PREV_POS_FLOOR,
+) -> np.ndarray:
     """Return a boolean mask of the features passing the FDR, odds-ratio, and prevalence cutoffs.
 
     Args:
@@ -133,14 +156,21 @@ def enriched_mask(result: dict, *, fdr_alpha: float = FDR_ALPHA,
     Returns:
         A boolean mask over all features.
     """
-    return ((result["fdr"] < fdr_alpha)
-            & (result["log2or"] >= log2or_floor)
-            & (result["prev_pos"] >= prev_pos_floor))
+    return (
+        (result["fdr"] < fdr_alpha)
+        & (result["log2or"] >= log2or_floor)
+        & (result["prev_pos"] >= prev_pos_floor)
+    )
 
 
-def boundary_features(feature_dir, feature_ids, *, edge: int = BOUNDARY_EDGE,
-                      frac_thresh: float = BOUNDARY_FRAC,
-                      top_windows: int = BOUNDARY_TOP_WINDOWS) -> set[int]:
+def boundary_features(
+    feature_dir,
+    feature_ids,
+    *,
+    edge: int = BOUNDARY_EDGE,
+    frac_thresh: float = BOUNDARY_FRAC,
+    top_windows: int = BOUNDARY_TOP_WINDOWS,
+) -> set[int]:
     """Identify features concentrated near the ends of stored FIM sequences.
 
     Args:
@@ -203,8 +233,15 @@ def boundary_features(feature_dir, feature_ids, *, edge: int = BOUNDARY_EDGE,
     return flagged
 
 
-def top_features(result: dict, *, n: int = 30, prev_min: float = PREV_POS_FLOOR,
-                 drop_boundary: bool = True, feature_dir=None, **mask_kwargs) -> list[int]:
+def top_features(
+    result: dict,
+    *,
+    n: int = 30,
+    prev_min: float = PREV_POS_FLOOR,
+    drop_boundary: bool = True,
+    feature_dir=None,
+    **mask_kwargs,
+) -> list[int]:
     """Select a signature as the top n enriched features, ranked by log2 odds ratio.
 
     Args:
@@ -236,8 +273,9 @@ def top_features(result: dict, *, n: int = 30, prev_min: float = PREV_POS_FLOOR,
     return ranked[:n]
 
 
-def write_signature(path, signatures: dict[str, list[int]], *, case: str = "top30",
-                    provenance: dict | None = None) -> Path:
+def write_signature(
+    path, signatures: dict[str, list[int]], *, case: str = "top30", provenance: dict | None = None
+) -> Path:
     """Write signatures to a JSON file in the format the SAE feature reward reads.
 
     An existing file is read and updated, and the named case is replaced.
@@ -293,6 +331,7 @@ def length_match(positives, background, *, n, rng, bin_width=20):
     Returns:
         list[Record]: The sampled background.
     """
+
     def _bin(r):
         return (r.idr_end - r.idr_start) // bin_width
 
@@ -311,7 +350,7 @@ def length_match(positives, background, *, n, rng, bin_width=20):
             idx = rng.choice(len(pool), size=take, replace=False)
             picked.extend(pool[i] for i in idx)
         shortfall += want - take
-    if shortfall > 0: # bins the background could not fill: top up from anywhere
+    if shortfall > 0:  # bins the background could not fill: top up from anywhere
         chosen = {id(r) for r in picked}
         rest = [r for r in background if id(r) not in chosen]
         if rest:

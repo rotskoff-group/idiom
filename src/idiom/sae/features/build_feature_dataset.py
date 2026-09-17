@@ -65,15 +65,15 @@ def build_feature_dataset(
         token_lists = [torch.tensor([tok.start_id, *tok.encode(s)]) for s in seqs]
         tokens = pad_sequence(token_lists, batch_first=True, padding_value=tok.pad_id).to(device)
 
-        acts = extract_activations(
-            model, tokens, [layer], tokenizer=tok, drop_markers=True, region=region
-        )[layer]
+        acts = extract_activations(model, tokens, [layer], tokenizer=tok, drop_markers=True, region=region)[
+            layer
+        ]
         top_val, top_ix, _ = sae.encode(acts.values.to(device))
 
         top_idx_parts.append(top_ix.cpu().to(torch.int32).numpy())
         top_val_parts.append(top_val.cpu().to(torch.float32).numpy())
-        seq_parts.append(acts.seq_idx.cpu().numpy().astype(np.int32) + start) # batch-local -> global
-        pos_parts.append(acts.pos_idx.cpu().numpy().astype(np.int32) - 1) # fed pos -> FIM-string pos
+        seq_parts.append(acts.seq_idx.cpu().numpy().astype(np.int32) + start)  # batch-local -> global
+        pos_parts.append(acts.pos_idx.cpu().numpy().astype(np.int32) - 1)  # fed pos -> FIM-string pos
         strings.extend(seqs)
 
     out = Path(out_dir)
@@ -85,8 +85,13 @@ def build_feature_dataset(
     (out / "strings.json").write_text(json.dumps(strings))
     (out / "meta.json").write_text(
         json.dumps(
-            {"k": int(sae.k), "num_latents": int(sae.num_latents), "layer": int(layer),
-             "region": region, "fim_mode": normalize_mode(fim_mode)}
+            {
+                "k": int(sae.k),
+                "num_latents": int(sae.num_latents),
+                "layer": int(layer),
+                "region": region,
+                "fim_mode": normalize_mode(fim_mode),
+            }
         )
     )
     return out
@@ -105,7 +110,9 @@ def main() -> None:
     args = p.parse_args()
 
     IDiomSAE.from_pretrained(args.sae).build_feature_dataset(
-        args.fasta, args.out, batch_size=args.batch_size,
+        args.fasta,
+        args.out,
+        batch_size=args.batch_size,
     )
 
 

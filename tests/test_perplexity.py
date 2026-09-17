@@ -21,8 +21,7 @@ def test_completion_perplexity_excludes_context_and_padding(tmp_path, prompted_p
             logits[..., tok.stop_id] = 2.0
             return logits
 
-    kwargs = dict(device="cpu", num_workers=0, batch_size=batch_size,
-                  prompted_prob=prompted_prob)
+    kwargs = dict(device="cpu", num_workers=0, batch_size=batch_size, prompted_prob=prompted_prob)
     scores = perplexity(ConstantModel(), str(fasta), completion_only=True, **kwargs)
     # Five IDR residues plus two STOP tokens; flanks, markers and padding are unscored.
     expected_nll = math.log(2 * math.exp(2) + tok.vocab_size - 2) - 2

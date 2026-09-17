@@ -136,18 +136,23 @@ class LitGRPO(L.LightningModule):
             torch.Tensor: The scalar GRPO loss.
         """
         prompts = batch
-        rep = prompts.repeat_interleave(self.group_size, dim=0) # [B*G, P]
+        rep = prompts.repeat_interleave(self.group_size, dim=0)  # [B*G, P]
         BG, P = rep.shape
 
         with torch.no_grad():
             completions = generate(
-                self.model, rep, max_new_tokens=self.max_new_tokens, temperature=self.temperature,
-                top_k=self.top_k, top_p=self.top_p, tokenizer=self.tok,
+                self.model,
+                rep,
+                max_new_tokens=self.max_new_tokens,
+                temperature=self.temperature,
+                top_k=self.top_k,
+                top_p=self.top_p,
+                tokenizer=self.tok,
             )
         T = completions.size(1)
 
         start = torch.full((BG, 1), self.tok.start_id, dtype=torch.long, device=rep.device)
-        full = torch.cat([start, rep, completions], dim=1) # [B*G, 1+P+T]
+        full = torch.cat([start, rep, completions], dim=1)  # [B*G, 1+P+T]
 
         # Align the completion mask with full[:, 1:], excluding padding
         mask = torch.zeros(BG, P + T, device=rep.device)
@@ -205,10 +210,14 @@ class LitGRPO(L.LightningModule):
         stats = torch.tensor(totals, dtype=torch.float64, device=self.device)
         stats = self.trainer.strategy.reduce(stats, reduce_op="sum")
         score_sum, nonempty, total = stats.unbind()
-        self.log_dict({
-            "train/metapredict_disorder": score_sum / nonempty.clamp_min(1),
-            "train/metapredict_empty_fraction": 1 - nonempty / total.clamp_min(1),
-        }, on_step=True, on_epoch=False)
+        self.log_dict(
+            {
+                "train/metapredict_disorder": score_sum / nonempty.clamp_min(1),
+                "train/metapredict_empty_fraction": 1 - nonempty / total.clamp_min(1),
+            },
+            on_step=True,
+            on_epoch=False,
+        )
         self._disorder_sequences.clear()
 
     def _print_samples(self, idrs: list[str], rewards: torch.Tensor) -> None:

@@ -91,9 +91,7 @@ class SparseCoder(nn.Module):
         self.normalize_decoder = normalize_decoder
 
         if activation == "groupmax" and self.num_latents % k != 0:
-            raise ValueError(
-                f"groupmax requires num_latents ({self.num_latents}) divisible by k ({k})"
-            )
+            raise ValueError(f"groupmax requires num_latents ({self.num_latents}) divisible by k ({k})")
 
         # k stored as a buffer so checkpoints are self-contained
         self.register_buffer("k", torch.tensor(int(k), dtype=torch.long))
@@ -130,9 +128,7 @@ class SparseCoder(nn.Module):
         if self.activation == "groupmax":
             values, indices = pre_acts.unflatten(-1, (k, -1)).max(dim=-1)
             # convert per-group indices into flat latent indices
-            offsets = torch.arange(
-                0, self.num_latents, self.num_latents // k, device=pre_acts.device
-            )
+            offsets = torch.arange(0, self.num_latents, self.num_latents // k, device=pre_acts.device)
             indices = offsets + indices
         else:
             values, indices = pre_acts.topk(k, dim=-1, sorted=False)
@@ -149,7 +145,7 @@ class SparseCoder(nn.Module):
         Returns:
             The reconstruction of shape [..., d_in].
         """
-        chosen = self.W_dec[top_indices] # [..., k, d_in]
+        chosen = self.W_dec[top_indices]  # [..., k, d_in]
         return (top_acts.unsqueeze(-1) * chosen).sum(dim=-2) + self.b_dec
 
     def encode_dense(self, x: Tensor) -> Tensor:
@@ -184,7 +180,7 @@ class SparseCoder(nn.Module):
 
         # AuxK: encourage the top ~half of dead latents to predict the residual
         if dead_mask is not None and (num_dead := int(dead_mask.sum())) > 0:
-            k_aux = x.shape[-1] // 2 # heuristic from Gao et al. Appendix B.1
+            k_aux = x.shape[-1] // 2  # heuristic from Gao et al. Appendix B.1
             scale = min(num_dead / k_aux, 1.0)
             k_aux = min(k_aux, num_dead)
 

@@ -10,6 +10,7 @@ from idiom.sae.model.sparse_coder import SparseCoder
 
 def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None):
     """Build the LambdaLR multiplier: linear warmup, then optional linear decay to zero."""
+
     def fn(step: int) -> float:
         if warmup_steps > 0 and step < warmup_steps:
             return step / warmup_steps
@@ -108,9 +109,7 @@ class LitSAE(L.LightningModule):
         Returns:
             t.Tensor: The scalar loss, fvu + auxk_alpha * auxk_loss + multi_topk_fvu / 8.
         """
-        dead_mask = (
-            self.num_tokens_since_fired > self.dead_feature_tokens if self.auxk_alpha > 0 else None
-        )
+        dead_mask = self.num_tokens_since_fired > self.dead_feature_tokens if self.auxk_alpha > 0 else None
         out = self.sae(batch, dead_mask=dead_mask)
         loss = out.fvu + self.auxk_alpha * out.auxk_loss + out.multi_topk_fvu / 8
 
@@ -139,9 +138,7 @@ class LitSAE(L.LightningModule):
         )
         return loss
 
-    def configure_gradient_clipping(
-        self, optimizer, gradient_clip_val=None, gradient_clip_algorithm=None
-    ):
+    def configure_gradient_clipping(self, optimizer, gradient_clip_val=None, gradient_clip_algorithm=None):
         """Project decoder gradients off their rows, then apply grad_clip_norm if set.
 
         Lightning's gradient_clip_val and gradient_clip_algorithm are ignored.
@@ -176,9 +173,7 @@ class LitSAE(L.LightningModule):
         opt = t.optim.Adam(self.sae.parameters(), lr=self.lr, betas=(0.9, 0.999))
         sched = t.optim.lr_scheduler.LambdaLR(
             opt,
-            _lr_lambda(
-                self.hparams.total_steps, self.hparams.warmup_steps, self.hparams.decay_start
-            ),
+            _lr_lambda(self.hparams.total_steps, self.hparams.warmup_steps, self.hparams.decay_start),
         )
         return {
             "optimizer": opt,

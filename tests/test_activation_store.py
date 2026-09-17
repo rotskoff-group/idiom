@@ -21,8 +21,9 @@ def _store(sae_batch_size=8, buffer_size=8, layer=1):
     model = IDiomTransformer(TINY)
     ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=1.0)
     loader = DataLoader(ds, batch_size=4, collate_fn=make_collate(TOK.pad_id))
-    return ActivationStore(model, loader, layer, sae_batch_size=sae_batch_size,
-                           buffer_size=buffer_size, device="cpu")
+    return ActivationStore(
+        model, loader, layer, sae_batch_size=sae_batch_size, buffer_size=buffer_size, device="cpu"
+    )
 
 
 def test_store_yields_dmodel_batches():

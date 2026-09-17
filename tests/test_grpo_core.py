@@ -21,7 +21,7 @@ def test_rewards():
 
 
 def test_group_advantages():
-    rewards = torch.tensor([1.0, 3.0, 0.0, 2.0]) # two groups of 2
+    rewards = torch.tensor([1.0, 3.0, 0.0, 2.0])  # two groups of 2
     adv = group_advantages(rewards, group_size=2, normalize=False)
     assert adv.tolist() == [-1.0, 1.0, -1.0, 1.0]
     norm = group_advantages(rewards, group_size=2, normalize=True)
@@ -57,10 +57,13 @@ def test_sequence_logprobs_at_context_boundary_matches_prefix_scoring():
     model = IDiomTransformer(cfg).eval()
     tokens = torch.randint(0, cfg.vocab_size, (2, cfg.max_seq_len + 1))
     actual = sequence_logprobs(model, tokens)
-    expected = torch.stack([
-        model(tokens[:, :i]).float().log_softmax(-1)[:, -1].gather(1, tokens[:, i:i + 1]).squeeze(1)
-        for i in range(1, tokens.size(1))
-    ], dim=1)
+    expected = torch.stack(
+        [
+            model(tokens[:, :i]).float().log_softmax(-1)[:, -1].gather(1, tokens[:, i : i + 1]).squeeze(1)
+            for i in range(1, tokens.size(1))
+        ],
+        dim=1,
+    )
     torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
     (-actual.mean()).backward()
     assert model.embed.weight.grad is not None

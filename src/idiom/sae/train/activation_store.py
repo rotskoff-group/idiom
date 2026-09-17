@@ -57,8 +57,12 @@ class ActivationStore(IterableDataset):
     def _acts(self, tokens: torch.Tensor) -> torch.Tensor:
         """Return the [N_residues, d_model] activations for one batch of token sequences."""
         out = extract_activations(
-            self.model, tokens, [self.layer], tokenizer=self.tok,
-            drop_markers=self.drop_markers, region=self.region,
+            self.model,
+            tokens,
+            [self.layer],
+            tokenizer=self.tok,
+            drop_markers=self.drop_markers,
+            region=self.region,
         )
         return out[self.layer].values
 

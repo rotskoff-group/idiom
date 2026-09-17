@@ -54,8 +54,23 @@ def test_generate_cli(tmp_path):
     m = IDiom.from_pretrained(tmp_path / "rel")
     expected = sum(bool(s) for s in m.generate_unprompted(n=8, max_new_tokens=6, temperature=1.0, seed=0))
     assert expected > 0
-    main(["unprompted", "--model", str(tmp_path / "rel"), "--out", str(out), "--n", "8",
-          "--max-new-tokens", "6", "--temperature", "1.0", "--seed", "0"])
+    main(
+        [
+            "unprompted",
+            "--model",
+            str(tmp_path / "rel"),
+            "--out",
+            str(out),
+            "--n",
+            "8",
+            "--max-new-tokens",
+            "6",
+            "--temperature",
+            "1.0",
+            "--seed",
+            "0",
+        ]
+    )
     assert out.read_text().count(">idiom_unprompted_") == expected
 
 

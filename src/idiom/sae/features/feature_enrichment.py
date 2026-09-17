@@ -96,8 +96,8 @@ def main(argv: list[str] | None = None) -> None:
         from huggingface_hub import hf_hub_download
 
         background_path = Path(hf_hub_download(DATA_REPO, VALIDATION_FASTA, repo_type="dataset"))
-    positive_idrs = {r.full_seq[r.idr_start:r.idr_end] for r in positives}
-    pool = [r for r in usable(background_path) if r.full_seq[r.idr_start:r.idr_end] not in positive_idrs]
+    positive_idrs = {r.full_seq[r.idr_start : r.idr_end] for r in positives}
+    pool = [r for r in usable(background_path) if r.full_seq[r.idr_start : r.idr_end] not in positive_idrs]
     background = length_match(positives, pool, n=args.max_background, rng=np.random.default_rng(args.seed))
     if not background:
         p.error("no usable background records remain after excluding exact positive IDR matches")
@@ -108,12 +108,13 @@ def main(argv: list[str] | None = None) -> None:
     a, n_pos = feature_counts(pos_fd)
     b, n_neg = feature_counts(bg_fd)
     result = enrich(a, n_pos, b, n_neg, sae.sae.num_latents, min_total_fire=args.min_total_fire)
-    mask = enriched_mask(result, fdr_alpha=args.fdr_alpha, log2or_floor=args.log2or_floor,
-                         prev_pos_floor=args.prev_pos_floor)
+    mask = enriched_mask(
+        result, fdr_alpha=args.fdr_alpha, log2or_floor=args.log2or_floor, prev_pos_floor=args.prev_pos_floor
+    )
     candidates = np.flatnonzero(mask)
     bad = set() if args.keep_boundary else boundary_features(bg_fd, candidates)
     ranked = candidates[np.argsort(-result["log2or"][candidates], kind="stable")]
-    ids = [int(f) for f in ranked if f not in bad][:args.top_n]
+    ids = [int(f) for f in ranked if f not in bad][: args.top_n]
     columns = ["a", "b", "prev_pos", "prev_neg", "log2or", "z", "p", "fdr", "active"]
     with (args.out / "enrichment.tsv").open("w", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t")
@@ -125,11 +126,18 @@ def main(argv: list[str] | None = None) -> None:
         "background": str(background_path),
         "background_repo": DATA_REPO if args.background is None else None,
         "background_file": VALIDATION_FASTA if args.background is None else None,
-        "host_model": str(sae.host_model), "layer": sae.layer,
-        "n_pos": n_pos, "n_background": n_neg, "background_pool_size": len(pool),
-        "length_matched": True, "length_bin_width": 20, "smooth": SMOOTH,
-        "exact_positive_idrs_excluded": True, "boundary_dropped": not args.keep_boundary,
-        "rank": "log2 odds ratio, descending", "selected_features": ids,
+        "host_model": str(sae.host_model),
+        "layer": sae.layer,
+        "n_pos": n_pos,
+        "n_background": n_neg,
+        "background_pool_size": len(pool),
+        "length_matched": True,
+        "length_bin_width": 20,
+        "smooth": SMOOTH,
+        "exact_positive_idrs_excluded": True,
+        "boundary_dropped": not args.keep_boundary,
+        "rank": "log2 odds ratio, descending",
+        "selected_features": ids,
     }
     (args.out / "run.json").write_text(json.dumps(provenance, indent=2) + "\n")
     if ids:

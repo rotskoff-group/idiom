@@ -40,13 +40,11 @@ def _make_dataset(tmp_path, per_seq_features, num_latents=10, n_res=5, values=No
     return d
 
 
-
-
 def test_feature_counts(tmp_path):
     d = _make_dataset(tmp_path, [[1, 2], [1, 3]])
     counts, n_seq = feature_counts(d)
     assert n_seq == 2
-    assert counts[1] == 2 # fires in both sequences (max-pooled, not counted per residue)
+    assert counts[1] == 2  # fires in both sequences (max-pooled, not counted per residue)
     assert counts[2] == 1
     assert counts[3] == 1
     assert counts[0] == 0
@@ -62,8 +60,9 @@ def test_bh_fdr_monotone_and_bounded():
 
 
 def test_feature_counts_ignore_zero_selections_and_keep_silent_sequences(tmp_path):
-    d = _make_dataset(tmp_path, [[1, 2], [1, 3]], n_res=2,
-                      values=[[[1.0, 0.0], [2.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]])
+    d = _make_dataset(
+        tmp_path, [[1, 2], [1, 3]], n_res=2, values=[[[1.0, 0.0], [2.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]]
+    )
     strings = json.loads((d / "strings.json").read_text())
     (d / "strings.json").write_text(json.dumps([*strings, "132"]))
     counts, n = feature_counts(d)
@@ -92,7 +91,7 @@ def test_enrich_separates_signal_from_noise():
 
     assert r["log2or"][0] > 5 and r["z"][0] > 5 and r["fdr"][0] < 1e-3
     assert abs(r["log2or"][1]) < 0.5 and r["fdr"][1] > 1e-3
-    assert not r["active"][2] # pooled firing count below MIN_TOTAL_FIRE
+    assert not r["active"][2]  # pooled firing count below MIN_TOTAL_FIRE
     m = enriched_mask(r)
     assert m[0] and not m[1] and not m[2]
     assert r["prev_pos"][0] == 1.0 and r["prev_neg"][0] == 0.0
@@ -128,7 +127,7 @@ def test_write_signature_roundtrip(tmp_path):
     write_signature(p, {"my_set": [3, 1, 2]}, case="top30", provenance={"sae": "test"})
     write_signature(p, {"my_set": [3]}, case="private30")
     blob = json.loads(p.read_text())
-    assert blob["top30"]["my_set"] == [3, 1, 2] # order preserved (rank order matters)
+    assert blob["top30"]["my_set"] == [3, 1, 2]  # order preserved (rank order matters)
     assert blob["private30"]["my_set"] == [3]
     assert blob["_provenance"]["sae"] == "test"
 
@@ -150,6 +149,7 @@ def test_load_sequences_ignores_an_out_of_range_span(tmp_path):
 
 def _rec(acc, length, start=0):
     from idiom.data.io import Record
+
     return Record(acc, "A" * (start + length), start, start + length)
 
 

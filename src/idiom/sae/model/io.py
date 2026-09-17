@@ -19,8 +19,13 @@ SAE_WEIGHTS_FILE = "sae.safetensors"
 
 
 def save_sae(
-    sae: SparseCoder, out_dir: str | Path, *, host_model: str | None, layer: int,
-    region: str = "all", fim_mode: str = "prompted",
+    sae: SparseCoder,
+    out_dir: str | Path,
+    *,
+    host_model: str | None,
+    layer: int,
+    region: str = "all",
+    fim_mode: str = "prompted",
 ) -> Path:
     """Write sae_config.json and sae.safetensors for a trained SAE.
 
@@ -60,9 +65,7 @@ def save_sae(
     return d
 
 
-def load_sae(
-    path: str | Path, *, device: str | torch.device = "cpu"
-) -> tuple[SparseCoder, dict]:
+def load_sae(path: str | Path, *, device: str | torch.device = "cpu") -> tuple[SparseCoder, dict]:
     """Load a released SAE directory into a SparseCoder and its config.
 
     Args:
@@ -81,8 +84,11 @@ def load_sae(
     if "fim_mode" in cfg:
         cfg["fim_mode"] = normalize_mode(cfg["fim_mode"])
     sae = SparseCoder(
-        cfg["d_in"], num_latents=cfg["num_latents"], k=cfg["k"],
-        activation=cfg.get("activation", "topk"), multi_topk=cfg.get("multi_topk", False),
+        cfg["d_in"],
+        num_latents=cfg["num_latents"],
+        k=cfg["k"],
+        activation=cfg.get("activation", "topk"),
+        multi_topk=cfg.get("multi_topk", False),
     )
     load_model(sae, str(d / SAE_WEIGHTS_FILE))
     return sae.to(device).eval(), cfg

@@ -43,7 +43,7 @@ def test_read_records(tmp_path):
 
 
 def test_record_to_example_shift():
-    rec = Record("P0", "MEDSKVDNRPQ", 4, 8) # IDR = seq[4:8] = "KVDN" (half-open)
+    rec = Record("P0", "MEDSKVDNRPQ", 4, 8)  # IDR = seq[4:8] = "KVDN" (half-open)
     x, y = record_to_example(rec, TOK, variant="prompted")
     assert x.shape == y.shape
     assert x[0].item() == TOK.start_id and y[-1].item() == TOK.stop_id

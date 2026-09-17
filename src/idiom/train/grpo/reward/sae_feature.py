@@ -25,7 +25,8 @@ DEFAULT_CASE = "top30"
 def _sae(sae_dir: str, device: str | None):
     """Load and cache the SAE and its host model."""
     return IDiomSAE.from_pretrained(
-        sae_dir, device=device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        sae_dir, device=device or ("cuda" if torch.cuda.is_available() else "cpu")
+    )
 
 
 @lru_cache(maxsize=8)
@@ -34,8 +35,7 @@ def _featuresets(features: str, case: str) -> dict:
     blob = json.loads(Path(features).read_text())
     if case not in blob:
         cases = [k for k in blob if not k.startswith("_")]
-        raise KeyError(f"case {case!r} not in {features} (available: {cases}); set the term's "
-                       f"case")
+        raise KeyError(f"case {case!r} not in {features} (available: {cases}); set the term's case")
     return blob[case]
 
 
@@ -44,15 +44,23 @@ def _target_ids(signature: str, features: str, case: str, sae_dir: str, device: 
     """Return signature indices on the SAE device; raise KeyError for an unknown signature."""
     sets = _featuresets(features, case)
     if signature not in sets:
-        raise KeyError(f"signature {signature!r} not in case {case!r} of {features} "
-                       f"(available: {sorted(sets)}); set the term's signature")
+        raise KeyError(
+            f"signature {signature!r} not in case {case!r} of {features} "
+            f"(available: {sorted(sets)}); set the term's signature"
+        )
     return torch.tensor(sets[signature], device=_sae(sae_dir, device).device, dtype=torch.long)
 
 
 @torch.no_grad()
-def feature_match(idr: str, signature: str, *, features: str = DEFAULT_FEATURES,
-                  case: str = DEFAULT_CASE, sae: str = DEFAULT_SAE,
-                  device: str | None = None) -> float:
+def feature_match(
+    idr: str,
+    signature: str,
+    *,
+    features: str = DEFAULT_FEATURES,
+    case: str = DEFAULT_CASE,
+    sae: str = DEFAULT_SAE,
+    device: str | None = None,
+) -> float:
     """Return the fraction of signature features with positive activation on an IDR.
 
     Encode in unprompted FIM format; a feature counts if active at any selected residue.
@@ -76,16 +84,23 @@ def feature_match(idr: str, signature: str, *, features: str = DEFAULT_FEATURES,
     lens = _sae(sae, device)
     s = fim_unprompted(idr, 0, len(idr))
     tokens = torch.tensor([[lens.tok.start_id, *lens.tok.encode(s)]], device=lens.device)
-    acts = extract_activations(lens.model, tokens, [lens.layer], tokenizer=lens.tok,
-                               drop_markers=True, region=lens.region)[lens.layer]
+    acts = extract_activations(
+        lens.model, tokens, [lens.layer], tokenizer=lens.tok, drop_markers=True, region=lens.region
+    )[lens.layer]
     feats = lens.sae.encode_dense(acts.values.to(lens.device))
     ids = _target_ids(signature, features, case, sae, device)
     fired = (feats[:, ids] > 0).any(dim=0).float()
     return float(fired.mean())
 
 
-def sae_signature(signature: str, *, features: str = DEFAULT_FEATURES, case: str = DEFAULT_CASE,
-                  sae: str = DEFAULT_SAE, device: str | None = None) -> Reward:
+def sae_signature(
+    signature: str,
+    *,
+    features: str = DEFAULT_FEATURES,
+    case: str = DEFAULT_CASE,
+    sae: str = DEFAULT_SAE,
+    device: str | None = None,
+) -> Reward:
     """Build a feature-match reward, validating the signature immediately.
 
     Load the SAE lazily on the first non-empty IDR.
@@ -110,10 +125,14 @@ def sae_signature(signature: str, *, features: str = DEFAULT_FEATURES, case: str
         raise ValueError(
             f"sae_signature: cannot read case {case!r} of {features!r} ({type(e).__name__}: {e}). "
             f"Build a signature with cookbook/notebooks/feature_enrichment.ipynb, then point the "
-            f"term's features at it.") from e
+            f"term's features at it."
+        ) from e
     if signature not in sets:
-        raise ValueError(f"sae_signature: no signature {signature!r} in case {case!r} of "
-                         f"{features!r}; available: {sorted(sets)}")
+        raise ValueError(
+            f"sae_signature: no signature {signature!r} in case {case!r} of "
+            f"{features!r}; available: {sorted(sets)}"
+        )
 
-    return batchify(lambda idr: feature_match(idr, signature, features=features, case=case, sae=sae,
-                                          device=device))
+    return batchify(
+        lambda idr: feature_match(idr, signature, features=features, case=case, sae=sae, device=device)
+    )

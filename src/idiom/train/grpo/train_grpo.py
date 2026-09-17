@@ -71,19 +71,21 @@ def run(cfg: DictConfig) -> None:
     try:
         wandb_logger.experiment.define_metric("trainer/global_step")
         wandb_logger.experiment.define_metric("*", step_metric="trainer/global_step")
-    except Exception: # offline/disabled W&B has no experiment to configure
+    except Exception:  # offline/disabled W&B has no experiment to configure
         pass
     trainer_cfg = OmegaConf.to_container(cfg.trainer, resolve=True)
     ckpt_every = trainer_cfg.pop("checkpoint_every", 0)
     max_steps = trainer_cfg.get("max_steps") or None
     # Disable epoch-end saves; checkpoint_every=0 saves only the final step
-    callbacks = [ModelCheckpoint(
-        dirpath=out_dir / "checkpoints",
-        every_n_train_steps=ckpt_every or max_steps,
-        save_top_k=-1 if ckpt_every else 1,
-        save_last=bool(ckpt_every),
-        filename="step_{step}",
-    )]
+    callbacks = [
+        ModelCheckpoint(
+            dirpath=out_dir / "checkpoints",
+            every_n_train_steps=ckpt_every or max_steps,
+            save_top_k=-1 if ckpt_every else 1,
+            save_last=bool(ckpt_every),
+            filename="step_{step}",
+        )
+    ]
     trainer = L.Trainer(
         **trainer_cfg,
         callbacks=callbacks,

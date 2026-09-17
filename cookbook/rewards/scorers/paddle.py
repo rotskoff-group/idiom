@@ -18,9 +18,9 @@ from pathlib import Path
 from _scorer_protocol import serve
 
 REPO_URL = "https://github.com/asanborn/PADDLE.git"
-WINDOW = 53 # PADDLE-noSS scores a fixed 53-residue window
+WINDOW = 53  # PADDLE-noSS scores a fixed 53-residue window
 _STRIDE = int(os.environ.get("PADDLE_STRIDE", "5"))
-_PAD = "G" # neutral flank when a sequence is shorter than one window
+_PAD = "G"  # neutral flank when a sequence is shorter than one window
 
 
 def _paddle_dir() -> Path:
@@ -29,10 +29,13 @@ def _paddle_dir() -> Path:
     if (d / "paddle.py").exists():
         return d
     d.parent.mkdir(parents=True, exist_ok=True)
-    print(f"cloning PADDLE (36 MB of model files, Apache-2.0) into {d} ...", file=sys.stderr,
-          flush=True)
-    subprocess.run(["git", "clone", "--depth", "1", REPO_URL, str(d)], check=True,
-                   stdout=sys.stderr.fileno(), stderr=sys.stderr.fileno())
+    print(f"cloning PADDLE (36 MB of model files, Apache-2.0) into {d} ...", file=sys.stderr, flush=True)
+    subprocess.run(
+        ["git", "clone", "--depth", "1", REPO_URL, str(d)],
+        check=True,
+        stdout=sys.stderr.fileno(),
+        stderr=sys.stderr.fileno(),
+    )
     return d
 
 
@@ -45,14 +48,14 @@ def _windows(seq: str) -> list[str]:
     starts = list(range(0, len(seq) - WINDOW + 1, _STRIDE))
     if starts[-1] != len(seq) - WINDOW:
         starts.append(len(seq) - WINDOW)
-    return [seq[s:s + WINDOW] for s in starts]
+    return [seq[s : s + WINDOW] for s in starts]
 
 
 def build():
     """Clone PADDLE if needed, load the model, and return the max-Z window scorer."""
     d = _paddle_dir()
     sys.path.insert(0, str(d))
-    os.chdir(d) # paddle.load_models resolves models/ relative to the working directory
+    os.chdir(d)  # paddle.load_models resolves models/ relative to the working directory
     import numpy as np
     import paddle as paddle_module
 

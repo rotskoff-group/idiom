@@ -16,9 +16,14 @@ def _resolve(name_or_path: str | Path) -> Path:
     return Path(snapshot_download(str(name_or_path)))
 
 
-
-def _oversample(batch_fn, n: int, *, length_range: tuple[int, int] | None = None,
-                max_oversample: int = 20, seed: int | None = None) -> list[str]:
+def _oversample(
+    batch_fn,
+    n: int,
+    *,
+    length_range: tuple[int, int] | None = None,
+    max_oversample: int = 20,
+    seed: int | None = None,
+) -> list[str]:
     """Draw up to n sequences within an inclusive length range.
 
     Without a range, draw once. Warn and return fewer sequences if the draw cap is reached.
@@ -44,6 +49,8 @@ def _oversample(batch_fn, n: int, *, length_range: tuple[int, int] | None = None
         drawn += n
         rounds += 1
     if len(kept) < n:
-        warnings.warn(f"generate: only {len(kept)}/{n} sequences fell in length {length_range} "
-                      f"after {drawn} draws (max_oversample={max_oversample}); returning those.")
+        warnings.warn(
+            f"generate: only {len(kept)}/{n} sequences fell in length {length_range} "
+            f"after {drawn} draws (max_oversample={max_oversample}); returning those."
+        )
     return kept[:n]

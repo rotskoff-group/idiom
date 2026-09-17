@@ -15,8 +15,7 @@ def inputs(tmp_path, monkeypatch):
     positive = tmp_path / "positive.fasta"
     background = tmp_path / "background.fasta"
     positive.write_text("".join(f">p{i}\n{'A' * 15}\n" for i in range(30)))
-    background.write_text(">overlap\n" + "A" * 15 + "\n" +
-                          "".join(f">b{i}\n{'C' * 15}\n" for i in range(60)))
+    background.write_text(">overlap\n" + "A" * 15 + "\n" + "".join(f">b{i}\n{'C' * 15}\n" for i in range(60)))
     seen = []
 
     class FakeSAE:
@@ -74,8 +73,22 @@ def test_cli_local_background_no_signature_and_no_stale_rerun(tmp_path, monkeypa
         "huggingface_hub.hf_hub_download", lambda *a, **kw: pytest.fail("unexpected download")
     )
     out = tmp_path / "out"
-    args = ["--sae", "fake", "--positive", str(positive), "--background", str(background),
-            "--out", str(out), "--name", "demo", "--log2or-floor", "100", "--max-positive", "10"]
+    args = [
+        "--sae",
+        "fake",
+        "--positive",
+        str(positive),
+        "--background",
+        str(background),
+        "--out",
+        str(out),
+        "--name",
+        "demo",
+        "--log2or-floor",
+        "100",
+        "--max-positive",
+        "10",
+    ]
     main(args)
     assert not (out / "signature.json").exists()
     assert json.loads((out / "run.json").read_text())["n_pos"] == 10
@@ -86,6 +99,18 @@ def test_cli_local_background_no_signature_and_no_stale_rerun(tmp_path, monkeypa
 def test_cli_rejects_empty_background(tmp_path, inputs):
     positive, _, seen = inputs
     with pytest.raises(SystemExit):
-        main(["--sae", "fake", "--positive", str(positive), "--background", str(positive),
-              "--out", str(tmp_path / "out"), "--name", "demo"])
+        main(
+            [
+                "--sae",
+                "fake",
+                "--positive",
+                str(positive),
+                "--background",
+                str(positive),
+                "--out",
+                str(tmp_path / "out"),
+                "--name",
+                "demo",
+            ]
+        )
     assert not seen

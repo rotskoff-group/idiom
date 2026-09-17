@@ -65,8 +65,10 @@ def parse_response(line: str, n: int) -> list[float]:
     if not isinstance(scores, list):
         raise ValueError(f"scorer response has no 'scores' list (keys: {sorted(msg)})")
     if len(scores) != n:
-        raise ValueError(f"scorer returned {len(scores)} scores for {n} sequences; scores must "
-                         f"correspond one-to-one, in the order the sequences were sent")
+        raise ValueError(
+            f"scorer returned {len(scores)} scores for {n} sequences; scores must "
+            f"correspond one-to-one, in the order the sequences were sent"
+        )
     out = []
     for i, s in enumerate(scores):
         try:
@@ -94,8 +96,15 @@ class ScorerProcess:
         proc (subprocess.Popen | None): The running child, or None when not started.
     """
 
-    def __init__(self, cmd, *, cwd: str | None = None, timeout: float = 300.0,
-                 env: dict | None = None, label: str | None = None) -> None:
+    def __init__(
+        self,
+        cmd,
+        *,
+        cwd: str | None = None,
+        timeout: float = 300.0,
+        env: dict | None = None,
+        label: str | None = None,
+    ) -> None:
         """Record the command and settings without starting the child process.
 
         Args:
@@ -127,9 +136,15 @@ class ScorerProcess:
         """
         try:
             self.proc = subprocess.Popen(
-                self.argv, cwd=self.cwd, env=self.env, text=True, bufsize=1,
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                start_new_session=True, # so a timeout can kill the whole process group
+                self.argv,
+                cwd=self.cwd,
+                env=self.env,
+                text=True,
+                bufsize=1,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,  # so a timeout can kill the whole process group
             )
         except OSError as e:
             raise RuntimeError(f"could not run scorer command {self.argv!r}: {e}") from e
@@ -219,8 +234,10 @@ class ScorerProcess:
             line = self._q.get(timeout=max(0, deadline - time.monotonic()))
         except queue.Empty:
             self.stop()
-            raise TimeoutError(f"scorer round trip exceeded {self.timeout:g}s for "
-                               f"{len(seqs)} sequences (raise the term's timeout)") from None
+            raise TimeoutError(
+                f"scorer round trip exceeded {self.timeout:g}s for "
+                f"{len(seqs)} sequences (raise the term's timeout)"
+            ) from None
         finally:
             if writer in self._threads:
                 writer.join()
@@ -257,8 +274,16 @@ class ScorerProcess:
             return self.roundtrip(seqs)
 
 
-def scorer(cmd, *, timeout: float = 300.0, maxlen: int = 0, cwd: str | None = None,
-           env: dict | None = None, cache_max: int = 100_000, label: str | None = None) -> Reward:
+def scorer(
+    cmd,
+    *,
+    timeout: float = 300.0,
+    maxlen: int = 0,
+    cwd: str | None = None,
+    env: dict | None = None,
+    cache_max: int = 100_000,
+    label: str | None = None,
+) -> Reward:
     """Return a reward with its own lazy subprocess and score cache.
 
     Empty strings score 0; duplicate sequences are sent once. Before storing new scores,
@@ -308,9 +333,11 @@ def check(cmd, shaping_spec: dict | None = None, seqs: list[str] | None = None) 
     Returns:
         0 if the scorer answered, 1 if it failed.
     """
-    seqs = seqs or ["MEEEKKKKSSSTTTDDDQQQQNNNN",
-                    "GSGSGSGSGSGSGSGSGSGSGSGSGSGSGS",
-                    "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ"]
+    seqs = seqs or [
+        "MEEEKKKKSSSTTTDDDQQQQNNNN",
+        "GSGSGSGSGSGSGSGSGSGSGSGSGSGSGS",
+        "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ",
+    ]
     shaping = build_from_spec(shaping_spec or "identity", SHAPING_ALIASES, "shaping", "--shaping")
     print(f"command : {cmd}")
     print(f"shaping : {shaping_spec or 'none (the raw reward is used as-is)'}")
@@ -341,8 +368,11 @@ def main(argv: list[str] | None = None) -> int:
     """
     p = argparse.ArgumentParser(description="Check an external reward scorer command.")
     p.add_argument("--cmd", required=True, help="command that runs the scorer")
-    p.add_argument("--shaping", default="identity",
-                   help="shaping rule applied to the raw reward: a shipped name, or module:function")
+    p.add_argument(
+        "--shaping",
+        default="identity",
+        help="shaping rule applied to the raw reward: a shipped name, or module:function",
+    )
     p.add_argument("--target", type=float, default=None, help="target for the shaping")
     p.add_argument("--width", type=float, default=None, help="tolerance as a fraction of the target")
     p.add_argument("sequences", nargs="*", help="sequences to score instead of the built-in set")

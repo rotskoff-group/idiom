@@ -21,7 +21,7 @@ from idiom.data.io import Record, read_records
 STORE_SUFFIX = ".idiomstore"
 _VERSION = 1
 _META = "meta.json"
-_OFF_DTYPE = np.int64 # CSR offsets into the byte buffers (file can exceed 2 GB)
+_OFF_DTYPE = np.int64  # CSR offsets into the byte buffers (file can exceed 2 GB)
 _COORD_DTYPE = np.int32
 _BYTE_DTYPE = np.uint8
 
@@ -33,8 +33,11 @@ def store_path_for(fasta: str | Path) -> Path:
 
 def _source_sig(fasta: str | Path) -> dict:
     st = Path(fasta).stat()
-    return {"source": str(Path(fasta).resolve()), "source_size": st.st_size,
-            "source_mtime_ns": st.st_mtime_ns}
+    return {
+        "source": str(Path(fasta).resolve()),
+        "source_size": st.st_size,
+        "source_mtime_ns": st.st_mtime_ns,
+    }
 
 
 def build_record_store(
@@ -59,7 +62,7 @@ def build_record_store(
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
 
-    seq_off = array.array("q", [0]) # int64; seq i = seq_data[seq_off[i]:seq_off[i+1]]
+    seq_off = array.array("q", [0])  # int64; seq i = seq_data[seq_off[i]:seq_off[i+1]]
     acc_off = array.array("q", [0])
     idr_start = array.array("i")
     idr_end = array.array("i")
@@ -83,14 +86,18 @@ def build_record_store(
     np.asarray(idr_start, dtype=_COORD_DTYPE).tofile(tmp / "idr_start.bin")
     np.asarray(idr_end, dtype=_COORD_DTYPE).tofile(tmp / "idr_end.bin")
     meta = {
-        "version": _VERSION, "n": n, "seq_bytes": so, "acc_bytes": ao,
-        "drop_noncanonical": drop_noncanonical, **_source_sig(fasta),
+        "version": _VERSION,
+        "n": n,
+        "seq_bytes": so,
+        "acc_bytes": ao,
+        "drop_noncanonical": drop_noncanonical,
+        **_source_sig(fasta),
     }
     (tmp / _META).write_text(json.dumps(meta, indent=2))
 
     if store_dir.exists():
         shutil.rmtree(store_dir)
-    os.replace(tmp, store_dir) # atomic on the same filesystem
+    os.replace(tmp, store_dir)  # atomic on the same filesystem
     log.info(f"built record store: {n:,} records -> {store_dir}")
     return store_dir
 
@@ -120,7 +127,7 @@ class RecordStore:
         self._idr_end = self._mmap("idr_end.bin", _COORD_DTYPE, n)
 
     def _mmap(self, name: str, dtype, count: int) -> np.ndarray:
-        if count == 0: # np.memmap rejects empty files
+        if count == 0:  # np.memmap rejects empty files
             return np.empty(0, dtype=dtype)
         return np.memmap(self.dir / name, dtype=dtype, mode="r", shape=(count,))
 
@@ -148,8 +155,10 @@ def _valid(store_dir: Path, fasta: Path) -> bool:
     if meta.get("version") != _VERSION:
         return False
     sig = _source_sig(fasta)
-    return (meta.get("source_size") == sig["source_size"]
-            and meta.get("source_mtime_ns") == sig["source_mtime_ns"])
+    return (
+        meta.get("source_size") == sig["source_size"]
+        and meta.get("source_mtime_ns") == sig["source_mtime_ns"]
+    )
 
 
 def open_or_build(
@@ -184,7 +193,7 @@ def open_or_build(
         try:
             fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
-            try: # break a stale lock from a crashed builder
+            try:  # break a stale lock from a crashed builder
                 if time.time() - lock.stat().st_mtime > lock_timeout:
                     lock.unlink(missing_ok=True)
                     continue

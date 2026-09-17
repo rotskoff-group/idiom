@@ -25,7 +25,7 @@ class ModelConfig:
         ValueError: If d_model is not divisible by n_heads, or head_dim is odd.
     """
 
-    vocab_size: int = 27 # idiom.data.tokenizer: 20 residues + 3 FIM markers + 4 controls
+    vocab_size: int = 27  # idiom.data.tokenizer: 20 residues + 3 FIM markers + 4 controls
     n_layers: int = 12
     d_model: int = 768
     n_heads: int = 12

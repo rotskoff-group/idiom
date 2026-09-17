@@ -67,7 +67,7 @@ class IDiom:
         d = _resolve(name_or_path)
         cfg = ModelConfig(**json.loads((d / CONFIG_FILE).read_text()))
         model = IDiomTransformer(cfg)
-        load_model(model, str(d / WEIGHTS_FILE)) # handles the tied embedding
+        load_model(model, str(d / WEIGHTS_FILE))  # handles the tied embedding
         return cls(model, device=resolve_device(device))
 
     def save_pretrained(self, out_dir: str | Path, *, model_card: str | None = None) -> Path:
@@ -88,8 +88,15 @@ class IDiom:
             (d / "README.md").write_text(model_card)
         return d
 
-    def push_to_hub(self, repo_id: str, *, private: bool = True, model_card: str | None = None,
-                    commit_message: str | None = None, token: str | None = None) -> str:
+    def push_to_hub(
+        self,
+        repo_id: str,
+        *,
+        private: bool = True,
+        model_card: str | None = None,
+        commit_message: str | None = None,
+        token: str | None = None,
+    ) -> str:
         """Save and upload a model release, creating the Hub repository if needed.
 
         Args:
@@ -106,8 +113,12 @@ class IDiom:
         api.create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
         with tempfile.TemporaryDirectory() as tmp:
             self.save_pretrained(tmp, model_card=model_card)
-            api.upload_folder(repo_id=repo_id, folder_path=tmp, repo_type="model",
-                              commit_message=commit_message or f"Upload {repo_id}")
+            api.upload_folder(
+                repo_id=repo_id,
+                folder_path=tmp,
+                repo_type="model",
+                commit_message=commit_message or f"Upload {repo_id}",
+            )
         return f"https://huggingface.co/{repo_id}"
 
     @classmethod
@@ -132,10 +143,19 @@ class IDiom:
         return self.tok.decode(ids)
 
     @torch.no_grad()
-    def _generate(self, prompt: str, n: int, *, length_range: tuple[int, int] | None = None,
-                  max_oversample: int = 20, batch_size: int | None = None, **kw) -> list[str]:
-        validate_generation(n, length_range=length_range, max_oversample=max_oversample,
-                            batch_size=batch_size, **kw)
+    def _generate(
+        self,
+        prompt: str,
+        n: int,
+        *,
+        length_range: tuple[int, int] | None = None,
+        max_oversample: int = 20,
+        batch_size: int | None = None,
+        **kw,
+    ) -> list[str]:
+        validate_generation(
+            n, length_range=length_range, max_oversample=max_oversample, batch_size=batch_size, **kw
+        )
         seed = kw.pop("seed", None)
         prompt_ids = torch.tensor(self.tok.encode(prompt), device=self.device)
 
@@ -154,10 +174,19 @@ class IDiom:
 
         return _oversample(_batch, n, length_range=length_range, max_oversample=max_oversample, seed=seed)
 
-    def generate_unprompted(self, n: int = 100, *, max_new_tokens: int = 1000, temperature: float = 1.0,
-                            top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
-                            length_range: tuple[int, int] | None = None, max_oversample: int = 20,
-                            batch_size: int | None = None) -> list[str]:
+    def generate_unprompted(
+        self,
+        n: int = 100,
+        *,
+        max_new_tokens: int = 1000,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+        top_p: float | None = None,
+        seed: int | None = None,
+        length_range: tuple[int, int] | None = None,
+        max_oversample: int = 20,
+        batch_size: int | None = None,
+    ) -> list[str]:
         """Generate unprompted IDRs from the bare "132" prompt.
 
         Args:
@@ -175,8 +204,15 @@ class IDiom:
         Returns:
             The generated IDR residue strings, at most n of them.
         """
-        kw = dict(max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
-                  length_range=length_range, max_oversample=max_oversample, batch_size=batch_size)
+        kw = dict(
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            length_range=length_range,
+            max_oversample=max_oversample,
+            batch_size=batch_size,
+        )
         if seed is not None:
             kw["seed"] = seed
         return self._generate(fim_prompt(), n, **kw)
@@ -203,8 +239,9 @@ class IDiom:
         kw.setdefault("max_new_tokens", 1000)
         return self._generate(fim_prompt(seq, idr_start, idr_end), n, **kw)
 
-    def generate_unprompted_fasta(self, out_fasta, n: int = 100, *, prefix: str = "idiom_unprompted",
-                                  **kw) -> Path:
+    def generate_unprompted_fasta(
+        self, out_fasta, n: int = 100, *, prefix: str = "idiom_unprompted", **kw
+    ) -> Path:
         """Generate unprompted IDRs and write them to a record FASTA.
 
         Each record is headed "{prefix}_{i}_IDR_1-{len}". Empty generations are skipped, so the
@@ -223,8 +260,16 @@ class IDiom:
         records = [(_idr_header(f"{prefix}_{i}", s), s) for i, s in enumerate(seqs) if s]
         return _write_fasta(records, out_fasta)
 
-    def generate_prompted_fasta(self, in_fasta, out_fasta, n: int = 100, *, return_full: bool = False,
-                                marker: str = "idiom_prompted", **kw) -> Path:
+    def generate_prompted_fasta(
+        self,
+        in_fasta,
+        out_fasta,
+        n: int = 100,
+        *,
+        return_full: bool = False,
+        marker: str = "idiom_prompted",
+        **kw,
+    ) -> Path:
         """Generate IDRs for each input FASTA record; skip empty generations.
 
         Headers use "{source_accession}_{marker}_gen{i}" plus the generated IDR span.
@@ -288,11 +333,9 @@ class IDiom:
         return embed_fasta(self.model, inputs, layers, pool=pool, tokenizer=self.tok, device=self.device)
 
 
-
 def _idr_header(accession: str, seq: str) -> str:
     """Return "{accession}_IDR_1-{len(seq)}" as a FASTA header."""
     return f"{accession}_IDR_1-{len(seq)}"
-
 
 
 def _write_fasta(records: list[tuple[str, str]], path) -> Path:

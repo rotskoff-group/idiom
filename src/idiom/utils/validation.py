@@ -14,20 +14,36 @@ def integer_at_least(name, value, minimum):
 
 def validate_sampling(temperature=1.0, top_k=None, top_p=None):
     """Validate temperature and optional top-k and nucleus cutoffs."""
-    if (isinstance(temperature, bool) or not isinstance(temperature, Real)
-            or not math.isfinite(temperature) or temperature < 0):
+    if (
+        isinstance(temperature, bool)
+        or not isinstance(temperature, Real)
+        or not math.isfinite(temperature)
+        or temperature < 0
+    ):
         raise ValueError("temperature must be finite and >= 0")
     if top_k is not None:
         integer_at_least("top_k", top_k, 1)
     if top_p is not None and (
-        isinstance(top_p, bool) or not isinstance(top_p, Real)
-        or not math.isfinite(top_p) or not 0 < top_p <= 1
+        isinstance(top_p, bool)
+        or not isinstance(top_p, Real)
+        or not math.isfinite(top_p)
+        or not 0 < top_p <= 1
     ):
         raise ValueError("top_p must be finite and in (0, 1]")
 
 
-def validate_generation(n, *, max_new_tokens=1000, temperature=1.0, top_k=None, top_p=None,
-                        batch_size=None, length_range=None, max_oversample=20, seed=None):
+def validate_generation(
+    n,
+    *,
+    max_new_tokens=1000,
+    temperature=1.0,
+    top_k=None,
+    top_p=None,
+    batch_size=None,
+    length_range=None,
+    max_oversample=20,
+    seed=None,
+):
     """Validate generation options; zero sequences is a valid empty request."""
     integer_at_least("n", n, 0)
     integer_at_least("max_new_tokens", max_new_tokens, 1)

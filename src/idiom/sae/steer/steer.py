@@ -152,6 +152,12 @@ def steer_generation(
     hook = build_steering_hook(sae, spec)
     with steering(model, spec.layer, hook, tokenizer=tok, region=region):
         return generate(
-            model, prompts, max_new_tokens=max_new_tokens, temperature=temperature,
-            top_k=top_k, top_p=top_p, tokenizer=tok, generator=generator,
+            model,
+            prompts,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            tokenizer=tok,
+            generator=generator,
         )

@@ -31,14 +31,23 @@ from pathlib import Path
 from _scorer_protocol import serve
 
 COMPARTMENTS = [
-    "nuclear_speckle", "p-body", "pml-bdoy", "post_synaptic_density", "stress_granule",
-    "chromosome", "nucleolus", "nuclear_pore_complex", "cajal_body", "rna_granule",
-    "cell_junction", "transcriptional",
+    "nuclear_speckle",
+    "p-body",
+    "pml-bdoy",
+    "post_synaptic_density",
+    "stress_granule",
+    "chromosome",
+    "nucleolus",
+    "nuclear_pore_complex",
+    "cajal_body",
+    "rna_granule",
+    "cell_junction",
+    "transcriptional",
 ]
 
 ZENODO_URL = "https://zenodo.org/records/14795445/files/checkpoints.zip?download=1"
 _CKPT_STEM = "protgps/32bf44b16a4e770a674896b81dfb3729"
-_MAX_LEN = 1800 # ProtGPS sequence-length ceiling
+_MAX_LEN = 1800  # ProtGPS sequence-length ceiling
 _BATCH = int(os.environ.get("PROTGPS_BATCH", "1"))
 
 
@@ -49,8 +58,7 @@ def _device():
 
 def _checkpoint_dir() -> Path:
     """Download the Zenodo checkpoint release if needed and return its directory."""
-    d = Path(os.environ.get("IDIOM_PROTGPS_DIR",
-                            Path.home() / ".cache/idiom/protgps")).expanduser()
+    d = Path(os.environ.get("IDIOM_PROTGPS_DIR", Path.home() / ".cache/idiom/protgps")).expanduser()
     # the Zenodo archive unpacks as checkpoints/protgps/..., so accept either layout
     for cand in (d, d / "checkpoints"):
         if (cand / f"{_CKPT_STEM}.args").exists():
@@ -59,8 +67,7 @@ def _checkpoint_dir() -> Path:
 
     d.mkdir(parents=True, exist_ok=True)
     zip_path = d / "checkpoints.zip"
-    print(f"downloading ProtGPS checkpoints (166 MB, CC BY 4.0) to {d} ...", file=sys.stderr,
-          flush=True)
+    print(f"downloading ProtGPS checkpoints (166 MB, CC BY 4.0) to {d} ...", file=sys.stderr, flush=True)
     with requests.get(ZENODO_URL, stream=True, timeout=600) as r:
         r.raise_for_status()
         with open(zip_path, "wb") as f:
@@ -72,8 +79,10 @@ def _checkpoint_dir() -> Path:
     for cand in (d, d / "checkpoints"):
         if (cand / f"{_CKPT_STEM}.args").exists():
             return cand
-    raise SystemExit(f"the Zenodo archive did not contain {_CKPT_STEM}.args under {d}; "
-                     f"set IDIOM_PROTGPS_DIR to a directory holding the ProtGPS checkpoints")
+    raise SystemExit(
+        f"the Zenodo archive did not contain {_CKPT_STEM}.args under {d}; "
+        f"set IDIOM_PROTGPS_DIR to a directory holding the ProtGPS checkpoints"
+    )
 
 
 def _load_model():
@@ -83,7 +92,7 @@ def _load_model():
     parent = _checkpoint_dir()
     args = Namespace(**pickle.load(open(parent / f"{_CKPT_STEM}.args", "rb")))
     args.model_path = str(parent / f"{_CKPT_STEM}epoch=26.ckpt")
-    args.pretrained_hub_dir = str(parent / "esm_models/esm2") # torch.hub cache for the backbone
+    args.pretrained_hub_dir = str(parent / "esm_models/esm2")  # torch.hub cache for the backbone
     Path(args.pretrained_hub_dir).mkdir(parents=True, exist_ok=True)
 
     model = get_object(args.lightning_name, "lightning")(args)
@@ -98,8 +107,9 @@ def _load_model():
 def build():
     """Parse --compartment, load the classifier, and return the compartment-probability scorer."""
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--compartment", default="nucleolus",
-                    help="one of the 12 compartments, or max / mean over them")
+    ap.add_argument(
+        "--compartment", default="nucleolus", help="one of the 12 compartments, or max / mean over them"
+    )
     target = ap.parse_args().compartment
     if target not in COMPARTMENTS and target not in ("max", "mean"):
         raise SystemExit(f"--compartment {target!r} is not one of {COMPARTMENTS} (or max, mean)")
@@ -113,7 +123,7 @@ def build():
         """Return the compartment probability for each sequence."""
         scores = [0.0] * len(sequences)
         for start in range(0, len(sequences), _BATCH):
-            chunk = sequences[start:start + _BATCH]
+            chunk = sequences[start : start + _BATCH]
             probs = torch.sigmoid(model.model({"x": [s[:_MAX_LEN] for s in chunk]})["logit"]).cpu()
             for j, row in enumerate(probs):
                 if target == "max":

@@ -16,9 +16,17 @@ from idiom.data.tokenizer import Tokenizer
 
 @torch.no_grad()
 def perplexity(
-    model, fasta: str, *, tokenizer: Tokenizer | None = None, max_len: int = 1024,
-    prompted_prob: float = 0.5, batch_size: int = 32, num_workers: int = 4,
-    device: str = "cuda", max_records: int | None = None, seed: int = 0,
+    model,
+    fasta: str,
+    *,
+    tokenizer: Tokenizer | None = None,
+    max_len: int = 1024,
+    prompted_prob: float = 0.5,
+    batch_size: int = 32,
+    num_workers: int = 4,
+    device: str = "cuda",
+    max_records: int | None = None,
+    seed: int = 0,
     completion_only: bool = False,
 ) -> dict[str, float]:
     """Compute mean per-token NLL and perplexity over a record FASTA.
@@ -47,18 +55,18 @@ def perplexity(
     records = read_records(fasta)
     if max_records is not None:
         records = itertools.islice(records, max_records)
-    ds = RecordDataset(records, tok, max_len=max_len, prompted_prob=prompted_prob,
-                       completion_only=completion_only, seed=seed)
-    dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers,
-                    collate_fn=make_collate(tok.pad_id))
+    ds = RecordDataset(
+        records, tok, max_len=max_len, prompted_prob=prompted_prob, completion_only=completion_only, seed=seed
+    )
+    dl = DataLoader(
+        ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=make_collate(tok.pad_id)
+    )
     model.eval()
     total_nll, total_tok = 0.0, 0
     for x, y, mask in dl:
         x, y, mask = x.to(device), y.to(device), mask.to(device)
         logits = model(x)
-        ce = F.cross_entropy(
-            logits.reshape(-1, logits.size(-1)), y.reshape(-1), reduction="none"
-        ).view_as(y)
+        ce = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1), reduction="none").view_as(y)
         total_nll += float((ce * mask).sum())
         total_tok += int(mask.sum())
     mean_nll = total_nll / max(total_tok, 1)

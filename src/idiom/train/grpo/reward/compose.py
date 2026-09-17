@@ -53,19 +53,22 @@ class Term:
 def _parse_term(raw: dict, where: str) -> tuple[str, float, object, object]:
     """Validate a term and return its label, weight, reward spec, and shaping spec."""
     if not isinstance(raw, dict):
-        raise ValueError(f"{where}: a term is a mapping of {sorted(TERM_KEYS)}, got "
-                         f"{type(raw).__name__}")
+        raise ValueError(f"{where}: a term is a mapping of {sorted(TERM_KEYS)}, got {type(raw).__name__}")
     term = dict(raw)
     unknown = set(term) - TERM_KEYS
     if unknown:
-        raise ValueError(f"{where}: unknown key(s) {sorted(unknown)}; a term takes "
-                         f"{sorted(TERM_KEYS)}. A reward's own settings go inside reward, next to "
-                         f"its name.")
+        raise ValueError(
+            f"{where}: unknown key(s) {sorted(unknown)}; a term takes "
+            f"{sorted(TERM_KEYS)}. A reward's own settings go inside reward, next to "
+            f"its name."
+        )
 
     reward_spec = term.get("reward")
     if reward_spec is None:
-        raise ValueError(f"{where}: a term needs a reward -- a shipped name, a 'module:function' "
-                         f"path, or a mapping of either plus that factory's arguments")
+        raise ValueError(
+            f"{where}: a term needs a reward -- a shipped name, a 'module:function' "
+            f"path, or a mapping of either plus that factory's arguments"
+        )
     # Use the factory name as the default metric label
     label = term.get("label") or spec_name(reward_spec, f"{where}.reward")[0].rpartition(":")[2]
     weight = _finite(term.get("weight", 1.0), f"{where} ({label!r}).weight")
@@ -77,8 +80,10 @@ def _check_unique_labels(labels: list[str]) -> None:
     seen: dict[str, int] = {}
     for i, label in enumerate(labels):
         if label in seen:
-            raise ValueError(f"reward.terms[{i}]: duplicate label {label!r}, already used by "
-                             f"reward.terms[{seen[label]}]; give one term its own label")
+            raise ValueError(
+                f"reward.terms[{i}]: duplicate label {label!r}, already used by "
+                f"reward.terms[{seen[label]}]; give one term its own label"
+            )
         seen[label] = i
 
 
@@ -102,7 +107,8 @@ def build_terms(rcfg: DictConfig) -> list[Term]:
             "reward.terms is empty; a run names every term it optimizes. Pass the whole objective "
             "at launch, e.g. reward.terms='[{reward: entropy, weight: 1.0, shaping: {name: "
             "quadratic, target: 3.65, width: 0.2}}]'; see cookbook/scripts/training/grpo/ for a ready-to-"
-            "submit script per objective.")
+            "submit script per objective."
+        )
 
     parsed = [_parse_term(t, f"reward.terms[{i}]") for i, t in enumerate(raw_terms)]
     _check_unique_labels([label for label, _, _, _ in parsed])
@@ -110,12 +116,14 @@ def build_terms(rcfg: DictConfig) -> list[Term]:
     terms = []
     for i, (label, weight, reward_spec, shaping_spec) in enumerate(parsed):
         where = f"reward.terms[{i}]"
-        terms.append(Term(
-            label=label,
-            weight=weight,
-            reward=build_from_spec(reward_spec, REWARD_ALIASES, "reward", where),
-            shaping=build_from_spec(shaping_spec or "identity", SHAPING_ALIASES, "shaping", where),
-        ))
+        terms.append(
+            Term(
+                label=label,
+                weight=weight,
+                reward=build_from_spec(reward_spec, REWARD_ALIASES, "reward", where),
+                shaping=build_from_spec(shaping_spec or "identity", SHAPING_ALIASES, "shaping", where),
+            )
+        )
     return terms
 
 
@@ -146,8 +154,9 @@ def build_reward(rcfg: DictConfig):
             except TypeError:
                 raise ValueError(f"reward {term.label!r}: expected one score per sequence") from None
             if len(values) != len(idrs):
-                raise ValueError(f"reward {term.label!r}: returned {len(values)} scores for "
-                                 f"{len(idrs)} sequences")
+                raise ValueError(
+                    f"reward {term.label!r}: returned {len(values)} scores for {len(idrs)} sequences"
+                )
             for i, value in enumerate(values):
                 where = f"reward {term.label!r}, sequence {i}"
                 raw_i = _finite(value, f"{where}, raw score")

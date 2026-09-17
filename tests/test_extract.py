@@ -43,10 +43,15 @@ def test_write_embeddings(tmp_path):
     assert (tmp_path / "out" / "layer_1_index.csv").exists()
 
 
-@pytest.mark.parametrize("artifact,flag", [
-    ("release", "--model"), ("hub", "--model"), ("checkpoint", "--model"),
-    ("checkpoint", "--ckpt"),
-])
+@pytest.mark.parametrize(
+    "artifact,flag",
+    [
+        ("release", "--model"),
+        ("hub", "--model"),
+        ("checkpoint", "--model"),
+        ("checkpoint", "--ckpt"),
+    ],
+)
 def test_extract_cli_loads_supported_artifacts(tmp_path, monkeypatch, artifact, flag):
     from dataclasses import asdict
 
@@ -64,8 +69,13 @@ def test_extract_cli_loads_supported_artifacts(tmp_path, monkeypatch, artifact, 
     monkeypatch.setattr("idiom.model.io.snapshot_download", download)
     if artifact == "checkpoint":
         path = tmp_path / "model.ckpt"
-        torch.save({"hyper_parameters": {"model_cfg": asdict(TINY)},
-                    "state_dict": {f"model.{k}": v for k, v in model.state_dict().items()}}, path)
+        torch.save(
+            {
+                "hyper_parameters": {"model_cfg": asdict(TINY)},
+                "state_dict": {f"model.{k}": v for k, v in model.state_dict().items()},
+            },
+            path,
+        )
     else:
         path = "test/model" if artifact == "hub" else release
     fasta = _fasta(tmp_path)

@@ -12,7 +12,7 @@ def sequence_logprobs(model, tokens: Tensor) -> Tensor:
 
     Input token ids have shape [B, L]; output has shape [B, L-1].
     """
-    logits = model(tokens[:, :-1]) # the final target need not fit as an input position
+    logits = model(tokens[:, :-1])  # the final target need not fit as an input position
     logp = F.log_softmax(logits.float(), dim=-1)
     return logp.gather(-1, tokens[:, 1:, None]).squeeze(-1)
 

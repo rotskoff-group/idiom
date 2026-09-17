@@ -26,8 +26,16 @@ from idiom.utils.validation import validate_generation
 class IDiomSAE:
     """An SAE bundled with its host model and training layer, region, and FIM mode."""
 
-    def __init__(self, sae, model: IDiom, layer: int, *, host_model: str | None = None,
-                 region: str = "all", fim_mode: str = "prompted"):
+    def __init__(
+        self,
+        sae,
+        model: IDiom,
+        layer: int,
+        *,
+        host_model: str | None = None,
+        region: str = "all",
+        fim_mode: str = "prompted",
+    ):
         """Bundle an SAE with its host model, layer, and training distribution.
 
         Args:
@@ -49,9 +57,11 @@ class IDiomSAE:
         self.fim_mode = normalize_mode(fim_mode)
 
     def __repr__(self) -> str:
-        return (f"IDiomSAE(host={self.host_model!r}, layer={self.layer}, region={self.region!r}, "
-                f"fim_mode={self.fim_mode!r}, latents={self.sae.num_latents}, "
-                f"k={getattr(self.sae, 'k', '?')})")
+        return (
+            f"IDiomSAE(host={self.host_model!r}, layer={self.layer}, region={self.region!r}, "
+            f"fim_mode={self.fim_mode!r}, latents={self.sae.num_latents}, "
+            f"k={getattr(self.sae, 'k', '?')})"
+        )
 
     @property
     def model(self) -> IDiomTransformer:
@@ -89,8 +99,14 @@ class IDiomSAE:
                     f"{d} records no host_model; pass model=IDiom.from_pretrained(...) explicitly."
                 )
             model = IDiom.load(cfg["host_model"], device=device)
-        return cls(sae, model, cfg["layer"], host_model=cfg.get("host_model"),
-                   region=cfg.get("region", "all"), fim_mode=cfg.get("fim_mode", "prompted"))
+        return cls(
+            sae,
+            model,
+            cfg["layer"],
+            host_model=cfg.get("host_model"),
+            region=cfg.get("region", "all"),
+            fim_mode=cfg.get("fim_mode", "prompted"),
+        )
 
     def save_pretrained(self, out_dir, *, host_model: str | None = None) -> Path:
         """Write sae_config.json and sae.safetensors to a directory.
@@ -103,12 +119,25 @@ class IDiomSAE:
         Returns:
             The output directory.
         """
-        return save_sae(self.sae, out_dir, host_model=host_model or self.host_model,
-                        layer=self.layer, region=self.region, fim_mode=self.fim_mode)
+        return save_sae(
+            self.sae,
+            out_dir,
+            host_model=host_model or self.host_model,
+            layer=self.layer,
+            region=self.region,
+            fim_mode=self.fim_mode,
+        )
 
-    def push_to_hub(self, repo_id: str, *, host_model: str | None = None, private: bool = True,
-                    model_card: str | None = None, commit_message: str | None = None,
-                    token: str | None = None) -> str:
+    def push_to_hub(
+        self,
+        repo_id: str,
+        *,
+        host_model: str | None = None,
+        private: bool = True,
+        model_card: str | None = None,
+        commit_message: str | None = None,
+        token: str | None = None,
+    ) -> str:
         """Save and upload an SAE release, creating the Hub repository if needed.
 
         Args:
@@ -129,8 +158,12 @@ class IDiomSAE:
             self.save_pretrained(tmp, host_model=host_model)
             if model_card is not None:
                 (Path(tmp) / "README.md").write_text(model_card)
-            api.upload_folder(repo_id=repo_id, folder_path=tmp, repo_type="model",
-                              commit_message=commit_message or f"Upload {repo_id}")
+            api.upload_folder(
+                repo_id=repo_id,
+                folder_path=tmp,
+                repo_type="model",
+                commit_message=commit_message or f"Upload {repo_id}",
+            )
         return f"https://huggingface.co/{repo_id}"
 
     @torch.no_grad()
@@ -165,9 +198,17 @@ class IDiomSAE:
             raise ValueError(
                 f"region={region!r} is not available from this SAE: it was trained in unprompted "
                 f"mode ('132{{IDR}}'), so only IDR residues are encoded and there are no flanking "
-                f"residues to select. Use region='idr', or an SAE trained with fim_mode='prompted'.")
-        emb = embed_fasta(self.model, inputs, [self.layer], pool="none", tokenizer=self.tok,
-                          device=self.device, fim_mode=self.fim_mode)
+                f"residues to select. Use region='idr', or an SAE trained with fim_mode='prompted'."
+            )
+        emb = embed_fasta(
+            self.model,
+            inputs,
+            [self.layer],
+            pool="none",
+            tokenizer=self.tok,
+            device=self.device,
+            fim_mode=self.fim_mode,
+        )
         values, index = emb[self.layer]
         x = torch.from_numpy(values).to(self.device)
         feats = self.sae.encode_dense(x).cpu().numpy()
@@ -181,8 +222,11 @@ class IDiomSAE:
                 continue
             rows.setdefault(row["record_idx"], []).append(i)
         accs = [index[indices[0]]["accession"] for indices in rows.values()]
-        pooled = (np.stack([feats[indices].mean(0) for indices in rows.values()])
-                  if rows else np.empty((0, feats.shape[1])))
+        pooled = (
+            np.stack([feats[indices].mean(0) for indices in rows.values()])
+            if rows
+            else np.empty((0, feats.shape[1]))
+        )
         return pooled, accs
 
     @torch.no_grad()
@@ -202,17 +246,40 @@ class IDiomSAE:
         Returns:
             The output directory.
         """
-        return _build_feature_dataset(self.model, self.sae, to_records(inputs), self.layer, out_dir,
-                    tokenizer=self.tok, device=self.device, batch_size=batch_size,
-                    region=self.region, fim_mode=self.fim_mode)
+        return _build_feature_dataset(
+            self.model,
+            self.sae,
+            to_records(inputs),
+            self.layer,
+            out_dir,
+            tokenizer=self.tok,
+            device=self.device,
+            batch_size=batch_size,
+            region=self.region,
+            fim_mode=self.fim_mode,
+        )
 
     @torch.no_grad()
-    def steer_generate(self, feature, strength, *, n: int = 100, mode: str = "add_direction",
-                       normalize: bool = False, relative: bool = False, preserve_norm: bool = False,
-                       prompt: str | None = None, max_new_tokens: int = 1000, temperature: float = 1.0,
-                       top_k: int | None = None, top_p: float | None = None, seed: int | None = None,
-                       length_range: tuple[int, int] | None = None, max_oversample: int = 20,
-                       batch_size: int | None = None) -> list[str]:
+    def steer_generate(
+        self,
+        feature,
+        strength,
+        *,
+        n: int = 100,
+        mode: str = "add_direction",
+        normalize: bool = False,
+        relative: bool = False,
+        preserve_norm: bool = False,
+        prompt: str | None = None,
+        max_new_tokens: int = 1000,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+        top_p: float | None = None,
+        seed: int | None = None,
+        length_range: tuple[int, int] | None = None,
+        max_oversample: int = 20,
+        batch_size: int | None = None,
+    ) -> list[str]:
         """Generate IDRs with SAE feature steering; see SteeringSpec for strength semantics.
 
         Args:
@@ -236,11 +303,26 @@ class IDiomSAE:
         Returns:
             The steered IDR residue strings, at most n of them.
         """
-        validate_generation(n, max_new_tokens=max_new_tokens, temperature=temperature,
-                            top_k=top_k, top_p=top_p, seed=seed, length_range=length_range,
-                            max_oversample=max_oversample, batch_size=batch_size)
-        spec = SteeringSpec(layer=self.layer, feature_idx=feature, strength=strength, mode=mode,
-                            normalize=normalize, relative=relative, preserve_norm=preserve_norm)
+        validate_generation(
+            n,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            seed=seed,
+            length_range=length_range,
+            max_oversample=max_oversample,
+            batch_size=batch_size,
+        )
+        spec = SteeringSpec(
+            layer=self.layer,
+            feature_idx=feature,
+            strength=strength,
+            mode=mode,
+            normalize=normalize,
+            relative=relative,
+            preserve_norm=preserve_norm,
+        )
         prompt_tokens = self.tok.encode(prompt) if prompt else None
 
         def _batch(k: int, s: int | None) -> list[str]:
@@ -251,9 +333,18 @@ class IDiomSAE:
             sequences = []
             for off in range(0, k, bs):
                 out = steer_generation(
-                    self.model, self.sae, spec, prompt_tokens=prompt_tokens, n_samples=min(bs, k - off),
-                    max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k, top_p=top_p,
-                    tokenizer=self.tok, region=self.region, generator=gen,
+                    self.model,
+                    self.sae,
+                    spec,
+                    prompt_tokens=prompt_tokens,
+                    n_samples=min(bs, k - off),
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    tokenizer=self.tok,
+                    region=self.region,
+                    generator=gen,
                 )
                 sequences.extend(self.host._decode_idr(row) for row in out)
             return sequences

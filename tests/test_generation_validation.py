@@ -18,17 +18,37 @@ def model():
     return host
 
 
-@pytest.mark.parametrize("kw", [
-    {"n": -1}, {"n": 1.5}, {"n": True}, {"max_new_tokens": 0}, {"max_new_tokens": 1.5},
-    {"batch_size": 0}, {"batch_size": -2}, {"batch_size": 1.5},
-    {"max_oversample": 0}, {"max_oversample": 1.5},
-    {"temperature": -1}, {"temperature": float("nan")}, {"temperature": float("inf")},
-    {"top_k": -1}, {"top_k": 0}, {"top_k": 1.5},
-    {"top_p": 0}, {"top_p": 1.1}, {"top_p": float("nan")},
-    {"length_range": (5, 2)}, {"length_range": (0, 2)}, {"length_range": (1.5, 2)},
-    {"length_range": (1,)}, {"length_range": (10, 20), "max_new_tokens": 5},
-    {"seed": -1}, {"seed": 2**64},
-])
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"n": -1},
+        {"n": 1.5},
+        {"n": True},
+        {"max_new_tokens": 0},
+        {"max_new_tokens": 1.5},
+        {"batch_size": 0},
+        {"batch_size": -2},
+        {"batch_size": 1.5},
+        {"max_oversample": 0},
+        {"max_oversample": 1.5},
+        {"temperature": -1},
+        {"temperature": float("nan")},
+        {"temperature": float("inf")},
+        {"top_k": -1},
+        {"top_k": 0},
+        {"top_k": 1.5},
+        {"top_p": 0},
+        {"top_p": 1.1},
+        {"top_p": float("nan")},
+        {"length_range": (5, 2)},
+        {"length_range": (0, 2)},
+        {"length_range": (1.5, 2)},
+        {"length_range": (1,)},
+        {"length_range": (10, 20), "max_new_tokens": 5},
+        {"seed": -1},
+        {"seed": 2**64},
+    ],
+)
 def test_invalid_options_rejected_by_generation_and_steering(model, kw):
     sae = IDiomSAE(SparseCoder(16, num_latents=32, k=4), model, layer=0)
     for call in (model.generate_unprompted, lambda **opts: sae.steer_generate(0, 0.5, **opts)):

@@ -90,13 +90,13 @@ def spec_name(spec, where: str) -> tuple[str, dict]:
     if isinstance(spec, str):
         return spec, {}
     if not isinstance(spec, dict):
-        raise ValueError(f"{where}: expected a name or a mapping with a name, got "
-                         f"{type(spec).__name__}")
+        raise ValueError(f"{where}: expected a name or a mapping with a name, got {type(spec).__name__}")
     kwargs = dict(spec)
     name = kwargs.pop("name", None)
     if not name:
-        raise ValueError(f"{where}: a mapping needs a name naming the factory to call, plus that "
-                         f"factory's arguments")
+        raise ValueError(
+            f"{where}: a mapping needs a name naming the factory to call, plus that factory's arguments"
+        )
     return name, kwargs
 
 
@@ -119,15 +119,19 @@ def build_from_spec(spec, aliases: dict[str, str], what: str, where: str):
     name, kwargs = spec_name(spec, where)
     path = aliases.get(name, name)
     if ":" not in path:
-        raise ValueError(f"{where}: unknown {what} {name!r}; the shipped names are "
-                         f"{sorted(aliases)}, or give a 'module:function' path to your own")
+        raise ValueError(
+            f"{where}: unknown {what} {name!r}; the shipped names are "
+            f"{sorted(aliases)}, or give a 'module:function' path to your own"
+        )
     fn = load_callable(path, f"{where}: {what} {name!r}")
     try:
         built = fn(**kwargs)
     except TypeError as e:
         raise ValueError(f"{where}: bad arguments for {what} {name!r}: {e}") from e
     if not callable(built):
-        raise ValueError(f"{where}: {what} {name!r} must be a factory returning a callable, but "
-                         f"it returned {type(built).__name__}; see the reward section of "
-                         f"cookbook/rewards/README.md")
+        raise ValueError(
+            f"{where}: {what} {name!r} must be a factory returning a callable, but "
+            f"it returned {type(built).__name__}; see the reward section of "
+            f"cookbook/rewards/README.md"
+        )
     return built

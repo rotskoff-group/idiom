@@ -53,8 +53,10 @@ def test_init_from_checkpoint_roundtrip(tmp_path):
     lit = LitAutoregressive(TINY)
     ckpt = tmp_path / "pre.ckpt"
     torch.save(
-        {"state_dict": {f"model.{k}": v for k, v in lit.model.state_dict().items()},
-         "hyper_parameters": dict(lit.hparams)},
+        {
+            "state_dict": {f"model.{k}": v for k, v in lit.model.state_dict().items()},
+            "hyper_parameters": dict(lit.hparams),
+        },
         ckpt,
     )
     sft = LitAutoregressive.init_from_checkpoint(str(ckpt), lr=1e-5)
@@ -75,8 +77,14 @@ def test_build_wires_pretrain_and_sft(tmp_path):
         "model": {"n_layers": 2, "d_model": 32, "n_heads": 4, "max_seq_len": 64, "vocab_size": 27},
         "optim": {"lr": 3e-4, "warmup_steps": 1, "weight_decay": 0.1, "min_lr_ratio": 0.1},
         "trainer": {"max_steps": 5},
-        "data": {"train_fasta": str(fasta), "val_fasta": None, "prompted_prob": 1.0,
-                 "completion_only": True, "batch_size": 2, "num_workers": 0},
+        "data": {
+            "train_fasta": str(fasta),
+            "val_fasta": None,
+            "prompted_prob": 1.0,
+            "completion_only": True,
+            "batch_size": 2,
+            "num_workers": 0,
+        },
     }
     lit, dm = build(OmegaConf.create(base))
     assert lit.model.cfg.n_layers == 2 and lit.max_steps_ == 5
@@ -86,8 +94,13 @@ def test_build_wires_pretrain_and_sft(tmp_path):
 def test_trainer_fit_smoke(tmp_path):
     lit = LitAutoregressive(TINY, warmup_steps=1, max_steps=2)
     trainer = L.Trainer(
-        max_steps=2, accelerator="cpu", devices=1, logger=False,
-        enable_checkpointing=False, enable_progress_bar=False, enable_model_summary=False,
+        max_steps=2,
+        accelerator="cpu",
+        devices=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
     )
     trainer.fit(lit, train_dataloaders=_loader())
     assert trainer.global_step == 2
@@ -105,16 +118,23 @@ def test_autoreg_runner_preserves_external_launcher_for_multiple_nodes(tmp_path,
     captured = {}
     module, data = object(), object()
     monkeypatch.setattr(train_autoreg, "build", lambda cfg: (module, data))
-    monkeypatch.setattr(train_autoreg, "WandbLogger", lambda **kw: SimpleNamespace(
-        log_hyperparams=lambda cfg: None))
+    monkeypatch.setattr(
+        train_autoreg, "WandbLogger", lambda **kw: SimpleNamespace(log_hyperparams=lambda cfg: None)
+    )
 
     def trainer(**kw):
         captured.update(kw)
         return SimpleNamespace(fit=lambda lit, **args: captured.update(lit=lit, fit_args=args))
 
     monkeypatch.setattr(train_autoreg.L, "Trainer", trainer)
-    cfg = OmegaConf.create({"seed": 0, "out_dir": str(tmp_path), "data": {"val_fasta": None},
-                            "trainer": {"num_nodes": nodes, "devices": 4}})
+    cfg = OmegaConf.create(
+        {
+            "seed": 0,
+            "out_dir": str(tmp_path),
+            "data": {"val_fasta": None},
+            "trainer": {"num_nodes": nodes, "devices": 4},
+        }
+    )
     train_autoreg.run(cfg)
     if nodes == 1:
         assert len(captured["plugins"]) == 1

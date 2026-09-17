@@ -1,6 +1,6 @@
 """Reference only: Python equivalent from PyTorch's SDPA documentation.
 
-The model uses torch.nn.functional.scaled_dot_product_attention.
+The model uses torch.nn.functional.scaled_dot_product_attention. This file is ignored by ruff.
 """
 
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,

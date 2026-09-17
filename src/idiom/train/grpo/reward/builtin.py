@@ -17,7 +17,7 @@ def composition_entropy(idr: str) -> float:
         return 0.0
     n = len(idr)
     h = -sum((c / n) * math.log2(c / n) for c in Counter(idr).values())
-    return h or 0.0 # a single repeated residue gives -0.0; log it as 0.0
+    return h or 0.0  # a single repeated residue gives -0.0; log it as 0.0
 
 
 def entropy() -> Reward:

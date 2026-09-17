@@ -102,7 +102,7 @@ def parse_idr_header(header: str) -> tuple[str, int, int]:
         x, y = int(x_str), int(y_str)
     except ValueError:
         raise ValueError(f"cannot parse IDR span from {span!r} in header {header!r}") from None
-    return accession, x - 1, y # 1-indexed inclusive -> 0-indexed half-open [start, end)
+    return accession, x - 1, y  # 1-indexed inclusive -> 0-indexed half-open [start, end)
 
 
 def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterator[Record]:
@@ -137,8 +137,7 @@ def _sequence_record(seq: str, index: int) -> Record:
     """Wrap a canonical sequence as a whole-IDR record with accession "seq_{index}"."""
     if not _TOK.is_canonical(seq):
         raise ValueError(
-            f"sequence at index {index} is not canonical (only the 20 amino acids are allowed): "
-            f"{seq[:30]!r}"
+            f"sequence at index {index} is not canonical (only the 20 amino acids are allowed): {seq[:30]!r}"
         )
     return Record(f"seq_{index}", seq, 0, len(seq))
 
@@ -171,7 +170,7 @@ def to_records(inputs, *, drop_noncanonical: bool = True) -> Iterator[Record]:
         except OSError as exc:
             if not isinstance(inputs, str) or exc.errno != errno.ENAMETOOLONG:
                 raise
-            exists = False # a long bare sequence is not a filesystem component
+            exists = False  # a long bare sequence is not a filesystem component
         if exists:
             yield from read_records(p, drop_noncanonical=drop_noncanonical)
         elif isinstance(inputs, Path):

@@ -87,7 +87,7 @@ class FeatureDataset:
         f = int(feature_id)
         out = np.zeros(self.top_indices.shape[0], dtype=np.float32)
         for s, ti, tv in self._row_chunks():
-            out[s:s + ti.shape[0]] = (tv * (ti == f)).sum(axis=1)
+            out[s : s + ti.shape[0]] = (tv * (ti == f)).sum(axis=1)
         return out
 
     def feature_ranking(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

@@ -38,7 +38,10 @@ def test_store_matches_read_records(tmp_path):
     for i, rec in enumerate(expected):
         got = store[i]
         assert (got.accession, got.full_seq, got.idr_start, got.idr_end) == (
-            rec.accession, rec.full_seq, rec.idr_start, rec.idr_end
+            rec.accession,
+            rec.full_seq,
+            rec.idr_start,
+            rec.idr_end,
         )
 
 
