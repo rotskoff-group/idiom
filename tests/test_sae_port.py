@@ -6,6 +6,7 @@ from idiom.sae import SparseCoder
 
 
 def test_sparse_coder_forward_cpu():
+    """Verify sparse-coder output shapes, sparsity, and finite loss on CPU."""
     d_in, k, n_latents = 16, 4, 64
     sae = SparseCoder(d_in, num_latents=n_latents, k=k)
     x = torch.randn(32, d_in)

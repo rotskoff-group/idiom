@@ -103,6 +103,7 @@ class RecordDataset(Dataset):
             )
 
     def __len__(self) -> int:
+        """Return the number of records retained by the dataset length filter."""
         return len(self._keep) if self.store is not None else len(self.records)
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -131,6 +132,7 @@ def make_collate(pad_id: int):
     """
 
     def collate(batch):
+        """Pad token inputs, targets, and loss masks to the longest sequence in the batch."""
         inputs, targets, masks = zip(*batch)
         x = pad_sequence(inputs, batch_first=True, padding_value=pad_id)
         y = pad_sequence(targets, batch_first=True, padding_value=pad_id)

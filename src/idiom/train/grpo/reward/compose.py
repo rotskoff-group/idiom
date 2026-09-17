@@ -145,6 +145,7 @@ def build_reward(rcfg: DictConfig):
     terms = build_terms(rcfg)
 
     def score_batch(idrs: list[str], group_size: int):
+        """Combine finite weighted rewards and return per-sequence totals and score breakdowns."""
         totals = [0.0] * len(idrs)
         breakdown: list[dict[str, float]] = [{} for _ in idrs]
         for term in terms:

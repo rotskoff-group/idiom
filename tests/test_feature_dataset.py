@@ -13,6 +13,7 @@ RECS = [Record(f"r{i}", "MEDSKVDNRPQACDEFG", 3, 12) for i in range(5)]
 
 
 def _build(tmp_path):
+    """Build a small feature dataset on disk and return its path and SAE."""
     model = IDiomTransformer(TINY)
     sae = SparseCoder(TINY.d_model, num_latents=32, k=4)
     out = build_feature_dataset(model, sae, RECS, layer=1, out_dir=tmp_path / "fd", batch_size=2)
@@ -20,6 +21,7 @@ def _build(tmp_path):
 
 
 def test_build_and_read(tmp_path):
+    """Verify that a generated feature dataset can be reopened with matching metadata."""
     out, sae = _build(tmp_path)
     for f in ("top_indices.npy", "top_values.npy", "seq_idx.npy", "pos_idx.npy", "strings.json", "meta.json"):
         assert (out / f).exists()
@@ -31,6 +33,7 @@ def test_build_and_read(tmp_path):
 
 
 def test_pos_idx_aligns_to_residues(tmp_path):
+    """Verify pos idx aligns to residues."""
     out, _ = _build(tmp_path)
     fd = FeatureDataset(out, in_memory=True)
     for row in range(min(20, len(fd.seq_idx))):
@@ -39,6 +42,7 @@ def test_pos_idx_aligns_to_residues(tmp_path):
 
 
 def test_reductions_run(tmp_path):
+    """Verify that feature reductions return firing sequences and aligned traces."""
     out, _ = _build(tmp_path)
     fd = FeatureDataset(out, in_memory=True)
     feat = int(fd.top_indices[0, 0])

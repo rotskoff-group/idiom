@@ -11,6 +11,7 @@ def _index(seqs):
 
 
 def test_per_sequence_activations_regroups_rows_by_accession():
+    """Verify per sequence activations regroups rows by accession."""
     seqs = [("A", "MKV"), ("B", "GSGS")]
     per_seq = per_sequence_activations(np.zeros((7, 4)), _index(seqs))
     assert [s for s, _ in per_seq] == ["MKV", "GSGS"]
@@ -19,6 +20,7 @@ def test_per_sequence_activations_regroups_rows_by_accession():
 
 def test_per_sequence_activations_orders_rows_by_source_position():
     # Encoder rows may be shuffled; logo windows must follow source-residue order
+    """Verify per sequence activations orders rows by source position."""
     index = [
         {"accession": "A", "source_pos": 2, "residue": "V"},
         {"accession": "A", "source_pos": 0, "residue": "M"},
@@ -37,6 +39,7 @@ def _feats(n_res, peaks):
 
 
 def test_top_windows_centres_on_the_peak_and_ranks_by_activation():
+    """Verify top windows centres on the peak and ranks by activation."""
     seqs = [("A", "AAAAKWAAAA"), ("B", "CCCCPYCCCC")]  # each peaks on its 6th residue
     feats = _feats(20, {5: 1.0, 15: 9.0})  # B activates harder
     per_seq = per_sequence_activations(feats, _index(seqs))
@@ -45,6 +48,7 @@ def test_top_windows_centres_on_the_peak_and_ranks_by_activation():
 
 
 def test_top_windows_clamps_a_peak_at_the_edge():
+    """Verify top windows clamps a peak at the edge."""
     seqs = [("A", "WAAAA")]
     feats = _feats(5, {0: 1.0})
     per_seq = per_sequence_activations(feats, _index(seqs))
@@ -52,6 +56,7 @@ def test_top_windows_clamps_a_peak_at_the_edge():
 
 
 def test_top_windows_skips_short_sequences_and_silent_features():
+    """Verify top windows skips short sequences and silent features."""
     seqs = [("short", "AA"), ("silent", "CCCCCCC")]
     feats = _feats(9, {})
     per_seq = per_sequence_activations(feats, _index(seqs))

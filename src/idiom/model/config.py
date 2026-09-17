@@ -37,6 +37,7 @@ class ModelConfig:
     tie_embeddings: bool = True
 
     def __post_init__(self) -> None:
+        """Validate that attention heads divide the model width and have even dimensions for RoPE."""
         if self.d_model % self.n_heads != 0:
             raise ValueError(f"d_model ({self.d_model}) must be divisible by n_heads ({self.n_heads})")
         if self.head_dim % 2 != 0:

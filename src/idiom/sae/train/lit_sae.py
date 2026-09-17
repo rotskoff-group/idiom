@@ -12,6 +12,7 @@ def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None):
     """Build the LambdaLR multiplier: linear warmup, then optional linear decay to zero."""
 
     def fn(step: int) -> float:
+        """Return the learning-rate multiplier for linear warmup and optional linear decay."""
         if warmup_steps > 0 and step < warmup_steps:
             return step / warmup_steps
         if decay_start is not None and step >= decay_start and decay_start < total_steps:

@@ -7,6 +7,7 @@ from torch import Tensor, nn
 
 
 def _rotate_half(x: Tensor) -> Tensor:
+    """Map paired coordinates from (x1, x2) to (-x2, x1) along the last dimension."""
     x1, x2 = x.chunk(2, dim=-1)
     return torch.cat((-x2, x1), dim=-1)
 

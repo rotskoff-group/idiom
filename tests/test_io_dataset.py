@@ -19,23 +19,27 @@ ACDEFG
 
 
 def _write(tmp_path, text):
+    """Write supplied FASTA text to a temporary record file and return its path."""
     p = tmp_path / "records.fasta"
     p.write_text(text)
     return p
 
 
 def test_read_fasta_drops_noncanonical(tmp_path):
+    """Verify that FASTA loading excludes noncanonical sequences."""
     pairs = read_fasta(_write(tmp_path, FASTA))
     accs = [h.split("_IDR_")[0] for h, _ in pairs]
     assert accs == ["P00001", "P00003"]
 
 
 def test_parse_idr_header():
+    """Verify parsing of IDR header coordinates and rejection of malformed headers."""
     assert parse_idr_header("P06748_IDR_119-242") == ("P06748", 118, 242)
     assert parse_idr_header("P00001_IDR_3-6 trailing") == ("P00001", 2, 6)
 
 
 def test_read_records(tmp_path):
+    """Verify that FASTA records retain the expected IDR spans."""
     recs = list(read_records(_write(tmp_path, FASTA)))
     assert [r.accession for r in recs] == ["P00001", "P00003"]
     r = recs[0]
@@ -43,6 +47,7 @@ def test_read_records(tmp_path):
 
 
 def test_record_to_example_shift():
+    """Verify record to example shift."""
     rec = Record("P0", "MEDSKVDNRPQ", 4, 8)  # IDR = seq[4:8] = "KVDN" (half-open)
     x, y = record_to_example(rec, TOK, variant="prompted")
     assert x.shape == y.shape
@@ -52,6 +57,7 @@ def test_record_to_example_shift():
 
 
 def test_dataset_len_filter_and_getitem():
+    """Verify dataset len filter and getitem."""
     keep = max_protein_len(16)
     recs = [
         Record("ok", "MEDSKVDNRPQ", 2, 5),
@@ -65,6 +71,7 @@ def test_dataset_len_filter_and_getitem():
 
 
 def test_collate_pads():
+    """Verify collate pads."""
     recs = [Record("a", "MEDSKVDNRPQ", 2, 5), Record("b", "ACDEFGHIKL", 1, 8)]
     ds = RecordDataset(recs, TOK, max_len=64, prompted_prob=1.0)
     collate = make_collate(TOK.pad_id)
@@ -74,6 +81,7 @@ def test_collate_pads():
 
 
 def test_to_records_normalizes_inputs(tmp_path):
+    """Verify to records normalizes inputs."""
     recs = list(to_records("MEDSKVDN"))
     assert len(recs) == 1
     assert (recs[0].accession, recs[0].idr_start, recs[0].idr_end) == ("seq_0", 0, 8)
@@ -88,6 +96,7 @@ def test_to_records_normalizes_inputs(tmp_path):
 
 
 def test_to_records_noncanonical_sequence_raises():
+    """Verify normalization of supported sequence, record, and FASTA inputs."""
     import pytest
 
     with pytest.raises(ValueError, match="canonical"):
@@ -95,11 +104,13 @@ def test_to_records_noncanonical_sequence_raises():
 
 
 def test_long_bare_sequence_matches_list_input():
+    """Verify long bare sequence matches list input."""
     seq = "ACDEFGHIKLMNPQRSTVWY" * 15
     assert list(to_records(seq)) == list(to_records([seq]))
 
 
 def test_existing_sequence_named_file_keeps_path_precedence(tmp_path, monkeypatch):
+    """Verify existing sequence named file keeps path precedence."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "ACDE").write_text(">protein_IDR_1-4\nMKLV\n")
     assert list(to_records("ACDE")) == [Record("protein", "MKLV", 0, 4)]

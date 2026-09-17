@@ -101,6 +101,7 @@ class IDiomTransformer(nn.Module):
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:
+        """Initialize linear and embedding weights with small normal values and zero linear biases."""
         if isinstance(module, nn.Linear):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:

@@ -50,6 +50,7 @@ class ActivationStore(IterableDataset):
         self.region = region
 
     def _input_tokens(self, batch) -> torch.Tensor:
+        """Extract token inputs from a batch and move them to the activation-store device."""
         x = batch[0] if isinstance(batch, (tuple, list)) else batch
         return x.to(self.device)
 

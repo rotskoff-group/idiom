@@ -12,6 +12,7 @@ def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callab
     """Return a hook adding strength * direction ([d_model]) at every position."""
 
     def hook(module, inputs, output):
+        """Add the scaled steering direction to the layer output."""
         d = direction.to(output.device, output.dtype)
         return output + strength * d
 
@@ -26,6 +27,7 @@ def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> 
     u = direction / (direction.norm() + 1e-8)
 
     def hook(module, inputs, output):
+        """Add the steering direction scaled by each output vector norm."""
         d = u.to(output.device, output.dtype)
         scale = alpha * output.norm(dim=-1, keepdim=True)
         return output + scale * d
@@ -41,6 +43,7 @@ def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1
     u = direction / (direction.norm() + 1e-8)
 
     def hook(module, inputs, output):
+        """Steer each output vector and restore its original norm."""
         d = u.to(output.device, output.dtype)
         norm = output.norm(dim=-1, keepdim=True)
         steered = output + alpha * norm * d
@@ -58,6 +61,7 @@ def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 
     idx = torch.as_tensor(list(feature_idxs), dtype=torch.long)
 
     def hook(module, inputs, output):
+        """Subtract the scaled decoder contributions of selected SAE features."""
         if scale == 0:
             return output
         f = sae.encode_dense(output)  # [B, L, num_latents]
@@ -72,6 +76,7 @@ def substitute_hook(vector: torch.Tensor) -> Callable:
     """Return a hook replacing every residual vector with vector ([d_model])."""
 
     def hook(module, inputs, output):
+        """Replace each output vector with a copy of the supplied vector."""
         v = vector.to(output.device, output.dtype)
         return v.expand_as(output).clone()
 
@@ -86,6 +91,7 @@ def sae_edit_hook(sae, edit_fn: Callable[[torch.Tensor], torch.Tensor]) -> Calla
     """
 
     def hook(module, inputs, output):
+        """Encode the output, edit its dense SAE features, and decode the edited representation."""
         f = sae.encode_dense(output)
         f = edit_fn(f)
         return sae.decode_dense(f).to(output.dtype)
@@ -114,6 +120,7 @@ def clamp_features_edit(
     val = torch.as_tensor(list(values), dtype=torch.float)
 
     def edit(f: torch.Tensor) -> torch.Tensor:
+        """Copy feature activations and set selected coordinates to the requested values."""
         f = f.clone()
         f[..., idx.to(f.device)] = val.to(f.device, f.dtype)
         return f
@@ -148,6 +155,7 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
         latest: dict = {}
 
         def _capture(_module, args):
+            """Track prompt and cached decoding tokens for residue-region masking."""
             tok_in = args[0]
             prev = latest.get("tokens")
             # Prefill replaces the context; cached single-token decoding extends it
@@ -160,6 +168,7 @@ def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str =
         inner = hook
 
         def _masked(module, inputs, output):
+            """Apply the inner steering hook only at positions selected by the token-region mask."""
             edited = inner(module, inputs, output)
             tokens = latest.get("tokens")
             n = output.shape[1]

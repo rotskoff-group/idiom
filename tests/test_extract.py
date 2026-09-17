@@ -12,12 +12,14 @@ FASTA = ">A_IDR_3-9\nMEDSKVDNRPQACDEFG\n>B_IDR_2-7\nACDEFGHIKLMN\n"
 
 
 def _fasta(tmp_path):
+    """Write the extraction FASTA fixture and return its path."""
     p = tmp_path / "r.fasta"
     p.write_text(FASTA)
     return p
 
 
 def test_pool_mean_one_vector_per_sequence(tmp_path):
+    """Verify pool mean one vector per sequence."""
     model = IDiomTransformer(TINY).eval()
     emb = embed_fasta(model, _fasta(tmp_path), layers=[1], pool="mean")
     values, index = emb[1]
@@ -26,6 +28,7 @@ def test_pool_mean_one_vector_per_sequence(tmp_path):
 
 
 def test_pool_none_per_residue_with_alignment(tmp_path):
+    """Verify pool none per residue with alignment."""
     model = IDiomTransformer(TINY).eval()
     emb = embed_fasta(model, _fasta(tmp_path), layers=[0, 1], pool="none")
     values, index = emb[1]
@@ -35,6 +38,7 @@ def test_pool_none_per_residue_with_alignment(tmp_path):
 
 
 def test_write_embeddings(tmp_path):
+    """Verify write embeddings."""
     model = IDiomTransformer(TINY).eval()
     emb = embed_fasta(model, _fasta(tmp_path), layers=[1], pool="mean")
     write_embeddings(emb, tmp_path / "out")
@@ -53,6 +57,7 @@ def test_write_embeddings(tmp_path):
     ],
 )
 def test_extract_cli_loads_supported_artifacts(tmp_path, monkeypatch, artifact, flag):
+    """Verify extract CLI loads supported artifacts."""
     from dataclasses import asdict
 
     from idiom import IDiom
@@ -63,6 +68,7 @@ def test_extract_cli_loads_supported_artifacts(tmp_path, monkeypatch, artifact, 
     downloads = []
 
     def download(repo):
+        """Record the requested repository and return the local release fixture."""
         downloads.append(repo)
         return str(release)
 

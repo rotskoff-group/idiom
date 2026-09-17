@@ -57,6 +57,7 @@ class IDiomSAE:
         self.fim_mode = normalize_mode(fim_mode)
 
     def __repr__(self) -> str:
+        """Summarize the host model, training distribution, and SAE dimensions."""
         return (
             f"IDiomSAE(host={self.host_model!r}, layer={self.layer}, region={self.region!r}, "
             f"fim_mode={self.fim_mode!r}, latents={self.sae.num_latents}, "
@@ -65,14 +66,17 @@ class IDiomSAE:
 
     @property
     def model(self) -> IDiomTransformer:
+        """Return the transformer wrapped by the host IDiom instance."""
         return self.host.model
 
     @property
     def tok(self) -> Tokenizer:
+        """Return the host model tokenizer."""
         return self.host.tok
 
     @property
     def device(self) -> torch.device:
+        """Return the device used by the host model."""
         return self.host.device
 
     @classmethod
@@ -326,6 +330,7 @@ class IDiomSAE:
         prompt_tokens = self.tok.encode(prompt) if prompt else None
 
         def _batch(k: int, s: int | None) -> list[str]:
+            """Generate k steered IDRs in bounded batches using an optional shared random seed."""
             gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
             bs = 8 if batch_size is None else batch_size
             if bs <= 0:

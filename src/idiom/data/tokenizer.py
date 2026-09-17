@@ -37,6 +37,7 @@ class Tokenizer:
     """
 
     def __init__(self) -> None:
+        """Build residue and special-token lookup tables and expose their token IDs."""
         self._itos: list[str] = list(RESIDUES) + list(FIM) + list(SPECIALS)
         self._stoi: dict[str, int] = {c: i for i, c in enumerate(self._itos)}
         self._char2id: dict[str, int] = {c: self._stoi[c] for c in RESIDUES + FIM}
@@ -82,9 +83,11 @@ class Tokenizer:
         return "".join(self._itos[int(i)] for i in ids if int(i) < n_seq)
 
     def is_residue(self, i: int) -> bool:
+        """Check whether a token ID lies below the residue vocabulary boundary."""
         return int(i) < self.n_residues
 
     def is_fim(self, i: int) -> bool:
+        """Check whether a token ID belongs to the FIM marker range."""
         return self.n_residues <= int(i) < self.n_residues + self.n_fim
 
     def residue_mask(self, ids: torch.Tensor) -> torch.Tensor:

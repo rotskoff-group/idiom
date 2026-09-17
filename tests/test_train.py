@@ -17,12 +17,14 @@ RECS = [Record("a", "MEDSKVDNRPQ", 2, 6), Record("b", "ACDEFGHIKLWY", 3, 9)]
 
 
 def _loader(completion_only=False):
+    """Create padded training batches with optional completion-only loss masks."""
     ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=1.0, completion_only=completion_only)
     return DataLoader(ds, batch_size=2, collate_fn=make_collate(TOK.pad_id))
 
 
 def test_sft_mask_is_completion_only():
     # SFT: only the IDR (idr_len residues) + STOP carry loss
+    """Verify SFT mask is completion only."""
     ds = RecordDataset(RECS, TOK, prompted_prob=1.0, completion_only=True)
     _, y, mask = ds[0]
     idr_len = RECS[0].idr_end - RECS[0].idr_start
@@ -31,6 +33,7 @@ def test_sft_mask_is_completion_only():
 
 
 def test_training_step_finite_grad():
+    """Verify training step finite grad."""
     lit = LitAutoregressive(TINY, warmup_steps=1, max_steps=10)
     batch = next(iter(_loader()))
     loss = lit.training_step(batch, 0)
@@ -38,6 +41,7 @@ def test_training_step_finite_grad():
 
 
 def test_warmup_cosine_shape():
+    """Verify warmup and cosine learning-rate multipliers at key schedule steps."""
     opt = torch.optim.SGD([torch.nn.Parameter(torch.zeros(1))], lr=1.0)
     sched = warmup_cosine(opt, warmup_steps=5, max_steps=20, min_lr_ratio=0.1)
     lrs = []
@@ -50,6 +54,7 @@ def test_warmup_cosine_shape():
 
 
 def test_init_from_checkpoint_roundtrip(tmp_path):
+    """Verify init from checkpoint roundtrip."""
     lit = LitAutoregressive(TINY)
     ckpt = tmp_path / "pre.ckpt"
     torch.save(
@@ -66,6 +71,7 @@ def test_init_from_checkpoint_roundtrip(tmp_path):
 
 
 def test_build_wires_pretrain_and_sft(tmp_path):
+    """Verify build wires pretrain and SFT."""
     from omegaconf import OmegaConf
 
     from idiom.train.autoreg.train_autoreg import build
@@ -92,6 +98,7 @@ def test_build_wires_pretrain_and_sft(tmp_path):
 
 
 def test_trainer_fit_smoke(tmp_path):
+    """Verify trainer fit smoke."""
     lit = LitAutoregressive(TINY, warmup_steps=1, max_steps=2)
     trainer = L.Trainer(
         max_steps=2,
@@ -108,6 +115,7 @@ def test_trainer_fit_smoke(tmp_path):
 
 @pytest.mark.parametrize("nodes", [1, 2])
 def test_autoreg_runner_preserves_external_launcher_for_multiple_nodes(tmp_path, monkeypatch, nodes):
+    """Verify autoreg runner preserves external launcher for multiple nodes."""
     from types import SimpleNamespace
 
     from lightning.pytorch.plugins.environments import LightningEnvironment
@@ -123,6 +131,7 @@ def test_autoreg_runner_preserves_external_launcher_for_multiple_nodes(tmp_path,
     )
 
     def trainer(**kw):
+        """Capture trainer construction and fit arguments without starting training."""
         captured.update(kw)
         return SimpleNamespace(fit=lambda lit, **args: captured.update(lit=lit, fit_args=args))
 

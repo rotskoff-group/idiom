@@ -217,6 +217,7 @@ class ScorerProcess:
         written: queue.Queue = queue.Queue()
 
         def write_request():
+            """Write and flush a JSON request, reporting completion or a pipe error through the queue."""
             try:
                 proc.stdin.write(json.dumps({"sequences": seqs}, separators=(",", ":")) + "\n")
                 proc.stdin.flush()
@@ -307,6 +308,7 @@ def scorer(
     cache: dict[str, float] = {}
 
     def reward(idrs: list[str]) -> list[float]:
+        """Score uncached nonempty IDRs through the child process and restore the input order."""
         todo = list(dict.fromkeys(s for s in idrs if s and s not in cache))
         batch = {s: cache[s] for s in idrs if s and s in cache}
         if todo:

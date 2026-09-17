@@ -11,4 +11,5 @@ import torch
 
 @pytest.fixture(autouse=True)
 def _seed():
+    """Reset the PyTorch random seed before each test."""
     torch.manual_seed(0)

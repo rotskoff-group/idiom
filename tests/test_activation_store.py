@@ -18,6 +18,7 @@ RECS = [Record(f"r{i}", "MEDSKVDNRPQACDEFG", 3, 12) for i in range(8)]
 
 
 def _store(sae_batch_size=8, buffer_size=8, layer=1):
+    """Build a CPU activation store backed by a tiny transformer and padded record batches."""
     model = IDiomTransformer(TINY)
     ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=1.0)
     loader = DataLoader(ds, batch_size=4, collate_fn=make_collate(TOK.pad_id))
@@ -27,6 +28,7 @@ def _store(sae_batch_size=8, buffer_size=8, layer=1):
 
 
 def test_store_yields_dmodel_batches():
+    """Verify store yields dmodel batches."""
     store = _store(sae_batch_size=8)
     batch = next(iter(store))
     assert batch.shape == (8, TINY.d_model)
@@ -34,6 +36,7 @@ def test_store_yields_dmodel_batches():
 
 
 def test_store_exhausts_after_exact_drain_without_losing_rows():
+    """Verify store exhausts after exact drain without losing rows."""
     store = _store(sae_batch_size=8, buffer_size=8)
     expected = torch.cat([store._acts(store._input_tokens(b)) for b in store.record_loader])
     actual = torch.cat(list(store))
@@ -42,15 +45,18 @@ def test_store_exhausts_after_exact_drain_without_losing_rows():
 
 
 def test_empty_activation_stream_yields_nothing():
+    """Verify empty activation stream yields nothing."""
     store = ActivationStore(IDiomTransformer(TINY), [], 1)
     assert list(store) == []
 
 
 def test_mean_activation_shape():
+    """Verify that the mean activation has one value per model dimension."""
     assert _store().mean_activation(max_batches=2).shape == (TINY.d_model,)
 
 
 def test_region_split_idr_vs_non_idr():
+    """Verify region split IDR vs non IDR."""
     model = IDiomTransformer(TINY)
     ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=1.0)
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
@@ -63,6 +69,7 @@ def test_region_split_idr_vs_non_idr():
 
 
 def test_region_on_unprompted_132_format():
+    """Verify region on unprompted 132 format."""
     model = IDiomTransformer(TINY)
     ds = RecordDataset(RECS, TOK, max_len=64, prompted_prob=0.0)
     x = next(iter(DataLoader(ds, batch_size=8, collate_fn=make_collate(TOK.pad_id))))[0]
@@ -72,6 +79,7 @@ def test_region_on_unprompted_132_format():
 
 
 def test_lit_sae_step_on_streamed_acts():
+    """Verify lit SAE step on streamed acts."""
     store = _store(sae_batch_size=8)
     batch = next(iter(store))
     lit = LitSAE(d_in=TINY.d_model, k=4, expansion_factor=2, auxk_alpha=0.0, total_steps=10, warmup_steps=1)

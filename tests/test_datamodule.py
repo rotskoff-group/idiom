@@ -12,6 +12,7 @@ VAL = ">V_IDR_2-4\nMKLVGQHACD\n"
 
 
 def test_datamodule_batches(tmp_path):
+    """Verify that the data module produces padded training and validation batches."""
     tr = tmp_path / "train.fasta"
     va = tmp_path / "val.fasta"
     tr.write_text(TRAIN)
@@ -29,6 +30,7 @@ def test_datamodule_batches(tmp_path):
 
 
 def test_no_val_fasta_skips_validation(tmp_path):
+    """Verify no val FASTA skips validation."""
     tr = tmp_path / "train.fasta"
     tr.write_text(TRAIN)
     dm = RecordDataModule(tr, None, tokenizer=TOK, batch_size=2, max_len=64, num_workers=0)

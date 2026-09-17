@@ -107,10 +107,12 @@ class SparseCoder(nn.Module):
 
     @property
     def device(self) -> torch.device:
+        """Return the device of the encoder weights."""
         return self.encoder.weight.device
 
     @property
     def dtype(self) -> torch.dtype:
+        """Return the data type of the encoder weights."""
         return self.encoder.weight.dtype
 
     def encode(self, x: Tensor) -> EncoderOutput:

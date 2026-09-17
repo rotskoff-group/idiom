@@ -9,9 +9,11 @@ from idiom.sae import SparseCoder
 
 @pytest.fixture
 def model():
+    """Create an IDiom wrapper that fails if invalid requests reach the transformer."""
     host = IDiom(IDiomTransformer(ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=32)))
 
     def fail_forward(*args, **kwargs):
+        """Fail the test if validation allows a model forward pass."""
         pytest.fail("invalid or empty request executed the model")
 
     host.model.forward = fail_forward
@@ -50,6 +52,7 @@ def model():
     ],
 )
 def test_invalid_options_rejected_by_generation_and_steering(model, kw):
+    """Verify invalid options rejected by generation and steering."""
     sae = IDiomSAE(SparseCoder(16, num_latents=32, k=4), model, layer=0)
     for call in (model.generate_unprompted, lambda **opts: sae.steer_generate(0, 0.5, **opts)):
         with pytest.raises(ValueError):
@@ -58,17 +61,20 @@ def test_invalid_options_rejected_by_generation_and_steering(model, kw):
 
 @pytest.mark.parametrize("start,end", [(-1, 2), (2, 1), (2, 2), (0, 7), (0.5, 2), (False, 2)])
 def test_invalid_spans(model, start, end):
+    """Verify invalid spans."""
     with pytest.raises(ValueError):
         model.generate_prompted("ACDEFG", start, end)
 
 
 @pytest.mark.parametrize("seq", ["", "ACXEFG", "AC1EFG", "acdefg"])
 def test_noncanonical_sequence_rejected_even_inside_replaced_region(model, seq):
+    """Verify noncanonical sequence rejected even inside replaced region."""
     with pytest.raises(ValueError, match="canonical"):
         model.generate_prompted(seq, 0, len(seq))
 
 
 def test_zero_count_is_empty_and_full_sequence_span_is_valid(model):
+    """Verify zero count is empty and full sequence span is valid."""
     assert model.generate_unprompted(n=0) == []
     assert model.generate_prompted("ACDEFG", 0, 6, n=0) == []
     sae = IDiomSAE(SparseCoder(16, num_latents=32, k=4), model, layer=0)
@@ -77,6 +83,7 @@ def test_zero_count_is_empty_and_full_sequence_span_is_valid(model):
 
 @pytest.mark.parametrize("args", [["--min-len", "0"], ["--top-p", "nan"], ["--n", "-1"]])
 def test_cli_validates_before_loading(monkeypatch, args):
+    """Verify CLI validates before loading."""
     from idiom.api.cli import main
 
     monkeypatch.setattr(IDiom, "load", lambda *a, **kw: pytest.fail("loaded model"))
@@ -86,6 +93,7 @@ def test_cli_validates_before_loading(monkeypatch, args):
 
 
 def test_empty_fasta_still_validates_options(model, tmp_path):
+    """Verify empty FASTA still validates options."""
     fasta = tmp_path / "empty.fasta"
     fasta.write_text("")
     with pytest.raises(ValueError, match="temperature"):

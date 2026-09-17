@@ -32,6 +32,7 @@ def store_path_for(fasta: str | Path) -> Path:
 
 
 def _source_sig(fasta: str | Path) -> dict:
+    """Return the source path, file size, and modification time for cache validation."""
     st = Path(fasta).stat()
     return {
         "source": str(Path(fasta).resolve()),
@@ -127,11 +128,13 @@ class RecordStore:
         self._idr_end = self._mmap("idr_end.bin", _COORD_DTYPE, n)
 
     def _mmap(self, name: str, dtype, count: int) -> np.ndarray:
+        """Open a read-only memory-mapped array, or return an empty array when count is zero."""
         if count == 0:  # np.memmap rejects empty files
             return np.empty(0, dtype=dtype)
         return np.memmap(self.dir / name, dtype=dtype, mode="r", shape=(count,))
 
     def __len__(self) -> int:
+        """Return the number of records recorded in the store metadata."""
         return self.meta["n"]
 
     def seq_lengths(self) -> np.ndarray:
@@ -148,6 +151,7 @@ class RecordStore:
 
 
 def _valid(store_dir: Path, fasta: Path) -> bool:
+    """Check whether cached metadata matches the store version and source file statistics."""
     try:
         meta = json.loads((store_dir / _META).read_text())
     except (FileNotFoundError, NotADirectoryError, json.JSONDecodeError):

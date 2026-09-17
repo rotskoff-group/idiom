@@ -333,6 +333,7 @@ def length_match(positives, background, *, n, rng, bin_width=20):
     """
 
     def _bin(r):
+        """Map an IDR length to its integer length-matching bin."""
         return (r.idr_end - r.idr_start) // bin_width
 
     pools: dict[int, list] = {}

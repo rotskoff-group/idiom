@@ -153,6 +153,7 @@ class IDiom:
         batch_size: int | None = None,
         **kw,
     ) -> list[str]:
+        """Generate and decode IDRs in batches with optional length filtering and a draw cap."""
         validate_generation(
             n, length_range=length_range, max_oversample=max_oversample, batch_size=batch_size, **kw
         )
@@ -161,6 +162,7 @@ class IDiom:
 
         def _batch(k: int, s: int | None) -> list[str]:
             # Reuse the RNG across chunks; reproducibility depends on batch_size
+            """Generate k decoded IDRs in bounded batches using an optional shared random seed."""
             gen = torch.Generator(device=self.device).manual_seed(s) if s is not None else None
             bs = 8 if batch_size is None else batch_size
             if bs <= 0:

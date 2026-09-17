@@ -15,6 +15,7 @@ from idiom.sae.features.feature_activations import FeatureDataset
 
 
 def _parse_args() -> argparse.Namespace:
+    """Parse feature-viewer options while allowing additional Streamlit arguments."""
     p = argparse.ArgumentParser()
     p.add_argument("--features", required=True, help="Path to a feature-activation dataset dir")
     p.add_argument(
@@ -29,16 +30,19 @@ def _parse_args() -> argparse.Namespace:
 
 @st.cache_resource
 def _load(path: str, in_memory: bool) -> FeatureDataset:
+    """Load a feature dataset with optional in-memory arrays."""
     return FeatureDataset(path, in_memory=in_memory)
 
 
 @st.cache_data
 def _ranking(_fd: FeatureDataset, num_latents: int):
+    """Return cached per-feature ranking statistics for the dataset."""
     return _fd.feature_ranking()
 
 
 @st.cache_data
 def _stats(_fd: FeatureDataset, feature_id: int):
+    """Return cached activation statistics for one feature."""
     return _fd.feature_stats(feature_id)
 
 
@@ -55,6 +59,7 @@ def _shade(seq: str, acts: np.ndarray, gmax: float) -> str:
 
 
 def main() -> None:
+    """Render the Streamlit feature browser with rankings and highlighted sequence activations."""
     args = _parse_args()
     fd = _load(args.features, args.in_memory)
     n_seqs = fd.n_seqs

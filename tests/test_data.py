@@ -9,6 +9,7 @@ TOK = Tokenizer()
 
 
 def test_id_map_layout():
+    """Verify the fixed residue, FIM, and special-token ID layout."""
     assert TOK.vocab_size == len(RESIDUES) + len(FIM) + 4 == 27
     assert [TOK.encode(c)[0] for c in "AY"] == [0, 19]
     assert [TOK.encode(c)[0] for c in "123"] == [20, 21, 22]
@@ -16,11 +17,13 @@ def test_id_map_layout():
 
 
 def test_encode_decode_roundtrip():
+    """Verify that encoding and decoding preserve a sequence containing FIM markers."""
     s = "1MEDS3KVDN2RPQNYLF"
     assert TOK.decode(TOK.encode(s)) == s
 
 
 def test_predicates_and_mask():
+    """Verify residue and FIM predicates and the residue-position mask."""
     assert TOK.is_residue(0) and TOK.is_residue(19)
     assert not TOK.is_residue(20)
     assert TOK.is_fim(20) and TOK.is_fim(22) and not TOK.is_fim(19)
@@ -29,6 +32,7 @@ def test_predicates_and_mask():
 
 
 def test_canonical_and_drop_policy():
+    """Verify canonical residue validation and rejection of noncanonical input."""
     import pytest
 
     assert TOK.is_canonical("MEDSKVDN")
@@ -40,6 +44,7 @@ def test_canonical_and_drop_policy():
 
 
 def test_fim_transforms():
+    """Verify prompted and unprompted FIM ordering for a known IDR span."""
     seq, start, end = "MEDSKVDNRPQ", 4, 8  # IDR = seq[4:8] = "KVDN" (half-open)
     assert seq[start:end] == "KVDN"
     assert fim_prompted(seq, start, end) == "1MEDS3RPQ2KVDN"
@@ -47,6 +52,7 @@ def test_fim_transforms():
 
 
 def test_normalize_mode_validates():
+    """Verify normalize mode validates."""
     import pytest
 
     from idiom.data.fim import normalize_mode
@@ -59,6 +65,7 @@ def test_normalize_mode_validates():
 
 
 def test_marker_drop_alignment_prompted():
+    """Verify marker drop alignment prompted."""
     seq, start, end = "MEDSKVDNRPQ", 4, 8
     fim = fim_prompted(seq, start, end)
     residues = "".join(c for c in fim if c not in "123")
@@ -68,6 +75,7 @@ def test_marker_drop_alignment_prompted():
 
 
 def test_marker_drop_alignment_unprompted():
+    """Verify marker drop alignment unprompted."""
     seq, start, end = "MEDSKVDNRPQ", 4, 8
     pos = residue_source_positions(len(seq), start, end, "unprompted")
     assert "".join(seq[p] for p in pos) == "KVDN"

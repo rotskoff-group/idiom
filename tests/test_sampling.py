@@ -11,16 +11,19 @@ TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len
 
 
 def _model():
+    """Create a tiny transformer in evaluation mode for sampling tests."""
     return IDiomTransformer(TINY).eval()
 
 
 def test_fim_prompt():
+    """Verify the bare and flank-conditioned FIM generation prompts."""
     assert fim_prompt() == "132"
     assert fim_prompt("MEDSKVDNRPQ", 4, 8) == "1MEDS3RPQ2"
 
 
 @torch.no_grad()
 def _ref_greedy(model, prompt, n_new):
+    """Generate greedy tokens using full-prefix forward passes without a KV cache."""
     seq = torch.cat([torch.full((prompt.size(0), 1), TOK.start_id), prompt], dim=1)
     out = []
     for _ in range(n_new):
@@ -31,6 +34,7 @@ def _ref_greedy(model, prompt, n_new):
 
 
 def test_greedy_matches_uncached_reference():
+    """Verify greedy matches uncached reference."""
     model = _model()
     prompt = torch.tensor(TOK.encode("132")).unsqueeze(0)
     cached = generate(model, prompt, max_new_tokens=8, temperature=0, stop_id=None)
@@ -39,6 +43,7 @@ def test_greedy_matches_uncached_reference():
 
 
 def test_greedy_is_deterministic():
+    """Verify greedy is deterministic."""
     model = _model()
     prompt = torch.tensor(TOK.encode("132")).unsqueeze(0)
     a = generate(model, prompt, max_new_tokens=6, temperature=0, stop_id=None)
@@ -47,6 +52,7 @@ def test_greedy_is_deterministic():
 
 
 def test_sampling_in_range_and_seeded():
+    """Verify sampling in range and seeded."""
     model = _model()
     prompt = torch.tensor([TOK.encode("132"), TOK.encode("132")])
     g1 = torch.Generator().manual_seed(0)
@@ -59,6 +65,7 @@ def test_sampling_in_range_and_seeded():
 
 
 def test_context_boundary_matches_reference_without_extra_forward():
+    """Verify context boundary matches reference without extra forward."""
     import pytest
 
     model = _model()
@@ -75,6 +82,7 @@ def test_context_boundary_matches_reference_without_extra_forward():
 
 
 def test_oversized_prompt_rejected_before_forward():
+    """Verify oversized prompt rejected before forward."""
     import pytest
 
     model = _model()

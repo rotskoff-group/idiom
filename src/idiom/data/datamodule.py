@@ -67,6 +67,7 @@ class RecordDataModule(L.LightningDataModule):
 
     def _build(self, path: str | Path) -> RecordDataset:
         # Memory mapping lets DDP ranks share record data through the OS page cache
+        """Build a record dataset from a cached store using the configured FIM options."""
         return RecordDataset(
             open_or_build(path),
             self.tok,
@@ -86,6 +87,7 @@ class RecordDataModule(L.LightningDataModule):
             self.test_set = self._build(self.test_fasta)
 
     def _loader(self, dataset: RecordDataset, *, shuffle: bool) -> DataLoader:
+        """Create a padded data loader, dropping incomplete batches when shuffling."""
         return DataLoader(
             dataset,
             batch_size=self.batch_size,

@@ -26,6 +26,7 @@ def _save_ckpt(tmp_path):
 
 
 def test_sae_build_wires_and_streams(tmp_path):
+    """Verify SAE build wires and streams."""
     _, ckpt = _save_ckpt(tmp_path)
     fasta = tmp_path / "r.fasta"
     fasta.write_text(">A_IDR_3-9\nMEDSKVDNRPQACDEFG\n>B_IDR_2-7\nACDEFGHIKLMN\n")

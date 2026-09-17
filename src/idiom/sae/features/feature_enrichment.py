@@ -30,6 +30,7 @@ VALIDATION_FASTA = "idiom-db/idiom-db-v1_validation.fasta"
 
 
 def _positive_int(value: str) -> int:
+    """Parse a positive integer or raise an argparse validation error."""
     number = int(value)
     if number < 1:
         raise argparse.ArgumentTypeError("must be a positive integer")
@@ -80,6 +81,7 @@ def main(argv: list[str] | None = None) -> None:
     max_length = sae.model.cfg.max_seq_len - 4
 
     def usable(path):
+        """Load nonempty IDRs that fit the context limit and report the retained count."""
         records = load_sequences(path)
         kept = [r for r in records if 0 < r.idr_end - r.idr_start <= max_length]
         print(f"{path}: kept {len(kept)} of {len(records)} canonical records within context")

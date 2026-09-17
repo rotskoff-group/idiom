@@ -12,6 +12,7 @@ from idiom.sae.features.feature_enrichment import main
 
 @pytest.fixture
 def inputs(tmp_path, monkeypatch):
+    """Create enrichment FASTA inputs and substitute a deterministic SAE fixture."""
     positive = tmp_path / "positive.fasta"
     background = tmp_path / "background.fasta"
     positive.write_text("".join(f">p{i}\n{'A' * 15}\n" for i in range(30)))
@@ -27,6 +28,7 @@ def inputs(tmp_path, monkeypatch):
         sae = SimpleNamespace(num_latents=3)
 
         def build_feature_dataset(self, records, out, batch_size):
+            """Write deterministic feature arrays and metadata while recording the input records."""
             seen.append(records)
             out.mkdir()
             feature = 0 if records[0].accession.startswith("p") else 1
@@ -43,10 +45,12 @@ def inputs(tmp_path, monkeypatch):
 
 
 def test_cli_downloads_background_and_exports(tmp_path, monkeypatch, inputs):
+    """Verify CLI downloads background and exports."""
     positive, background, seen = inputs
     downloads = []
 
     def download(*args, **kwargs):
+        """Record download arguments and return the local background FASTA."""
         downloads.append((args, kwargs))
         return str(background)
 
@@ -68,6 +72,7 @@ def test_cli_downloads_background_and_exports(tmp_path, monkeypatch, inputs):
 
 
 def test_cli_local_background_no_signature_and_no_stale_rerun(tmp_path, monkeypatch, inputs):
+    """Verify CLI local background no signature and no stale rerun."""
     positive, background, _ = inputs
     monkeypatch.setattr(
         "huggingface_hub.hf_hub_download", lambda *a, **kw: pytest.fail("unexpected download")
@@ -97,6 +102,7 @@ def test_cli_local_background_no_signature_and_no_stale_rerun(tmp_path, monkeypa
 
 
 def test_cli_rejects_empty_background(tmp_path, inputs):
+    """Verify CLI rejects empty background."""
     positive, _, seen = inputs
     with pytest.raises(SystemExit):
         main(

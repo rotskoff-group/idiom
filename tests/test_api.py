@@ -10,10 +10,12 @@ TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len
 
 
 def _idiom():
+    """Wrap a tiny transformer in the public IDiom API."""
     return IDiom(IDiomTransformer(TINY))
 
 
 def test_save_and_from_pretrained_roundtrip(tmp_path):
+    """Verify that saving and reloading preserves model configuration and weights."""
     m = _idiom()
     m.save_pretrained(tmp_path / "rel")
     assert (tmp_path / "rel" / "config.json").exists()
@@ -25,12 +27,14 @@ def test_save_and_from_pretrained_roundtrip(tmp_path):
 
 
 def test_generate_unprompted_returns_residue_strings():
+    """Verify generate unprompted returns residue strings."""
     seqs = _idiom().generate_unprompted(n=3, max_new_tokens=8, temperature=0, seed=0)
     assert len(seqs) == 3
     assert all(set(s) <= set(RESIDUES) for s in seqs)
 
 
 def test_generate_prompted_and_fasta(tmp_path):
+    """Verify generate prompted and FASTA."""
     m = _idiom()
     seqs = m.generate_prompted("MEDSKVDNRPQ", 4, 8, n=2, max_new_tokens=6, temperature=0)
     assert len(seqs) == 2
@@ -46,6 +50,7 @@ def test_generate_prompted_and_fasta(tmp_path):
 
 
 def test_generate_cli(tmp_path):
+    """Verify that the generation CLI writes the requested FASTA outputs."""
     from idiom.api import main
 
     _idiom().save_pretrained(tmp_path / "rel")
@@ -75,6 +80,7 @@ def test_generate_cli(tmp_path):
 
 
 def test_embed(tmp_path):
+    """Verify pooled and per-residue embedding shapes through the public API."""
     fa = tmp_path / "p.fasta"
     fa.write_text(">A_IDR_3-9\nMEDSKVDNRPQACDEFG\n")
     emb = _idiom().embed(fa, layers=[1], pool="mean")
@@ -83,6 +89,7 @@ def test_embed(tmp_path):
 
 
 def test_embed_plain_string_and_list():
+    """Verify embed plain string and list."""
     m = _idiom()
     values, index = m.embed("MEDSKVDNRPQACDEFG", layers=[1], pool="mean")[1]
     assert values.shape == (1, TINY.d_model) and index[0]["accession"] == "seq_0"
@@ -91,6 +98,7 @@ def test_embed_plain_string_and_list():
 
 
 def test_embed_noncanonical_raises():
+    """Verify embed noncanonical raises."""
     import pytest
 
     with pytest.raises(ValueError, match="canonical"):
@@ -98,6 +106,7 @@ def test_embed_noncanonical_raises():
 
 
 def test_embed_long_bare_sequence():
+    """Verify embed long bare sequence."""
     cfg = ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=512)
     model = IDiom(IDiomTransformer(cfg))
     seq = "ACDEFGHIKLMNPQRSTVWY" * 15
@@ -107,6 +116,7 @@ def test_embed_long_bare_sequence():
 
 
 def _idiom_sae(host, *, region="all", fim_mode="prompted"):
+    """Attach a small SAE to the supplied host with the requested training distribution."""
     from idiom.sae import SparseCoder
 
     sae = SparseCoder(TINY.d_model, num_latents=TINY.d_model * 4, k=8)
@@ -114,6 +124,7 @@ def _idiom_sae(host, *, region="all", fim_mode="prompted"):
 
 
 def test_idiomsae_save_and_from_pretrained_roundtrip(tmp_path):
+    """Verify IDiomSAE save and from pretrained roundtrip."""
     host = _idiom()
     sae = _idiom_sae(host)
     host.save_pretrained(tmp_path / "rel")
@@ -129,6 +140,7 @@ def test_idiomsae_save_and_from_pretrained_roundtrip(tmp_path):
 
 
 def test_idiomsae_encode_and_steer(tmp_path):
+    """Verify IDiomSAE encode and steer."""
     host = _idiom()
     sae = _idiom_sae(host)
     fa = tmp_path / "p.fasta"
@@ -140,6 +152,7 @@ def test_idiomsae_encode_and_steer(tmp_path):
 
 
 def test_idiomsae_encode_rejects_a_region_an_unprompted_sae_cannot_produce():
+    """Verify IDiomSAE encode rejects a region an unprompted SAE cannot produce."""
     import pytest
 
     sae = _idiom_sae(_idiom(), fim_mode="unprompted")
@@ -151,17 +164,20 @@ def test_idiomsae_encode_rejects_a_region_an_unprompted_sae_cannot_produce():
 
 
 def test_idiomsae_repr_shows_the_training_distribution():
+    """Verify IDiomSAE repr shows the training distribution."""
     r = repr(_idiom_sae(_idiom(), region="idr", fim_mode="unprompted"))
     assert "region='idr'" in r and "fim_mode='unprompted'" in r and "layer=1" in r
 
 
 def test_idiomsae_encode_plain_strings():
+    """Verify IDiomSAE encode plain strings."""
     sae = _idiom_sae(_idiom())
     feats, accs = sae.encode(["MEDSKVDN", "ACDEFGHIKL"], pool="mean")
     assert feats.shape == (2, sae.sae.num_latents) and accs == ["seq_0", "seq_1"]
 
 
 def test_sae_keeps_multiple_idrs_of_one_protein_separate(tmp_path):
+    """Verify SAE keeps multiple IDRs of one protein separate."""
     import numpy as np
 
     from idiom.data.io import read_records
@@ -185,6 +201,7 @@ def test_sae_keeps_multiple_idrs_of_one_protein_separate(tmp_path):
 
 
 def test_idiomsae_save_records_published_host_model(tmp_path):
+    """Verify IDiomSAE save records published host model."""
     import json
 
     host = _idiom()
@@ -196,6 +213,7 @@ def test_idiomsae_save_records_published_host_model(tmp_path):
 
 
 def test_prompted_defaults_and_fasta(tmp_path):
+    """Verify prompted defaults and FASTA."""
     import pytest
 
     model = _idiom()
@@ -209,6 +227,7 @@ def test_prompted_defaults_and_fasta(tmp_path):
 
 
 def test_generation_batches_are_bounded_and_repeatable():
+    """Verify generation batches are bounded and repeatable."""
     model = _idiom()
     sae = _idiom_sae(model)
     for generate in (model.generate_unprompted, lambda **kw: sae.steer_generate(0, 0.5, **kw)):

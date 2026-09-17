@@ -4,6 +4,7 @@ from idiom.utils.device import is_cpu_only, resolve_device
 
 
 def test_package_skeleton_imports():
+    """Verify that the package and its public components import successfully."""
     import idiom.data
     import idiom.model
     import idiom.sae
@@ -13,8 +14,10 @@ def test_package_skeleton_imports():
 
 
 def test_explicit_cpu():
+    """Verify that explicit CPU selection overrides automatic device choice."""
     assert resolve_device("cpu").type == "cpu"
 
 
 def test_cpu_first_default():
+    """Verify the default CPU device used by the API wrapper."""
     assert is_cpu_only()

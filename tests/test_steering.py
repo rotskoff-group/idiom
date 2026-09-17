@@ -16,6 +16,7 @@ RECS = [Record(f"r{i}", "MEDSKVDNRPQACDEFG", 3, 12) for i in range(4)]
 
 
 def test_steering_context_only_edits_residues():
+    """Verify steering context only edits residues."""
     model = IDiomTransformer(TINY).eval()
     tokens = torch.tensor([[TOK.start_id, *TOK.encode("1AC3D2EF")]])
     base = model(tokens)
@@ -27,6 +28,7 @@ def test_steering_context_only_edits_residues():
 
 
 def test_steer_generation_runs():
+    """Verify steer generation runs."""
     model = IDiomTransformer(TINY).eval()
     sae = SparseCoder(TINY.d_model, num_latents=32, k=4)
     spec = SteeringSpec(layer=1, feature_idx=3, strength=2.0, mode="add_direction")
@@ -36,6 +38,7 @@ def test_steer_generation_runs():
 
 @pytest.mark.parametrize("strength", [0.0, 0.5, 1.0, 2.0, -1.0])
 def test_ablation_respects_scalar_strength(strength):
+    """Verify ablation respects scalar strength."""
     sae = SparseCoder(4, num_latents=8, k=1)
     with torch.no_grad():
         sae.encoder.weight.zero_()
@@ -51,6 +54,7 @@ def test_ablation_respects_scalar_strength(strength):
 
 
 def test_zero_ablation_generation_matches_unsteered_baseline():
+    """Verify zero ablation generation matches unsteered baseline."""
     from idiom import IDiom, IDiomSAE
 
     host = IDiom(IDiomTransformer(TINY))

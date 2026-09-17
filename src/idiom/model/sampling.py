@@ -13,6 +13,7 @@ from idiom.utils.validation import integer_at_least, validate_sampling
 
 
 def _filter_top_k(logits: Tensor, k: int | None) -> Tensor:
+    """Mask logits below the kth-largest value, retaining ties at the cutoff."""
     if not k or k >= logits.size(-1):
         return logits
     kth = logits.topk(k, dim=-1).values[..., -1, None]
@@ -20,6 +21,7 @@ def _filter_top_k(logits: Tensor, k: int | None) -> Tensor:
 
 
 def _filter_top_p(logits: Tensor, p: float | None) -> Tensor:
+    """Keep the smallest descending-probability prefix whose cumulative mass reaches p."""
     if p is None or p >= 1.0:
         return logits
     sorted_logits, sorted_idx = torch.sort(logits, descending=True, dim=-1)

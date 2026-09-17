@@ -5,6 +5,7 @@ The model uses torch.nn.functional.scaled_dot_product_attention. This file is ig
 
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
         is_causal=False, scale=None, enable_gqa=False) -> torch.Tensor:
+    """Compute reference scaled dot-product attention with optional masking, dropout, and GQA."""
     L, S = query.size(-2), key.size(-2)
     scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
     attn_bias = torch.zeros(L, S, dtype=query.dtype, device=query.device)

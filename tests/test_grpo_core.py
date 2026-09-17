@@ -11,6 +11,7 @@ from tests.reward_fixtures import fraction_alanine, fraction_proline
 
 
 def test_rewards():
+    """Verify residue fractions, entropy, length, and quadratic reward values."""
     assert fraction_proline()(["PPAP", ""]) == [0.75, 0.0]
     assert fraction_alanine()(["AAAA", "AC"]) == [1.0, 0.5]
     assert entropy()(["AAAA"]) == [0.0]
@@ -21,6 +22,7 @@ def test_rewards():
 
 
 def test_group_advantages():
+    """Verify group centering and optional unit-variance normalization of advantages."""
     rewards = torch.tensor([1.0, 3.0, 0.0, 2.0])  # two groups of 2
     adv = group_advantages(rewards, group_size=2, normalize=False)
     assert adv.tolist() == [-1.0, 1.0, -1.0, 1.0]
@@ -30,6 +32,7 @@ def test_group_advantages():
 
 
 def test_grpo_loss_grad_flows():
+    """Verify GRPO loss grad flows."""
     B, T = 2, 4
     policy = torch.randn(B, T, requires_grad=True)
     ref = torch.randn(B, T)
@@ -42,6 +45,7 @@ def test_grpo_loss_grad_flows():
 
 
 def test_sequence_logprobs_shape_and_values():
+    """Verify sequence logprobs shape and values."""
     cfg = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len=16)
     model = IDiomTransformer(cfg).eval()
     tokens = torch.randint(0, cfg.vocab_size, (1, 5))
@@ -53,6 +57,7 @@ def test_sequence_logprobs_shape_and_values():
 
 
 def test_sequence_logprobs_at_context_boundary_matches_prefix_scoring():
+    """Verify sequence logprobs at context boundary matches prefix scoring."""
     cfg = ModelConfig(n_layers=1, d_model=16, n_heads=2, max_seq_len=8)
     model = IDiomTransformer(cfg).eval()
     tokens = torch.randint(0, cfg.vocab_size, (2, cfg.max_seq_len + 1))

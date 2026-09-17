@@ -30,6 +30,7 @@ def warmup_cosine(
     """
 
     def lr_factor(step: int) -> float:
+        """Return the learning-rate multiplier for warmup followed by bounded cosine decay."""
         if step < warmup_steps:
             return (step + 1) / max(1, warmup_steps)
         progress = (step - warmup_steps) / max(1, max_steps - warmup_steps)

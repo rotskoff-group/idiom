@@ -10,10 +10,12 @@ TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=32, n_heads=4, max_seq_len
 
 
 def _tiny_model():
+    """Create a tiny transformer in evaluation mode."""
     return IDiomTransformer(TINY).eval()
 
 
 def test_rmsnorm_unit_scale():
+    """Verify RMSNorm unit scale."""
     norm = RMSNorm(8)
     x = torch.randn(4, 8) * 5.0
     out = norm(x)  # weight initialized to ones -> output rows have RMS ~1
@@ -22,6 +24,7 @@ def test_rmsnorm_unit_scale():
 
 
 def test_rope_is_norm_preserving():
+    """Verify RoPE is norm preserving."""
     rope = Rope(head_dim=8, max_seq_len=16)
     q = torch.randn(1, 2, 5, 8)
     k = torch.randn(1, 2, 5, 8)
@@ -32,6 +35,7 @@ def test_rope_is_norm_preserving():
 
 
 def test_forward_shapes_and_tied_embeddings():
+    """Verify forward shapes and tied embeddings."""
     model = _tiny_model()
     tokens = torch.randint(0, TINY.vocab_size, (2, 6))
     logits = model(tokens)
@@ -43,6 +47,7 @@ def test_forward_shapes_and_tied_embeddings():
 
 @torch.no_grad()
 def test_kv_cache_matches_full_forward():
+    """Verify KV cache matches full forward."""
     model = _tiny_model()
     tokens = torch.randint(0, TINY.vocab_size, (1, 7))
 

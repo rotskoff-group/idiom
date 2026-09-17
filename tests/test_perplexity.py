@@ -10,12 +10,14 @@ from idiom.utils.perplexity import perplexity
 @pytest.mark.parametrize("prompted_prob", [0.0, 1.0])
 @pytest.mark.parametrize("batch_size", [1, 2])
 def test_completion_perplexity_excludes_context_and_padding(tmp_path, prompted_prob, batch_size):
+    """Verify completion perplexity excludes context and padding."""
     fasta = tmp_path / "records.fasta"
     fasta.write_text(">first_IDR_3-4\nCCAACC\n>second_IDR_4-6\nCCCAAACC\n")
     tok = Tokenizer()
 
     class ConstantModel(torch.nn.Module):
         def forward(self, x):
+            """Return fixed logits favoring alanine and STOP for perplexity checks."""
             logits = torch.zeros(*x.shape, tok.vocab_size)
             logits[..., tok.encode("A")[0]] = 2.0
             logits[..., tok.stop_id] = 2.0

@@ -20,6 +20,7 @@ from workflow_utils import check_context, isolated, load_inputs, summaries, writ
 
 
 def test_input_audit_and_roundtrip(tmp_path):
+    """Verify input auditing and sequence-file round trips in notebook helpers."""
     fasta = tmp_path / "input.fasta"
     fasta.write_text(
         ">same_IDR_2-4\nACDEFG\n>same_IDR_3-5\nACDEFG\n"
@@ -58,6 +59,7 @@ def test_input_audit_and_roundtrip(tmp_path):
     ],
 )
 def test_notebook_execution(name, tmp_path, monkeypatch):
+    """Execute cookbook notebooks with local fixtures and verify their outputs."""
     import matplotlib
 
     matplotlib.use("Agg")

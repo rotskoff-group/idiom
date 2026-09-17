@@ -36,6 +36,7 @@ class Record:
 
 
 def _iter_fasta_raw(path: str | Path) -> Iterator[tuple[str, str]]:
+    """Yield FASTA headers and joined sequence lines without validating residues or spans."""
     header: str | None = None
     parts: list[str] = []
     with Path(path).open() as fh:

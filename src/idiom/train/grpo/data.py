@@ -24,9 +24,11 @@ class PromptDataset(Dataset):
         self.encoded = [torch.tensor(self.tok.encode(p), dtype=torch.long) for p in prompts]
 
     def __len__(self) -> int:
+        """Return the number of encoded prompts."""
         return len(self.encoded)
 
     def __getitem__(self, i: int) -> torch.Tensor:
+        """Return the encoded prompt at the requested index."""
         return self.encoded[i]
 
 

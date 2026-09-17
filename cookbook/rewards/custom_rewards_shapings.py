@@ -23,6 +23,7 @@ def net_charge_fraction() -> Reward:
 
     # EDIT: replace this single-sequence calculation with your own measurement
     def score(idr: str) -> float:
+        """Return the absolute charge imbalance per residue, or zero for an empty IDR."""
         if not idr:  # In-process rewards must handle empty sequences themselves
             return 0.0
         pos = sum(idr.count(a) for a in "KR")
