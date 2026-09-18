@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
+from idiom.data.records import Record
 from idiom.sae.features.enrichment import (
     FDR_ALPHA,
     LOG2OR_FLOOR,
@@ -80,7 +81,7 @@ def main(argv: list[str] | None = None) -> None:
         p.error("enrichment requires an SAE trained on unprompted IDRs")
     max_length = sae.model.cfg.max_seq_len - 4
 
-    def usable(path):
+    def usable(path) -> list[Record]:
         """Load nonempty IDRs that fit the context limit and report the retained count."""
         records = load_sequences(path)
         kept = [r for r in records if 0 < r.idr_end - r.idr_start <= max_length]

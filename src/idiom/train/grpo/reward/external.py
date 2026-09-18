@@ -220,7 +220,7 @@ class ScorerProcess:
         deadline = time.monotonic() + self.timeout
         written: queue.Queue = queue.Queue()
 
-        def write_request():
+        def write_request() -> None:
             """Write and flush a JSON request, reporting completion or a pipe error through the queue."""
             try:
                 proc.stdin.write(json.dumps({"sequences": seqs}, separators=(",", ":")) + "\n")

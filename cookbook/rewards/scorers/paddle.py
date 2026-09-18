@@ -10,9 +10,12 @@ PADDLE_STRIDE sets the window stride (default 5).
 Run with uv run --script; model files are cloned on first use.
 """
 
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from _scorer_protocol import serve
@@ -54,7 +57,7 @@ def _windows(seq: str) -> list[str]:
     return [seq[s : s + WINDOW] for s in starts]
 
 
-def build():
+def build() -> Callable[[list[str]], list[float]]:
     """Load PADDLE and return a callable scoring the strongest window in each sequence.
 
     Clone the checkout if needed, prepend it to sys.path, and change the process
@@ -68,7 +71,7 @@ def build():
 
     model = paddle_module.PADDLE_noSS()
 
-    def score_batch(sequences):
+    def score_batch(sequences) -> list[float]:
         """Return the strongest 53-residue window Z-score per sequence."""
         flat, owner = [], []
         for i, seq in enumerate(sequences):

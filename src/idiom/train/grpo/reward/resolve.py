@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 from collections.abc import Callable
+from types import ModuleType
 
 # Batch rewards return one raw score per IDR in input order
 Reward = Callable[[list[str]], list[float]]
@@ -34,7 +35,7 @@ def batchify(score: Callable[[str], float]) -> Reward:
     return lambda idrs: [float(score(idr)) for idr in idrs]
 
 
-def import_module(spec: str):
+def import_module(spec: str) -> ModuleType:
     """Import and return a module by dotted name or .py file path."""
     if spec.endswith(".py"):
         mod_spec = importlib.util.spec_from_file_location("idiom_reward_module", spec)
@@ -44,7 +45,7 @@ def import_module(spec: str):
     return importlib.import_module(spec)
 
 
-def load_callable(path: str, where: str = "spec"):
+def load_callable(path: str, where: str = "spec") -> Callable[..., object]:
     """Resolve a "module:function" path to a callable.
 
     Args:
@@ -100,7 +101,7 @@ def spec_name(spec, where: str) -> tuple[str, dict]:
     return name, kwargs
 
 
-def build_from_spec(spec, aliases: dict[str, str], what: str, where: str):
+def build_from_spec(spec, aliases: dict[str, str], what: str, where: str) -> Callable[..., object]:
     """Build a reward or shaping function from a factory spec.
 
     Args:

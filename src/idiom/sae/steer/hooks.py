@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 
 import torch
+
+from idiom.model.transformer import IDiomTransformer
 
 
 def add_direction_hook(direction: torch.Tensor, strength: float = 1.0) -> Callable:
     """Return a hook adding strength * direction ([d_model]) at every position."""
 
-    def hook(module, inputs, output):
+    def hook(module, inputs, output) -> torch.Tensor:
         """Add the scaled steering direction to the layer output."""
         d = direction.to(output.device, output.dtype)
         return output + strength * d
@@ -26,7 +28,7 @@ def add_relative_direction_hook(direction: torch.Tensor, alpha: float = 1.0) -> 
     """
     u = direction / (direction.norm() + 1e-8)
 
-    def hook(module, inputs, output):
+    def hook(module, inputs, output) -> torch.Tensor:
         """Add the steering direction scaled by each output vector norm."""
         d = u.to(output.device, output.dtype)
         scale = alpha * output.norm(dim=-1, keepdim=True)
@@ -42,7 +44,7 @@ def add_relative_renorm_direction_hook(direction: torch.Tensor, alpha: float = 1
     """
     u = direction / (direction.norm() + 1e-8)
 
-    def hook(module, inputs, output):
+    def hook(module, inputs, output) -> torch.Tensor:
         """Steer each output vector and restore its original norm."""
         d = u.to(output.device, output.dtype)
         norm = output.norm(dim=-1, keepdim=True)
@@ -60,7 +62,7 @@ def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 
     """
     idx = torch.as_tensor(list(feature_idxs), dtype=torch.long)
 
-    def hook(module, inputs, output):
+    def hook(module, inputs, output) -> torch.Tensor:
         """Subtract the scaled decoder contributions of selected SAE features."""
         if scale == 0:
             return output
@@ -75,7 +77,7 @@ def subtract_contribution_hook(sae, feature_idxs: Sequence[int], scale: float = 
 def substitute_hook(vector: torch.Tensor) -> Callable:
     """Return a hook replacing every residual vector with vector ([d_model])."""
 
-    def hook(module, inputs, output):
+    def hook(module, inputs, output) -> torch.Tensor:
         """Replace each output vector with a copy of the supplied vector."""
         v = vector.to(output.device, output.dtype)
         return v.expand_as(output).clone()
@@ -90,7 +92,7 @@ def sae_edit_hook(sae, edit_fn: Callable[[torch.Tensor], torch.Tensor]) -> Calla
     SAE reconstruction introduces reconstruction error.
     """
 
-    def hook(module, inputs, output):
+    def hook(module, inputs, output) -> torch.Tensor:
         """Encode the output, edit its dense SAE features, and decode the edited representation."""
         f = sae.encode_dense(output)
         f = edit_fn(f)
@@ -129,7 +131,9 @@ def clamp_features_edit(
 
 
 @contextmanager
-def steering(model, layer: int, hook: Callable, *, tokenizer=None, region: str = "all"):
+def steering(
+    model, layer: int, hook: Callable, *, tokenizer=None, region: str = "all"
+) -> Iterator[IDiomTransformer]:
     """Temporarily install a hook on model.blocks[layer]; remove hooks on exit.
 
     With a tokenizer, mask edits by region, tracking tokens during cached decoding.

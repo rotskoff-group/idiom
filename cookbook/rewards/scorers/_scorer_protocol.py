@@ -6,7 +6,7 @@ import os
 import sys
 
 
-def serve(build):
+def serve(build) -> None:
     """Serve newline-delimited JSON requests until stdin closes.
 
     Requests contain {"sequences": [str, ...]}. Responses contain either

@@ -65,7 +65,7 @@ class SparseCoder(nn.Module):
         normalize_decoder: bool = True,
         device: str | torch.device | None = None,
         dtype: torch.dtype | None = None,
-    ):
+    ) -> None:
         """Initialize the decoder from encoder weights, optionally normalizing its rows.
 
         Args:
@@ -206,14 +206,14 @@ class SparseCoder(nn.Module):
         return ForwardOutput(sae_out, top_acts, top_indices, fvu, auxk_loss, multi_topk_fvu)
 
     @torch.no_grad()
-    def set_decoder_norm_to_unit_norm(self):
+    def set_decoder_norm_to_unit_norm(self) -> None:
         """Rescale every decoder row to unit norm, in place."""
         eps = torch.finfo(self.W_dec.dtype).eps
         norm = self.W_dec.data.norm(dim=1, keepdim=True)
         self.W_dec.data /= norm + eps
 
     @torch.no_grad()
-    def remove_gradient_parallel_to_decoder_directions(self):
+    def remove_gradient_parallel_to_decoder_directions(self) -> None:
         """Subtract from the decoder gradient its component parallel to each decoder row, in place.
 
         Raises:

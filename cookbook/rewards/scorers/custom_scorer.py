@@ -20,12 +20,15 @@ a scorer GPU when needed. Test from the IDiom environment before training:
     python -m idiom.train.grpo.reward.external --cmd "uv run --script /path/to/my_scorer.py"
 """
 
+from __future__ import annotations
+
 import argparse
+from collections.abc import Callable
 
 from _scorer_protocol import serve  # Keep the helper beside this file; it handles JSON communication
 
 
-def build():
+def build() -> Callable[[list[str]], list[float]]:
     """Load dependencies once and return a batch scorer; serve() redirects library output to stderr."""
     # EDIT: expose the settings your scorer needs as command-line arguments
     ap = argparse.ArgumentParser()
@@ -37,7 +40,7 @@ def build():
     # EDIT: import dependencies and load model weights here, once per process rather than per batch
     from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
-    def score_batch(sequences):
+    def score_batch(sequences) -> list[float]:
         """Return one property value per non-empty sequence; let serve() report errors."""
         # EDIT: replace this calculation; batch model predictions here if supported
         # Inputs are non-empty; return one finite numeric score per sequence in the same order

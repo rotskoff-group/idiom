@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import lightning as L
 import torch as t
+from lightning.pytorch.utilities.types import OptimizerLRScheduler
 
 from idiom.sae.model.sparse_coder import SparseCoder
 
 
-def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None):
+def _lr_lambda(total_steps: int, warmup_steps: int, decay_start: int | None) -> Callable[[int], float]:
     """Build a warmup/decay multiplier for steps from zero through total_steps.
 
     Optional linear decay reaches zero at total_steps and is not clamped afterward.
@@ -48,7 +51,7 @@ class LitSAE(L.LightningModule):
         auxk_alpha: float = 1 / 32,
         dead_feature_tokens: int = 10_000_000,
         grad_clip_norm: float | None = None,
-    ):
+    ) -> None:
         """Initialize the SAE and training settings.
 
         Args:
@@ -94,16 +97,16 @@ class LitSAE(L.LightningModule):
         )
 
     @t.no_grad()
-    def init_b_dec_from_mean(self, mean_activation: t.Tensor):
+    def init_b_dec_from_mean(self, mean_activation: t.Tensor) -> None:
         """Set the decoder bias to mean_activation ([d_in]), matching its device and dtype."""
         self.sae.b_dec.data = mean_activation.to(self.sae.b_dec.device, self.sae.b_dec.dtype)
 
-    def on_train_batch_start(self, *args, **kwargs):
+    def on_train_batch_start(self, *args, **kwargs) -> None:
         """Renormalize decoder rows before each batch when decoder normalization is enabled."""
         if self.sae.normalize_decoder:
             self.sae.set_decoder_norm_to_unit_norm()
 
-    def training_step(self, batch: t.Tensor, batch_idx: int):
+    def training_step(self, batch: t.Tensor, batch_idx: int) -> t.Tensor:
         """Compute SAE loss and update dead-latent counters.
 
         Args:
@@ -142,7 +145,9 @@ class LitSAE(L.LightningModule):
         )
         return loss
 
-    def configure_gradient_clipping(self, optimizer, gradient_clip_val=None, gradient_clip_algorithm=None):
+    def configure_gradient_clipping(
+        self, optimizer, gradient_clip_val=None, gradient_clip_algorithm=None
+    ) -> None:
         """Project existing decoder gradients when normalization is enabled, then clip if configured.
 
         Lightning's gradient_clip_val and gradient_clip_algorithm are ignored.
@@ -157,7 +162,7 @@ class LitSAE(L.LightningModule):
             )
 
     @t.no_grad()
-    def validation_step(self, batch: t.Tensor, batch_idx: int):
+    def validation_step(self, batch: t.Tensor, batch_idx: int) -> None:
         """Log held-out FVU, explained variance, and L0 for batch [n_tokens, d_in]."""
         out = self.sae(batch)
         l0 = (out.latent_acts > 0).float().sum(-1).mean()
@@ -172,7 +177,7 @@ class LitSAE(L.LightningModule):
             batch_size=batch.size(0),
         )
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> OptimizerLRScheduler:
         """Build Adam plus the per-step warmup / linear-decay schedule."""
         opt = t.optim.Adam(self.sae.parameters(), lr=self.lr, betas=(0.9, 0.999))
         sched = t.optim.lr_scheduler.LambdaLR(

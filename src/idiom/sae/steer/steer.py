@@ -118,7 +118,7 @@ def steer_generation(
     region: str = "all",
     tokenizer=None,
     generator=None,
-):
+) -> torch.Tensor:
     """Sample with region-masked steering on spec.layer, updating the mask at each step.
 
     Args:

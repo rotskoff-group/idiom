@@ -18,7 +18,7 @@ DEMO = [
 ]
 
 
-def load_inputs(path, mode="idr", limit=32):
+def load_inputs(path, mode="idr", limit=32) -> tuple[list[Record], pd.DataFrame]:
     """Load valid FASTA records and audit every input entry.
 
     Assign unique record_<row> IDs, preserving original accessions in the audit.
@@ -80,17 +80,17 @@ def load_inputs(path, mode="idr", limit=32):
     return records, audit
 
 
-def idr_sequence(record):
+def idr_sequence(record) -> str:
     """Extract the annotated IDR."""
     return record.full_seq[record.idr_start : record.idr_end]
 
 
-def isolated(records):
+def isolated(records) -> list[Record]:
     """Remove flanks while preserving unique record IDs."""
     return [Record(r.accession, idr_sequence(r), 0, len(idr_sequence(r))) for r in records]
 
 
-def check_context(records, max_length, include_flanks=False):
+def check_context(records, max_length, include_flanks=False) -> None:
     """Check that each selected sequence fits the model context.
 
     Args:
@@ -110,7 +110,7 @@ def check_context(records, max_length, include_flanks=False):
         raise ValueError(f"Inputs exceed model context ({max_length} including markers): {bad[:10]}")
 
 
-def summaries(records, audit):
+def summaries(records, audit) -> pd.DataFrame:
     """Return a DataFrame of IDR composition and original record metadata.
 
     Args:
@@ -143,7 +143,7 @@ def summaries(records, audit):
     )
 
 
-def write_fasta(records, path):
+def write_fasta(records, path) -> Path:
     """Write full records with one-based inclusive IDR spans and return the output Path.
 
     Overwrite an existing file. The parent directory must already exist.
@@ -154,7 +154,7 @@ def write_fasta(records, path):
     return Path(path)
 
 
-def save_run(out, settings, *, elapsed=None):
+def save_run(out, settings, *, elapsed=None) -> None:
     """Write settings, dependency versions, and optional elapsed seconds to run.json.
 
     Create the output directory if needed and overwrite an existing run.json.

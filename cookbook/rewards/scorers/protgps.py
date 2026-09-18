@@ -20,6 +20,14 @@ PROTGPS_BATCH sets sequences per forward pass (default 1 for batch-independent r
 Checkpoints download on first use.
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pytorch_lightning import LightningModule
+
 import argparse
 import os
 import pickle
@@ -51,7 +59,7 @@ _MAX_LEN = 1800  # ProtGPS sequence-length ceiling
 _BATCH = int(os.environ.get("PROTGPS_BATCH", "1"))
 
 
-def _device():
+def _device() -> str:
     """Return IDIOM_PROTGPS_DEVICE when set, otherwise CPU."""
     return os.environ.get("IDIOM_PROTGPS_DEVICE") or "cpu"
 
@@ -85,7 +93,7 @@ def _checkpoint_dir() -> Path:
     )
 
 
-def _load_model():
+def _load_model() -> LightningModule:
     """Load the ProtGPS classifier in eval mode on the selected device."""
     from protgps.utils.loading import get_object
 
@@ -104,7 +112,7 @@ def _load_model():
     return model.eval().to(_device())
 
 
-def build():
+def build() -> Callable[[list[str]], list[float]]:
     """Build a scorer for a named compartment or the max/mean across all compartments.
 
     Parse --compartment, load the classifier, and truncate each sequence to its first
@@ -123,7 +131,7 @@ def build():
     model = _load_model()
 
     @torch.no_grad()
-    def score_batch(sequences):
+    def score_batch(sequences) -> list[float]:
         """Return compartment or aggregate probabilities for sequences truncated to 1,800 residues."""
         scores = [0.0] * len(sequences)
         for start in range(0, len(sequences), _BATCH):

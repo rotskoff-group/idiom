@@ -9,19 +9,22 @@ Kappa returns -1 for sequences without charged residues.
 Run with uv run --script; see cookbook/rewards/README.md for reward configuration.
 """
 
+from __future__ import annotations
+
 import argparse
+from collections.abc import Callable
 
 from _scorer_protocol import serve
 
 
-def build():
+def build() -> Callable[[list[str]], list[float]]:
     """Parse arguments and return the sparrow property scorer."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--property", default="radius_of_gyration")
     prop = ap.parse_args().property
     from sparrow import Protein
 
-    def score_batch(sequences):
+    def score_batch(sequences) -> list[float]:
         """Return the requested property for each sequence.
 
         ALBATROSS predictions are methods on Protein.predictor; sequence parameters such as FCR and

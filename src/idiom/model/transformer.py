@@ -48,7 +48,7 @@ class Block(nn.Module):
         self.ffn_norm = RMSNorm(cfg.d_model, cfg.norm_eps)
         self.ffn = SwiGLU(cfg.d_model, cfg.expansion_ratio)
 
-    def forward(self, x, rope, positions, cache=None, layer_idx=0):
+    def forward(self, x, rope, positions, cache=None, layer_idx=0) -> Tensor:
         """Apply the attention and feed-forward sublayers with residual connections.
 
         Args:
@@ -110,7 +110,9 @@ class IDiomTransformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, tokens: Tensor, *, cache: KVCache | None = None, return_hidden_states: bool = False):
+    def forward(
+        self, tokens: Tensor, *, cache: KVCache | None = None, return_hidden_states: bool = False
+    ) -> Tensor | tuple[Tensor, list[Tensor]]:
         """Run the transformer, optionally through a KV cache and returning the residual stream.
 
         When a cache is given, positions continue from cache.length and the cache is extended by L.

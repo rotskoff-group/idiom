@@ -6,7 +6,7 @@ import math
 from numbers import Integral, Real
 
 
-def integer_at_least(name, value, minimum):
+def integer_at_least(name, value, minimum) -> None:
     """Require an integer at or above a lower bound.
 
     Args:
@@ -21,7 +21,7 @@ def integer_at_least(name, value, minimum):
         raise ValueError(f"{name} must be an integer >= {minimum}")
 
 
-def validate_sampling(temperature=1.0, top_k=None, top_p=None):
+def validate_sampling(temperature=1.0, top_k=None, top_p=None) -> None:
     """Validate sampling options, returning None on success.
 
     Args:
@@ -61,7 +61,7 @@ def validate_generation(
     length_range=None,
     max_oversample=20,
     seed=None,
-):
+) -> None:
     """Validate generation options, returning None on success.
 
     Booleans are rejected for numeric options. A zero sequence count is valid.

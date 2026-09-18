@@ -123,7 +123,7 @@ class LitGRPO(L.LightningModule):
                 ids.append(i)
         return self.tok.decode(ids)
 
-    def training_step(self, batch: torch.Tensor, batch_idx: int):
+    def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         """Roll out completions and return GRPO loss for equal-length prompts.
 
         Log reward totals and terms, KL, length, and composition entropy.
@@ -236,6 +236,6 @@ class LitGRPO(L.LightningModule):
             print(f"  [{j}] reward={rewards[i].item():.3f}  len={len(idrs[i])}  {seq}", flush=True)
         print("=" * 70, flush=True)
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> torch.optim.Optimizer:
         """Return AdamW over policy parameters only."""
         return torch.optim.AdamW(self.model.parameters(), lr=self.lr)

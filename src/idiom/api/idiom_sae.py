@@ -35,7 +35,7 @@ class IDiomSAE:
         host_model: str | None = None,
         region: str = "all",
         fim_mode: str = "prompted",
-    ):
+    ) -> None:
         """Bundle an SAE with its host model, layer, and training distribution.
 
         Args:
@@ -171,7 +171,7 @@ class IDiomSAE:
         return f"https://huggingface.co/{repo_id}"
 
     @torch.no_grad()
-    def encode(self, inputs, *, pool: str = "mean"):
+    def encode(self, inputs, *, pool: str = "mean") -> tuple[np.ndarray, list[dict] | list[str]]:
         """Encode IDR residues using the SAE's saved prompt format and layer.
 
         Prompted SAEs retain flanks as context; unprompted SAEs use only the IDR.

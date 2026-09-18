@@ -6,6 +6,7 @@ Every term is explicit; zero-weight terms are still evaluated and logged.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from omegaconf import DictConfig, OmegaConf
@@ -127,7 +128,7 @@ def build_terms(rcfg: DictConfig) -> list[Term]:
     return terms
 
 
-def build_reward(rcfg: DictConfig):
+def build_reward(rcfg: DictConfig) -> Callable[[list[str], int], tuple[list[float], list[dict[str, float]]]]:
     """Build the total reward from a reward config.
 
     Args:
@@ -144,7 +145,7 @@ def build_reward(rcfg: DictConfig):
     """
     terms = build_terms(rcfg)
 
-    def score_batch(idrs: list[str], group_size: int):
+    def score_batch(idrs: list[str], group_size: int) -> tuple[list[float], list[dict[str, float]]]:
         """Combine finite weighted rewards and return per-sequence totals and score breakdowns."""
         totals = [0.0] * len(idrs)
         breakdown: list[dict[str, float]] = [{} for _ in idrs]

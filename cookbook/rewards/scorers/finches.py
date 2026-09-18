@@ -9,12 +9,20 @@ Choose --forcefield mpipi or calvados. Negative epsilon indicates attraction.
 Run with uv run --script; see cookbook/rewards/README.md for reward configuration.
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from finches import CALVADOS_frontend, Mpipi_frontend
+
 import argparse
 
 from _scorer_protocol import serve
 
 
-def build_frontend(forcefield):
+def build_frontend(forcefield) -> CALVADOS_frontend | Mpipi_frontend:
     """Return the FINCHES frontend for a force field.
 
     Args:
@@ -32,7 +40,7 @@ def build_frontend(forcefield):
     return Mpipi_frontend()
 
 
-def build():
+def build() -> Callable[[list[str]], list[float]]:
     """Parse arguments and return the epsilon scorer for the chosen mode and force field."""
     ap = argparse.ArgumentParser(description="FINCHES epsilon as an IDiom external reward.")
     ap.add_argument(
@@ -55,7 +63,7 @@ def build():
     frontend = build_frontend(args.forcefield)
     partner = args.partner if args.mode == "heterotypic" else None
 
-    def score_batch(sequences):
+    def score_batch(sequences) -> list[float]:
         """Return epsilon(seq, partner-or-self) for each sequence."""
         return [float(frontend.epsilon(s, partner or s)) for s in sequences]
 

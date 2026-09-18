@@ -7,6 +7,7 @@ import tempfile
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
 import torch
 from huggingface_hub import HfApi
 from safetensors.torch import load_model, save_model
@@ -36,7 +37,7 @@ class IDiom:
         device (torch.device): The device the model is on.
     """
 
-    def __init__(self, model: IDiomTransformer, tokenizer: Tokenizer | None = None, device="cpu"):
+    def __init__(self, model: IDiomTransformer, tokenizer: Tokenizer | None = None, device="cpu") -> None:
         """Move the model to device in eval mode and attach a tokenizer (default if omitted)."""
         self.model = model.eval()
         self.tok = tokenizer or Tokenizer()
@@ -335,7 +336,7 @@ class IDiom:
         layers: list[int],
         *,
         pool: str = "mean",
-    ):
+    ) -> dict[int, tuple[np.ndarray, list[dict]]]:
         """Extract IDR embeddings using both flanks as FIM context.
 
         Invalid FASTA sequences and spans in nonempty headers are skipped with logged

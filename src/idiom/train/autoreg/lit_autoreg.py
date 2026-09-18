@@ -8,6 +8,7 @@ import lightning as L
 import torch
 import torch.nn.functional as F
 from lightning.pytorch.utilities import grad_norm
+from lightning.pytorch.utilities.types import OptimizerLRScheduler
 
 from idiom.model.config import ModelConfig
 from idiom.model.io import load_model
@@ -79,32 +80,32 @@ class LitAutoregressive(L.LightningModule):
         lit.model.load_state_dict(model.state_dict())
         return lit
 
-    def _masked_loss(self, logits, targets, mask):
+    def _masked_loss(self, logits, targets, mask) -> torch.Tensor:
         """Return the cross-entropy averaged over the positions the mask selects."""
         per_token = F.cross_entropy(
             logits.reshape(-1, logits.size(-1)), targets.reshape(-1), reduction="none"
         ).view_as(targets)
         return (per_token * mask).sum() / mask.sum().clamp(min=1)
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx) -> torch.Tensor:
         """Return and log masked cross-entropy for (input_ids, target_ids, loss_mask)."""
         x, y, mask = batch
         loss = self._masked_loss(self.model(x), y, mask)
         self.log("train/loss", loss, prog_bar=True, on_step=True)
         return loss
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx) -> torch.Tensor:
         """Return and log validation cross-entropy for (input_ids, target_ids, loss_mask)."""
         x, y, mask = batch
         loss = self._masked_loss(self.model(x), y, mask)
         self.log("val/loss", loss, prog_bar=True, on_epoch=True, sync_dist=True)
         return loss
 
-    def on_before_optimizer_step(self, optimizer):
+    def on_before_optimizer_step(self, optimizer) -> None:
         """Log per-parameter and total L2 gradient norms."""
         self.log_dict(grad_norm(self, norm_type=2))
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> OptimizerLRScheduler:
         """Return AdamW with a per-step warmup-cosine schedule."""
         opt = torch.optim.AdamW(
             self.model.parameters(), lr=self.lr, betas=self.betas, weight_decay=self.weight_decay

@@ -35,13 +35,13 @@ def _load(path: str, in_memory: bool) -> FeatureDataset:
 
 
 @st.cache_data
-def _ranking(_fd: FeatureDataset, num_latents: int):
+def _ranking(_fd: FeatureDataset, num_latents: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return cached per-feature ranking statistics for the dataset."""
     return _fd.feature_ranking()
 
 
 @st.cache_data
-def _stats(_fd: FeatureDataset, feature_id: int):
+def _stats(_fd: FeatureDataset, feature_id: int) -> tuple[float, np.ndarray, np.ndarray]:
     """Return cached activation statistics for one feature."""
     return _fd.feature_stats(feature_id)
 

@@ -317,7 +317,7 @@ def load_sequences(path) -> list[Record]:
     return out
 
 
-def length_match(positives, background, *, n, rng, bin_width=20):
+def length_match(positives, background, *, n, rng, bin_width=20) -> list[Record]:
     """Sample a background whose IDR-length distribution follows the positive set's.
 
     Fill undersupplied bins from the remaining pool. Rounded bin allocations can make
@@ -334,7 +334,7 @@ def length_match(positives, background, *, n, rng, bin_width=20):
         The sampled background records, without replacement within each bin.
     """
 
-    def _bin(r):
+    def _bin(r) -> int:
         """Map an IDR length to its integer length-matching bin."""
         return (r.idr_end - r.idr_start) // bin_width
 

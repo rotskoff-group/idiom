@@ -22,7 +22,7 @@ DEFAULT_CASE = "top30"
 
 
 @lru_cache(maxsize=4)
-def _sae(sae_dir: str, device: str | None):
+def _sae(sae_dir: str, device: str | None) -> IDiomSAE:
     """Load and cache the SAE and its host model."""
     return IDiomSAE.from_pretrained(
         sae_dir, device=device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -40,7 +40,7 @@ def _featuresets(features: str, case: str) -> dict:
 
 
 @lru_cache(maxsize=32)
-def _target_ids(signature: str, features: str, case: str, sae_dir: str, device: str | None):
+def _target_ids(signature: str, features: str, case: str, sae_dir: str, device: str | None) -> torch.Tensor:
     """Return signature indices on the SAE device; raise KeyError for an unknown signature."""
     sets = _featuresets(features, case)
     if signature not in sets:

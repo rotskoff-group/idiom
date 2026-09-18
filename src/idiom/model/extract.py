@@ -33,7 +33,7 @@ def extract_embeddings(
     tokenizer=None,
     device="cpu",
     fim_mode=PROMPTED,
-):
+) -> dict[int, tuple[np.ndarray, list[dict]]]:
     """Extract residual-stream embeddings in input-record order.
 
     FASTA entries with invalid sequences or nonempty malformed headers are skipped;

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import torch
 from torch.utils.data import IterableDataset
 
@@ -68,7 +70,7 @@ class ActivationStore(IterableDataset):
         return out[self.layer].values
 
     @torch.no_grad()
-    def __iter__(self):
+    def __iter__(self) -> Iterator[torch.Tensor]:
         """Yield shuffled activation batches until the record loader is exhausted.
 
         Yields:
@@ -85,7 +87,7 @@ class ActivationStore(IterableDataset):
                 n = sum(t.size(0) for t in buf)
         yield from self._drain(buf, final=True)
 
-    def _drain(self, buf: list[torch.Tensor], *, final: bool = False):
+    def _drain(self, buf: list[torch.Tensor], *, final: bool = False) -> Iterator[torch.Tensor]:
         """Shuffle the buffer and yield full batches, carrying any remainder unless final."""
         if not buf:
             return

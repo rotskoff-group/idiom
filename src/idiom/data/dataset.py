@@ -6,6 +6,7 @@ Inputs prepend START; targets append STOP. make_collate adds right padding.
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 
 import numpy as np
 import torch
@@ -125,13 +126,13 @@ class RecordDataset(Dataset):
         return x, y, mask
 
 
-def make_collate(pad_id: int):
+def make_collate(pad_id: int) -> Callable[..., tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     """Return a collator producing right-padded [B, L] (input, target, loss_mask) tensors.
 
     Pad input and target with pad_id and the boolean loss mask with False.
     """
 
-    def collate(batch):
+    def collate(batch) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Pad token inputs, targets, and loss masks to the longest sequence in the batch."""
         inputs, targets, masks = zip(*batch)
         x = pad_sequence(inputs, batch_first=True, padding_value=pad_id)

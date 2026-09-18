@@ -12,6 +12,7 @@ Files:
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
@@ -35,7 +36,7 @@ class FeatureDataset:
         n_seqs (int): Number of sequences.
     """
 
-    def __init__(self, path: str | Path, in_memory: bool = False):
+    def __init__(self, path: str | Path, in_memory: bool = False) -> None:
         """Open a dataset directory and build the per-sequence row index.
 
         Args:
@@ -72,7 +73,7 @@ class FeatureDataset:
     # Chunk reductions to bound memory use for memory-mapped datasets
     CHUNK_ROWS = 1_000_000
 
-    def _row_chunks(self):
+    def _row_chunks(self) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
         """Yield (start_row, top_indices, top_values) chunks, in one piece when held in memory."""
         n = self.top_indices.shape[0]
         if self.in_memory:
