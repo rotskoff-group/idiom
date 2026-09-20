@@ -2,26 +2,28 @@
 #   idiom_train_autoreg data.train_fasta=/path/train.fasta model.n_layers=12 model.d_model=768
 seed: 0
 device: auto # auto | cpu | cuda
-init_from: null # weights-only warm start from a .ckpt (see sft.yaml)
-resume_from: null # mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
-ckpt_every_n_steps: 2000 # rolling last.ckpt cadence, for preemption-safe resume
+init_from: null # Warm-start weights; see sft.yaml for pretrained model inputs
+resume_from: null # Resume training state (optimizer, step, LR, RNG) from a .ckpt
+ckpt_every_n_steps: 2000 # Steps between rolling last.ckpt saves for preemption recovery
 wandb_project: idiom # WANDB_MODE=offline disables syncing
 run_name: null
 
 data:
-  train_fasta: ??? # required: per-split record FASTA from curation
+  train_fasta: ??? # Required: training split in record FASTA format
   val_fasta: null
-  prompted_prob: 0.5 # prompted (context) vs unprompted (de novo) augmentation
-  completion_only: false # pretraining: loss on every token
-  batch_size: 32 # PER-GPU; global = batch_size * devices * accumulate_grad_batches
+  prompted_prob: 0.5 # Probability of prompted (context) vs unprompted (de novo) input
+  completion_only: false # Compute loss on all tokens
+  batch_size: 32 # Per GPU; global batch = batch_size * devices * accumulate_grad_batches
   num_workers: 8
 
-model: # the released idiom-300M; idiom-85M = 12L/768/12, idiom-20M = 6L/512/8
+# IDiom-300M architecture. For 85M/20M, use (n_layers, d_model, n_heads):
+# (12, 768, 12) / (6, 512, 8).
+model:
   vocab_size: 27
   n_layers: 24
   d_model: 1024
   n_heads: 16
-  max_seq_len: 1024 # longest protein + 4 (START + the three FIM markers)
+  max_seq_len: 1024 # Must fit the protein plus START and three FIM markers
 
   rope_base: 10000.0
   expansion_ratio: 2.6666666666666665
@@ -29,20 +31,20 @@ model: # the released idiom-300M; idiom-85M = 12L/768/12, idiom-20M = 6L/512/8
   qk_norm: true
   tie_embeddings: true
 
-optim: # paper recipe: AdamW, no weight decay, warmup 3k then cosine to 10%
+optim: # AdamW with linear warmup, then cosine decay to min_lr_ratio
   lr: 3.0e-4
   warmup_steps: 3000
   weight_decay: 0.0
   betas: [0.9, 0.95]
   min_lr_ratio: 0.1
 
-trainer: # global batch 1024 = 32/GPU * 8 GPUs * accum 4
+trainer:
   max_steps: 250000
   accelerator: auto
   devices: 8
   precision: bf16-mixed
   val_check_interval: 25000
-  gradient_clip_val: 1.0 # original 302M pretraining run
+  gradient_clip_val: 1.0
   accumulate_grad_batches: 4
 
 out_dir: ${oc.env:IDIOM_OUT,./runs}/pretrain

@@ -1,4 +1,4 @@
-# Reward terms for finches.bash. Edit scorer commands, targets, shaping, and weights here
+# Reward terms for finches.bash
 # ${oc.env:...} references values exported by the Bash script
 # Native ProTalpha targets with Mpipi at 0.150 M salt. Recalculate if changing force field
 reward:

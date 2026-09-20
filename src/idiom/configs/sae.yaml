@@ -3,21 +3,21 @@
 seed: 0
 device: auto
 model_ckpt: ??? # Frozen model: checkpoint, release directory, or Hub repo ID
-resume_from: null # mid-run resume (optimizer/step/RNG) from a .ckpt
+resume_from: null # Resume training state (optimizer, step, RNG) from a .ckpt
 wandb_project: idiom-sae
 run_name: null
 
-layer: 8 # residual-stream block to train the SAE on (must be < n_layers)
+layer: 8 # Zero-based residual-stream block index; must be < n_layers
 region: all # residues feeding the SAE: all | idr | non_idr (split at the '2' marker)
 
 data:
-  fasta: ??? # required: record FASTA whose activations feed the SAE
-  prompted_prob: 0.5 # prompted (context) vs unprompted (de novo); 0.0 = a pure de novo SAE
+  fasta: ??? # Required: record FASTA for activation extraction
+  prompted_prob: 0.5 # Probability of prompted input; 0.0 uses de novo input only
   shuffle: true
   record_batch_size: 16 # sequences per model forward, re-batched into sae_batch_size
 
 sae_batch_size: 4096 # activation rows per SAE step
-buffer_size: 262144 # shuffling-buffer rows before draining
+buffer_size: 262144 # Activation rows to collect before shuffling and draining
 init_b_dec_from_mean: true
 
 sae:

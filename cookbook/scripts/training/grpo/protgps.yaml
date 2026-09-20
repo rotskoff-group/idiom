@@ -1,4 +1,4 @@
-# Reward terms for protgps.bash. Edit scorer commands, targets, shaping, and weights here
+# Reward terms for protgps.bash
 # ProtGPS is length-sensitive; add a length term if generations drift long
 reward:
   terms:

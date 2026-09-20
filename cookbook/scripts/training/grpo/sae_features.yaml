@@ -1,4 +1,4 @@
-# Reward terms for sae_features.bash. Edit targets, shaping, and weights here
+# Reward terms for sae_features.bash
 # ${oc.env:...} references values exported by the Bash script
 reward:
   terms:

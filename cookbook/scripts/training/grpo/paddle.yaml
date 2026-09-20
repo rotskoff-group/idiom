@@ -1,4 +1,4 @@
-# Reward terms for paddle.bash. Edit scorer commands, targets, shaping, and weights here
+# Reward terms for paddle.bash
 reward:
   terms:
     - label: entropy

@@ -1,4 +1,4 @@
-# Reward terms for combined.bash. Edit scorer commands, targets, shaping, and weights here
+# Reward terms for combined.bash
 # ProtGPS is length-sensitive; add a length term if generations drift long
 reward:
   terms:

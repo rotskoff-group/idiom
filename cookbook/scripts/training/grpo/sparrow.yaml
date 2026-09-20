@@ -1,4 +1,4 @@
-# Reward terms for sparrow.bash. Edit scorer commands, targets, shaping, and weights here
+# Reward terms for sparrow.bash
 reward:
   terms:
     - label: entropy

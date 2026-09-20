@@ -1,4 +1,4 @@
-# Reward terms for custom_reward.bash. Edit targets, shaping, and weights here
+# Reward terms for custom_reward.bash
 # Target charged fraction 0.30; score 0 at 0.30 and -0.15 at 0.15 or 0.45
 # Add entropy or length terms if needed; see the other reward YAML examples
 reward:

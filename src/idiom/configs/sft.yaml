@@ -3,20 +3,20 @@
 seed: 0
 device: auto
 init_from: ??? # Checkpoint, release directory, or Hub repo ID
-resume_from: null # mid-run resume (optimizer/step/LR/RNG) from a .ckpt, e.g. last.ckpt
-ckpt_every_n_steps: 2000 # rolling last.ckpt cadence
+resume_from: null # Resume training state (optimizer, step, LR, RNG) from a .ckpt
+ckpt_every_n_steps: 2000 # Steps between rolling last.ckpt saves
 wandb_project: idiom # WANDB_MODE=offline disables syncing
 run_name: null
 
 data:
-  train_fasta: ??? # required: the (usually small, curated) SFT record FASTA
+  train_fasta: ??? # Required: curated training records in record FASTA format
   val_fasta: null
-  prompted_prob: 1.0 # SFT is typically prompted (context) in-filling
+  prompted_prob: 1.0 # Probability of prompted input; 1.0 uses context infilling only
   completion_only: true # loss on the IDR completion only
   batch_size: 32
   num_workers: 8
 
-# No model block: SFT reads the architecture from init_from's checkpoint
+# Model architecture is loaded from init_from
 
 optim:
   lr: 1.0e-5
