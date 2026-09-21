@@ -27,7 +27,7 @@ bash cookbook/scripts/generation/generate_unprompted.bash
 
 Typical default parameters are provided in all scripts, please modify them for your own use. Most training and inference examples use one GPU.
 
-To run reinforcement learning examples under `cookbook/scripts/grpo`, `uv` must be installed (`python -m pip install uv`) so that external scorers in `cookbook/rewards/scorers/` can be used.
+Reinforcement learning examples are in `cookbook/scripts/training/grpo/`. Examples that launch external scorers with `uv run` require `uv` (`python -m pip install uv`).
 
 <br>
 
@@ -144,8 +144,9 @@ $$
 where $x$ is a generated sequence and $i$ indexes the reward terms.
 
 Rewards can be calculated during training using built-in or custom Python functions,
-or by external scorers run as subprocesses. External scorers can be run in separate Python environments
-to prevent dependency conflicts. At least one reward must be enabled for training, and multiple rewards can be combined, each with its own
+or by external scorers run as subprocesses. Use an in-process custom reward when its dependencies fit your
+training environment, and use an external scorer when it needs a separate environment.
+At least one reward must be enabled for training, and multiple rewards can be combined, each with its own
 shaping function and weight.
 
 In this cookbook, we provide several packaged examples for running GRPO training in `cookbook/scripts/training/grpo/`.
@@ -195,7 +196,41 @@ in Bash. No Hydra `defaults` section is needed in the reward YAML.
 | `reward` | A mapping with `name` and any arguments: a built-in (`length`, `entropy`, or `sae_signature`), a custom Python factory (returns a function), or an external program via `external_scorer`. |
 | `shaping` | A mapping with `name` and any arguments: a built-in (`identity`, `quadratic`, or `gaussian`) or a custom Python factory, defaults to `identity`. |
 
-Below are several examples of reward terms that can be employed.
+<br>
+
+### Write and run your own reward
+
+Use an in-process custom reward when its dependencies fit your training environment, and use an external scorer when it needs a separate environment.
+
+#### In-process reward
+
+1. Copy [custom_rewards_shapings.py](rewards/custom_rewards_shapings.py) and adapt a reward factory. The factory returns a function that accepts a list of sequences and returns one finite score per sequence, in order, including empty sequences.
+2. Edit [custom_reward.yaml](scripts/training/grpo/custom_reward.yaml). Set `reward.name` to your factory as `/path/to/file.py:factory` or `package.module:factory`, then choose shaping and weight. Put factory arguments alongside `name`.
+3. Test the returned function on a few sequences, including an empty string.
+4. Set `REPO`, `OUT`, and training settings in [custom_reward.bash](scripts/training/grpo/custom_reward.bash), then run it from the repository root.
+
+```bash
+bash cookbook/scripts/training/grpo/custom_reward.bash
+```
+
+#### External scorer
+
+1. Copy [custom_scorer.py](rewards/scorers/custom_scorer.py) and [_scorer_protocol.py](rewards/scorers/_scorer_protocol.py) into the same directory. Update the dependency header and scoring function.
+2. Edit [custom_scorer.yaml](scripts/training/grpo/custom_scorer.yaml). Point `reward.cmd` to your script and choose shaping and weight. Review the included entropy and length terms too, since they also contribute to training.
+3. Test the scorer before training, replacing the path below with your script's location.
+
+```bash
+python -m idiom.train.grpo.reward.external \
+  --cmd "uv run --script /path/to/my_scorer.py"
+```
+
+4. Set `REPO`, `OUT`, and training settings in [custom_scorer.bash](scripts/training/grpo/custom_scorer.bash), then run it from the repository root.
+
+```bash
+bash cookbook/scripts/training/grpo/custom_scorer.bash
+```
+
+The following examples show reward terms you can use or adapt.
 
 <br>
 

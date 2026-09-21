@@ -2,7 +2,7 @@
 # requires-python = ">=3.10"
 # dependencies = ["biopython>=1.83", "numpy<2"]
 # ///
-"""Template for an external scorer with its own dependencies; copy and adapt.
+"""Template for an external scorer with its own dependencies.
 
 Copy this file and _scorer_protocol.py into the same directory. Edit the dependency
 header and build() below. This example scores Biopython isoelectric point or molecular
