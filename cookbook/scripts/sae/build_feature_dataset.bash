@@ -21,6 +21,5 @@ idiom_feature_dataset \
     --out "$OUT" \
     --batch-size "$BATCH_SIZE"
 
-# Inspect the output with FeatureDataset in Python or launch the viewer from this checkout:
-# streamlit run src/idiom/sae/features/feature_viewer.py -- --features "$OUT"
+# Inspect the output with FeatureDataset in Python; see cookbook/notebooks/inspect_sae_features.ipynb.
 echo "DONE -> $OUT"
