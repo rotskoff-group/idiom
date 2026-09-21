@@ -9,9 +9,9 @@ from idiom.sae.features.enrichment import (
     select_features,
     top_features,
 )
-from idiom.sae.features.feature_activations import FeatureDataset
-from idiom.sae.features.logos import AMINO_ACIDS, feature_windows, logo_data
+from idiom.sae.features.feature_dataset import FeatureDataset
 from idiom.sae.features.signatures import combine_signatures, load_signatures, write_signature
+from idiom.sae.features.windows import AMINO_ACIDS, feature_windows, logo_data
 
 __all__ = [
     "AMINO_ACIDS",

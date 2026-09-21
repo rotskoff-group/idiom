@@ -34,7 +34,7 @@ def build_feature_dataset(
     fim_mode: str = "prompted",
     provenance: dict | None = None,
 ) -> Path:
-    """Write per-residue top-k features using the feature_activations module file schema.
+    """Write per-residue top-k features using the feature_dataset module file schema.
 
     Move both models to device in eval mode. Positions index FIM strings without START.
 

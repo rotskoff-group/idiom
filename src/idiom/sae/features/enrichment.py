@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from idiom.data.records import Record, parse_idr_header, read_fasta
-from idiom.sae.features.feature_activations import FeatureDataset
+from idiom.sae.features.feature_dataset import FeatureDataset
 from idiom.sae.features.signatures import write_signature as write_signature
 
 # Defaults used to build the published signatures

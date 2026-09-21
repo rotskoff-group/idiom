@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from idiom.sae.features import load_enrichment, select_features
-from idiom.sae.features.feature_enrichment import main
+from idiom.sae.features.enrichment_cli import main
 
 
 @pytest.fixture

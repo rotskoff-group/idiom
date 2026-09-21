@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from idiom.sae.features.feature_activations import FeatureDataset
+from idiom.sae.features.feature_dataset import FeatureDataset
 
 AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
