@@ -1,4 +1,7 @@
-"""Input validation and exports shared by the interactive cookbook workflows."""
+"""Input auditing, exports, and small-set comparisons for cookbook workflows.
+
+Requires the cookbook extra (pandas). This module is not imported by the core API.
+"""
 
 import json
 from pathlib import Path
@@ -170,3 +173,89 @@ def save_run(out, settings, *, elapsed=None) -> None:
             versions[package] = "source checkout"
     payload = {"settings": settings, "versions": versions, "elapsed_seconds": elapsed}
     (out / "run.json").write_text(json.dumps(payload, indent=2, default=str))
+
+
+def split_records(records, *, validation_fraction=0.2, seed=0):
+    """Split by exact IDR sequence so duplicate sequences never cross splits.
+
+    This does not separate homologous sequences. Use externally clustered splits when
+    evaluating generalization beyond close relatives.
+    """
+    import numpy as np
+
+    if not 0 < validation_fraction < 1:
+        raise ValueError("validation_fraction must be between zero and one")
+    groups = list(dict.fromkeys(idr_sequence(r) for r in records))
+    if len(groups) < 2:
+        raise ValueError("At least two distinct IDRs are required for a validation split")
+    n = min(len(groups) - 1, max(1, round(len(groups) * validation_fraction)))
+    chosen = set(np.random.default_rng(seed).choice(groups, size=n, replace=False))
+    return (
+        [r for r in records if idr_sequence(r) not in chosen],
+        [r for r in records if idr_sequence(r) in chosen],
+    )
+
+
+def sequence_metrics(sequences) -> pd.DataFrame:
+    """Summarize generated sequences, retaining empty outputs for accounting."""
+    from idiom.train.grpo.reward.builtin import composition_entropy
+
+    rows = []
+    for i, s in enumerate(sequences):
+        rows.append(
+            dict(
+                sequence_id=i,
+                sequence=s,
+                length=len(s),
+                entropy=composition_entropy(s),
+                charged_fraction=sum(s.count(a) for a in "DEKR") / max(len(s), 1),
+            )
+        )
+    frame = pd.DataFrame(rows, columns=["sequence_id", "sequence", "length", "entropy", "charged_fraction"])
+    frame["duplicate"] = frame.sequence.duplicated()
+    return frame
+
+
+def nearest_reference(sequences, references) -> pd.DataFrame:
+    """Report closest reference by SequenceMatcher similarity, not alignment identity.
+
+    Intended for small demonstrations; cost grows with candidates times references.
+    Exact matches are reported separately. References must be nonempty.
+    """
+    from difflib import SequenceMatcher
+
+    references = list(references)
+    if not references:
+        raise ValueError("At least one reference sequence is required")
+    rows = []
+    for i, sequence in enumerate(sequences):
+        scores = [SequenceMatcher(None, sequence, ref, autojunk=False).ratio() for ref in references]
+        best = max(range(len(scores)), key=scores.__getitem__)
+        rows.append(
+            dict(
+                sequence_id=i, reference_row=best, similarity=scores[best], exact_match=sequence in references
+            )
+        )
+    return pd.DataFrame(rows, columns=["sequence_id", "reference_row", "similarity", "exact_match"])
+
+
+def example_file(name: str, directory, *, revision="v1") -> Path:
+    """Download a cookbook FASTA from the same release used by notebook installation."""
+    from urllib.request import urlretrieve
+
+    allowed = {
+        "effector/ad.fasta",
+        "effector/rd.fasta",
+        "protgps/nucleolus.fasta",
+        "prompted_grpo/P45973.fasta",
+    }
+    if name not in allowed:
+        raise ValueError(f"Unknown example: {name}")
+    out = Path(directory) / name
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if not out.exists():
+        urlretrieve(
+            f"https://raw.githubusercontent.com/rotskoff-group/idiom/{revision}/cookbook/example_data/{name}",
+            out,
+        )
+    return out

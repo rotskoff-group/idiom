@@ -5,15 +5,14 @@ Signature JSON maps case names to {signature_name: [feature_ids]}.
 
 from __future__ import annotations
 
-import json
 from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from idiom import IDiomSAE
-from idiom.data.fim import fim_unprompted
-from idiom.model.activations import extract_activations
+from idiom.sae.features.signatures import load_signatures
 from idiom.train.grpo.reward.resolve import Reward, batchify
 
 DEFAULT_SAE = "jxliu2/idiomsae-300M-L18-k32"
@@ -32,23 +31,45 @@ def _sae(sae_dir: str, device: str | None) -> IDiomSAE:
 @lru_cache(maxsize=8)
 def _featuresets(features: str, case: str) -> dict:
     """Read a case as {signature_name: [feature_ids]}; raise KeyError if absent."""
-    blob = json.loads(Path(features).read_text())
-    if case not in blob:
-        cases = [k for k in blob if not k.startswith("_")]
-        raise KeyError(f"case {case!r} not in {features} (available: {cases}); set the term's case")
-    return blob[case]
+    return load_signatures(features, case=case)
 
 
 @lru_cache(maxsize=32)
 def _target_ids(signature: str, features: str, case: str, sae_dir: str, device: str | None) -> torch.Tensor:
     """Return signature indices on the SAE device; raise KeyError for an unknown signature."""
-    sets = _featuresets(features, case)
+    lens = _sae(sae_dir, device)
+    sets = load_signatures(features, case=case, sae=sae_dir, num_latents=lens.sae.num_latents)
     if signature not in sets:
         raise KeyError(
             f"signature {signature!r} not in case {case!r} of {features} "
             f"(available: {sorted(sets)}); set the term's signature"
         )
-    return torch.tensor(sets[signature], device=_sae(sae_dir, device).device, dtype=torch.long)
+    return torch.tensor(sets[signature], device=lens.device, dtype=torch.long)
+
+
+@torch.no_grad()
+def signature_presence(
+    idrs: list[str],
+    signature: str,
+    *,
+    features: str = DEFAULT_FEATURES,
+    case: str = DEFAULT_CASE,
+    sae: str = DEFAULT_SAE,
+    device: str | None = None,
+) -> np.ndarray:
+    """Return [sequences, target features] presence using the reward's frozen lens.
+
+    Column order follows the signature. Empty sequences have no active features.
+    This is the same positive-anywhere criterion used by feature_match.
+    """
+    lens = _sae(sae, device)
+    ids = _target_ids(signature, features, case, sae, device).cpu().numpy()
+    presence = np.zeros((len(idrs), len(ids)), dtype=bool)
+    for i, sequence in enumerate(idrs):
+        if sequence:
+            peaks, _ = lens.encode(sequence, pool="max")
+            presence[i] = peaks[0, ids] > 0
+    return presence
 
 
 @torch.no_grad()
@@ -81,16 +102,9 @@ def feature_match(
     """
     if not idr:
         return 0.0
-    lens = _sae(sae, device)
-    s = fim_unprompted(idr, 0, len(idr))
-    tokens = torch.tensor([[lens.tok.start_id, *lens.tok.encode(s)]], device=lens.device)
-    acts = extract_activations(
-        lens.model, tokens, [lens.layer], tokenizer=lens.tok, drop_markers=True, region=lens.region
-    )[lens.layer]
-    feats = lens.sae.encode_dense(acts.values.to(lens.device))
-    ids = _target_ids(signature, features, case, sae, device)
-    fired = (feats[:, ids] > 0).any(dim=0).float()
-    return float(fired.mean())
+    return float(
+        signature_presence([idr], signature, features=features, case=case, sae=sae, device=device).mean()
+    )
 
 
 def sae_signature(
@@ -121,11 +135,11 @@ def sae_signature(
             signature.
     """
     try:
-        sets = _featuresets(features, case)
+        sets = load_signatures(features, case=case, sae=sae)
     except Exception as e:
         raise ValueError(
             f"sae_signature: cannot read case {case!r} of {features!r} ({type(e).__name__}: {e}). "
-            f"Build a signature with cookbook/notebooks/feature_enrichment.ipynb, then point the "
+            f"Build a signature with cookbook/notebooks/04_discover_feature_signature.ipynb, then point the "
             f"term's features at it."
         ) from e
     if signature not in sets:

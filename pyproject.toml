@@ -29,6 +29,9 @@ dependencies = [
     "metapredict==3.0.2",
 ]
 
+[project.optional-dependencies]
+cookbook = ["pandas>=2", "ipykernel>=6"]
+
 [project.urls]
 Homepage = "https://github.com/rotskoff-group/idiom"
 "Hugging Face" = "https://huggingface.co/collections/jxliu2/idiom"

@@ -6,13 +6,14 @@ Signatures exclude boundary-associated features by default.
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 
 import numpy as np
 
 from idiom.data.records import Record, parse_idr_header, read_fasta
+from idiom.sae.features.feature_activations import FeatureDataset
+from idiom.sae.features.signatures import write_signature as write_signature
 
 # Defaults used to build the published signatures
 MIN_TOTAL_FIRE = 5
@@ -38,19 +39,17 @@ def feature_counts(feature_dir, keep=None) -> tuple[np.ndarray, int]:
     Returns:
         Per-feature sequence counts of length num_latents, and the number of sequences counted.
     """
-    d = Path(feature_dir)
-    ti = np.load(d / "top_indices.npy")
-    tv = np.load(d / "top_values.npy")
-    si = np.load(d / "seq_idx.npy").astype(np.int64)
-    num_latents = int(json.loads((d / "meta.json").read_text())["num_latents"])
+    fd = feature_dir if isinstance(feature_dir, FeatureDataset) else FeatureDataset(feature_dir)
+    ti, tv, si = fd.top_indices, fd.top_values, np.asarray(fd.seq_idx, dtype=np.int64)
+    num_latents = fd.num_latents
 
     if keep is not None:
-        keep = np.asarray(sorted(set(int(k) for k in keep)))
+        keep = np.asarray(sorted(set(fd._sequence_id(k) for k in keep)), dtype=np.int64)
         m = np.isin(si, keep)
         ti, tv, si = ti[m], tv[m], si[m]
         n_seq = len(keep)
     else:
-        n_seq = len(json.loads((d / "strings.json").read_text()))
+        n_seq = fd.n_seqs
 
     if not si.size:
         return np.zeros(num_latents), n_seq
@@ -108,6 +107,25 @@ def enrich(
         A dictionary containing scalar n_pos and n_neg and per-feature arrays a, b,
         log2or, z, p, fdr, active, prev_pos, and prev_neg.
     """
+    if (
+        n_pos < 1
+        or n_neg < 1
+        or num_latents < 1
+        or min_total_fire < 1
+        or not np.isfinite(smooth)
+        or smooth <= 0
+    ):
+        raise ValueError("Positive sample counts, latent count, firing cutoff, and smoothing are required")
+    for counts, size in ((a, n_pos), (b, n_neg)):
+        values = np.asarray(counts)
+        if (
+            values.ndim != 1
+            or len(values) > num_latents
+            or not np.isfinite(values).all()
+            or np.any(values < 0)
+            or np.any(values > size)
+        ):
+            raise ValueError("Feature counts must be finite and between zero and the sample count")
     a = np.pad(np.asarray(a, float), (0, num_latents - len(a)))
     b = np.pad(np.asarray(b, float), (0, num_latents - len(b)))
     total = n_pos + n_neg
@@ -156,6 +174,8 @@ def enriched_mask(
     Returns:
         A boolean mask over all features.
     """
+    if not 0 < fdr_alpha <= 1 or not 0 <= prev_pos_floor <= 1 or not np.isfinite(log2or_floor):
+        raise ValueError("Invalid FDR, prevalence, or odds-ratio cutoff")
     return (
         (result["fdr"] < fdr_alpha)
         & (result["log2or"] >= log2or_floor)
@@ -184,15 +204,14 @@ def boundary_features(
     Returns:
         The subset of feature_ids that were flagged.
     """
-    feature_ids = [int(f) for f in feature_ids]
+    if edge < 0 or top_windows < 1 or not 0 <= frac_thresh <= 1:
+        raise ValueError("Invalid boundary-filter parameters")
+    feature_ids = list(feature_ids)
     if not feature_ids:
         return set()
-    d = Path(feature_dir)
-    ti = np.load(d / "top_indices.npy", mmap_mode="r")
-    tv = np.load(d / "top_values.npy", mmap_mode="r")
-    si = np.load(d / "seq_idx.npy")
-    pi = np.load(d / "pos_idx.npy")
-    strings = json.loads((d / "strings.json").read_text())
+    fd = feature_dir if isinstance(feature_dir, FeatureDataset) else FeatureDataset(feature_dir)
+    feature_ids = [fd._feature_id(f) for f in feature_ids]
+    ti, tv, si, pi, strings = fd.top_indices, fd.top_values, fd.seq_idx, fd.pos_idx, fd.strings
 
     cache: dict[int, tuple[int, int]] = {}
 
@@ -204,11 +223,9 @@ def boundary_features(
             cache[seq_index] = (aa[0], aa[-1]) if aa else (0, -1)
         return cache[seq_index]
 
-    want = np.zeros(max(int(np.asarray(ti).max()), max(feature_ids)) + 1, dtype=bool)
-    want[feature_ids] = True
     flat = np.asarray(ti).reshape(-1)
-    sel = want[flat]
-    rows = np.repeat(np.arange(ti.shape[0]), ti.shape[1])[sel]
+    sel = np.isin(flat, feature_ids) & (np.asarray(tv).reshape(-1) > 0)
+    rows = np.flatnonzero(sel) // ti.shape[1]
     fids = flat[sel]
     vals = np.asarray(tv).reshape(-1)[sel]
 
@@ -220,7 +237,7 @@ def boundary_features(
     flagged: set[int] = set()
     for f, lo_i, hi_i in zip(uniq.tolist(), starts.tolist(), ends.tolist()):
         r, v = rows[lo_i:hi_i], vals[lo_i:hi_i]
-        top = r[np.argsort(-v)[:top_windows]]
+        top = r[np.argsort(-v, kind="stable")[:top_windows]]
         if not len(top):
             continue
         n_boundary = 0
@@ -234,70 +251,71 @@ def boundary_features(
     return flagged
 
 
-def top_features(
+def select_features(
     result: dict,
     *,
     n: int = 30,
-    prev_min: float = PREV_POS_FLOOR,
     drop_boundary: bool = True,
     feature_dir=None,
-    **mask_kwargs,
-) -> list[int]:
-    """Select a signature as the top n enriched features, ranked by log2 odds ratio.
+    fdr_alpha: float = FDR_ALPHA,
+    log2or_floor: float = LOG2OR_FLOOR,
+    prev_pos_floor: float = PREV_POS_FLOOR,
+) -> dict:
+    """Return selected IDs and per-feature enriched, boundary_filtered, selected masks.
 
-    Args:
-        result: Output of enrich.
-        n: Maximum number of features to keep.
-        prev_min: Minimum prevalence in the positive set.
-        drop_boundary: If True, remove boundary features before truncating to n.
-        feature_dir (str | Path | None): Feature dataset used to detect boundary features; required
-            when drop_boundary is True.
-        **mask_kwargs: Forwarded to enriched_mask as fdr_alpha, log2or_floor, and prev_pos_floor.
-
-    Returns:
-        Feature ids in descending order of log2 odds ratio, fewer than n if the enriched pool is
-        smaller.
-
-    Raises:
-        ValueError: If drop_boundary is True and feature_dir is None.
+    Rank by descending log2 odds ratio, breaking ties by ascending feature ID.
+    Boundary exclusions are computed for all passing candidates before taking n.
     """
-    mask = enriched_mask(result, **mask_kwargs) & (result["prev_pos"] >= prev_min)
-    ids = np.where(mask)[0]
-    ids = ids[np.argsort(-result["log2or"][ids])]
-    ranked = [int(f) for f in ids]
-
+    if not isinstance(n, (int, np.integer)) or n < 0:
+        raise ValueError("n must be a nonnegative integer")
+    mask = enriched_mask(
+        result, fdr_alpha=fdr_alpha, log2or_floor=log2or_floor, prev_pos_floor=prev_pos_floor
+    )
+    candidates = np.flatnonzero(mask)
+    boundary = np.zeros(len(mask), dtype=bool)
     if drop_boundary:
         if feature_dir is None:
-            raise ValueError("drop_boundary=True needs feature_dir (the dataset to judge against)")
-        bad = boundary_features(feature_dir, ranked)
-        ranked = [f for f in ranked if f not in bad]
-    return ranked[:n]
+            raise ValueError("drop_boundary=True needs feature_dir")
+        bad = boundary_features(feature_dir, candidates)
+        boundary[list(bad)] = True
+    ranked = candidates[np.argsort(-result["log2or"][candidates], kind="stable")]
+    ids = [int(f) for f in ranked if not boundary[f]][:n]
+    selected = np.zeros(len(mask), dtype=bool)
+    selected[ids] = True
+    return dict(ids=ids, enriched=mask, boundary_filtered=boundary, selected=selected)
 
 
-def write_signature(
-    path, signatures: dict[str, list[int]], *, case: str = "top30", provenance: dict | None = None
-) -> Path:
-    """Write signatures to a JSON file in the format the SAE feature reward reads.
+def top_features(result: dict, *, prev_min: float | None = None, **kwargs) -> list[int]:
+    """Return selected IDs; prev_min is a compatibility alias for prev_pos_floor."""
+    if prev_min is not None:
+        if "prev_pos_floor" in kwargs and kwargs["prev_pos_floor"] != prev_min:
+            raise ValueError("Specify only one prevalence cutoff")
+        kwargs["prev_pos_floor"] = prev_min
+    return select_features(result, **kwargs)["ids"]
 
-    An existing file is read and updated, and the named case is replaced.
 
-    Args:
-        path (str | Path): Output JSON path.
-        signatures: Signature name to feature ids.
-        case: Case name to store the signatures under.
-        provenance: Notes merged into the file's "_provenance" entry.
-
-    Returns:
-        The written path.
-    """
+def save_enrichment(path, result: dict, selection: dict) -> Path:
+    """Save a complete numerical result and selection masks for reuse without inference."""
     out = Path(path)
-    blob = json.loads(out.read_text()) if out.exists() else {}
-    blob[case] = {k: [int(i) for i in v] for k, v in signatures.items()}
-    if provenance:
-        blob.setdefault("_provenance", {}).update(provenance)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(blob, indent=1))
+    with out.open("wb") as handle:
+        np.savez_compressed(handle, **result, **selection)
     return out
+
+
+def load_enrichment(path) -> tuple[dict, dict]:
+    """Read the result and selection written by save_enrichment (no pickle)."""
+    with np.load(path, allow_pickle=False) as data:
+        result = {
+            key: data[key]
+            for key in data.files
+            if key not in {"ids", "enriched", "boundary_filtered", "selected"}
+        }
+        selection = {key: data[key] for key in ("enriched", "boundary_filtered", "selected")}
+        selection["ids"] = data["ids"].astype(int).tolist()
+    for key in ("n_pos", "n_neg"):
+        result[key] = int(result[key])
+    return result, selection
 
 
 def load_sequences(path) -> list[Record]:
@@ -320,8 +338,8 @@ def load_sequences(path) -> list[Record]:
 def length_match(positives, background, *, n, rng, bin_width=20) -> list[Record]:
     """Sample a background whose IDR-length distribution follows the positive set's.
 
-    Fill undersupplied bins from the remaining pool. Rounded bin allocations can make
-    the result larger or smaller than n; the available background also limits its size.
+    Allocate bins by largest remainder, then fill undersupplied bins from the remaining
+    pool. Return exactly min(n, len(background)) records, sampled without replacement.
 
     Args:
         positives (list[Record]): Positive records.
@@ -334,29 +352,32 @@ def length_match(positives, background, *, n, rng, bin_width=20) -> list[Record]
         The sampled background records, without replacement within each bin.
     """
 
-    def _bin(r) -> int:
-        """Map an IDR length to its integer length-matching bin."""
+    if not isinstance(n, (int, np.integer)) or n < 0 or not isinstance(bin_width, int) or bin_width < 1:
+        raise ValueError("n must be nonnegative and bin_width positive integers")
+    positives, background = list(positives), list(background)
+    if not positives:
+        raise ValueError("At least one positive record is required")
+    target = min(n, len(background))
+    if target == 0:
+        return []
+
+    def length_bin(r):
         return (r.idr_end - r.idr_start) // bin_width
 
-    pools: dict[int, list] = {}
-    for r in background:
-        pools.setdefault(_bin(r), []).append(r)
-
-    pos_bins, counts = np.unique([_bin(r) for r in positives], return_counts=True)
-    weights = counts / counts.sum()
-    picked, shortfall = [], 0
-    for b, w in zip(pos_bins.tolist(), weights.tolist()):
-        want = int(round(w * n))
+    pools = {}
+    for i, record in enumerate(background):
+        pools.setdefault(length_bin(record), []).append(i)
+    bins, counts = np.unique([length_bin(r) for r in positives], return_counts=True)
+    exact = counts / counts.sum() * target
+    allocation = np.floor(exact).astype(int)
+    remainder = target - allocation.sum()
+    allocation[np.argsort(-(exact - allocation), kind="stable")[:remainder]] += 1
+    picked = []
+    for b, want in zip(bins, allocation):
         pool = pools.get(b, [])
-        take = min(want, len(pool))
-        if take:
-            idx = rng.choice(len(pool), size=take, replace=False)
-            picked.extend(pool[i] for i in idx)
-        shortfall += want - take
-    if shortfall > 0:  # bins the background could not fill: top up from anywhere
-        chosen = {id(r) for r in picked}
-        rest = [r for r in background if id(r) not in chosen]
-        if rest:
-            idx = rng.choice(len(rest), size=min(shortfall, len(rest)), replace=False)
-            picked.extend(rest[i] for i in idx)
-    return picked
+        if pool:
+            picked.extend(rng.choice(pool, size=min(want, len(pool)), replace=False).tolist())
+    if len(picked) < target:
+        rest = np.setdiff1d(np.arange(len(background)), picked)
+        picked.extend(rng.choice(rest, size=target - len(picked), replace=False).tolist())
+    return [background[i] for i in picked]

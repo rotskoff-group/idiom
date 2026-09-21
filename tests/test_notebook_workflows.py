@@ -1,7 +1,6 @@
 """Execute the cookbook workflows with small real models and local FASTA inputs."""
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -12,11 +11,9 @@ from idiom import IDiom, IDiomSAE, ModelConfig
 from idiom.data.records import read_records
 from idiom.model import IDiomTransformer
 from idiom.sae import SparseCoder
+from idiom.utils.notebook_helpers import check_context, isolated, load_inputs, summaries, write_fasta
 
 NOTEBOOKS = Path(__file__).resolve().parents[1] / "cookbook" / "notebooks"
-sys.path.insert(0, str(NOTEBOOKS))
-
-from workflow_utils import check_context, isolated, load_inputs, summaries, write_fasta  # noqa: E402
 
 
 def test_input_audit_and_roundtrip(tmp_path):
@@ -46,130 +43,162 @@ def test_input_audit_and_roundtrip(tmp_path):
     assert load_inputs(empty)[0] == []
 
 
-@pytest.mark.parametrize(
-    "name,use_flanks,pool",
-    [
-        ("analyze_sequences", False, "mean"),
-        ("analyze_sequences", True, "mean"),
-        ("analyze_sequences", False, "last"),
-        ("analyze_sequences", True, "last"),
-        ("generate_sequences", False, "mean"),
-        ("inspect_sae_features", False, "mean"),
-        ("feature_enrichment", False, "mean"),
-        ("feature_enrichment_gallery", False, "mean"),
-        ("compare_sequence_sets", False, "mean"),
-        ("steer_generation", False, "mean"),
-    ],
-)
-def test_notebook_execution(name, use_flanks, pool, tmp_path, monkeypatch):
-    """Execute cookbook notebooks with local fixtures and verify their outputs."""
+NOTEBOOK_NAMES = [
+    "01_generate_idrs",
+    "02_explore_embeddings",
+    "03_interpret_sae_features",
+    "04_discover_feature_signature",
+    "05_finetune_and_generate",
+    "06_design_with_custom_rewards",
+    "07_design_with_rl_sae",
+]
+
+
+def execute_notebook(name, parameters):
+    """Execute all ordinary Python cells from a fresh namespace, replacing only user settings."""
+    namespace = {"__name__": "__main__"}
+    notebook = json.loads((NOTEBOOKS / f"{name}.ipynb").read_text())
+    for i, cell in enumerate(notebook["cells"]):
+        if cell["cell_type"] != "code":
+            continue
+        assert not cell["outputs"] and cell["execution_count"] is None
+        source = "".join(cell["source"])
+        exec(compile(source, f"{name}:cell_{i}", "exec"), namespace)
+        if "parameters" in cell["metadata"].get("tags", []):
+            namespace.update(parameters)
+    return namespace
+
+
+@pytest.mark.parametrize("name", NOTEBOOK_NAMES)
+def test_notebook_execution(name, tmp_path, monkeypatch):
+    """Run inference, training, checkpoint reload, and exports with real tiny models on CPU."""
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    monkeypatch.chdir(NOTEBOOKS)
+    from idiom.sae.features import write_signature
+    from idiom.train.grpo.reward import sae_feature
+
+    monkeypatch.chdir(tmp_path)  # No checkout-relative files or helper imports
     monkeypatch.setattr(plt, "show", lambda: plt.close("all"))
     previous_threads = torch.get_num_threads()
     torch.set_num_threads(1)
     torch.manual_seed(4)
     config = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=128)
     host = IDiom(IDiomTransformer(config))
+    model_dir = host.save_pretrained(tmp_path / "host")
     sae = IDiomSAE(
         SparseCoder(16, num_latents=32, k=4),
         host,
         layer=1,
-        host_model="test-host",
+        host_model=str(model_dir),
         region="idr",
         fim_mode="unprompted",
     )
-    monkeypatch.setattr(IDiom, "from_pretrained", classmethod(lambda cls, *args, **kwargs: host))
-    monkeypatch.setattr(IDiomSAE, "from_pretrained", classmethod(lambda cls, *args, **kwargs: sae))
+    sae_dir = sae.save_pretrained(tmp_path / "sae")
     positive = tmp_path / "positive.fasta"
     background = tmp_path / "background.fasta"
     positive.write_text("".join(f">same_IDR_3-18\nAC{'Q' * (8 + i)}{'S' * (8 - i)}DE\n" for i in range(8)))
     background.write_text("".join(f">same_IDR_3-18\nAC{'E' * (8 + i)}{'K' * (8 - i)}DE\n" for i in range(8)))
-    gallery = name == "feature_enrichment_gallery"
-    if gallery:
-        from idiom.sae.features import enrichment
-
-        name = "feature_enrichment"
-        # Exercise rendering/export even when random test weights yield no significant hits.
-        monkeypatch.setattr(
-            enrichment, "top_features", lambda result, **kwargs: [int(np.argmax(result["a"]))]
-        )
-    namespace = {"__name__": "__main__"}
-    notebook = json.loads((NOTEBOOKS / f"{name}.ipynb").read_text())
+    signature = write_signature(
+        tmp_path / "targets.json", {"demo": [0, 1], "second": [1, 2]}, provenance={"sae": str(sae_dir)}
+    )
+    parameters = dict(
+        OUT_DIR=tmp_path / "outputs",
+        MODEL_ID=str(model_dir),
+        SAE_ID=str(sae_dir),
+        DEVICE="cpu",
+        BATCH_SIZE=2,
+        LAYER=1,
+        INPUT_FASTA=positive,
+        INPUT_MODE="annotated",
+        MAX_RECORDS=8,
+        N=4,
+        MAX_NEW_TOKENS=12,
+        LENGTH_RANGE=None,
+        MAX_STEPS=2,
+        GROUP_SIZE=2,
+        TARGET_LENGTH=8,
+        POSITIVE_FASTA=positive,
+        POSITIVE_MODE="annotated",
+        BACKGROUND_FASTA=background,
+        BACKGROUND_MODE="annotated",
+        MAX_POSITIVE=8,
+        MAX_BACKGROUND=8,
+        SIGNATURE_FILE=signature,
+        SIGNATURE_NAMES=["demo", "second"],
+        SAE_DEVICE="cpu",
+    )
     try:
-        for i, cell in enumerate(notebook["cells"]):
-            if cell["cell_type"] != "code":
-                continue
-            source = "".join(cell["source"])
-            assert not cell["outputs"] and cell["execution_count"] is None
-            exec(compile(source, f"{name}:cell_{i}", "exec"), namespace)
-            if "OUT_DIR = Path(" in source:
-                namespace.update(
-                    OUT_DIR=tmp_path / "outputs",
-                    DEVICE="cpu",
-                    USE_FLANKS=use_flanks,
-                    POOL=pool,
-                    LAYER=1,
-                    INPUT_FASTA=positive,
-                    INPUT_MODE="annotated",
-                    MAX_RECORDS=8,
-                    N=4,
-                    MAX_NEW_TOKENS=12,
-                    LENGTH_RANGE=None,
-                    FEATURE_ID=0,
-                    POSITIVE_FASTA=positive,
-                    POSITIVE_MODE="annotated",
-                    BACKGROUND_FASTA=background,
-                    BACKGROUND_MODE="annotated",
-                    QUERY_FASTA=positive,
-                    QUERY_MODE="annotated",
-                    REFERENCE_FASTA=background,
-                    REFERENCE_MODE="annotated",
-                    RUN_SAE=True,
-                    RUN_PERPLEXITY=True,
-                    EXPORT_SIGNATURE=True,
-                    MAX_POSITIVE=8,
-                    MAX_BACKGROUND=8,
-                )
-        out = tmp_path / "outputs"
-        run = json.loads((out / "run.json").read_text())
-        assert run["elapsed_seconds"] > 0
+        namespace = execute_notebook(name, parameters)
+        out = parameters["OUT_DIR"]
+        assert json.loads((out / "run.json").read_text())["elapsed_seconds"] > 0
         assert list(out.glob("*.csv")) and list(out.glob("*.png"))
-        if name == "analyze_sequences":
-            assert np.load(out / "embeddings.npy").shape == (8, 16)
-            table = namespace["residue_table"]
-            assert table.protein_position_1based.tolist() == list(range(3, 19))
-            assert table.source_pos.tolist() == list(range(2, 18) if use_flanks else range(16))
-            assert table.is_idr.all()
-            assert "".join(table.residue) == "Q" * 8 + "S" * 8
-            residue_values = np.load(out / "first_sequence_residue_embeddings.npy")
-            assert residue_values.shape == (16, 16)
-            expected = residue_values.mean(0) if pool == "mean" else residue_values[-1]
-            np.testing.assert_allclose(np.load(out / "embeddings.npy")[0], expected, atol=1e-7)
-            assert run["settings"]["pool"] == pool
-            assert run["settings"]["use_flanks"] == use_flanks
-        if name == "generate_sequences":
+        assert out.with_suffix(".zip").exists()
+        if name.startswith("01"):
             redesigned = list(read_records(out / "redesigned_proteins.fasta"))
             assert redesigned and all(r.idr_start == 2 for r in redesigned)
             assert all(r.full_seq[:2] == "AC" and r.full_seq.endswith("DE") for r in redesigned)
-        if name == "inspect_sae_features":
-            assert namespace["trace_rows"]
-            assert min(r["protein_position"] for r in namespace["trace_rows"]) == 3
-        if name == "feature_enrichment":
-            assert len(namespace["table"]) == 32
-            assert set(map(lambda r: r.full_seq, namespace["positives"])).isdisjoint(
-                r.full_seq for r in namespace["background"]
+        if name.startswith("02"):
+            assert np.load(out / "embeddings.npy").shape == (8, 16)
+            assert namespace["residue_table"].protein_position_1based.tolist() == list(range(3, 19))
+        if name.startswith(("03", "04")):
+            monkeypatch.setattr(
+                IDiomSAE, "from_pretrained", lambda *a, **k: pytest.fail("Reopened results loaded a model")
             )
-        if gallery:
-            assert (out / "signature.json").exists()
-            assert (out / "feature_logos.png").exists()
-        if name == "compare_sequence_sets":
-            assert (out / "feature_prevalence.csv").exists()
-            assert (out / "aggregate_perplexity.csv").exists()
+            reuse = dict(parameters, OUT_DIR=tmp_path / "reopened")
+            if name.startswith("03"):
+                reuse["FEATURE_DIR"] = out / "features"
+            else:
+                reuse["RESULT_DIR"] = out
+            execute_notebook(name, reuse)
+        if name.startswith(("05", "06", "07")):
+            restored = IDiom.from_pretrained(out / "model", device="cpu")
+            assert any(
+                not torch.equal(a, b) for a, b in zip(host.model.parameters(), restored.model.parameters())
+            )
+            assert (out / "training/checkpoints/last.ckpt").is_file()
+        if name.startswith("07"):
+            assert (out / "signature_coverage.csv").is_file()
+            assert (out / "target_feature_presence.csv").is_file()
     finally:
+        sae_feature._sae.cache_clear()
+        sae_feature._target_ids.cache_clear()
         plt.close("all")
         torch.set_num_threads(previous_threads)
+
+
+def test_split_keeps_duplicate_idrs_together():
+    from idiom.data.records import Record
+    from idiom.utils.notebook_helpers import idr_sequence, split_records
+
+    records = [Record(str(i), s, 0, len(s)) for i, s in enumerate(["AAA", "CCC", "AAA", "DDD"])]
+    train, validation = split_records(records, seed=2)
+    assert train and validation
+    assert set(map(idr_sequence, train)).isdisjoint(map(idr_sequence, validation))
+
+
+def test_notebook_structure_and_links():
+    """Keep the release set numbered, output-free, and independent of companion Python files."""
+    import re
+
+    assert sorted(p.stem for p in NOTEBOOKS.glob("*.ipynb")) == NOTEBOOK_NAMES
+    for name in NOTEBOOK_NAMES:
+        path = NOTEBOOKS / f"{name}.ipynb"
+        notebook = json.loads(path.read_text())
+        parameters = []
+        for cell in notebook["cells"]:
+            source = "".join(cell["source"])
+            assert "workflow_utils" not in source
+            if cell["cell_type"] == "code":
+                compile(source, str(path), "exec")
+                assert cell["execution_count"] is None and not cell["outputs"]
+                parameters.extend(tag for tag in cell["metadata"].get("tags", []) if tag == "parameters")
+            else:
+                for dest in re.findall(r"\]\(([^)]+)\)", source):
+                    if "github/rotskoff-group/idiom/blob/v1/" in dest:
+                        assert dest.endswith(f"/cookbook/notebooks/{name}.ipynb")
+                    elif "://" not in dest and not dest.startswith("#"):
+                        assert (path.parent / dest.split("#")[0]).exists(), (name, dest)
+        assert len(parameters) == 1

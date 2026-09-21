@@ -17,12 +17,12 @@ from idiom.sae.features.enrichment import (
     MIN_TOTAL_FIRE,
     PREV_POS_FLOOR,
     SMOOTH,
-    boundary_features,
     enrich,
-    enriched_mask,
     feature_counts,
     length_match,
     load_sequences,
+    save_enrichment,
+    select_features,
     write_signature,
 )
 
@@ -89,6 +89,7 @@ def main(argv: list[str] | None = None) -> None:
         return kept
 
     positives = usable(args.positive)
+    positive_idrs = {r.full_seq[r.idr_start : r.idr_end] for r in positives}
     if args.max_positive is not None and len(positives) > args.max_positive:
         chosen = np.random.default_rng(args.seed).choice(len(positives), args.max_positive, replace=False)
         positives = [positives[i] for i in sorted(chosen)]
@@ -99,7 +100,6 @@ def main(argv: list[str] | None = None) -> None:
         from huggingface_hub import hf_hub_download
 
         background_path = Path(hf_hub_download(DATA_REPO, VALIDATION_FASTA, repo_type="dataset"))
-    positive_idrs = {r.full_seq[r.idr_start : r.idr_end] for r in positives}
     pool = [r for r in usable(background_path) if r.full_seq[r.idr_start : r.idr_end] not in positive_idrs]
     background = length_match(positives, pool, n=args.max_background, rng=np.random.default_rng(args.seed))
     if not background:
@@ -111,19 +111,31 @@ def main(argv: list[str] | None = None) -> None:
     a, n_pos = feature_counts(pos_fd)
     b, n_neg = feature_counts(bg_fd)
     result = enrich(a, n_pos, b, n_neg, sae.sae.num_latents, min_total_fire=args.min_total_fire)
-    mask = enriched_mask(
-        result, fdr_alpha=args.fdr_alpha, log2or_floor=args.log2or_floor, prev_pos_floor=args.prev_pos_floor
+    selection = select_features(
+        result,
+        n=args.top_n,
+        drop_boundary=not args.keep_boundary,
+        feature_dir=bg_fd,
+        fdr_alpha=args.fdr_alpha,
+        log2or_floor=args.log2or_floor,
+        prev_pos_floor=args.prev_pos_floor,
     )
-    candidates = np.flatnonzero(mask)
-    bad = set() if args.keep_boundary else boundary_features(bg_fd, candidates)
-    ranked = candidates[np.argsort(-result["log2or"][candidates], kind="stable")]
-    ids = [int(f) for f in ranked if f not in bad][: args.top_n]
+    ids = selection["ids"]
+    save_enrichment(args.out / "enrichment.npz", result, selection)
     columns = ["a", "b", "prev_pos", "prev_neg", "log2or", "z", "p", "fdr", "active"]
     with (args.out / "enrichment.tsv").open("w", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t")
         writer.writerow(["feature_id", *columns, "enriched", "boundary_filtered", "selected"])
         for f in range(sae.sae.num_latents):
-            writer.writerow([f, *(result[key][f] for key in columns), bool(mask[f]), f in bad, f in ids])
+            writer.writerow(
+                [
+                    f,
+                    *(result[key][f] for key in columns),
+                    bool(selection["enriched"][f]),
+                    bool(selection["boundary_filtered"][f]),
+                    bool(selection["selected"][f]),
+                ]
+            )
     provenance = {
         **{key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
         "background": str(background_path),

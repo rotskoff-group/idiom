@@ -1,79 +1,72 @@
-# Notebooks
+# IDiom notebooks
 
-Start with **[Analyze your sequences](analyze_sequences.ipynb)**. Each notebook runs independently,
-with a small demo and one configuration cell for your own data.
+Seven independent workflows, ordered from generation to post-training. Open any notebook
+in Colab and run it from top to bottom; no prior notebook or repository checkout is required.
 
-| Notebook | Workflow | Colab |
+| Notebook | Goal | Colab |
 |---|---|---|
-| [`analyze_sequences.ipynb`](analyze_sequences.ipynb) | Start here: validate your IDRs, embed, find neighbors, and export results | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/analyze_sequences.ipynb) |
-| [`generate_sequences.ipynb`](generate_sequences.ipynb) | Generate de novo IDRs or replace an annotated protein region | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/generate_sequences.ipynb) |
-| [`inspect_sae_features.ipynb`](inspect_sae_features.ipynb) | Rank features in your sequences and plot residue activations | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/inspect_sae_features.ipynb) |
-| [`feature_enrichment.ipynb`](feature_enrichment.ipynb) | Compare feature prevalence with a length-matched background | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/feature_enrichment.ipynb) |
-| [`compare_sequence_sets.ipynb`](compare_sequence_sets.ipynb) | Compare candidates and references; optionally score perplexity | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/compare_sequence_sets.ipynb) |
-| [`steer_generation.ipynb`](steer_generation.ipynb) | Compare feature steering strengths with an unsteered baseline | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/steer_generation.ipynb) |
+| [01 · Generate IDRs](01_generate_idrs.ipynb) | Sample standalone IDRs and redesign an IDR between protein flanks | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/01_generate_idrs.ipynb) |
+| [02 · Explore embeddings](02_explore_embeddings.ipynb) | Extract representations, find similar sequences, and visualize a projection | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/02_explore_embeddings.ipynb) |
+| [03 · Interpret SAE features](03_interpret_sae_features.ipynb) | Rank features, inspect residue traces and logos, and reopen saved activations | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/03_interpret_sae_features.ipynb) |
+| [04 · Discover a feature signature](04_discover_feature_signature.ipynb) | Compare positives and background, inspect enrichment, and export targets | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/04_discover_feature_signature.ipynb) |
+| [05 · Fine-tune and generate](05_finetune_and_generate.ipynb) | Train on your sequences, reload the model, and compare samples | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/05_finetune_and_generate.ipynb) |
+| [06 · Design with custom rewards](06_design_with_custom_rewards.ipynb) | Run GRPO with a transparent sequence-property objective | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/06_design_with_custom_rewards.ipynb) |
+| [07 · Design with RL-SAE](07_design_with_rl_sae.ipynb) | Optimize a feature signature or a union of signatures and evaluate coverage | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/07_design_with_rl_sae.ipynb) |
 
-## Run locally or in Colab
+## Setup and your own data
 
-Install IDiom from the repository root (`pip install -e .`) and a notebook environment
-(`pip install jupyterlab pandas`). Launch `jupyter lab` from the repository root or this directory.
-Keep `workflow_utils.py` beside the notebooks. In Colab, select a GPU runtime; the setup cell
-installs missing dependencies and downloads the companion helper. Local edits to the notebooks
-and helper must be published before the Colab links can use them.
+Select a GPU runtime in Colab. The setup cell installs `idiom[cookbook]` from the `v1`
+release when IDiom is absent. Demo FASTAs come from that same release. An older installed
+IDiom must be upgraded and the kernel restarted. Locally, install the cookbook extra and
+open the notebook with Jupyter. Shared input and comparison helpers are installed as
+`idiom.utils.notebook_helpers`; there is no separately downloaded Python helper.
 
-The analysis and generation starters default to IDiom-20M; SAE workflows load the released
-300M host model. A GPU is recommended; CPU runs are supported but slower. First runs download
-weights. Analysis and inspection use six illustrative IDRs, comparison uses two groups of three,
-and enrichment samples up to 128 positives and 512 background records. Enrichment downloads the
-validation FASTA before sampling. These demo settings do not reproduce published signatures.
+Each notebook has one input/settings cell. Upload a FASTA using Colab's Files pane or set
+an absolute local/Drive path. `INPUT_MODE="idr"` accepts isolated IDRs with ordinary
+headers. `"annotated"` requires full proteins with `_IDR_x-y` headers using **1-based,
+inclusive** coordinates. Python APIs use **0-based, end-exclusive** coordinates.
+These workflows do not predict IDR boundaries. Invalid records are audited, not repaired.
+Repeated accessions receive distinct record IDs; audits preserve the original names.
 
-Each notebook prints measured elapsed time and saves it in `run.json`, alongside settings and
-package versions. Timing includes model loading and analysis, excluding installation. Hardware
-and sequence lengths strongly affect runtime; these are not fixed hardware benchmarks.
-Reduce sample counts and generation/SAE batch sizes when needed. Generation uses a bounded token
-budget and can terminate at that budget; inspect lengths before interpreting candidates. SAE
-inspection and comparison use sparse feature datasets, whose construction still requires host RAM.
+For Drive persistence, mount Drive and set `OUT_DIR` to a directory there. Otherwise,
+the final cell creates a ZIP and offers a Colab download. Use a new output directory for
+each experiment. Training notebooks accept `RESUME_FROM` and save optimizer checkpoints
+as well as reloadable model releases. Archives containing model checkpoints can be large.
 
-## Bring your own sequences
+## Hardware and scale
 
-- **Isolated IDRs:** choose `"idr"` input mode. Ordinary FASTA headers work. If an `_IDR_x-y`
-  suffix is present, it must span the whole sequence (`_IDR_1-L`).
-- **Full proteins:** choose `"annotated"` and provide `_IDR_x-y` headers with 1-based inclusive spans.
-  Invalid annotations are reported instead of being interpreted as whole-protein IDRs.
-- Use uppercase canonical amino acids. Input audits list accepted/excluded records and reasons.
-  A unique record ID maps every result back to the original header and accession, even when
-  accessions repeat. No sequence is silently truncated to fit model context.
+Generation, embeddings, SFT, and custom-reward examples default to the 20M model. SAE
+workflows use the released 300M host and its matching SAE. Small inference examples can
+run on CPU. Training defaults are short demonstrations, not convergence recipes.
+RL-SAE defaults to a CPU reward lens to reduce GPU memory pressure, at a speed cost.
+A free Colab GPU is not guaranteed to fit every training configuration.
 
-Analysis embeddings average isolated IDR residues by default; set `USE_FLANKS=True` to retain
-annotated protein context. The released SAE always reads isolated IDRs. Sequence-set comparison extracts isolated IDRs from both groups
-for consistent embeddings and optional likelihood scoring. Perplexity is an aggregate,
-token-weighted diagnostic, not a biological quality score.
+Reduce sequence counts, batch size, and generation length when needed. The feature builder
+retains sparse output batches in host RAM. Embedding neighbor comparisons and string-similarity
+checks are intended for small sets. Runtime and memory depend on the chosen hardware and inputs;
+fresh-kernel CPU tests with tiny models do not establish full-model Colab performance.
 
-## Outputs and next steps
+## Saved outputs and handoffs
 
-Each workflow saves plots and/or tables, input audits, and `run.json` in its configured output
-directory. Reusing that directory replaces named files; use a fresh directory per analysis so
-older optional exports cannot be mistaken for current results. The notebooks print the output
-path; in Colab, download results using the Files panel before disconnecting.
+- **01:** generated and redesigned FASTAs, candidate metrics, input audit, plots, and settings.
+- **02:** embeddings, row metadata, nearest neighbors, PCA coordinates, and residue embeddings.
+- **03:** sparse activations, feature rankings, traces, aligned windows, logo data, and figures.
+  Set `FEATURE_DIR` to reopen a dataset from the dataset CLI or notebook 04 without inference.
+- **04:** selected input FASTAs and audits, `fd_positive/`, `fd_background/`, `enrichment.npz`,
+  `enrichment.tsv`, logo outputs, and optional `signature.json`. Set `RESULT_DIR` to reopen a
+  notebook or enrichment CLI run. The NPZ stores numerical statistics and selection diagnostics.
+- **05–07:** baseline and adapted FASTAs, comparison tables, training config and CSV logs,
+  `training/checkpoints/last.ckpt`, and `model/` for `IDiom.from_pretrained`.
+- **07:** also exports the chosen signature, component coverage, and target-feature presence.
 
-Generation writes IDR-only FASTAs for analysis, comparison, and enrichment, plus redesigned full
-proteins with updated spans. Inspection can guide feature selection for steering. Enrichment
-keeps signature export and the GRPO handoff optional; a small demo may find no significant features.
+Notebook 04's signature can be uploaded to notebook 07. Notebook 07 also includes a bundled
+target so it runs independently. Feature IDs belong to a particular SAE: retain its identity
+and model revision with your outputs. Legacy signature files without identity remain readable;
+the caller is responsible for pairing them with the correct SAE.
 
-`generate_and_embed.ipynb` and `sae_features.ipynb` remain as navigation pages for older links.
-Their workflows now live in the focused notebooks above.
-See the [cookbook](../README.md) for batch scripts and training workflows.
+Enrichment tests association with the supplied background, not biological function. Training
+and steering scores are not experimental validation. SFT's default split separates exact duplicate
+IDRs but does not separate homologs. Use clustered splits and independent evaluation for substantive studies.
 
-## Files you can reuse
-
-| Workflow | Main exports |
-|---|---|
-| Analyze | `sequence_summary.csv`, `embeddings.npy`, `embedding_index.csv`, `nearest_neighbors.csv`, PCA figure and coordinates |
-| Generate | `idrs.fasta`, `redesigned_idrs.fasta`, `redesigned_proteins.fasta`, `original_idr.fasta`, `candidates.csv` |
-| Inspect | `features/`, `sequence_index.csv`, `feature_ranking.csv`, `residue_traces.csv`, activation figures |
-| Enrichment | Selected FASTAs and record indices, input audits, `enrichment.csv`, logos, optional `signature.json` |
-| Compare | Sequence summaries, composition figures, `nearest_references.csv`, optional feature prevalence and aggregate perplexity |
-| Steer | One FASTA per strength, `candidates.csv` with measured activations, sequence index, comparison figure |
-
-Record IDs join result tables to input audits; the original accession and header are preserved there.
-FASTA annotations are 1-based inclusive; exported residue plots use original protein coordinates.
-The demo sequences illustrate the workflow and carry no experimental functional labels.
+Pretraining, SAE training, larger runs, and external predictor integrations remain in
+[the script cookbook](../scripts/README.md).

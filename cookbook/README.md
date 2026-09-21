@@ -54,19 +54,19 @@ See the main README's [sequence conventions](../README.md#sequence-conventions) 
 
 ## Notebooks
 
-Start with **[Analyze your sequences](notebooks/analyze_sequences.ipynb)**, then choose a
-workflow below. Each runs independently with a small demo, configurable FASTA inputs,
-validation reports, and exported results. See the [notebook guide](notebooks/README.md) for
-installation, input conventions, hardware guidance, and output details.
+Start with **Generate IDRs**, then choose a workflow below. Every notebook runs independently
+in Colab or locally, with a small demo, user-supplied inputs, and exported results.
+See the [notebook guide](notebooks/README.md) for setup, hardware, and output details.
 
-| Notebook | Workflow | Colab |
+| Notebook | Goal | Colab |
 |---|---|---|
-| [`analyze_sequences.ipynb`](notebooks/analyze_sequences.ipynb) | Start here: validate your IDRs, embed, find neighbors, and export results | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/analyze_sequences.ipynb) |
-| [`generate_sequences.ipynb`](notebooks/generate_sequences.ipynb) | Generate de novo IDRs or replace an annotated protein region | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/generate_sequences.ipynb) |
-| [`inspect_sae_features.ipynb`](notebooks/inspect_sae_features.ipynb) | Rank features in your sequences and plot residue activations | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/inspect_sae_features.ipynb) |
-| [`feature_enrichment.ipynb`](notebooks/feature_enrichment.ipynb) | Compare feature prevalence with a length-matched background | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/feature_enrichment.ipynb) |
-| [`compare_sequence_sets.ipynb`](notebooks/compare_sequence_sets.ipynb) | Compare candidates and references; optionally score perplexity | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/compare_sequence_sets.ipynb) |
-| [`steer_generation.ipynb`](notebooks/steer_generation.ipynb) | Compare feature steering strengths with an unsteered baseline | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/main/cookbook/notebooks/steer_generation.ipynb) |
+| [01 · Generate IDRs](notebooks/01_generate_idrs.ipynb) | Sample standalone IDRs and redesign an IDR between protein flanks | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/01_generate_idrs.ipynb) |
+| [02 · Explore embeddings](notebooks/02_explore_embeddings.ipynb) | Extract representations, find similar sequences, and visualize a projection | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/02_explore_embeddings.ipynb) |
+| [03 · Interpret SAE features](notebooks/03_interpret_sae_features.ipynb) | Rank features, inspect residue traces and logos, and reopen saved activations | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/03_interpret_sae_features.ipynb) |
+| [04 · Discover a feature signature](notebooks/04_discover_feature_signature.ipynb) | Compare positives and background, inspect enrichment, and export targets | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/04_discover_feature_signature.ipynb) |
+| [05 · Fine-tune and generate](notebooks/05_finetune_and_generate.ipynb) | Train on your sequences, reload the model, and compare samples | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/05_finetune_and_generate.ipynb) |
+| [06 · Design with custom rewards](notebooks/06_design_with_custom_rewards.ipynb) | Run GRPO with a transparent sequence-property objective | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/06_design_with_custom_rewards.ipynb) |
+| [07 · Design with RL-SAE](notebooks/07_design_with_rl_sae.ipynb) | Optimize a feature signature or a union of signatures and evaluate coverage | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/07_design_with_rl_sae.ipynb) |
 
 <br>
 
@@ -118,7 +118,7 @@ If you omit the background, the command downloads the held-out IDiom-DB validati
 and `signature.json` if features pass the filters. Set `FEATURES` in
 [sae_features.bash](scripts/training/grpo/sae_features.bash) and `signature` and `case` in
 [sae_features.yaml](scripts/training/grpo/sae_features.yaml) to train with that signature
-The [enrichment notebook](notebooks/feature_enrichment.ipynb) provides interactive analysis
+The [enrichment notebook](notebooks/04_discover_feature_signature.ipynb) provides interactive analysis
 
 ### Checkpoints and data
 

@@ -49,6 +49,7 @@ class IDiomSAE:
         Raises:
             ValueError: If fim_mode is neither "prompted" nor "unprompted".
         """
+        self.source = None
         self.sae = sae.eval().to(model.device)
         self.host = model
         self.layer = int(layer)
@@ -103,7 +104,7 @@ class IDiomSAE:
                     f"{d} records no host_model; pass model=IDiom.from_pretrained(...) explicitly."
                 )
             model = IDiom.load(cfg["host_model"], device=device)
-        return cls(
+        result = cls(
             sae,
             model,
             cfg["layer"],
@@ -111,6 +112,9 @@ class IDiomSAE:
             region=cfg.get("region", "all"),
             fim_mode=cfg.get("fim_mode", "prompted"),
         )
+
+        result.source = str(name_or_path)
+        return result
 
     def save_pretrained(self, out_dir, *, host_model: str | None = None) -> Path:
         """Write sae_config.json and sae.safetensors to a directory.
@@ -248,6 +252,7 @@ class IDiomSAE:
             batch_size=batch_size,
             region=self.region,
             fim_mode=self.fim_mode,
+            provenance={"sae": self.source, "host_model": self.host_model},
         )
 
     @torch.no_grad()

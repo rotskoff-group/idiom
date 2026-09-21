@@ -180,7 +180,6 @@ def test_sae_keeps_multiple_idrs_of_one_protein_separate(tmp_path):
     import numpy as np
 
     from idiom.data.records import read_records
-    from idiom.sae.features import per_sequence_activations
 
     fasta = tmp_path / "repeated.fasta"
     fasta.write_text(">P1_IDR_1-3\nACDEFGHIK\n>P1_IDR_6-9\nACDEFGHIK\n")
@@ -193,8 +192,8 @@ def test_sae_keeps_multiple_idrs_of_one_protein_separate(tmp_path):
         np.testing.assert_allclose(pooled, expected, atol=1e-6)
         feats, index = sae.encode(fasta, pool="none")
         assert {row["record_idx"] for row in index} == {0, 1}
-        groups = per_sequence_activations(feats, index)
-        assert [s for s, _ in groups] == ["ACD", "GHIK"]
+        groups = ["".join(row["residue"] for row in index if row["record_idx"] == i) for i in (0, 1)]
+        assert groups == ["ACD", "GHIK"]
 
 
 def test_idiomsae_save_records_published_host_model(tmp_path):

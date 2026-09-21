@@ -34,10 +34,12 @@ class FeatureDataset:
         layer (int): The layer the activations came from.
         region (str): The residue region the dataset covers.
         n_seqs (int): Number of sequences.
+        fim_mode (str | None): Stored prompt mode; None for legacy datasets.
+        provenance (dict): Optional SAE and host-model source identifiers.
     """
 
     def __init__(self, path: str | Path, in_memory: bool = False) -> None:
-        """Open a dataset directory and build the per-sequence row index.
+        """Open and validate a dataset; build the per-sequence index only when tracing.
 
         Args:
             path: The dataset directory.
@@ -52,23 +54,69 @@ class FeatureDataset:
         self.pos_idx = np.load(self.path / "pos_idx.npy", mmap_mode=mmap)
         self.strings = json.loads((self.path / "strings.json").read_text())
         meta = json.loads((self.path / "meta.json").read_text())
-        self.k = int(meta["k"])
+        if self.top_indices.ndim != 2:
+            raise ValueError("top_indices must have shape [residues, k]")
+        self.k = int(meta.get("k", self.top_indices.shape[-1]))
         self.num_latents = int(meta["num_latents"])
-        self.layer = int(meta["layer"])
+        self.layer = int(meta.get("layer", -1))
         self.region = str(meta.get("region", "all"))
 
+        self.fim_mode = meta.get("fim_mode")
+        self.provenance = meta.get("provenance", {})
+        self.n_seqs = len(self.strings)
+        if not isinstance(self.strings, list) or not all(isinstance(s, str) for s in self.strings):
+            raise ValueError("strings.json must contain sequence strings")
+        if self.top_indices.ndim != 2 or self.top_indices.shape != self.top_values.shape:
+            raise ValueError("top_indices and top_values must have matching [residues, k] shapes")
+        n_rows, k = self.top_indices.shape
+        if k != self.k or self.k < 1 or self.num_latents < self.k:
+            raise ValueError("Invalid k or num_latents metadata")
+        if self.seq_idx.shape != (n_rows,) or self.pos_idx.shape != (n_rows,):
+            raise ValueError("seq_idx and pos_idx must have one entry per residue")
+        for array in (self.top_indices, self.seq_idx, self.pos_idx):
+            if array.dtype.kind not in "iu":
+                raise ValueError("Feature, sequence, and position indices must be integers")
+        self._counts = np.zeros(self.n_seqs, dtype=np.int64)
+        lengths = np.array([len(s) for s in self.strings], dtype=np.int64)
+        for start, ti, tv in self._row_chunks():
+            seq = self.seq_idx[start : start + len(ti)]
+            pos = self.pos_idx[start : start + len(ti)]
+            if np.any(ti < 0) or np.any(ti >= self.num_latents):
+                raise ValueError("Feature index outside latent range")
+            if not np.isfinite(tv).all() or np.any(tv < 0):
+                raise ValueError("Activations must be finite and nonnegative")
+            if np.any(seq < 0) or np.any(seq >= self.n_seqs):
+                raise ValueError("Sequence index outside strings.json")
+            self._counts += np.bincount(np.asarray(seq, dtype=np.int64), minlength=self.n_seqs)
+            if np.any(pos < 0) or np.any(pos >= lengths[seq]):
+                raise ValueError("Position outside stored sequence")
+        self._order = self._offsets = None
+        self._ranking: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
+
+    def _sequence_index(self) -> None:
+        """Build the sequence index lazily; count-only workflows do not need it."""
+        if self._order is not None:
+            return
         # Sequence s occupies _order[_offsets[s]:_offsets[s + 1]]
         seq = np.asarray(self.seq_idx[:], dtype=np.int64)
         self.n_seqs = len(self.strings)
         self._order = np.argsort(seq, kind="stable").astype(np.int64)
         self._offsets = np.zeros(self.n_seqs + 1, dtype=np.int64)
-        np.cumsum(np.bincount(seq, minlength=self.n_seqs), out=self._offsets[1:])
-        self._ranking: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
+        np.cumsum(self._counts, out=self._offsets[1:])
 
     def sequence(self, local_seq_idx: int) -> str:
         """Return the stored FIM string for local_seq_idx."""
-        s = self.strings[int(local_seq_idx)]
-        return s.decode("utf-8") if isinstance(s, bytes) else str(s)
+        return self.strings[self._sequence_id(local_seq_idx)]
+
+    def _feature_id(self, value: int) -> int:
+        if not isinstance(value, (int, np.integer)) or not 0 <= value < self.num_latents:
+            raise ValueError(f"Feature ID must be an integer in [0, {self.num_latents})")
+        return int(value)
+
+    def _sequence_id(self, value: int) -> int:
+        if not isinstance(value, (int, np.integer)) or not 0 <= value < self.n_seqs:
+            raise ValueError(f"Sequence ID must be an integer in [0, {self.n_seqs})")
+        return int(value)
 
     # Chunk reductions to bound memory use for memory-mapped datasets
     CHUNK_ROWS = 1_000_000
@@ -85,7 +133,7 @@ class FeatureDataset:
 
     def row_activations(self, feature_id: int) -> np.ndarray:
         """Return float32 [N_res] activations, zero where feature_id was not selected."""
-        f = int(feature_id)
+        f = self._feature_id(feature_id)
         out = np.zeros(self.top_indices.shape[0], dtype=np.float32)
         for s, ti, tv in self._row_chunks():
             out[s : s + ti.shape[0]] = (tv * (ti == f)).sum(axis=1)
@@ -133,7 +181,7 @@ class FeatureDataset:
         peak = np.zeros(self.n_seqs, dtype=np.float32)
         np.maximum.at(peak, seq, row_acts)
 
-        total = np.bincount(seq, minlength=self.n_seqs)
+        total = self._counts
         fired = np.bincount(seq, weights=(row_acts > 0).astype(np.float64), minlength=self.n_seqs)
         frac = np.zeros(self.n_seqs, dtype=np.float32)
         nz = total > 0
@@ -145,7 +193,9 @@ class FeatureDataset:
 
         Unselected features have zero activation; sequences without rows return empty arrays.
         """
-        s = int(local_seq_idx)
+        s = self._sequence_id(local_seq_idx)
+        feature_id = self._feature_id(feature_id)
+        self._sequence_index()
         rows = self._order[self._offsets[s] : self._offsets[s + 1]]
         if rows.size == 0:
             return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.float32)
@@ -173,6 +223,8 @@ class FeatureDataset:
         Raises:
             ValueError: If sort_by is neither "peak" nor "fraction".
         """
+        if not isinstance(n, (int, np.integer)) or n < 0:
+            raise ValueError("n must be a nonnegative integer")
         _, peak, frac = self.feature_stats(feature_id)
         if sort_by == "peak":
             scores = peak
@@ -183,5 +235,5 @@ class FeatureDataset:
         nz = np.where(scores > 0)[0]
         if len(nz) == 0:
             return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.float32)
-        top = nz[np.argsort(-scores[nz])[:n]]
+        top = nz[np.argsort(-scores[nz], kind="stable")[:n]]
         return top, scores[top]

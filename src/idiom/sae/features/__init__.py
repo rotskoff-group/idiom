@@ -1,12 +1,31 @@
-"""Feature datasets, enrichment analysis, and sequence-logo windows."""
+"""Sparse feature datasets, peak windows, enrichment, and reusable design signatures."""
 
 from idiom.sae.features.build_feature_dataset import build_feature_dataset
+from idiom.sae.features.enrichment import (
+    enrich,
+    feature_counts,
+    load_enrichment,
+    save_enrichment,
+    select_features,
+    top_features,
+)
 from idiom.sae.features.feature_activations import FeatureDataset
-from idiom.sae.features.logos import per_sequence_activations, top_windows
+from idiom.sae.features.logos import AMINO_ACIDS, feature_windows, logo_data
+from idiom.sae.features.signatures import combine_signatures, load_signatures, write_signature
 
 __all__ = [
+    "AMINO_ACIDS",
     "FeatureDataset",
     "build_feature_dataset",
-    "per_sequence_activations",
-    "top_windows",
+    "combine_signatures",
+    "enrich",
+    "feature_counts",
+    "feature_windows",
+    "load_enrichment",
+    "load_signatures",
+    "logo_data",
+    "save_enrichment",
+    "select_features",
+    "top_features",
+    "write_signature",
 ]

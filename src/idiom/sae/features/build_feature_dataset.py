@@ -32,6 +32,7 @@ def build_feature_dataset(
     batch_size: int = 16,
     region: str = "all",
     fim_mode: str = "prompted",
+    provenance: dict | None = None,
 ) -> Path:
     """Write per-residue top-k features using the feature_activations module file schema.
 
@@ -48,6 +49,7 @@ def build_feature_dataset(
         batch_size: Positive number of records per forward batch.
         region: Residues to keep: "all", "idr", or "non_idr".
         fim_mode: Prompt format: "prompted" or "unprompted".
+        provenance: Optional SAE and host-model identifiers saved with the dataset.
 
     Returns:
         The output directory.
@@ -55,11 +57,30 @@ def build_feature_dataset(
     Raises:
         ValueError: If fim_mode is neither "prompted" nor "unprompted".
     """
+    if not isinstance(batch_size, int) or batch_size < 1:
+        raise ValueError("batch_size must be a positive integer")
+    if region not in {"all", "idr", "non_idr"}:
+        raise ValueError("region must be all, idr, or non_idr")
+    if not isinstance(layer, int) or not 0 <= layer < model.cfg.n_layers:
+        raise ValueError("layer outside model blocks")
+    records = list(records)
+    if not records:
+        raise ValueError("At least one valid record is required")
+    from idiom.data.tokenizer import RESIDUES
+
+    for r in records:
+        if (
+            not r.full_seq
+            or set(r.full_seq) - set(RESIDUES)
+            or not 0 <= r.idr_start < r.idr_end <= len(r.full_seq)
+        ):
+            raise ValueError(f"Invalid sequence or IDR span: {r.accession}")
     tok = tokenizer or Tokenizer()
     fim = fim_prompted if normalize_mode(fim_mode) == PROMPTED else fim_unprompted
+    if any(len(fim(r.full_seq, r.idr_start, r.idr_end)) + 1 > model.cfg.max_seq_len for r in records):
+        raise ValueError("Sequence exceeds model context")
     model = model.eval().to(device)
     sae = sae.eval().to(device)
-    records = list(records)
 
     top_idx_parts, top_val_parts, seq_parts, pos_parts, strings = [], [], [], [], []
 
@@ -90,6 +111,8 @@ def build_feature_dataset(
     (out / "meta.json").write_text(
         json.dumps(
             {
+                "schema_version": 1,
+                "provenance": provenance or {},
                 "k": int(sae.k),
                 "num_latents": int(sae.num_latents),
                 "layer": int(layer),

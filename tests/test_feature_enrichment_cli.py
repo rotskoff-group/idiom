@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from idiom.sae.features import load_enrichment, select_features
 from idiom.sae.features.feature_enrichment import main
 
 
@@ -71,6 +72,11 @@ def test_cli_downloads_background_and_exports(tmp_path, monkeypatch, inputs):
         rows = list(csv.DictReader(handle, delimiter="\t"))
     assert len(rows) == 3 and rows[0]["selected"] == "True"
     assert rows[2]["active"] == "False"
+    result, saved = load_enrichment(out / "enrichment.npz")
+    recomputed = select_features(result, feature_dir=out / "fd_background")
+    assert saved["ids"] == recomputed["ids"] == [0]
+    for key in ("enriched", "boundary_filtered", "selected"):
+        np.testing.assert_array_equal(saved[key], recomputed[key])
 
 
 def test_cli_local_background_no_signature_and_no_stale_rerun(tmp_path, monkeypatch, inputs):

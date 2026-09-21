@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# Train the paper's layer-18 SAE on unprompted IDR activations from frozen IDiom-300M
+# Train a layer-18 SAE on unprompted IDR activations from frozen IDiom-300M
 # Zero-based layer 18; expansion_factor=16 gives 16,384 latents and an auto-scaled LR of 2e-4
 # Needs: 1 GPU
 

@@ -1,63 +1,30 @@
-"""Tests for the residue windows a feature logo is built from."""
+"""Peak-window alignment and information content from saved sparse activations."""
+
+import json
 
 import numpy as np
 
-from idiom.sae.features import per_sequence_activations, top_windows
+from idiom.sae.features import FeatureDataset, feature_windows, logo_data
 
 
-def _index(seqs):
-    """Per-row metadata for a set of sequences, in the order encode(pool='none') returns rows."""
-    return [{"accession": acc, "source_pos": i, "residue": r} for acc, seq in seqs for i, r in enumerate(seq)]
-
-
-def test_per_sequence_activations_regroups_rows_by_accession():
-    """Verify legacy grouping of feature rows by accession."""
-    seqs = [("A", "MKV"), ("B", "GSGS")]
-    per_seq = per_sequence_activations(np.zeros((7, 4)), _index(seqs))
-    assert [s for s, _ in per_seq] == ["MKV", "GSGS"]
-    assert [idx.tolist() for _, idx in per_seq] == [[0, 1, 2], [3, 4, 5, 6]]
-
-
-def test_per_sequence_activations_orders_rows_by_source_position():
-    # Encoder rows may be shuffled; logo windows must follow source-residue order
-    """Verify that feature rows are restored to original protein order."""
-    index = [
-        {"accession": "A", "source_pos": 2, "residue": "V"},
-        {"accession": "A", "source_pos": 0, "residue": "M"},
-        {"accession": "A", "source_pos": 1, "residue": "K"},
-    ]
-    ((residues, idx),) = per_sequence_activations(np.zeros((3, 2)), index)
-    assert residues == "MKV" and idx.tolist() == [1, 2, 0]
-
-
-def _feats(n_res, peaks):
-    """Activations for one feature (column 0), with peaks as {row: value}."""
-    f = np.zeros((n_res, 1))
-    for row, val in peaks.items():
-        f[row, 0] = val
-    return f
-
-
-def test_top_windows_centres_on_the_peak_and_ranks_by_activation():
-    """Verify peak-centered windows ranked by activation strength."""
-    seqs = [("A", "AAAAKWAAAA"), ("B", "CCCCPYCCCC")]  # each peaks on its 6th residue
-    feats = _feats(20, {5: 1.0, 15: 9.0})  # B activates harder
-    per_seq = per_sequence_activations(feats, _index(seqs))
-    # 5-residue windows centred on the peak residue (W, Y), most-active sequence first
-    assert top_windows(0, feats, per_seq, half_width=2) == ["CPYCC", "AKWAA"]
-
-
-def test_top_windows_clamps_a_peak_at_the_edge():
-    """Verify that windows around edge peaks remain within sequence bounds."""
-    seqs = [("A", "WAAAA")]
-    feats = _feats(5, {0: 1.0})
-    per_seq = per_sequence_activations(feats, _index(seqs))
-    assert top_windows(0, feats, per_seq, half_width=1) == ["WAA"]  # clamped, still full width
-
-
-def test_top_windows_skips_short_sequences_and_silent_features():
-    """Verify exclusion of short sequences and inactive features from logo windows."""
-    seqs = [("short", "AA"), ("silent", "CCCCCCC")]
-    feats = _feats(9, {})
-    per_seq = per_sequence_activations(feats, _index(seqs))
-    assert top_windows(0, feats, per_seq, half_width=2) == []
+def test_windows_keep_peaks_aligned_and_missing_positions(tmp_path):
+    """Edge peaks and short sequences contribute at their real relative offsets."""
+    np.save(tmp_path / "top_indices.npy", np.zeros((5, 1), dtype=np.int32))
+    np.save(tmp_path / "top_values.npy", np.array([[3], [1], [0], [1], [2]], dtype=np.float32))
+    np.save(tmp_path / "seq_idx.npy", np.array([0, 0, 0, 1, 1]))
+    np.save(tmp_path / "pos_idx.npy", np.array([3, 4, 5, 3, 4]))
+    (tmp_path / "strings.json").write_text(json.dumps(["132ACD", "132EF"]))
+    (tmp_path / "meta.json").write_text(json.dumps(dict(k=1, num_latents=2, layer=0)))
+    fd = FeatureDataset(tmp_path)
+    windows = feature_windows(fd, 0, half_width=2)
+    assert [w.residues for w in windows] == ["--ACD", "-EF--"]
+    assert [w.peak_position for w in windows] == [3, 4]
+    assert np.isnan(windows[0].activations[:2]).all()
+    data = logo_data(fd, 0, half_width=2)
+    assert data["counts"].sum(axis=1).tolist() == [0, 1, 2, 1, 1]
+    assert data["information"].shape == (5, 20)
+    assert not data["information"][0].any()
+    np.testing.assert_allclose(data["mean_activation"], [0, 0.5, 2.5, 0.5, 0])
+    empty = logo_data(fd, 1, half_width=2)
+    assert not empty["windows"] and not empty["counts"].any()
+    assert feature_windows(fd, 0, n=0) == []
