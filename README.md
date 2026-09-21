@@ -1,7 +1,7 @@
 # IDiom
 
 <p align="center">
-  <a href="https://doi.org/10.64898/2026.04.10.717777">Preprint</a>
+  <a href="">Preprint</a>
   |
   <a href="https://huggingface.co/collections/jxliu2/idiom">Models</a>
   |
@@ -360,13 +360,13 @@ hf download jxliu2/idiom-db --repo-type dataset --include "idiom-db/idiom-db-v1_
 ## Citation
 
 ```bibtex
-@article{liu2026idiom,
-  author = {Liu, Jason and Ibarraran, Sebastian and Hu, Frank and Park, Abigail and Dunn, Alexander and Rotskoff, Grant},
-  title = {Generative design of intrinsically disordered protein regions with {IDiom}},
-  journal = {bioRxiv},
-  year = {2026},
-  doi = {10.64898/2026.04.10.717777},
-  URL = {https://doi.org/10.64898/2026.04.10.717777},
+@article{,
+  author = {},
+  title = {},
+  journal = {},
+  year = {},
+  doi = {},
+  URL = {},
 }
 ```
 
