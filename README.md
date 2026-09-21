@@ -92,7 +92,7 @@ print(sequences)
 Weights download on first use. By default, device selection uses `IDIOM_DEVICE` if set,
 otherwise CUDA when available or CPU. Pass `device="cpu"` or `device="cuda:0"` to
 `from_pretrained` to select a device explicitly. Reduce `batch_size` if GPU memory is limited.
-`from_pretrained` accepts a Hub model ID or a released directory; `IDiom.load`
+`from_pretrained` accepts a Hub model ID or a released directory. `IDiom.load`
 also accepts a Lightning `.ckpt` file.
 
 Generate 10 unprompted IDRs within a length range:
@@ -102,7 +102,7 @@ from idiom import IDiom
 
 model = IDiom.from_pretrained("jxliu2/idiom-300M")
 sequences = model.generate_unprompted(n=10, length_range=(80, 120))
-# Oversamples up to max_oversample * n draws; may return fewer than n sequences
+# Oversamples up to max_oversample * n draws and may return fewer than n sequences
 print(sequences)
 ```
 
@@ -116,7 +116,7 @@ sequences = model.generate_unprompted(n=10, temperature=0.8, top_p=0.9, seed=42)
 print(sequences)
 ```
 
-Lower temperatures concentrate sampling on more likely residues; `top_p=0.9` restricts
+Lower temperatures concentrate sampling on more likely residues. Setting `top_p=0.9` restricts
 each step to the most likely residues whose cumulative probability reaches 90%.
 Use `seed` for reproducibility with a fixed batch size. Length filtering
 may return fewer sequences if it reaches the sampling limit. See the
@@ -203,8 +203,8 @@ values, index = model.embed(record, layers=[18], pool="none")[18]  # Four IDR re
 last, index = model.embed(record, layers=[18], pool="last")[18]  # Final IDR residue vector
 ```
 
-`pool="mean"` averages IDR residue vectors; `"none"` returns them individually; `"last"`
-returns the final IDR residue's representation, excluding EOS and markers. Full-protein
+`pool="mean"` averages IDR residue vectors. Use `"none"` to return them individually or `"last"` to
+return the final IDR residue's representation, excluding EOS and markers. Full-protein
 inputs retain both flanks in the regular FIM computation, but flank embeddings are never
 returned. Per-residue rows follow original IDR sequence order within each input record.
 Metadata includes `record_idx`, `source_pos` (zero-based original protein position),
@@ -220,8 +220,8 @@ idiom_extract --model jxliu2/idiom-300M \
     --layers 18 --pool mean --out embeddings
 ```
 
-Use [Extract sequence embeddings](cookbook/notebooks/03_extract_embeddings.ipynb) for embedding extraction,
-or start with [Generate IDRs](cookbook/notebooks/01_generate_idrs.ipynb) for de novo and prompted generation.
+Use [Extract sequence embeddings](cookbook/notebooks/extract_embeddings.ipynb) for embedding extraction,
+or start with [Generate IDRs](cookbook/notebooks/generate_idrs.ipynb) for de novo and prompted generation.
 
 <br>
 
@@ -268,12 +268,12 @@ This released IDiomSAE uses only unprompted IDRs. Full-protein inputs with marke
 are accepted, but their flanks are excluded from the SAE's model input. Its saved prompt
 mode controls this automatically. Future prompted SAEs can retain flanks as context while
 returning only IDR features. The public encoding interface rejects SAEs trained exclusively
-on non-IDR residues; internal training and analysis retain region-aware extraction.
+on non-IDR residues. Internal training and analysis retain region-aware extraction.
 
-Use the [SAE inspection notebook](cookbook/notebooks/04_interpret_sae_features.ipynb)
+Use the [SAE inspection notebook](cookbook/notebooks/interpret_sae_features.ipynb)
 to inspect highly activating sequences and activation patterns, and use the
-[enrichment notebook](cookbook/notebooks/05_discover_feature_signature.ipynb) to identify features
-enriched within a set of sequences. The [RL-SAE notebook](cookbook/notebooks/08_design_with_rl_sae.ipynb)
+[enrichment notebook](cookbook/notebooks/enriched_feature_signature.ipynb) to identify features
+enriched within a set of sequences. The [RL-SAE notebook](cookbook/notebooks/rl_with_sae_rewards.ipynb)
 uses feature signatures as design rewards and evaluates coverage after training.
 
 <br>
@@ -321,7 +321,7 @@ The cookbook in `cookbook/` provides detailed examples and workflows for using a
 
 - [Eight independent notebooks](cookbook/notebooks/README.md): generation, IDR prediction, embeddings, SAE interpretation,
   signature discovery, SFT, custom-reward GRPO, and RL-SAE. Start with
-  [Generate IDRs](cookbook/notebooks/01_generate_idrs.ipynb), locally or in Colab.
+  [Generate IDRs](cookbook/notebooks/generate_idrs.ipynb), locally or in Colab.
 - Scripts in `cookbook/scripts/`: run supervised fine-tuning and GRPO-based reinforcement learning with custom rewards, and run additional SAE workflows.
 - Rewards in `cookbook/rewards/`: define custom reinforcement learning rewards and connect external scorers such as SPARROW, FINCHES, ProtGPS, PADDLE, or custom code.
 
@@ -336,7 +336,7 @@ IDiom models are hosted in our [Hugging Face collection](https://huggingface.co/
 | [idiom-300M](https://huggingface.co/jxliu2/idiom-300M) | 302M | 24 layers, width 1024 |
 | [idiom-85M](https://huggingface.co/jxliu2/idiom-85M) | 85M | 12 layers, width 768 |
 | [idiom-20M](https://huggingface.co/jxliu2/idiom-20M) | 18.9M | 6 layers, width 512 |
-| [idiomsae-300M-L18-k32](https://huggingface.co/jxliu2/idiomsae-300M-L18-k32) | — | SAE on layer 18 of idiom-300M; 16,384 latents, k=32 |
+| [idiomsae-300M-L18-k32](https://huggingface.co/jxliu2/idiomsae-300M-L18-k32) | — | SAE on layer 18 of idiom-300M with 16,384 latents, k=32 |
 
 <br>
 

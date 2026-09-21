@@ -139,7 +139,7 @@ def sae_signature(
     except Exception as e:
         raise ValueError(
             f"sae_signature: cannot read case {case!r} of {features!r} ({type(e).__name__}: {e}). "
-            f"Build a signature with cookbook/notebooks/04_discover_feature_signature.ipynb, then point the "
+            f"Build a signature with cookbook/notebooks/enriched_feature_signature.ipynb, then point the "
             f"term's features at it."
         ) from e
     if signature not in sets:

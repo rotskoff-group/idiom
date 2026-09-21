@@ -1,6 +1,6 @@
 # Rewards
 
-See the [cookbook](../README.md#reward-definition) for details.
+See the [cookbook guide](../README.md#reward-definition) for reward configuration and examples.
 
 ## Custom reward and shaping
 
@@ -8,7 +8,9 @@ See the [cookbook](../README.md#reward-definition) for details.
 
 ## External scorers
 
-The adapters in `cookbook/rewards/scorers/` run scorers as subprocesses in separate environments.
+The adapters in `cookbook/rewards/scorers/` run scorers as subprocesses.
+The [GRPO scripts](../scripts/README.md#grpo-examples) launch them in separate
+environments with `uv run`; install `uv` with `python -m pip install uv`.
 
 | File | Provides |
 |---|---|

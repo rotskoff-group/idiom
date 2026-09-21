@@ -21,5 +21,5 @@ idiom_feature_dataset \
     --out "$OUT" \
     --batch-size "$BATCH_SIZE"
 
-# Inspect the output with FeatureDataset in Python; see cookbook/notebooks/03_interpret_sae_features.ipynb.
+# Inspect the output with FeatureDataset in Python; see cookbook/notebooks/interpret_sae_features.ipynb.
 echo "DONE -> $OUT"

@@ -1,6 +1,7 @@
 # Bash scripts
 
-See the [cookbook](../README.md#bash-scripts) for details.
+See the [cookbook guide](../README.md#getting-started) for installation and setup.
+Set `REPO`, `OUT`, and workflow parameters in each script before running it.
 
 ## IDR generation
 
@@ -27,16 +28,19 @@ See the [cookbook](../README.md#bash-scripts) for details.
 
 ### GRPO examples
 
+See [reward definition](../README.md#reward-definition) for reward configuration.
+Examples that launch external scorers with `uv run` require `uv` (`python -m pip install uv`).
+
 Each `.bash` script loads reward terms from the matching `.yaml` file in
 `cookbook/scripts/training/grpo/` (for example, `combined.bash` loads `combined.yaml`).
-Edit rewards, scorer commands, shaping, targets, and weights in YAML; edit training settings
+Edit rewards, scorer commands, shaping, targets, and weights in YAML. Edit training settings
 and runtime paths in Bash. The scripts export variables used by `${oc.env:...}` entries
 in YAML and pass the loaded terms as a Hydra command-line override.
 
 | Script | Reward |
 |---|---|
 | [sae_features.bash](training/grpo/sae_features.bash) | Reinforcement learning with sparse autoencoder features (RL-SAE) |
-| [custom_reward.bash](training/grpo/custom_reward.bash) | Use a custom defined reward |
+| [custom_reward.bash](training/grpo/custom_reward.bash) | Use a custom Python reward |
 | [custom_scorer.bash](training/grpo/custom_scorer.bash) | Run a custom external scorer as a subprocess in a separate environment |
 | [sparrow.bash](training/grpo/sparrow.bash) | Target an IDR sequence property such as radius of gyration using [SPARROW](https://github.com/idptools/sparrow) |
 | [finches.bash](training/grpo/finches.bash) | Match ProTalpha interaction strength with H1.0 CTD using [FINCHES](https://github.com/idptools/finches) |

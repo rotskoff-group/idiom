@@ -15,8 +15,8 @@ Here we provide examples of how to use IDiom!
 
 ## Getting started
 
-Open a notebook below to work interactively in Colab; each notebook includes installation
-and example-data setup. For local use or Bash scripts,
+Open a notebook below to work interactively in Colab. Each notebook includes installation
+and example-data setup. For local notebooks, install `idiom[cookbook]`. For Bash scripts,
 [install IDiom and clone the repository](../README.md#installation).
 
 Next, Bash scripts in `cookbook/scripts/` are provided as examples of training, inference, and SAE workflows. To run these scripts, activate your IDiom-installed environment, edit the `REPO` and `OUT` directories, then run, for example:
@@ -40,7 +40,7 @@ Demo inputs are included in `cookbook/example_data`.
 | `cookbook/example_data/protgps/` | IDRs associated with six subcellular compartments |
 | `cookbook/example_data/effector/` | Experimentally measured activation and repression domain IDRs |
 | `cookbook/example_data/disprot/` | Held-out proteins with annotated IDRs and flanking context |
-| [`cookbook/example_data/sae_features/`](example_data/sae_features/README.md) | Enriched top-30 and original private-30 SAE targets |
+| [`cookbook/example_data/sae_features/`](example_data/sae_features/) | Enriched top-30 and original private-30 SAE targets |
 | `cookbook/example_data/prompted_grpo/` | HP1α (P45973), IDR residues 79–123 |
 | `cookbook/example_data/finches/` | ProTalpha and H1.0 C-terminal reference constructs |
 
@@ -50,6 +50,13 @@ may repeat accessions with different spans. Prompted IDR generation uses the fla
 
 See the main README's [sequence conventions](../README.md#sequence-conventions) for more information.
 
+[`sae_signatures.json`](example_data/sae_features/sae_signatures.json) provides targets for
+`jxliu2/idiomsae-300M-L18-k32`: `top30` contains enriched features; `private30` contains
+the original private-feature targets, not the result of removing shared features from `top30`.
+Both cover the six main compartments plus `pml_body` and `post_synaptic_density`.
+Select `signature` (e.g. `nucleolus`) and `case` in
+[`sae_features.yaml`](scripts/training/grpo/sae_features.yaml).
+
 <br>
 
 ## Notebooks
@@ -58,27 +65,19 @@ Run any notebook independently in Colab or locally, using example data or your o
 
 | Notebook | Colab |
 |---|---|
-| [01 · Generate IDRs](notebooks/01_generate_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/01_generate_idrs.ipynb) |
-| [02 · Predict IDRs and generate replacements](notebooks/02_predict_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/02_predict_idrs.ipynb) |
-| [03 · Extract embeddings](notebooks/03_extract_embeddings.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/03_extract_embeddings.ipynb) |
-| [04 · Interpret SAE features](notebooks/04_interpret_sae_features.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/04_interpret_sae_features.ipynb) |
-| [05 · Discover a feature signature](notebooks/05_discover_feature_signature.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/05_discover_feature_signature.ipynb) |
-| [06 · Fine-tune and generate](notebooks/06_finetune_and_generate.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/06_finetune_and_generate.ipynb) |
-| [07 · Design with custom rewards](notebooks/07_design_with_custom_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/07_design_with_custom_rewards.ipynb) |
-| [08 · Design with SAE rewards](notebooks/08_design_with_rl_sae.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/08_design_with_rl_sae.ipynb) |
+| [Generate IDRs](notebooks/generate_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/generate_idrs.ipynb) |
+| [Predict IDRs and generate replacements](notebooks/predict_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/predict_idrs.ipynb) |
+| [Extract embeddings](notebooks/extract_embeddings.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/extract_embeddings.ipynb) |
+| [Interpret SAE features](notebooks/interpret_sae_features.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/interpret_sae_features.ipynb) |
+| [Enriched feature signature](notebooks/enriched_feature_signature.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/enriched_feature_signature.ipynb) |
+| [RL and generate](notebooks/rl_and_generate.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_and_generate.ipynb) |
+| [RL with custom rewards](notebooks/rl_with_custom_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_with_custom_rewards.ipynb) |
+| [RL with SAE rewards](notebooks/rl_with_sae_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_with_sae_rewards.ipynb) |
 
-Run the setup cell in Colab, or install `idiom[cookbook]` locally. Notebooks 01–03
-default to CPU. A GPU is recommended for 04–08; RL-SAE may need more memory than
-some Colab runtimes provide.
-
-Set your FASTA path in the settings cell. Use `INPUT_MODE="idr"` for isolated IDRs or
-`"annotated"` for proteins with [IDR span headers](../README.md#sequence-conventions).
-Notebook 02 prepares both formats from unannotated proteins using metapredict V3.
-
-The default `OUT_DIR` includes a timestamp. Download results through Colab's Files
-pane before the runtime ends, or copy them to mounted Drive. Notebook 05 exports
-signatures for notebook 08; use the same SAE weights, case, and signature name for
-both. See the [notebook guide](notebooks/README.md) for example inputs and saved outputs.
+Run cells in order; Colab notebooks install dependencies and download example data.
+For local use, install `idiom[cookbook]`. Input and parameter details are in each notebook.
+A GPU is recommended for SAE analysis, fine-tuning, and RL.
+Download results from Colab before the runtime ends.
 
 <br>
 
@@ -89,7 +88,6 @@ In `cookbook/scripts/`, we provide the following Bash scripts. Details are provi
 `pretrain.bash`, `sft.bash`, `train_sae.bash`, and all scripts in `cookbook/scripts/training/grpo/` load default YAML configs from `src/idiom/configs/` and apply Hydra command-line overrides.
 
 `generate_unprompted.bash`, `generate_prompted.bash`, `build_feature_dataset.bash`, and `feature_enrichment.bash` use command-line arguments without YAML configs.
-
 
 ### IDR generation
 
@@ -114,34 +112,6 @@ In `cookbook/scripts/`, we provide the following Bash scripts. Details are provi
 | [pretrain.bash](scripts/training/pretrain.bash) | Pretrain IDiom from scratch |
 | [cookbook/scripts/training/grpo/](scripts/training/grpo/) | Reinforcement learning with custom rewards, SAE features, or external scorers |
 
-
-
-<!-- ### Generation and analysis details
-
-Generation must fit the model context, including flanks and markers. Length filtering can
-return fewer sequences than requested. Adjust `--batch-size` for memory use; seeded results
-are reproducible for a fixed batch size. Consult each script and the command's `--help` for options
-
-### Feature enrichment
-
-Edit the positive FASTA and optional background in [feature_enrichment.bash](scripts/sae/feature_enrichment.bash)
-If you omit the background, the command downloads the held-out IDiom-DB validation FASTA from
-`jxliu2/idiom-db`. Use a fresh output directory. The run writes feature datasets, `enrichment.tsv`, `run.json`,
-and `signature.json` if features pass the filters. Set `FEATURES` in
-[sae_features.bash](scripts/training/grpo/sae_features.bash) and `signature` and `case` in
-[sae_features.yaml](scripts/training/grpo/sae_features.yaml) to train with that signature
-The [enrichment notebook](notebooks/05_discover_feature_signature.ipynb) provides interactive analysis
-
-### Checkpoints and data
-
-- Pretraining and SFT automatically resume from `$OUT/checkpoints/last.ckpt` when present
-- GRPO saves a final checkpoint; set `trainer.checkpoint_every` for periodic checkpoints
-  and `resume_from` to resume
-- SAE training exports `sae_config.json` and `sae.safetensors`; resuming requires a Lightning checkpoint
-
-FASTA training creates a `<fasta>.idiomstore/` sidecar on first use
-See [example data](#example-data) for inputs and sequence conventions -->
-
 <br>
 
 ## Reinforcement learning
@@ -162,18 +132,13 @@ At least one reward must be enabled for training, and multiple rewards can be co
 shaping function and weight.
 
 In this cookbook, we provide several packaged examples for running GRPO training in `cookbook/scripts/training/grpo/`.
-<!-- Define at least one term in -->
-<!-- `reward.terms`; none are added automatically -->
-
-<!-- GRPO logs metapredict disorder separately from the reward; set `grpo.track_disorder=false` -->
-<!-- to disable it -->
 
 ### GRPO examples
 
 | Script | Reward |
 |---|---|
 | [sae_features.bash](scripts/training/grpo/sae_features.bash) | Reinforcement learning with sparse autoencoder features (RL-SAE) |
-| [custom_reward.bash](scripts/training/grpo/custom_reward.bash) | Use a custom defined reward |
+| [custom_reward.bash](scripts/training/grpo/custom_reward.bash) | Use a custom Python reward |
 | [custom_scorer.bash](scripts/training/grpo/custom_scorer.bash) | Run a custom external scorer as a subprocess in a separate environment |
 | [sparrow.bash](scripts/training/grpo/sparrow.bash) | Target an IDR sequence property such as radius of gyration using [SPARROW](https://github.com/idptools/sparrow) |
 | [finches.bash](scripts/training/grpo/finches.bash) | Match ProTalpha interaction strength with H1.0 CTD using [FINCHES](https://github.com/idptools/finches) |
@@ -194,7 +159,7 @@ total reward = sum(weight × shaping(raw reward))
 
 Each script in `cookbook/scripts/training/grpo/` loads `reward.terms` from its matching
 YAML file (for example, `custom_reward.bash` loads `custom_reward.yaml`). Edit rewards,
-scorer commands, shaping, and weights in YAML; edit training settings and runtime paths
+scorer commands, shaping, and weights in YAML. Edit training settings and runtime paths
 in Bash. No Hydra `defaults` section is needed in the reward YAML.
 
 <br>

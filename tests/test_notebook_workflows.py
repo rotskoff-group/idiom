@@ -44,14 +44,14 @@ def test_input_audit_and_roundtrip(tmp_path):
 
 
 NOTEBOOK_NAMES = [
-    "01_generate_idrs",
-    "02_predict_idrs",
-    "03_extract_embeddings",
-    "04_interpret_sae_features",
-    "05_discover_feature_signature",
-    "06_finetune_and_generate",
-    "07_design_with_custom_rewards",
-    "08_design_with_rl_sae",
+    "generate_idrs",
+    "predict_idrs",
+    "extract_embeddings",
+    "interpret_sae_features",
+    "enriched_feature_signature",
+    "rl_and_generate",
+    "rl_with_custom_rewards",
+    "rl_with_sae_rewards",
 ]
 
 
@@ -143,13 +143,13 @@ def test_notebook_execution(name, additional, tmp_path, monkeypatch):
         out = parameters["OUT_DIR"]
         assert json.loads((out / "run.json").read_text())["elapsed_seconds"] > 0
         assert list(out.glob("*.csv")) or (out / "enrichment.tsv").exists()
-        if name.startswith("01"):
+        if name == "generate_idrs":
             redesigned = list(read_records(out / "redesigned_proteins.fasta"))
             assert redesigned and all(r.idr_start == 2 for r in redesigned)
             assert all(r.full_seq.startswith("AC") and r.full_seq.endswith("DE") for r in redesigned)
             assert (out / "generated.fasta").exists()
             assert len(namespace["sequences"]) == parameters["N"]
-        if name.startswith("02"):
+        if name == "predict_idrs":
             assert (out / "prediction_settings.json").exists()
             annotated = list(read_records(out / "annotated_proteins.fasta"))
             isolated_records, _ = load_inputs(out / "idrs.fasta", "idr", None)
@@ -172,7 +172,7 @@ def test_notebook_execution(name, additional, tmp_path, monkeypatch):
                 assert record.full_seq[record.idr_end :] == original.full_seq[original.idr_end :]
                 assert record.full_seq[record.idr_start : record.idr_end] == row.generated_idr
                 assert row.original_idr == original.full_seq[original.idr_start : original.idr_end]
-        if name.startswith("03"):
+        if name == "extract_embeddings":
             assert np.load(out / "embeddings.npy").shape == (8, 16)
             import pandas as pd
 
@@ -188,28 +188,28 @@ def test_notebook_execution(name, additional, tmp_path, monkeypatch):
             )
             positions = pd.read_csv(out / "residue_index.csv")
             assert positions.protein_position_1based.tolist() == list(range(3, 19)) * 2
-        if name.startswith("04"):
+        if name == "interpret_sae_features":
             assert (out / "features/meta.json").exists()
             assert list(out.glob("*_trace.png")) and list(out.glob("*_logo.png"))
-        if name.startswith("05"):
+        if name == "enriched_feature_signature":
             from idiom.sae.features import load_enrichment
 
             result, selection = load_enrichment(out / "enrichment.npz")
             assert result["n_pos"] == result["n_neg"] == 8
             assert len(selection["selected"]) == 32
-        if name.startswith(("06", "07", "08")):
+        if name in ("rl_and_generate", "rl_with_custom_rewards", "rl_with_sae_rewards"):
             restored = IDiom.from_pretrained(out / "model", device="cpu")
             assert any(
                 not torch.equal(a, b) for a, b in zip(host.model.parameters(), restored.model.parameters())
             )
             assert (out / "training/checkpoints/last.ckpt").is_file()
-        if name.startswith(("07", "08")):
+        if name in ("rl_with_custom_rewards", "rl_with_sae_rewards"):
             import pandas as pd
 
             scores = pd.read_csv(out / "rewards.csv")
             assert set(scores.group) == {"baseline", "adapted"}
             assert np.isfinite(scores.total_reward).all()
-        if name.startswith("08"):
+        if name == "rl_with_sae_rewards":
             expected = {"demo": [0, 1]}
             if additional:
                 expected.update(second=[1, 2], combined=[0, 1, 2])
@@ -243,7 +243,7 @@ def test_prediction_notebook_without_valid_proteins(tmp_path, monkeypatch):
     fasta.write_text(">invalid\nAX\n")
     monkeypatch.setattr(IDiom, "from_pretrained", lambda *a, **k: pytest.fail("Loaded a generator"))
     out = tmp_path / "outputs"
-    namespace = execute_notebook("02_predict_idrs", {"INPUT_FASTA": fasta, "OUT_DIR": out, "DEVICE": "cpu"})
+    namespace = execute_notebook("predict_idrs", {"INPUT_FASTA": fasta, "OUT_DIR": out, "DEVICE": "cpu"})
     assert namespace["regions"].empty and namespace["candidates"].empty
     assert (out / "prompted_idrs.fasta").read_text() == ""
     assert (out / "redesigned_proteins.fasta").read_text() == ""
@@ -251,12 +251,12 @@ def test_prediction_notebook_without_valid_proteins(tmp_path, monkeypatch):
 
 
 def test_notebook_structure_and_links():
-    """Keep notebooks numbered, free of saved errors, and independent of companion Python files."""
+    """Keep notebooks free of saved errors, and independent of companion Python files."""
     import re
 
     from IPython.core.inputtransformer2 import TransformerManager
 
-    assert sorted(p.stem for p in NOTEBOOKS.glob("*.ipynb")) == NOTEBOOK_NAMES
+    assert sorted(p.stem for p in NOTEBOOKS.glob("*.ipynb")) == sorted(NOTEBOOK_NAMES)
     for name in NOTEBOOK_NAMES:
         path = NOTEBOOKS / f"{name}.ipynb"
         notebook = json.loads(path.read_text())
