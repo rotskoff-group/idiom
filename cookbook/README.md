@@ -15,9 +15,9 @@ Here we provide examples of how to use IDiom!
 
 ## Getting started
 
-First, [install IDiom and clone the repository](../README.md#installation) to access the cookbook examples.
-
-Then, the Jupyter notebooks in `cookbook/notebooks/` can be used to work with IDiom interactively. Notebooks can run locally or in Colab with a GPU.
+Open a notebook below to work interactively in Colab; each notebook includes installation
+and example-data setup. For local use or Bash scripts,
+[install IDiom and clone the repository](../README.md#installation).
 
 Next, Bash scripts in `cookbook/scripts/` are provided as examples of training, inference, and SAE workflows. To run these scripts, activate your IDiom-installed environment, edit the `REPO` and `OUT` directories, then run, for example:
 
@@ -54,19 +54,31 @@ See the main README's [sequence conventions](../README.md#sequence-conventions) 
 
 ## Notebooks
 
-Start with **Generate IDRs**, then choose a workflow below. Every notebook runs independently
-in Colab or locally, with a small demo, user-supplied inputs, and exported results.
-See the [notebook guide](notebooks/README.md) for setup, hardware, and output details.
+Run any notebook independently in Colab or locally, using example data or your own FASTA.
 
-| Notebook | Goal | Colab |
-|---|---|---|
-| [01 · Generate IDRs](notebooks/01_generate_idrs.ipynb) | Sample standalone IDRs and redesign an IDR between protein flanks | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/01_generate_idrs.ipynb) |
-| [02 · Explore embeddings](notebooks/02_explore_embeddings.ipynb) | Extract representations, find similar sequences, and visualize a projection | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/02_explore_embeddings.ipynb) |
-| [03 · Interpret SAE features](notebooks/03_interpret_sae_features.ipynb) | Rank features, inspect residue traces and logos, and reopen saved activations | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/03_interpret_sae_features.ipynb) |
-| [04 · Discover a feature signature](notebooks/04_discover_feature_signature.ipynb) | Compare positives and background, inspect enrichment, and export targets | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/04_discover_feature_signature.ipynb) |
-| [05 · Fine-tune and generate](notebooks/05_finetune_and_generate.ipynb) | Train on your sequences, reload the model, and compare samples | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/05_finetune_and_generate.ipynb) |
-| [06 · Design with custom rewards](notebooks/06_design_with_custom_rewards.ipynb) | Run GRPO with a transparent sequence-property objective | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/06_design_with_custom_rewards.ipynb) |
-| [07 · Design with RL-SAE](notebooks/07_design_with_rl_sae.ipynb) | Optimize a feature signature or a union of signatures and evaluate coverage | [Open](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/07_design_with_rl_sae.ipynb) |
+| Notebook | Colab |
+|---|---|
+| [01 · Generate IDRs](notebooks/01_generate_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/01_generate_idrs.ipynb) |
+| [02 · Predict IDRs and generate replacements](notebooks/02_predict_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/02_predict_idrs.ipynb) |
+| [03 · Extract embeddings](notebooks/03_extract_embeddings.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/03_extract_embeddings.ipynb) |
+| [04 · Interpret SAE features](notebooks/04_interpret_sae_features.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/04_interpret_sae_features.ipynb) |
+| [05 · Discover a feature signature](notebooks/05_discover_feature_signature.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/05_discover_feature_signature.ipynb) |
+| [06 · Fine-tune and generate](notebooks/06_finetune_and_generate.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/06_finetune_and_generate.ipynb) |
+| [07 · Design with custom rewards](notebooks/07_design_with_custom_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/07_design_with_custom_rewards.ipynb) |
+| [08 · Design with SAE rewards](notebooks/08_design_with_rl_sae.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/08_design_with_rl_sae.ipynb) |
+
+Run the setup cell in Colab, or install `idiom[cookbook]` locally. Notebooks 01–03
+default to CPU. A GPU is recommended for 04–08; RL-SAE may need more memory than
+some Colab runtimes provide.
+
+Set your FASTA path in the settings cell. Use `INPUT_MODE="idr"` for isolated IDRs or
+`"annotated"` for proteins with [IDR span headers](../README.md#sequence-conventions).
+Notebook 02 prepares both formats from unannotated proteins using metapredict V3.
+
+The default `OUT_DIR` includes a timestamp. Download results through Colab's Files
+pane before the runtime ends, or copy them to mounted Drive. Notebook 05 exports
+signatures for notebook 08; use the same SAE weights, case, and signature name for
+both. See the [notebook guide](notebooks/README.md) for example inputs and saved outputs.
 
 <br>
 
@@ -118,7 +130,7 @@ If you omit the background, the command downloads the held-out IDiom-DB validati
 and `signature.json` if features pass the filters. Set `FEATURES` in
 [sae_features.bash](scripts/training/grpo/sae_features.bash) and `signature` and `case` in
 [sae_features.yaml](scripts/training/grpo/sae_features.yaml) to train with that signature
-The [enrichment notebook](notebooks/04_discover_feature_signature.ipynb) provides interactive analysis
+The [enrichment notebook](notebooks/05_discover_feature_signature.ipynb) provides interactive analysis
 
 ### Checkpoints and data
 

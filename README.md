@@ -220,7 +220,7 @@ idiom_extract --model jxliu2/idiom-300M \
     --layers 18 --pool mean --out embeddings
 ```
 
-Use [Explore sequences with embeddings](cookbook/notebooks/02_explore_embeddings.ipynb) for embeddings and similarity analysis,
+Use [Extract sequence embeddings](cookbook/notebooks/03_extract_embeddings.ipynb) for embedding extraction,
 or start with [Generate IDRs](cookbook/notebooks/01_generate_idrs.ipynb) for de novo and prompted generation.
 
 <br>
@@ -270,10 +270,10 @@ mode controls this automatically. Future prompted SAEs can retain flanks as cont
 returning only IDR features. The public encoding interface rejects SAEs trained exclusively
 on non-IDR residues; internal training and analysis retain region-aware extraction.
 
-Use the [SAE inspection notebook](cookbook/notebooks/03_interpret_sae_features.ipynb)
+Use the [SAE inspection notebook](cookbook/notebooks/04_interpret_sae_features.ipynb)
 to inspect highly activating sequences and activation patterns, and use the
-[enrichment notebook](cookbook/notebooks/04_discover_feature_signature.ipynb) to identify features
-enriched within a set of sequences. The [RL-SAE notebook](cookbook/notebooks/07_design_with_rl_sae.ipynb)
+[enrichment notebook](cookbook/notebooks/05_discover_feature_signature.ipynb) to identify features
+enriched within a set of sequences. The [RL-SAE notebook](cookbook/notebooks/08_design_with_rl_sae.ipynb)
 uses feature signatures as design rewards and evaluates coverage after training.
 
 <br>
@@ -319,7 +319,7 @@ MEDQSSGACDE
 
 The cookbook in `cookbook/` provides detailed examples and workflows for using and post-training IDiom. Detailed information can be found in the [cookbook readme](cookbook/README.md).
 
-- [Seven independent notebooks](cookbook/notebooks/README.md): generation, embeddings, SAE interpretation,
+- [Eight independent notebooks](cookbook/notebooks/README.md): generation, IDR prediction, embeddings, SAE interpretation,
   signature discovery, SFT, custom-reward GRPO, and RL-SAE. Start with
   [Generate IDRs](cookbook/notebooks/01_generate_idrs.ipynb), locally or in Colab.
 - Scripts in `cookbook/scripts/`: run supervised fine-tuning and GRPO-based reinforcement learning with custom rewards, and run additional SAE workflows.

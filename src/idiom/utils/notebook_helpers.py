@@ -236,6 +236,7 @@ def example_file(name: str, directory, *, revision="v1") -> Path:
     from urllib.request import urlretrieve
 
     allowed = {
+        "disprot/disprot_len1020_idrs.fasta",
         "effector/ad.fasta",
         "effector/rd.fasta",
         "protgps/nucleolus.fasta",
@@ -251,3 +252,95 @@ def example_file(name: str, directory, *, revision="v1") -> Path:
             out,
         )
     return out
+
+
+def training_config(kind, model, out_dir, *, device="auto", steps=10, seed=0):
+    """Load SFT/GRPO defaults with local logging and single-device notebook settings."""
+    from importlib.resources import files
+
+    import torch
+    from omegaconf import OmegaConf
+
+    from idiom.utils.device import resolve_device
+
+    if kind not in {"sft", "grpo"}:
+        raise ValueError("kind must be sft or grpo")
+    target = resolve_device(device)
+    cfg = OmegaConf.load(files("idiom") / f"configs/{kind}.yaml")
+    cfg.init_from, cfg.out_dir, cfg.seed = str(model), str(Path(out_dir).resolve()), seed
+    cfg.device = str(target)
+    cfg.trainer = dict(
+        max_steps=steps,
+        accelerator="gpu" if target.type == "cuda" else "cpu",
+        devices=[target.index or 0] if target.type == "cuda" else 1,
+        precision="bf16-mixed" if target.type == "cuda" and torch.cuda.is_bf16_supported() else "32-true",
+        gradient_clip_val=1.0,
+        accumulate_grad_batches=1,
+        log_every_n_steps=1,
+        limit_val_batches=1.0,
+        num_sanity_val_steps=0,
+        enable_model_summary=False,
+    )
+    return cfg
+
+
+def train_and_save(cfg):
+    """Run a fresh notebook training job; save config, CSV logs, checkpoint, and model release."""
+    import gc
+
+    import lightning as L
+    import torch
+    from lightning.pytorch.callbacks import ModelCheckpoint
+    from lightning.pytorch.loggers import CSVLogger
+    from omegaconf import OmegaConf
+    from torch.utils.data import DataLoader
+
+    from idiom import IDiom
+
+    out = Path(cfg.out_dir)
+    if (out / "training").exists():
+        raise ValueError("Use a fresh output directory for training")
+    out.mkdir(parents=True, exist_ok=True)
+    L.seed_everything(cfg.seed, workers=True)
+    OmegaConf.save(cfg, out / "training_config.yaml")
+    checkpoint = ModelCheckpoint(dirpath=out / "training/checkpoints", save_last=True, save_top_k=0)
+    trainer = L.Trainer(
+        **OmegaConf.to_container(cfg.trainer, resolve=True),
+        logger=CSVLogger(out / "training", name="metrics"),
+        callbacks=[checkpoint],
+    )
+    if "grpo" in cfg:
+        from idiom.train.grpo.data import collate_prompts
+        from idiom.train.grpo.train_grpo import build
+
+        lit, prompts = build(cfg)
+        loader = DataLoader(
+            prompts, batch_size=cfg.prompts.batch_size, shuffle=True, collate_fn=collate_prompts
+        )
+        trainer.fit(lit, train_dataloaders=loader)
+    else:
+        from idiom.train.autoreg.train_autoreg import build
+
+        lit, dm = build(cfg)
+        trainer.fit(lit, datamodule=dm)
+        metrics = trainer.validate(lit, datamodule=dm)
+        (out / "validation_metrics.json").write_text(json.dumps(metrics, indent=2))
+    trainer.save_checkpoint(out / "training/checkpoints/last.ckpt")
+    release = IDiom(lit.model.cpu()).save_pretrained(out / "model")
+    del trainer, lit
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return release
+
+
+def load_feature_inputs(path, mode="idr", *, max_length):
+    """Load and audit unique IDRs that fit the feature model's context."""
+    from idiom.sae.features.enrichment import prepare_sequences
+
+    records, audit = load_inputs(path, mode, None)
+    kept, reasons = prepare_sequences(records, max_length=max_length)
+    for record, reason in zip(records, reasons):
+        if reason:
+            audit.loc[audit.record_id == record.accession, "status"] = reason
+    return kept, audit
