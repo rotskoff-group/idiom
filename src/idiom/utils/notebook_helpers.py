@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from idiom.data.records import Record, parse_idr_header, read_fasta
+from idiom.data.records import Record, parse_sequence_record, read_fasta
 
 AA = "ACDEFGHIKLMNPQRSTVWY"
 DEMO = [
@@ -51,16 +51,8 @@ def load_inputs(path, mode="idr", limit=32) -> tuple[list[Record], pd.DataFrame]
         status = "accepted"
         accession, start, end = header.split()[0] if header.split() else "", 0, len(seq)
         try:
-            if not accession or not seq or set(seq) - set(AA):
-                raise ValueError("empty header/sequence or noncanonical residues")
-            if mode == "annotated" and path is not None:
-                accession, start, end = parse_idr_header(header)
-            elif "_IDR_" in accession:
-                accession, start, end = parse_idr_header(header)
-                if (start, end) != (0, len(seq)):
-                    raise ValueError("partial IDR span: use annotated mode for full proteins")
-            if not 0 <= start < end <= len(seq):
-                raise ValueError("IDR coordinates outside sequence")
+            record = parse_sequence_record(header, seq, mode=mode if path is not None else "idr")
+            accession, start, end = record.accession, record.idr_start, record.idr_end
             if limit is not None and len(records) >= limit:
                 status = "outside sample limit"
             else:

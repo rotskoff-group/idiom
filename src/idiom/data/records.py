@@ -108,6 +108,27 @@ def parse_idr_header(header: str) -> tuple[str, int, int]:
     return accession, x - 1, y  # 1-indexed inclusive -> 0-indexed half-open [start, end)
 
 
+def parse_sequence_record(header: str, seq: str, *, mode: str = "auto") -> Record:
+    """Validate a FASTA entry as an isolated IDR or an annotated protein.
+
+    Auto mode accepts either format, but never falls back from an invalid span.
+    IDR mode requires any supplied span to cover the whole sequence.
+    """
+    if mode not in {"auto", "idr", "annotated"}:
+        raise ValueError("mode must be auto, idr, or annotated")
+    accession = header.split()[0] if header.split() else ""
+    if not accession or not seq or not _TOK.is_canonical(seq):
+        raise ValueError("empty header/sequence or noncanonical residues")
+    start, end = 0, len(seq)
+    if mode == "annotated" or "_IDR_" in accession:
+        accession, start, end = parse_idr_header(header)
+        if not accession or not 0 <= start < end <= len(seq):
+            raise ValueError("IDR coordinates outside sequence or empty accession")
+        if mode == "idr" and (start, end) != (0, len(seq)):
+            raise ValueError("partial IDR span: use annotated mode for full proteins")
+    return Record(accession, seq, start, end)
+
+
 def read_records(path: str | Path, *, drop_noncanonical: bool = True) -> Iterator[Record]:
     """Parse a FASTA into Records.
 

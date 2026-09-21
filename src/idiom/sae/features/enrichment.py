@@ -11,9 +11,9 @@ from pathlib import Path
 
 import numpy as np
 
-from idiom.data.records import Record, parse_idr_header, read_fasta
+from idiom.data.records import Record, parse_sequence_record, read_fasta
+from idiom.data.tokenizer import RESIDUE_SET
 from idiom.sae.features.feature_dataset import FeatureDataset
-from idiom.sae.features.signatures import write_signature as write_signature
 
 # Defaults used to build the published signatures
 MIN_TOTAL_FIRE = 5
@@ -26,7 +26,7 @@ BOUNDARY_EDGE = 2
 BOUNDARY_FRAC = 0.5
 BOUNDARY_TOP_WINDOWS = 80
 
-_AA = set("ACDEFGHIKLMNPQRSTVWY")
+_AA = RESIDUE_SET
 
 
 def feature_counts(feature_dir, keep=None) -> tuple[np.ndarray, int]:
@@ -285,15 +285,6 @@ def select_features(
     return dict(ids=ids, enriched=mask, boundary_filtered=boundary, selected=selected)
 
 
-def top_features(result: dict, *, prev_min: float | None = None, **kwargs) -> list[int]:
-    """Return selected IDs; prev_min is a compatibility alias for prev_pos_floor."""
-    if prev_min is not None:
-        if "prev_pos_floor" in kwargs and kwargs["prev_pos_floor"] != prev_min:
-            raise ValueError("Specify only one prevalence cutoff")
-        kwargs["prev_pos_floor"] = prev_min
-    return select_features(result, **kwargs)["ids"]
-
-
 def save_enrichment(path, result: dict, selection: dict) -> Path:
     """Save a complete numerical result and selection masks for reuse without inference."""
     out = Path(path)
@@ -318,21 +309,32 @@ def load_enrichment(path) -> tuple[dict, dict]:
     return result, selection
 
 
-def load_sequences(path) -> list[Record]:
-    """Read canonical FASTA records, treating unusable IDR spans as the whole sequence.
-
-    Records retain file order.
-    """
+def load_sequences(path, *, mode="auto") -> list[Record]:
+    """Read valid canonical FASTA entries, skipping malformed or out-of-range spans."""
+    if mode not in {"auto", "idr", "annotated"}:
+        raise ValueError("mode must be auto, idr, or annotated")
     out = []
-    for header, seq in read_fasta(path):
+    for header, seq in read_fasta(path, drop_noncanonical=False):
         try:
-            acc, start, end = parse_idr_header(header)
-            if not 0 <= start < end <= len(seq):
-                raise ValueError
+            out.append(parse_sequence_record(header, seq, mode=mode))
         except ValueError:
-            acc, start, end = header.split()[0], 0, len(seq)
-        out.append(Record(acc, seq, start, end))
+            continue
     return out
+
+
+def prepare_sequences(records, *, max_length):
+    """Keep unique IDRs within context; return kept records and rejection reasons in input order."""
+    seen, kept, reasons = set(), [], []
+    for record in records:
+        sequence = record.full_seq[record.idr_start : record.idr_end]
+        reason = (
+            "exceeds context" if len(sequence) > max_length else "duplicate IDR" if sequence in seen else None
+        )
+        reasons.append(reason)
+        if reason is None:
+            seen.add(sequence)
+            kept.append(record)
+    return kept, reasons
 
 
 def length_match(positives, background, *, n, rng, bin_width=20) -> list[Record]:

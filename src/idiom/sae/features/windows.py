@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from idiom.data.tokenizer import RESIDUES as AMINO_ACIDS
 from idiom.sae.features.feature_dataset import FeatureDataset
-
-AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
 
 @dataclass

@@ -14,7 +14,7 @@ from idiom.sae.features import (
     select_features,
     write_signature,
 )
-from idiom.sae.features.enrichment import boundary_features, feature_counts, length_match, top_features
+from idiom.sae.features.enrichment import boundary_features, feature_counts, length_match
 
 
 def dataset(path, values=None):
@@ -68,9 +68,6 @@ def test_selection_ties_prevalence_and_result_roundtrip(tmp_path):
     )
     selection = select_features(result, n=2, drop_boundary=False, prev_pos_floor=0.01)
     assert selection["ids"] == [0, 1]
-    assert top_features(result, n=2, drop_boundary=False, prev_min=0.01) == [0, 1]
-    with pytest.raises(ValueError, match="one prevalence"):
-        top_features(result, drop_boundary=False, prev_min=0.01, prev_pos_floor=0.1)
     save_enrichment(tmp_path / "result.npz", result, selection)
     restored, selected = load_enrichment(tmp_path / "result.npz")
     assert selected["ids"] == [0, 1] and restored["n_pos"] == 100
@@ -123,3 +120,12 @@ def test_builder_validates_before_inference(tmp_path, monkeypatch):
         with pytest.raises(ValueError):
             build_feature_dataset(model, sae, records, 0, tmp_path / "fd", batch_size=batch_size)
         assert not (tmp_path / "fd").exists()
+
+
+def test_signature_null_provenance_preserves_identity(tmp_path):
+    """A null update must not allow old signatures to be relabeled with another SAE."""
+    path = write_signature(tmp_path / "sig.json", {"first": [1]}, provenance={"sae": "A"})
+    write_signature(path, {"second": [2]}, case="second", provenance={"sae": None})
+    assert load_signatures(path, sae="A") == {"first": [1]}
+    with pytest.raises(ValueError, match="different SAEs"):
+        write_signature(path, {"third": [3]}, case="third", provenance={"sae": "B"})

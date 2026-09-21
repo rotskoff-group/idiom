@@ -13,9 +13,9 @@ from idiom.sae.features.enrichment import (
     feature_counts,
     length_match,
     load_sequences,
-    top_features,
-    write_signature,
+    select_features,
 )
+from idiom.sae.features.signatures import write_signature
 
 
 def _make_dataset(tmp_path, per_seq_features, num_latents=10, n_res=5, values=None):
@@ -102,13 +102,13 @@ def test_enrich_separates_signal_from_noise():
     assert r["prev_pos"][0] == 1.0 and r["prev_neg"][0] == 0.0
 
 
-def test_top_features_ranks_by_log2or(tmp_path):
+def test_select_features_ranks_by_log2or(tmp_path):
     """Verify that selected features are ordered by descending log odds ratio."""
     n_latents = 5
     a = np.array([90.0, 100.0, 60.0, 0.0, 0.0])
     b = np.array([10.0, 300.0, 5.0, 0.0, 0.0])
     r = enrich(a, 100, b, 1000, n_latents)
-    ids = top_features(r, n=2, drop_boundary=False)
+    ids = select_features(r, n=2, drop_boundary=False)["ids"]
     assert len(ids) == 2
     assert r["log2or"][ids[0]] >= r["log2or"][ids[1]]
 
@@ -150,11 +150,10 @@ def test_load_sequences_reads_spans_and_falls_back_to_whole_sequence(tmp_path):
 
 
 def test_load_sequences_ignores_an_out_of_range_span(tmp_path):
-    """Verify whole-sequence fallback for an out-of-range IDR span."""
+    """Reject out-of-range spans rather than interpreting them as whole IDRs."""
     fa = tmp_path / "bad.fasta"
     fa.write_text(">P2_IDR_0-999\nACDE\n")
-    (rec,) = load_sequences(fa)
-    assert (rec.idr_start, rec.idr_end) == (0, 4)
+    assert load_sequences(fa) == []
 
 
 def _rec(acc, length, start=0):

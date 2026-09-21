@@ -15,7 +15,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 from idiom.data.fim import PROMPTED, fim_prompted, fim_unprompted, normalize_mode
-from idiom.data.tokenizer import Tokenizer
+from idiom.data.tokenizer import RESIDUE_SET, Tokenizer
 from idiom.model.activations import extract_activations
 
 
@@ -66,27 +66,25 @@ def build_feature_dataset(
     records = list(records)
     if not records:
         raise ValueError("At least one valid record is required")
-    from idiom.data.tokenizer import RESIDUES
-
     for r in records:
         if (
             not r.full_seq
-            or set(r.full_seq) - set(RESIDUES)
+            or set(r.full_seq) - RESIDUE_SET
             or not 0 <= r.idr_start < r.idr_end <= len(r.full_seq)
         ):
             raise ValueError(f"Invalid sequence or IDR span: {r.accession}")
     tok = tokenizer or Tokenizer()
     fim = fim_prompted if normalize_mode(fim_mode) == PROMPTED else fim_unprompted
-    if any(len(fim(r.full_seq, r.idr_start, r.idr_end)) + 1 > model.cfg.max_seq_len for r in records):
+    strings = [fim(r.full_seq, r.idr_start, r.idr_end) for r in records]
+    if any(len(s) + 1 > model.cfg.max_seq_len for s in strings):
         raise ValueError("Sequence exceeds model context")
     model = model.eval().to(device)
     sae = sae.eval().to(device)
 
-    top_idx_parts, top_val_parts, seq_parts, pos_parts, strings = [], [], [], [], []
+    top_idx_parts, top_val_parts, seq_parts, pos_parts = [], [], [], []
 
     for start in range(0, len(records), batch_size):
-        chunk = records[start : start + batch_size]
-        seqs = [fim(r.full_seq, r.idr_start, r.idr_end) for r in chunk]
+        seqs = strings[start : start + batch_size]
         token_lists = [torch.tensor([tok.start_id, *tok.encode(s)]) for s in seqs]
         tokens = pad_sequence(token_lists, batch_first=True, padding_value=tok.pad_id).to(device)
 
@@ -99,7 +97,6 @@ def build_feature_dataset(
         top_val_parts.append(top_val.cpu().to(torch.float32).numpy())
         seq_parts.append(acts.seq_idx.cpu().numpy().astype(np.int32) + start)  # batch-local -> global
         pos_parts.append(acts.pos_idx.cpu().numpy().astype(np.int32) - 1)  # fed pos -> FIM-string pos
-        strings.extend(seqs)
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

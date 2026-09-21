@@ -63,10 +63,10 @@ class FeatureDataset:
 
         self.fim_mode = meta.get("fim_mode")
         self.provenance = meta.get("provenance", {})
-        self.n_seqs = len(self.strings)
         if not isinstance(self.strings, list) or not all(isinstance(s, str) for s in self.strings):
             raise ValueError("strings.json must contain sequence strings")
-        if self.top_indices.ndim != 2 or self.top_indices.shape != self.top_values.shape:
+        self.n_seqs = len(self.strings)
+        if self.top_indices.shape != self.top_values.shape:
             raise ValueError("top_indices and top_values must have matching [residues, k] shapes")
         n_rows, k = self.top_indices.shape
         if k != self.k or self.k < 1 or self.num_latents < self.k:
@@ -99,8 +99,7 @@ class FeatureDataset:
             return
         # Sequence s occupies _order[_offsets[s]:_offsets[s + 1]]
         seq = np.asarray(self.seq_idx[:], dtype=np.int64)
-        self.n_seqs = len(self.strings)
-        self._order = np.argsort(seq, kind="stable").astype(np.int64)
+        self._order = np.argsort(seq, kind="stable")
         self._offsets = np.zeros(self.n_seqs + 1, dtype=np.int64)
         np.cumsum(self._counts, out=self._offsets[1:])
 

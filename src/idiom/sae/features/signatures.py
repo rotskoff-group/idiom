@@ -54,8 +54,9 @@ def write_signature(path, signatures, *, case="top30", provenance=None) -> Path:
     out = Path(path)
     blob = json.loads(out.read_text()) if out.exists() else {}
     old_sae = blob.get("_provenance", {}).get("sae")
-    new_sae = (provenance or {}).get("sae")
-    if old_sae and new_sae and old_sae != new_sae:
+    provenance = {key: value for key, value in (provenance or {}).items() if value is not None}
+    new_sae = provenance.get("sae")
+    if old_sae is not None and new_sae is not None and old_sae != new_sae:
         raise ValueError("Cannot mix signatures from different SAEs in one file")
     blob[case] = validated
     if provenance:

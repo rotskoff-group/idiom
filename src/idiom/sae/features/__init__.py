@@ -7,7 +7,6 @@ from idiom.sae.features.enrichment import (
     load_enrichment,
     save_enrichment,
     select_features,
-    top_features,
 )
 from idiom.sae.features.feature_dataset import FeatureDataset
 from idiom.sae.features.signatures import combine_signatures, load_signatures, write_signature
@@ -26,6 +25,5 @@ __all__ = [
     "logo_data",
     "save_enrichment",
     "select_features",
-    "top_features",
     "write_signature",
 ]

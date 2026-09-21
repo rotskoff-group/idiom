@@ -16,8 +16,20 @@ def inputs(tmp_path, monkeypatch):
     """Create enrichment FASTA inputs and substitute a deterministic SAE fixture."""
     positive = tmp_path / "positive.fasta"
     background = tmp_path / "background.fasta"
-    positive.write_text("".join(f">p{i}\n{'A' * 15}\n" for i in range(30)))
-    background.write_text(">overlap\n" + "A" * 15 + "\n" + "".join(f">b{i}\n{'C' * 15}\n" for i in range(60)))
+    from itertools import product
+
+    suffixes = ["".join(pair) for pair in product("ACDEFGHIKLMNPQRSTVWY", repeat=2)]
+    pos_sequences = ["A" * 13 + suffix for suffix in suffixes[:30]]
+    bg_sequences = ["C" * 13 + suffix for suffix in suffixes[:60]]
+    positive.write_text(
+        "".join(f">p{i}\n{seq}\n" for i, seq in enumerate(pos_sequences))
+        + f">duplicate\n{pos_sequences[0]}\n>bad_IDR_1-99\nACDE\n"
+    )
+    background.write_text(
+        f">overlap\n{pos_sequences[0]}\n"
+        + "".join(f">b{i}\n{seq}\n" for i, seq in enumerate(bg_sequences))
+        + f">duplicate\n{bg_sequences[0]}\n"
+    )
     seen = []
 
     class FakeSAE:

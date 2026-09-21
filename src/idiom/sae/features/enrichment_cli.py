@@ -21,10 +21,12 @@ from idiom.sae.features.enrichment import (
     feature_counts,
     length_match,
     load_sequences,
+    prepare_sequences,
     save_enrichment,
     select_features,
-    write_signature,
 )
+from idiom.sae.features.feature_dataset import FeatureDataset
+from idiom.sae.features.signatures import write_signature
 
 DATA_REPO = "jxliu2/idiom-db"
 VALIDATION_FASTA = "idiom-db/idiom-db-v1_validation.fasta"
@@ -44,6 +46,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--sae", required=True, help="SAE Hub ID or release directory")
     p.add_argument("--positive", required=True, type=Path, help="positive IDR FASTA")
     p.add_argument("--background", type=Path, help="local FASTA; defaults to the HF validation split")
+    p.add_argument("--positive-mode", choices=("auto", "idr", "annotated"), default="auto")
+    p.add_argument("--background-mode", choices=("auto", "idr", "annotated"), default="auto")
     p.add_argument("--out", required=True, type=Path, help="new or empty output directory")
     p.add_argument("--name", required=True, help="signature name for the GRPO reward")
     p.add_argument("--case", help="signature case (default: top<TOP_N>)")
@@ -65,8 +69,10 @@ def main(argv: list[str] | None = None) -> None:
         p.error("--fdr-alpha must be in (0, 1] and --prev-pos-floor in [0, 1]")
     if not math.isfinite(args.log2or_floor) or args.seed < 0:
         p.error("--log2or-floor must be finite and --seed nonnegative")
-    if not args.name.strip() or (args.case is not None and not args.case.strip()):
-        p.error("--name and --case must not be empty")
+    if not args.name.strip() or (
+        args.case is not None and (not args.case.strip() or args.case.startswith("_"))
+    ):
+        p.error("--name and --case must not be empty; --case must not start with _")
     for path in (args.positive, args.background):
         if path is not None and not path.is_file():
             p.error(f"FASTA does not exist: {path}")
@@ -81,17 +87,20 @@ def main(argv: list[str] | None = None) -> None:
         p.error("enrichment requires an SAE trained on unprompted IDRs")
     max_length = sae.model.cfg.max_seq_len - 4
 
-    def usable(path) -> list[Record]:
+    def usable(path, mode) -> list[Record]:
         """Load nonempty IDRs that fit the context limit and report the retained count."""
-        records = load_sequences(path)
-        kept = [r for r in records if 0 < r.idr_end - r.idr_start <= max_length]
-        print(f"{path}: kept {len(kept)} of {len(records)} canonical records within context")
+        records = load_sequences(path, mode=mode)
+        kept, _ = prepare_sequences(records, max_length=max_length)
+        print(
+            f"{path}: kept {len(kept)} of {len(records)} valid records "
+            "after deduplication and context filtering"
+        )
         return kept
 
-    positives = usable(args.positive)
+    positives = usable(args.positive, args.positive_mode)
     positive_idrs = {r.full_seq[r.idr_start : r.idr_end] for r in positives}
     if args.max_positive is not None and len(positives) > args.max_positive:
-        chosen = np.random.default_rng(args.seed).choice(len(positives), args.max_positive, replace=False)
+        chosen = np.random.default_rng(args.seed).permutation(len(positives))[: args.max_positive]
         positives = [positives[i] for i in sorted(chosen)]
     if not positives:
         p.error("no usable positive records")
@@ -100,7 +109,11 @@ def main(argv: list[str] | None = None) -> None:
         from huggingface_hub import hf_hub_download
 
         background_path = Path(hf_hub_download(DATA_REPO, VALIDATION_FASTA, repo_type="dataset"))
-    pool = [r for r in usable(background_path) if r.full_seq[r.idr_start : r.idr_end] not in positive_idrs]
+    pool = [
+        r
+        for r in usable(background_path, args.background_mode)
+        if r.full_seq[r.idr_start : r.idr_end] not in positive_idrs
+    ]
     background = length_match(positives, pool, n=args.max_background, rng=np.random.default_rng(args.seed))
     if not background:
         p.error("no usable background records remain after excluding exact positive IDR matches")
@@ -108,6 +121,7 @@ def main(argv: list[str] | None = None) -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     pos_fd = sae.build_feature_dataset(positives, args.out / "fd_positive", batch_size=args.batch_size)
     bg_fd = sae.build_feature_dataset(background, args.out / "fd_background", batch_size=args.batch_size)
+    pos_fd, bg_fd = FeatureDataset(pos_fd), FeatureDataset(bg_fd)
     a, n_pos = feature_counts(pos_fd)
     b, n_neg = feature_counts(bg_fd)
     result = enrich(a, n_pos, b, n_neg, sae.sae.num_latents, min_total_fire=args.min_total_fire)
