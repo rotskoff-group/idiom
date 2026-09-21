@@ -49,7 +49,7 @@ NOTEBOOK_NAMES = [
     "extract_embeddings",
     "interpret_sae_features",
     "enriched_feature_signature",
-    "rl_and_generate",
+    "sft_and_generate",
     "rl_with_custom_rewards",
     "rl_with_sae_rewards",
 ]
@@ -197,7 +197,7 @@ def test_notebook_execution(name, additional, tmp_path, monkeypatch):
             result, selection = load_enrichment(out / "enrichment.npz")
             assert result["n_pos"] == result["n_neg"] == 8
             assert len(selection["selected"]) == 32
-        if name in ("rl_and_generate", "rl_with_custom_rewards", "rl_with_sae_rewards"):
+        if name in ("sft_and_generate", "rl_with_custom_rewards", "rl_with_sae_rewards"):
             restored = IDiom.from_pretrained(out / "model", device="cpu")
             assert any(
                 not torch.equal(a, b) for a, b in zip(host.model.parameters(), restored.model.parameters())

@@ -118,9 +118,9 @@ print(sequences)
 
 Lower temperatures concentrate sampling on more likely residues. Setting `top_p=0.9` restricts
 each step to the most likely residues whose cumulative probability reaches 90%.
-Use `seed` for reproducibility with a fixed batch size. Length filtering
-may return fewer sequences if it reaches the sampling limit. See the
-[generation notes](cookbook/README.md#generation-and-analysis-details) for details.
+Use `seed` for reproducibility with a fixed batch size and sampling settings. Length filtering
+draws at most `max_oversample * n` candidates and may return fewer than `n` sequences
+if too few fall within the requested range.
 
 For de novo FASTA output, use `model.generate_unprompted_fasta("idrs.fasta", n=10)` or:
 
