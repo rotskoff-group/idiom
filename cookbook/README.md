@@ -108,13 +108,13 @@ $$
 R(x) = \sum_i \text{weight}_i \times \text{shaping}_i\!\left(\text{raw reward}_i(x)\right)
 $$
 
-where $x$ is the generated IDR amino acid sequence and $i$ indexes the reward terms. Reward functions receive **only** the generated IDR sequence.
+where $x$ is the generated IDR sequence and $i$ indexes the reward terms. Reward functions receive **only the generated IDR sequence.**
 
-Rewards can be calculated during training in three ways:
+Rewards can be calculated in three ways:
 
 - **Built-in rewards:** use the reward functions provided by IDiom.
-- **Custom Python rewards:** run your own functions in the training process when their dependencies fit the training environment.
-- **External scorers:** run scoring code in a separate process, with its own environment when needed.
+- **Custom Python rewards:** run your own functions in the training process when their dependencies are compatible with the training environment.
+- **External scorers:** run scoring code in a separate Python subprocess, with its own environment.
 
 At least one reward must be enabled for training, and multiple rewards can be combined. All rewards can be numerically shaped before they are added to the overall reward. 
 
@@ -145,20 +145,27 @@ total reward = sum(weight × shaping(raw reward))
 ```
 
 Each script in `cookbook/scripts/training/grpo/` loads `reward.terms` from its matching
-YAML file (for example, `custom_reward.bash` loads `custom_reward.yaml`). Edit rewards,
-scorer commands, shaping, and weights in YAML. Edit training settings and runtime paths
-in Bash. No Hydra `defaults` section is needed in the reward YAML.
+YAML file (for example, `custom_reward.bash` loads `custom_reward.yaml`). 
+
+
+<!-- Edit rewards, -->
+<!-- scorer commands, shaping, and weights in YAML. Edit training settings and runtime paths -->
+<!-- in Bash. No Hydra `defaults` section is needed in the reward YAML. -->
 
 <br>
 
 ### Configuring reward terms
 
+Reward terms have four fields: 
+
 | Field | Choices |
 |---|---|
 | `label` | Any unique name, used in logs. |
-| `weight` | Any finite number, defaults to `1.0`. Zero logs the term without optimizing it, negative values reverse its contribution. |
+| `weight` | Any finite number, defaults to `1.0`. Zero logs the term without optimizing it, and negative values reverse its contribution. |
 | `reward` | A mapping with `name` and any arguments: a built-in (`length`, `entropy`, or `sae_signature`), a custom Python factory (returns a function), or an external program via `external_scorer`. |
 | `shaping` | A mapping with `name` and any arguments: a built-in (`identity`, `quadratic`, or `gaussian`) or a custom Python factory, defaults to `identity`. |
+
+Example terms are provided below. 
 
 <br>
 
@@ -168,10 +175,10 @@ Use an in-process custom reward when its dependencies fit your training environm
 
 #### In-process reward
 
-1. Copy [custom_rewards_shapings.py](rewards/custom_rewards_shapings.py) and adapt a reward factory. The factory returns a function that accepts a list of sequences and returns one finite score per sequence, in order, including empty sequences.
-2. Edit [custom_reward.yaml](scripts/training/grpo/custom_reward.yaml). Set `reward.name` to your factory as `/path/to/file.py:factory` or `package.module:factory`, then choose shaping and weight. Put factory arguments alongside `name`.
-3. Test the returned function on a few sequences, including an empty string.
-4. Set `REPO`, `OUT`, and training settings in [custom_reward.bash](scripts/training/grpo/custom_reward.bash), then run it from the repository root.
+1. Define your reward using [custom_rewards_shapings.py](rewards/custom_rewards_shapings.py) as a template. The reward function takes a list of IDRs and returns one finite score per IDR, in the same order.
+2. In [custom_reward.yaml](scripts/training/grpo/custom_reward.yaml), set `reward.name` to `/path/to/file.py:factory` or `package.module:factory`. The factory creates your reward function, and you must add its arguments under `reward`, alongside `name`. Set the shaping function and weight.
+3. Test your reward on a few IDRs.
+4. Set `REPO`, `OUT`, and training parameters in [custom_reward.bash](scripts/training/grpo/custom_reward.bash), then run from the repository root:
 
 ```bash
 bash cookbook/scripts/training/grpo/custom_reward.bash
@@ -194,9 +201,13 @@ python -m idiom.train.grpo.reward.external \
 bash cookbook/scripts/training/grpo/custom_scorer.bash
 ```
 
-The following examples show reward terms you can use or adapt.
+
 
 <br>
+
+## Example reward terms 
+
+The following examples show reward terms you can use or adapt.
 
 ### Built-in reward and shaping
 
