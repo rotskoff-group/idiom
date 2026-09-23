@@ -29,7 +29,7 @@ Set `REPO`, `OUT`, and workflow parameters in each script before running it.
 ### GRPO examples
 
 See [reward definition](../README.md#reward-definition) for reward configuration.
-Examples that launch external scorers with `uv run` require `uv` (`python -m pip install uv`).
+External scorer examples use `uv run`; `uv` is installed with IDiom.
 
 Each `.bash` script loads reward terms from the matching `.yaml` file in
 `cookbook/scripts/training/grpo/` (for example, `combined.bash` loads `combined.yaml`).

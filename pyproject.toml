@@ -27,10 +27,10 @@ dependencies = [
     "matplotlib>=3.7",
     "logomaker>=0.8",
     "metapredict==3.0.2",
+    "pandas>=2",
+    "ipykernel>=6",
+    "uv",
 ]
-
-[project.optional-dependencies]
-cookbook = ["pandas>=2", "ipykernel>=6"]
 
 [project.urls]
 Homepage = "https://github.com/rotskoff-group/idiom"

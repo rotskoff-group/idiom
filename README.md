@@ -29,11 +29,11 @@ IDiom is an autoregressive protein language model trained on IDiom-DB, a dataset
 
 - [Installation](#installation)
 - [Quickstart](#quickstart)
+  - [Sequence conventions](#sequence-conventions)
   - [Sequence generation](#sequence-generation)
   - [Extracting model embeddings](#extracting-model-embeddings)
   - [IDiomSAE](#idiomsae)
-- [Sequence conventions](#sequence-conventions)
-- [Cookbook: notebooks, scripts, and rewards](#cookbook-notebooks-post-training-and-rewards)
+- [Cookbook: notebooks, post-training, and rewards](#cookbook-notebooks-post-training-and-rewards)
 - [Models](#models)
 - [Data](#data)
 - [Citation](#citation)
@@ -74,6 +74,36 @@ Below, we provide several examples to get started with IDiom. More detailed exam
 
 <br>
 
+## Sequence conventions
+
+IDiom is trained using a fill-in-the-middle (FIM) format with one token per canonical amino acid and three positional marker tokens. The markers denote the N-terminal flank `1`, IDR `2`, and C-terminal flank `3`.
+
+As an example, consider the example full protein sequence `MEDQSSGACDE` where `QSSG` is an IDR flanked by `MED` and `ACDE`. The sequence's FIM representation is `1MED3ACDE2QSSG`, and during prompted generation, the model receives `1MED3ACDE2` and generates an IDR conditioned on the flanks. During unprompted generation, the model only receives `132` and generates a de novo IDR without flanking context.
+
+The positional markers are handled automatically by IDiom, and all use cases need only to supply amino acid sequences and IDR positions. **FASTA headers use 1-based, inclusive IDR residue positions**, following biological convention, and **Python methods use standard 0-based, end-exclusive IDR residue positions**. IDiom converts between these conventions automatically when reading and writing FASTA files.
+
+In the example `MEDQSSGACDE` with IDR `QSSG`, we have:
+
+| Interface | IDR `QSSG` in  `MEDQSSGACDE` |
+|---|---|
+| FASTA header | `>example_IDR_4-7` |
+| Python args | `idr_start=3, idr_end=7` |
+| Python slice | `seq[3:7]` |
+
+<!-- All three identify the same four residues, `QSSG`. To convert a FASTA span `_IDR_x-y` to Python,
+subtract one from the start only: `idr_start=x-1`, `idr_end=y` -->
+
+To interface with IDiom, the first whitespace-delimited token in each FASTA header must end with `_IDR_x-y`, where `x` and `y` are the **1-based, inclusive** indices of the IDR in that record. A fully disordered sequence of `<length>` would for example have FASTA headers ending in `_IDR_1-<length>`.
+
+For example, a FASTA record marking `QSSG` as the IDR is:
+
+```fasta
+>example_IDR_4-7
+MEDQSSGACDE
+```
+
+<br>
+
 ## Sequence generation
 
 IDiom enables the generation of standalone unprompted IDRs, as well as IDRs conditioned on flanking protein context. These flanking protein contexts are the protein residues preceding and following the IDR on its N-terminal and C-terminal sides. 
@@ -91,7 +121,7 @@ sequences = model.generate_unprompted(n=10)
 print(sequences)
 ```
 
-Generate 10 unprompted IDRs within a length range. IDiom samples up to max_oversample * n candidates but may return fewer than n sequences within the requested length range.
+Generate 10 unprompted IDRs within a length range. IDiom samples up to max_oversample * n candidates but may return fewer than n sequences within the requested length range:
 
 ```python
 from idiom import IDiom
@@ -101,7 +131,7 @@ sequences = model.generate_unprompted(n=10, length_range=(80, 120), max_oversamp
 print(sequences)
 ```
 
-Sample with explicit temperature and top-p sampling (defaults when not specified: `temperature=1.0` and `top_p=None`, which disables top-p).
+Sample with explicit temperature and top-p sampling (defaults when not specified: `temperature=1.0` and `top_p=None`, which disables top-p):
 
 ```python
 from idiom import IDiom
@@ -163,13 +193,13 @@ When `return_full=True`, the output FASTA contains each generated IDR placed bac
 
 ## Extracting model embeddings
 
-IDiom can extract embeddings from chosen model layers with mean pooling across the IDR `pool="mean"`, for every IDR residue `pool="none"`, and from only the final position `pool="last"`. **Embedding extraction returns only representations for IDR regions.** 
+IDiom can extract embeddings from chosen model layers with mean pooling across the IDR `pool="mean"`, for every IDR residue `pool="none"`, and from only the final position `pool="last"`. **Embedding extraction returns only representations for IDR residues.** 
 
 <!-- Embeddings can be extracted from the model X Y Z (mean pool, per residue, last) -->
 
 ### Embeddings of unprompted IDRs 
 
-To extract embeddings without flanking context, pass IDR sequences directly. Each sequence is treated as entirely IDR:
+To extract embeddings without flanking context, pass in IDR sequences directly. Each sequence is treated as an unprompted IDR:
 
 ```python
 from idiom import IDiom
@@ -195,17 +225,12 @@ print(last.shape)  # (2, 1024) final residue representation for each IDR
 
 ### Embeddings of prompted IDRs 
 
-To extract IDR embeddings with both flanks as context, use the `Record` dataclass, which represents a single IDR data record. `Record`s take the full protein sequence and the indices of the IDR span. In this example, `QSSG` is the IDR, with `MED` and `ACDE` as its N- and C-terminal flanks:
+To extract IDR embeddings with both flanks as prompting context, use the [`Record`](src/idiom/data/records.py) dataclass, which represents a single IDR data record. `Record`s take the full protein sequence and the indices of the IDR span. In this example, `QSSG` is the IDR, with `MED` and `ACDE` as its N- and C-terminal flanks:
 
 ```python
 from idiom.data.records import Record
 
-record = Record(
-    "protein1",
-    full_seq="MEDQSSGACDE",
-    idr_start=3,
-    idr_end=7,
-)  # Zero-based, end-exclusive coordinates: full_seq[3:7] is QSSG
+record = Record("protein1", full_seq="MEDQSSGACDE", idr_start=3, idr_end=7)  # IDR: QSSG
 ```
 
 Then, extract the IDR embeddings: 
@@ -246,11 +271,11 @@ This writes `embeddings/layer_18.npy` and `embeddings/layer_18_index.csv`.
 
 ## IDiomSAE
 
-We provide a TopK sparse autoencoder, IDiomSAE, trained on the residual stream of layer-18 of 24 in IDiom-300M. IDiomSAE has k = 32 and a latent dimension of z = 16,384.
+We provide a TopK sparse autoencoder, IDiomSAE, trained on the residual stream of layer-18 of 24 in IDiom-300M. IDiomSAE has k = 32 and a latent dimension of z = 16,384. We note that IDiomSAE was only trained on the IDiom activations of unprompted IDR residues. 
 
 ### Extracting SAE feature vectors 
 
-To extract SAE feature vectors, pass IDR sequences directly. Each residue's feature vector has 16,384 dimensions. Full-protein `Record` inputs are also accepted, but this released SAE excludes flanks from its model input.
+To extract SAE feature vectors, pass in IDR sequences directly. Each residue's feature vector has dimension 16,384. 
 
 ```python
 from idiom import IDiomSAE
@@ -272,12 +297,23 @@ peak, accessions = sae.encode(idr_sequences, pool="max")
 print(peak.shape)  # (2, 16384) each feature's maximum activation in each IDR
 ```
 
+Full-length protein sequences can also be passed in, but only the unprompted IDR will be used when extracting IDiom activations for IDiomSAE encoding: 
+
+```python
+from idiom.data.records import Record
+
+record = Record("protein1", "MEDQSSGACDE", idr_start=3, idr_end=7)
+features, index = sae.encode(record, pool="none")
+print(features.shape)  # (4, 16384) features for QSSG
+# Flanking context is not used for IDiom activation extraction when using sae.encode()
+```
+
 ### Steering generation 
 
 To steer the generation of IDRs using SAE features, run:
 
 ```python
-# Example feature ID 1234
+# Example feature ID 1234 (of 16384)
 steered = sae.steer_generate(feature=1234, strength=0.25, n=10)
 ```
 
@@ -288,72 +324,20 @@ peak_features, accessions = sae.encode(idr_sequences, pool="max")
 present = peak_features > 0  # [N_IDRs, num_latents] boolean feature presence
 ```
 
-SAE encoding always returns IDR features. Pooling happens after encoding each residue:
-`"mean"` averages features, while `"max"` takes each feature's maximum over the IDR.
-Testing max-pooled values with `features > 0` gives the same “active anywhere” presence
-criterion used in feature enrichment. `"none"` returns rows in original IDR order with
-source-position metadata. Repeated accessions remain separate input records.
+SAE features are returned only for IDR residues, with flanks excluded by this released model. Max-pooled values greater than zero indicate features active anywhere in an IDR.
 
-This released IDiomSAE uses only unprompted IDRs. Full-protein inputs with marked IDRs
-are accepted, but their flanks are excluded from the SAE's model input. Its saved prompt
-mode controls this automatically. Future prompted SAEs can retain flanks as context while
-returning only IDR features. The public encoding interface rejects SAEs trained exclusively
-on non-IDR residues. Internal training and analysis retain region-aware extraction.
-
-Use the [SAE inspection notebook](cookbook/notebooks/interpret_sae_features.ipynb)
-to inspect highly activating sequences and activation patterns, and use the
-[enrichment notebook](cookbook/notebooks/enriched_feature_signature.ipynb) to identify features
-enriched within a set of sequences. The [RL-SAE notebook](cookbook/notebooks/rl_with_sae_rewards.ipynb)
-uses feature signatures as design rewards and evaluates coverage after training.
+For more complex SAE workflows, please see the notebooks for [inspecting SAE features](cookbook/notebooks/interpret_sae_features.ipynb), [finding enriched features](cookbook/notebooks/enriched_feature_signature.ipynb), and [using feature signatures as RL rewards](cookbook/notebooks/rl_with_sae_rewards.ipynb).
 
 <br>
 
-## Sequence conventions
-
-IDiom is trained using a fill-in-the-middle (FIM) format with one token per canonical amino acid and three positional marker tokens. The markers denote the N-terminal flank `1`, IDR `2`, and C-terminal flank `3`.
-
-As an example, consider the example full protein sequence `MEDQSSGACDE` where `QSSG` is an IDR flanked by `MED` and `ACDE`. The sequence's FIM representation is `1MED3ACDE2QSSG`, and during prompted generation, the model receives `1MED3ACDE2` and generates an IDR conditioned on the flanks. During unprompted generation, the model only receives `132` and generates a de novo IDR without flanking context.
-
-The positional markers are handled automatically by IDiom, and all use cases need only to supply amino acid sequences and IDR positions. **FASTA headers use 1-based, inclusive IDR residue positions**, following biological convention, and **Python methods use standard 0-based, end-exclusive IDR residue positions**. IDiom converts between these conventions automatically when reading and writing FASTA files.
-
-In the example `MEDQSSGACDE` with IDR `QSSG`, we have:
-
-| Interface | IDR `QSSG` in  `MEDQSSGACDE` |
-|---|---|
-| FASTA header | `>example_IDR_4-7` |
-| Python args | `idr_start=3, idr_end=7` |
-| Python slice | `seq[3:7]` |
-
-<!-- All three identify the same four residues, `QSSG`. To convert a FASTA span `_IDR_x-y` to Python,
-subtract one from the start only: `idr_start=x-1`, `idr_end=y` -->
-
-To interface with IDiom, the first whitespace-delimited token in each FASTA header must end with `_IDR_x-y`, where `x` and `y` are the **1-based, inclusive** indices of the IDR in that record. A fully disordered sequence of `<length>` would for example have FASTA headers ending in `_IDR_1-<length>`.
-
-FASTA readers skip records with missing or malformed IDR spans, out-of-range coordinates,
-or sequences containing anything outside the 20 uppercase canonical amino acids, and log
-the counts skipped. Bare sequence inputs to the Python API instead raise `ValueError`
-for empty or noncanonical sequences.
-
-
-
-For example, a FASTA record marking `QSSG` as the IDR is:
-
-```fasta
->example_IDR_4-7
-MEDQSSGACDE
-```
-
-<br>
 
 ## Cookbook: notebooks, post-training, and rewards
 
 The cookbook in `cookbook/` provides detailed examples and workflows for using and post-training IDiom. Detailed information can be found in the [cookbook readme](cookbook/README.md).
 
-- [Eight independent notebooks](cookbook/notebooks/README.md): generation, IDR prediction, embeddings, SAE interpretation,
-  signature discovery, SFT, custom-reward GRPO, and RL-SAE. Start with
-  [Generate IDRs](cookbook/notebooks/generate_idrs.ipynb), locally or in Colab.
-- Scripts in `cookbook/scripts/`: run supervised fine-tuning and GRPO-based reinforcement learning with custom rewards, and run additional SAE workflows.
-- Rewards in `cookbook/rewards/`: define custom reinforcement learning rewards and connect external scorers such as SPARROW, FINCHES, ProtGPS, PADDLE, or custom code.
+- [Notebooks](cookbook/notebooks/README.md): explore generation, prediction, embeddings, SAE analysis, and post-training.
+- [Bash scripts](cookbook/scripts/README.md): run SFT, custom-reward GRPO, and SAE workflows.
+- [Custom rewards](cookbook/rewards/README.md): define reinforcement learning rewards and connect external scorers.
 
 <br>
 
@@ -372,14 +356,13 @@ IDiom models are hosted in our [Hugging Face collection](https://huggingface.co/
 
 ## Data
 
-IDiom-DB is a dataset of 54M IDRs curated from the AlphaFold Database (curation details are provided in the manuscript). IDiom-DB can be found on Hugging Face at [jxliu2/idiom-db](https://huggingface.co/datasets/jxliu2/idiom-db). The training split contains 53.6M records (23.6 GB), and the validation and test splits contain
-271k records each (128 MB each).
+IDiom-DB is a dataset of 54M IDRs curated from the AlphaFold Database (curation details are provided in the manuscript). IDiom-DB can be found on Hugging Face at [jxliu2/idiom-db](https://huggingface.co/datasets/jxliu2/idiom-db). The training split contains 54M records (~24 GB), and the validation and test splits contain 270k records each (130 MB each).
 
 Quick download instructions (for details see the Hugging Face repository):
 
 ```bash
 # Download all training, validation, and test splits
-hf download jxliu2/idiom-db --repo-type dataset --include "idiom-db/*"
+hf download jxliu2/idiom-db --repo-type dataset --include "idiom-db/idiom-db-v1_*.fasta"
 
 # Download only the validation split
 hf download jxliu2/idiom-db --repo-type dataset --include "idiom-db/idiom-db-v1_validation.fasta"

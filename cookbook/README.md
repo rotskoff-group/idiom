@@ -5,56 +5,42 @@ Here we provide examples of how to use IDiom!
 ## Table of Contents
 
 - [Getting started](#getting-started)
-- [Example data](#example-data)
 - [Notebooks](#notebooks)
 - [Bash scripts](#bash-scripts)
 - [Reinforcement learning](#reinforcement-learning)
 - [Reward definition](#reward-definition)
+- [Example data](#example-data)
 
 
 ## Getting started
 
-Open a notebook below to work interactively in Colab. Each notebook includes installation
-and example-data setup. For local notebooks, install `idiom[cookbook]`. For Bash scripts,
-[install IDiom and clone the repository](../README.md#installation).
+For local use, first install IDiom and clone the repository:
 
-Next, Bash scripts in `cookbook/scripts/` are provided as examples of training, inference, and SAE workflows. To run these scripts, activate your IDiom-installed environment, edit the `REPO` and `OUT` directories, then run, for example:
+```bash
+pip install "idiom @ git+https://github.com/rotskoff-group/idiom.git@v1"
+git clone --branch v1 https://github.com/rotskoff-group/idiom.git
+cd idiom
+```
+
+Demo inputs are included in `cookbook/example_data`; see [Example data](#example-data) for details.
+
+### Notebooks
+
+Run the [notebooks](#notebooks) interactively in Colab or locally to explore IDR generation and prediction, embeddings, SAE analysis, and post-training.
+
+### Bash scripts and reinforcement learning examples
+
+The [Bash scripts](#bash-scripts) cover training, inference, and SAE workflows, including [reinforcement learning examples](#grpo-examples) in `cookbook/scripts/training/grpo/`. To run a script, activate your IDiom-installed environment, edit the `REPO` and `OUT` directories, then run a script from the repository root:
 
 ```bash
 bash cookbook/scripts/generation/generate_unprompted.bash
 ```
 
-Typical default parameters are provided in all scripts, please modify them for your own use. Most training and inference examples use one GPU.
+Adjust the default parameters for your use. Most training and inference examples use one GPU.
 
-Reinforcement learning examples are in `cookbook/scripts/training/grpo/`. Examples that launch external scorers with `uv run` require `uv` (`python -m pip install uv`).
+### Custom RL rewards
 
-<br>
-
-## Example data
-
-Demo inputs are included in `cookbook/example_data`.
-
-| Directory | Contents |
-|---|---|
-| `cookbook/example_data/protgps/` | IDRs associated with six subcellular compartments |
-| `cookbook/example_data/effector/` | Experimentally measured activation and repression domain IDRs |
-| `cookbook/example_data/disprot/` | Held-out proteins with annotated IDRs and flanking context |
-| [`cookbook/example_data/sae_features/`](example_data/sae_features/) | Enriched top-30 and original private-30 SAE targets |
-| `cookbook/example_data/prompted_grpo/` | HP1α (P45973), IDR residues 79–123 |
-| `cookbook/example_data/finches/` | ProTalpha and H1.0 C-terminal reference constructs |
-
-FASTA headers end with `_IDR_x-y`, with 1-based, inclusive coordinates, to mark an IDR span.
-ProtGPS and effector sequences are isolated IDRs with no flanking context. DisProt sequences include flanks and
-may repeat accessions with different spans. Prompted IDR generation uses the flanks of a full protein around the marked IDR span as the prompt, and the HP1α sequence is used as an example of this.
-
-See the main README's [sequence conventions](../README.md#sequence-conventions) for more information.
-
-[`sae_signatures.json`](example_data/sae_features/sae_signatures.json) provides targets for
-`jxliu2/idiomsae-300M-L18-k32`: `top30` contains enriched features; `private30` contains
-the original private-feature targets, not the result of removing shared features from `top30`.
-Both cover the six main compartments plus `pml_body` and `post_synaptic_density`.
-Select `signature` (e.g. `nucleolus`) and `case` in
-[`sae_features.yaml`](scripts/training/grpo/sae_features.yaml).
+Use the examples in [`cookbook/rewards/`](rewards/README.md) to define custom reinforcement learning rewards or connect external scorers. Configure reward terms in the matching GRPO YAML file. See [Reward definition](#reward-definition) for built-in rewards, custom functions, and scorer setup.
 
 <br>
 
@@ -73,8 +59,8 @@ Run any notebook independently in Colab or locally, using example data or your o
 | [RL with custom rewards](notebooks/rl_with_custom_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_with_custom_rewards.ipynb) |
 | [RL with SAE rewards](notebooks/rl_with_sae_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_with_sae_rewards.ipynb) |
 
-Run cells in order; Colab notebooks install dependencies and download example data.
-For local use, install `idiom[cookbook]`. Input and parameter details are in each notebook.
+Run cells in order. Colab notebooks will install dependencies and download example data.
+For local use, install `idiom`. Input and parameter details are in each notebook.
 A GPU is recommended for SAE analysis, fine-tuning, and RL.
 Download results from Colab before the runtime ends.
 
@@ -83,10 +69,6 @@ Download results from Colab before the runtime ends.
 ## Bash scripts
 
 In `cookbook/scripts/`, we provide the following Bash scripts. Details are provided within the scripts themselves.
-
-`pretrain.bash`, `sft.bash`, `train_sae.bash`, and all scripts in `cookbook/scripts/training/grpo/` load default YAML configs from `src/idiom/configs/` and apply Hydra command-line overrides.
-
-`generate_unprompted.bash`, `generate_prompted.bash`, `build_feature_dataset.bash`, and `feature_enrichment.bash` use command-line arguments without YAML configs.
 
 ### IDR generation
 
@@ -111,24 +93,30 @@ In `cookbook/scripts/`, we provide the following Bash scripts. Details are provi
 | [pretrain.bash](scripts/training/pretrain.bash) | Pretrain IDiom from scratch |
 | [cookbook/scripts/training/grpo/](scripts/training/grpo/) | Reinforcement learning with custom rewards, SAE features, or external scorers |
 
+`pretrain.bash`, `sft.bash`, `train_sae.bash`, and all scripts in `cookbook/scripts/training/grpo/` load default YAML configs from `src/idiom/configs/` and apply Hydra command-line overrides.
+
+`generate_unprompted.bash`, `generate_prompted.bash`, `build_feature_dataset.bash`, and `feature_enrichment.bash` use command-line arguments without YAML configs.
+
+
 <br>
 
 ## Reinforcement learning
 
-IDiom uses GRPO for reinforcement learning post-training. RL aims to maximize a weighted sum of
-shaped rewards:
+IDiom uses GRPO for reinforcement learning post-training. RL aims to maximize a weighted sum of shaped rewards:
 
 $$
 R(x) = \sum_i \text{weight}_i \times \text{shaping}_i\!\left(\text{raw reward}_i(x)\right)
 $$
 
-where $x$ is a generated sequence and $i$ indexes the reward terms.
+where $x$ is the generated IDR amino acid sequence and $i$ indexes the reward terms. Reward functions receive **only** the generated IDR sequence.
 
-Rewards can be calculated during training using built-in or custom Python functions,
-or by external scorers run as subprocesses. Use an in-process custom reward when its dependencies fit your
-training environment, and use an external scorer when it needs a separate environment.
-At least one reward must be enabled for training, and multiple rewards can be combined, each with its own
-shaping function and weight.
+Rewards can be calculated during training in three ways:
+
+- **Built-in rewards:** use the reward functions provided by IDiom.
+- **Custom Python rewards:** run your own functions in the training process when their dependencies fit the training environment.
+- **External scorers:** run scoring code in a separate process, with its own environment when needed.
+
+At least one reward must be enabled for training, and multiple rewards can be combined. All rewards can be numerically shaped before they are added to the overall reward. 
 
 In this cookbook, we provide several packaged examples for running GRPO training in `cookbook/scripts/training/grpo/`.
 
@@ -351,3 +339,30 @@ reward:
         width: 0.2
       weight: 1.0
 ```
+
+<br>
+
+## Example data
+
+Demo inputs are included in `cookbook/example_data`.
+
+| Directory | Contents |
+|---|---|
+| `cookbook/example_data/protgps/` | IDRs associated with six subcellular compartments |
+| `cookbook/example_data/effector/` | Experimentally measured activation and repression domain IDRs |
+| `cookbook/example_data/disprot/` | Held-out proteins with annotated IDRs and flanking context |
+| [`cookbook/example_data/sae_features/`](example_data/sae_features/) | Enriched top-30 and original private-30 SAE targets |
+| `cookbook/example_data/prompted_grpo/` | HP1α (P45973), IDR residues 79–123 |
+| `cookbook/example_data/finches/` | ProTalpha and H1.0 C-terminal reference constructs |
+
+FASTA headers end with `_IDR_x-y`, with 1-based, inclusive coordinates, to mark an IDR span.
+ProtGPS and effector sequences are isolated IDRs with no flanking context. DisProt sequences include flanks and may repeat accessions with different spans. Prompted IDR generation uses the flanks of a full protein around the marked IDR span as the prompt, and the HP1α sequence is used as an example of this.
+
+See the main README's [sequence conventions](../README.md#sequence-conventions) for more information.
+
+[`sae_signatures.json`](example_data/sae_features/sae_signatures.json) contains two sets of SAE feature targets for reinforcement learning with sparse autoencoder features (RL-SAE):
+
+- `top30`: enriched features for each compartment
+- `private30`: top private features for each compartment
+
+Both sets cover the main biomolecular compartments discussed in the paper. In [`sae_features.yaml`](scripts/training/grpo/sae_features.yaml), choose a compartment with `signature` (e.g. `nucleolus`) and a feature set with `case` (`top30` or `private30`).

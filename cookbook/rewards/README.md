@@ -10,7 +10,7 @@ See the [cookbook guide](../README.md#reward-definition) for reward configuratio
 
 The adapters in `cookbook/rewards/scorers/` run scorers as subprocesses.
 The [GRPO scripts](../scripts/README.md#grpo-examples) launch them in separate
-environments with `uv run`; install `uv` with `python -m pip install uv`.
+environments with `uv run`; `uv` is installed with IDiom.
 
 | File | Provides |
 |---|---|

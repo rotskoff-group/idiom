@@ -9,8 +9,8 @@ header and build() below. This example scores Biopython isoelectric point or mol
 weight; IDiom applies shaping and weights separately.
 
 In the reward YAML, set reward.name to external_scorer and reward.cmd to
-"uv run --script /path/to/my_scorer.py" plus any arguments. Install uv with
-`python -m pip install uv` if needed. The command runs directly, without shell expansion.
+"uv run --script /path/to/my_scorer.py" plus any arguments. uv is installed with
+IDiom. The command runs directly, without shell expansion.
 See cookbook/scripts/training/grpo/custom_scorer.yaml for a complete configuration.
 
 The scorer persists across batches. Set reward.cache_max to 0 for stochastic scores;
