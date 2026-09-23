@@ -1,5 +1,9 @@
 #!/bin/bash
+
 set -euo pipefail
+
+# Identify SAE features enriched in a positive FASTA relative to a background FASTA
+# This example compares nucleolus IDRs against the held-out IDiom validation set
 
 REPO="/path/to/idiom" # EDIT: repository checkout
 OUT="/path/to/output/enrichment" # EDIT: new or empty directory

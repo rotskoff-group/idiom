@@ -11,7 +11,6 @@ Here we provide examples of how to use IDiom!
 - [Reinforcement learning](#reinforcement-learning)
 - [Reward definition](#reward-definition)
 
-<br>
 
 ## Getting started
 
