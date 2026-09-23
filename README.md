@@ -39,11 +39,10 @@ IDiom is an autoregressive protein language model trained on IDiom-DB, a dataset
 - [Citation](#citation)
 - [License](#license)
 
-<br>
 
 ## Installation
 
-Please install the `v1` release directly from GitHub (requires Python ≥3.10):
+Please install the `v1` release directly from GitHub (Python ≥3.10):
 
 ```bash
 pip install git+https://github.com/rotskoff-group/idiom.git@v1
@@ -55,7 +54,7 @@ To access the examples in `cookbook/`, please also clone the `v1` release:
 git clone --branch v1 https://github.com/rotskoff-group/idiom.git
 ```
 
-We welcome any contributions to this open source project. For development, clone the repository and install the package with its development dependencies (Python ≥3.10):
+We welcome any contributions to this open source project. For development, clone the repository and install the package with its development dependencies:
 
 ```bash
 pip install uv
@@ -71,13 +70,15 @@ If you have any questions please open an issue or email [jxliu2@stanford.edu](ma
 
 ## Quickstart
 
-Below, we provide several examples to get started with IDiom. More detailed examples and workflows are provided in `cookbook/`.
+Below, we provide several examples to get started with IDiom. More detailed examples and workflows are provided in the `cookbook/`.
+
+<br>
 
 ## Sequence generation
 
-IDiom enables the generation of standalone unprompted IDRs, as well as IDRs conditioned on flanking protein context.
+IDiom enables the generation of standalone unprompted IDRs, as well as IDRs conditioned on flanking protein context. These flanking protein contexts are the protein residues preceding and following the IDR on its N-terminal and C-terminal sides. 
 
-### Unprompted generation
+## Unprompted generation
 
 Generate 10 unprompted IDRs:
 
@@ -85,28 +86,22 @@ Generate 10 unprompted IDRs:
 from idiom import IDiom
 
 model = IDiom.from_pretrained("jxliu2/idiom-300M")
+# The model weights will download from HuggingFace on the first use
 sequences = model.generate_unprompted(n=10)
 print(sequences)
 ```
 
-Weights download on first use. By default, device selection uses `IDIOM_DEVICE` if set,
-otherwise CUDA when available or CPU. Pass `device="cpu"` or `device="cuda:0"` to
-`from_pretrained` to select a device explicitly. Reduce `batch_size` if GPU memory is limited.
-`from_pretrained` accepts a Hub model ID or a released directory. `IDiom.load`
-also accepts a Lightning `.ckpt` file.
-
-Generate 10 unprompted IDRs within a length range:
+Generate 10 unprompted IDRs within a length range. IDiom samples up to max_oversample * n candidates but may return fewer than n sequences within the requested length range.
 
 ```python
 from idiom import IDiom
 
 model = IDiom.from_pretrained("jxliu2/idiom-300M")
-sequences = model.generate_unprompted(n=10, length_range=(80, 120))
-# Oversamples up to max_oversample * n draws and may return fewer than n sequences
+sequences = model.generate_unprompted(n=10, length_range=(80, 120), max_oversample=20)
 print(sequences)
 ```
 
-Sample with temperature and top-p sampling:
+Sample with explicit temperature and top-p sampling (defaults when not specified: `temperature=1.0` and `top_p=None`, which disables top-p).
 
 ```python
 from idiom import IDiom
@@ -116,22 +111,15 @@ sequences = model.generate_unprompted(n=10, temperature=0.8, top_p=0.9, seed=42)
 print(sequences)
 ```
 
-Lower temperatures concentrate sampling on more likely residues. Setting `top_p=0.9` restricts
-each step to the most likely residues whose cumulative probability reaches 90%.
-Use `seed` for reproducibility with a fixed batch size and sampling settings. Length filtering
-draws at most `max_oversample * n` candidates and may return fewer than `n` sequences
-if too few fall within the requested range.
-
-For de novo FASTA output, use `model.generate_unprompted_fasta("idrs.fasta", n=10)` or:
+To have generated sequences directly output to a FASTA file, use `model.generate_unprompted_fasta("idrs.fasta", n=10)` or:
 
 ```bash
 idiom_generate unprompted --model jxliu2/idiom-300M --n 10 --out idrs.fasta
 ```
 
-### Prompted generation
+## Prompted generation
 
-For prompted generation, supply a protein sequence and its IDR span. See [Sequence conventions](#sequence-conventions)
-for residue position indexing conventions.
+For prompted generation, you must supply a protein sequence as well as the IDR span that you would like to re-generate. IDiom uses the specified IDR's preceding N-terminal residues and following C-terminal residues as the prompt for generating new IDRs. Please see [Sequence conventions](#sequence-conventions) for residue position indexing conventions.
 
 This example uses the flanking context around the IDR within residues 119–259 (1-based, inclusive) of human [NPM1 (UniProt P06748)](https://www.uniprot.org/uniprotkb/P06748/entry) as the prompt for generating IDRs:
 
@@ -148,10 +136,8 @@ seq = (
     "PSSVEDIKAKMQASIEKGGSLPKVEAKFINYVKNCFRMTDQEAIQDLWQWRKSL"
 )
 # Use flanking context around IDR residues 119–259 (1-based inclusive, following bio convention) as the prompt
-regen_sequences = model.generate_prompted(
-    seq, idr_start=118, idr_end=259, n=10
-)  # Standard Python indexing here
-print(regen_sequences)  # Returns only the generated prompted IDRs
+regen_idrs = model.generate_prompted(seq, idr_start=118, idr_end=259, n=10)  # Standard Python indexing here
+print(regen_idrs)  # Returns only the generated prompted IDRs
 ```
 
 To generate prompted IDRs from an existing FASTA file containing protein sequences (see [Sequence conventions](#sequence-conventions) for FASTA file requirements), run this example from the cloned repository root to use [HP1α](cookbook/example_data/prompted_grpo/P45973.fasta) as an example sequence (IDR between residues 79–123):
@@ -162,66 +148,97 @@ from idiom import IDiom
 model = IDiom.from_pretrained("jxliu2/idiom-300M")
 model.generate_prompted_fasta(
     "cookbook/example_data/prompted_grpo/P45973.fasta",
-    "redesigned.fasta",
+    "regen_hp1a.fasta",
     n=10,
     return_full=True,
 )
-# redesigned.fasta is the output
+# outputs regen_hp1a.fasta
 ```
 
-`return_full=True` places each generated IDR between its original prompting flanks in the output FASTA, while `return_full=False` just outputs the prompted IDRs in the FASTA.
+When `return_full=True`, the output FASTA contains each generated IDR placed back within its full-length context, i.e. in bewteen its original prompting flanks. When `return_full=False`, the output FASTA contains just the prompt-generated IDRs. 
+
+<!-- each generated IDR between its original prompting flanks in the output FASTA, while `return_full=False` just outputs the prompted IDRs in the FASTA. -->
 
 <br>
 
 ## Extracting model embeddings
 
-Extract sequence-level embeddings from IDR sequences:
+IDiom can extract embeddings from chosen model layers with mean pooling across the IDR `pool='mean'`, for every IDR residue `pool='none'`, and from only the final position `pool='last'`. **Embedding extraction returns only representations for IDR regions.** 
+
+<!-- Embeddings can be extracted from the model X Y Z (mean pool, per residue, last) -->
+
+### Embeddings of unprompted IDRs 
+
+To extract mean-pooled, sequence-level embeddings from unprompted IDR sequences:
 
 ```python
 from idiom import IDiom
 
 model = IDiom.from_pretrained("jxliu2/idiom-300M")
 idr_sequences = ["MSSGQSSQSPGSGQQQQSSG", "GSGSSQPSQGQSSGSSQQPN"]
+# In this example, the entire sequence is the IDR
 
 values, index = model.embed(idr_sequences, layers=[18], pool="mean")[18]
-# Use pool="none" for per-residue embeddings
 # Embedding layers are 0-based Transformer block indices
-
 print(values.shape)  # (2, 1024) one IDR-averaged embedding per sequence
 print(values)  # Embedding vector
 ```
 
-Embedding extraction returns only IDR representations. Inputs can be annotated FASTA paths,
-`Record` objects with zero-based, end-exclusive IDR coordinates, bare sequences, or iterables
-of records/sequences. Bare sequences are treated as entirely IDR.
+To extract per-residue embeddings for the same sequences, use `pool="none"`:
+
+```python
+values, index = model.embed(idr_sequences, layers=[18], pool="none")[18]
+print(values.shape)  # (40, 1024) one row per residue across both IDRs
+```
+
+### Embeddings of prompted IDRs 
+
+To extract IDR embeddings with both flanks as context, use the `Record` dataclass, which represents a single IDR data record. `Record`s take the full protein sequence and the indices of the IDR span. In this example, `QSSG` is the IDR, with `MED` and `ACDE` as its N- and C-terminal flanks:
 
 ```python
 from idiom.data.records import Record
 
-record = Record("protein1", "MEDQSSGACDE", idr_start=3, idr_end=7)  # QSSG
-values, index = model.embed(record, layers=[18], pool="none")[18]  # Four IDR residue rows
-last, index = model.embed(record, layers=[18], pool="last")[18]  # Final IDR residue vector
+record = Record(
+    "protein1",
+    full_seq="MEDQSSGACDE",
+    idr_start=3,
+    idr_end=7,
+)  # Zero-based, end-exclusive coordinates: full_seq[3:7] is QSSG
 ```
 
-`pool="mean"` averages IDR residue vectors. Use `"none"` to return them individually or `"last"` to
-return the final IDR residue's representation, excluding EOS and markers. Full-protein
-inputs retain both flanks in the regular FIM computation, but flank embeddings are never
-returned. Per-residue rows follow original IDR sequence order within each input record.
-Metadata includes `record_idx`, `source_pos` (zero-based original protein position),
-`residue`, `accession`, and `is_idr`. Pooled metadata includes `record_idx`, `accession`,
-`n_idr`, and `n_residues` (both counts equal the IDR length). Empty or invalid supplied IDR
-spans raise an error. The underlying function is `idiom.model.extract.extract_embeddings`.
+Then, extract the IDR embeddings: 
 
-To export embeddings for a FASTA file of proteins with IDR regions marked, run the `idiom_extract` CLI:
+```python
+values, index = model.embed(record, layers=[18], pool="none")[18]
+print(values.shape)  # (4, 1024) embeddings for Q, S, S, G only
+# Both flanks provide context, but their embeddings are not returned.
+
+pooled, _ = model.embed(record, layers=[18], pool="mean")[18]
+print(pooled.shape)  # (1, 1024) averaged over the four IDR residues
+
+last, _ = model.embed(record, layers=[18], pool="last")[18]
+print(last.shape)  # (1, 1024) representation of the final IDR residue, G
+```
+
+### Embeddings from FASTA files
+
+To obtain IDR embeddings from a FASTA file, pass the FASTA path with [annotated IDR spans](#sequence-conventions) to `model.embed()`. Any present flanking residues are used as prompted context, and only IDR embeddings are returned.
+
+```python
+fasta = "cookbook/example_data/prompted_grpo/P45973.fasta"
+values, index = model.embed(fasta, layers=[18], pool="mean")[18]
+print(values.shape)  # (1, 1024); use pool="none" for (45, 1024)
+```
+
+To export embeddings from the command line:
 
 ```bash
 idiom_extract --model jxliu2/idiom-300M \
-    --fasta cookbook/example_data/disprot/disprot_len1020_idrs.fasta \
+    --fasta cookbook/example_data/prompted_grpo/P45973.fasta \
     --layers 18 --pool mean --out embeddings
 ```
 
-Use [Extract sequence embeddings](cookbook/notebooks/extract_embeddings.ipynb) for embedding extraction,
-or start with [Generate IDRs](cookbook/notebooks/generate_idrs.ipynb) for de novo and prompted generation.
+This writes `embeddings/layer_18.npy` and `embeddings/layer_18_index.csv`.
 
 <br>
 
