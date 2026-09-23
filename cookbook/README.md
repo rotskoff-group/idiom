@@ -9,6 +9,7 @@ Here we provide examples of how to use IDiom!
 - [Bash scripts](#bash-scripts)
 - [Reinforcement learning](#reinforcement-learning)
 - [Reward definition](#reward-definition)
+- [Example reward terms](#example-reward-terms)
 - [Example data](#example-data)
 
 
@@ -165,7 +166,7 @@ Reward terms have four fields:
 | `reward` | A mapping with `name` and any arguments: a built-in (`length`, `entropy`, or `sae_signature`), a custom Python factory (returns a function), or an external program via `external_scorer`. |
 | `shaping` | A mapping with `name` and any arguments: a built-in (`identity`, `quadratic`, or `gaussian`) or a custom Python factory, defaults to `identity`. |
 
-Example terms are provided below. 
+See [Example reward terms](#example-reward-terms) for YAML examples.
 
 <br>
 
@@ -187,8 +188,8 @@ bash cookbook/scripts/training/grpo/custom_reward.bash
 #### External scorer
 
 1. Copy [custom_scorer.py](rewards/scorers/custom_scorer.py) and [_scorer_protocol.py](rewards/scorers/_scorer_protocol.py) into the same directory. Update the dependency header and scoring function.
-2. Edit [custom_scorer.yaml](scripts/training/grpo/custom_scorer.yaml). Point `reward.cmd` to your script and choose shaping and weight. Review the included entropy and length terms too, since they also contribute to training.
-3. Test the scorer before training, replacing the path below with your script's location.
+2. Edit [custom_scorer.yaml](scripts/training/grpo/custom_scorer.yaml), and point `reward.cmd` to your script and choose shaping and weight.
+3. To test the scorer before training, replace the path below with your script's location.
 
 ```bash
 python -m idiom.train.grpo.reward.external \
@@ -201,11 +202,9 @@ python -m idiom.train.grpo.reward.external \
 bash cookbook/scripts/training/grpo/custom_scorer.bash
 ```
 
-
-
 <br>
 
-## Example reward terms 
+## Example reward terms
 
 The following examples show reward terms you can use or adapt.
 
