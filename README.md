@@ -163,13 +163,13 @@ When `return_full=True`, the output FASTA contains each generated IDR placed bac
 
 ## Extracting model embeddings
 
-IDiom can extract embeddings from chosen model layers with mean pooling across the IDR `pool='mean'`, for every IDR residue `pool='none'`, and from only the final position `pool='last'`. **Embedding extraction returns only representations for IDR regions.** 
+IDiom can extract embeddings from chosen model layers with mean pooling across the IDR `pool="mean"`, for every IDR residue `pool="none"`, and from only the final position `pool="last"`. **Embedding extraction returns only representations for IDR regions.** 
 
 <!-- Embeddings can be extracted from the model X Y Z (mean pool, per residue, last) -->
 
 ### Embeddings of unprompted IDRs 
 
-To extract mean-pooled, sequence-level embeddings from unprompted IDR sequences:
+To extract embeddings without flanking context, pass IDR sequences directly. Each sequence is treated as entirely IDR:
 
 ```python
 from idiom import IDiom
@@ -177,18 +177,20 @@ from idiom import IDiom
 model = IDiom.from_pretrained("jxliu2/idiom-300M")
 idr_sequences = ["MSSGQSSQSPGSGQQQQSSG", "GSGSSQPSQGQSSGSSQQPN"]
 # In this example, the entire sequence is the IDR
-
-values, index = model.embed(idr_sequences, layers=[18], pool="mean")[18]
-# Embedding layers are 0-based Transformer block indices
-print(values.shape)  # (2, 1024) one IDR-averaged embedding per sequence
-print(values)  # Embedding vector
 ```
 
-To extract per-residue embeddings for the same sequences, use `pool="none"`:
+Then, extract the IDR embeddings:
 
 ```python
+# Embedding layers are 0-based Transformer block indices
 values, index = model.embed(idr_sequences, layers=[18], pool="none")[18]
 print(values.shape)  # (40, 1024) one row per residue across both IDRs
+
+pooled, _ = model.embed(idr_sequences, layers=[18], pool="mean")[18]
+print(pooled.shape)  # (2, 1024) averaged over each IDR's residues
+
+last, _ = model.embed(idr_sequences, layers=[18], pool="last")[18]
+print(last.shape)  # (2, 1024) final residue representation for each IDR
 ```
 
 ### Embeddings of prompted IDRs 
@@ -246,20 +248,31 @@ This writes `embeddings/layer_18.npy` and `embeddings/layer_18_index.csv`.
 
 We provide a TopK sparse autoencoder, IDiomSAE, trained on the residual stream of layer-18 of 24 in IDiom-300M. IDiomSAE has k = 32 and a latent dimension of z = 16,384.
 
+### Extracting SAE feature vectors 
+
+To extract SAE feature vectors, pass IDR sequences directly. Each residue's feature vector has 16,384 dimensions. Full-protein `Record` inputs are also accepted, but this released SAE excludes flanks from its model input.
+
 ```python
 from idiom import IDiomSAE
 
 sae = IDiomSAE.from_pretrained("jxliu2/idiomsae-300M-L18-k32")
 idr_sequences = ["MSSGQSSQSPGSGQQQQSSG", "GSGSSQPSQGQSSGSSQQPN"]
-
-features, accessions = sae.encode(idr_sequences, pool="mean")
-# Use pool="none" for per-IDR-residue feature vectors
-# Use pool="max" for each feature's strongest activation anywhere in the IDR
-
-print(features.shape)  # (2, 16384) one IDR-averaged feature vector per sequence
-print(features)  # SAE feature activations
 ```
 
+Then, extract the IDR feature vectors:
+
+```python
+features, index = sae.encode(idr_sequences, pool="none")
+print(features.shape)  # (40, 16384) one feature vector per IDR residue
+
+pooled, accessions = sae.encode(idr_sequences, pool="mean")
+print(pooled.shape)  # (2, 16384) averaged over each IDR's residues
+
+peak, accessions = sae.encode(idr_sequences, pool="max")
+print(peak.shape)  # (2, 16384) each feature's maximum activation in each IDR
+```
+
+### Steering generation 
 
 To steer the generation of IDRs using SAE features, run:
 
