@@ -1,0 +1,39 @@
+"""DataModule test: per-split record FASTAs -> padded batches."""
+
+import torch
+
+from idiom.data.datamodule import RecordDataModule
+from idiom.data.tokenizer import Tokenizer
+
+TOK = Tokenizer()
+
+TRAIN = ">A_IDR_3-6\nMEDSKVDNRPQ\n>B_IDR_2-5\nACDEFGHIKL\n>C_IDR_1-4\nWYFGSTNQAA\n"
+VAL = ">V_IDR_2-4\nMKLVGQHACD\n"
+
+
+def test_datamodule_batches(tmp_path):
+    """Verify that the data module produces padded training and validation batches."""
+    tr = tmp_path / "train.fasta"
+    va = tmp_path / "val.fasta"
+    tr.write_text(TRAIN)
+    va.write_text(VAL)
+
+    dm = RecordDataModule(tr, va, tokenizer=TOK, batch_size=2, max_len=64, num_workers=0)
+    dm.setup()
+    assert len(dm.train_set) == 3 and len(dm.val_set) == 1
+
+    x, y, m = next(iter(dm.train_dataloader()))
+    assert x.shape == y.shape == m.shape
+    assert x.size(0) == 2 and x.dtype == torch.long and m.dtype == torch.bool
+    assert (x[:, 0] == TOK.start_id).all()
+    assert x.max().item() <= TOK.mask_id
+
+
+def test_no_val_fasta_skips_validation(tmp_path):
+    """Verify that omitting validation FASTA disables its dataset and loader."""
+    tr = tmp_path / "train.fasta"
+    tr.write_text(TRAIN)
+    dm = RecordDataModule(tr, None, tokenizer=TOK, batch_size=2, max_len=64, num_workers=0)
+    dm.setup()
+    assert dm.val_set is None
+    assert dm.val_dataloader() is None

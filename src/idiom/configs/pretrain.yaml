@@ -1,0 +1,58 @@
+# Override settings on the CLI:
+#   idiom_train_autoreg data.train_fasta=/path/train.fasta model.n_layers=12 model.d_model=768
+seed: 0
+device: auto # auto | cpu | cuda
+init_from: null # Warm-start weights; see sft.yaml for pretrained model inputs
+resume_from: null # Resume training state (optimizer, step, LR, RNG) from a .ckpt
+ckpt_every_n_steps: 2000 # Steps between rolling last.ckpt saves for preemption recovery
+wandb_project: idiom # WANDB_MODE=offline disables syncing
+run_name: null
+
+data:
+  train_fasta: ??? # Required: training split in record FASTA format
+  val_fasta: null
+  prompted_prob: 0.5 # Probability of prompted (context) vs unprompted (de novo) input
+  completion_only: false # Compute loss on all tokens
+  batch_size: 32 # Per GPU; global batch = batch_size * devices * accumulate_grad_batches
+  num_workers: 8
+
+# IDiom-300M architecture. For 85M/20M, use (n_layers, d_model, n_heads):
+# (12, 768, 12) / (6, 512, 8).
+model:
+  vocab_size: 27
+  n_layers: 24
+  d_model: 1024
+  n_heads: 16
+  max_seq_len: 1024 # Must fit the protein plus START and three FIM markers
+
+  rope_base: 10000.0
+  expansion_ratio: 2.6666666666666665
+  norm_eps: 1.0e-5
+  qk_norm: true
+  tie_embeddings: true
+
+optim: # AdamW with linear warmup, then cosine decay to min_lr_ratio
+  lr: 3.0e-4
+  warmup_steps: 3000
+  weight_decay: 0.0
+  betas: [0.9, 0.95]
+  min_lr_ratio: 0.1
+
+trainer:
+  max_steps: 250000
+  accelerator: auto
+  devices: 8
+  precision: bf16-mixed
+  val_check_interval: 25000
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 4
+
+out_dir: ${oc.env:IDIOM_OUT,./runs}/pretrain
+
+# IDIOM_OUT overrides the output root
+hydra:
+  run:
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}

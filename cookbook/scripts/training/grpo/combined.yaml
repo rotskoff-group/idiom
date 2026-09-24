@@ -1,0 +1,40 @@
+# Reward terms for combined.bash
+# ProtGPS is length-sensitive; add a length term if generations drift long
+reward:
+  terms:
+    - label: entropy
+      weight: 1.0
+      reward:
+        name: entropy
+      shaping:
+        name: quadratic
+        target: 3.65
+        width: 0.2
+    - label: eps
+      weight: 0.5
+      reward:
+        name: external_scorer
+        cmd: uv run --script cookbook/rewards/scorers/finches.py --mode homotypic --forcefield mpipi
+        timeout: 300.0
+        maxlen: 0
+        cwd: null
+        env: null
+        cache_max: 100000
+        label: null
+      shaping:
+        name: quadratic
+        target: -6.0
+        width: 1.0
+    - label: protgps
+      weight: 1.0
+      reward:
+        name: external_scorer
+        cmd: uv run --script cookbook/rewards/scorers/protgps.py --compartment nucleolus
+        timeout: 300.0
+        maxlen: 0
+        cwd: null
+        env: null
+        cache_max: 100000
+        label: null
+      shaping:
+        name: identity

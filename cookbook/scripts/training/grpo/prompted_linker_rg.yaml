@@ -1,0 +1,35 @@
+# Reward terms for prompted_linker_rg.bash
+# Length target: y - x + 1 for the FASTA IDR span. Rg target is in angstroms
+reward:
+  terms:
+    - label: entropy
+      weight: 1.0
+      reward:
+        name: entropy
+      shaping:
+        name: quadratic
+        target: 3.65
+        width: 0.2
+    - label: length
+      weight: 1.0
+      reward:
+        name: length
+      shaping:
+        name: quadratic
+        target: 45
+        width: 0.1
+    - label: rg
+      weight: 0.5
+      reward:
+        name: external_scorer
+        cmd: uv run --script cookbook/rewards/scorers/sparrow.py --property radius_of_gyration
+        timeout: 300.0
+        maxlen: 0
+        cwd: null
+        env: null
+        cache_max: 100000
+        label: null
+      shaping:
+        name: quadratic
+        target: 25
+        width: 0.2

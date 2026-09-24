@@ -1,0 +1,32 @@
+# Reward terms for paddle.bash
+reward:
+  terms:
+    - label: entropy
+      weight: 1.0
+      reward:
+        name: entropy
+      shaping:
+        name: quadratic
+        target: 3.65
+        width: 0.2
+    - label: length
+      weight: 1.0
+      reward:
+        name: length
+      shaping:
+        name: quadratic
+        target: 100
+        width: 1.0
+    - label: paddle
+      weight: 0.5
+      reward:
+        name: external_scorer
+        cmd: uv run --script cookbook/rewards/scorers/paddle.py
+        timeout: 600.0
+        maxlen: 0
+        cwd: null
+        env: null
+        cache_max: 100000
+        label: null
+      shaping:
+        name: identity
