@@ -1,6 +1,6 @@
 """Input auditing, exports, and small-set comparisons for cookbook workflows.
 
-Requires the cookbook extra (pandas). This module is not imported by the core API.
+This module is not imported by the core API.
 """
 
 import json
