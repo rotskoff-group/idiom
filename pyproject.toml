@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "idiom"
 version = "1.0.0"
-description = "Generative design of intrinsically disordered protein regions"
+description = "A protein language model for intrinsically disordered regions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
