@@ -10,7 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "Jason Liu", email = "jxliu2@stanford.edu" }]
+authors = [
+    { name = "Jason Liu", email = "jxliu2@stanford.edu" },
+    { name = "Sebastian Ibarraran", email = "sebastian.ibarraran@stanford.edu" },
+    { name = "Grant M. Rotskoff", email = "rotskoff@stanford.edu" },
+]
 
 dependencies = [
     "torch>=2.4,<3",
