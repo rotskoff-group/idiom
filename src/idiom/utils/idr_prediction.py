@@ -9,6 +9,7 @@ import pandas as pd
 
 from idiom.data.records import Record, read_fasta
 from idiom.data.tokenizer import RESIDUE_SET
+from idiom.utils.device import resolve_device
 from idiom.utils.notebook_helpers import write_fasta
 
 
@@ -28,6 +29,7 @@ def predict_idrs_fasta(fasta, out_dir, *, device="cpu", minimum_idr_length=12):
         or minimum_idr_length < 1
     ):
         raise ValueError("minimum_idr_length must be a positive integer")
+    device = str(resolve_device(device))
     out = Path(out_dir)
     if out.exists() and any(out.iterdir()):
         raise ValueError("Use a new or empty output directory")

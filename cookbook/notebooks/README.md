@@ -1,15 +1,13 @@
 # IDiom notebooks
 
-| Notebook | Colab |
-|---|---|
-| [Generate IDRs](generate_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/generate_idrs.ipynb) |
-| [Predict IDRs and generate replacements](predict_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/predict_idrs.ipynb) |
-| [Extract embeddings](extract_embeddings.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/extract_embeddings.ipynb) |
-| [Interpret SAE features](interpret_sae_features.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/interpret_sae_features.ipynb) |
-| [Enriched feature signature](enriched_feature_signature.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/enriched_feature_signature.ipynb) |
-| [SFT and generate](sft_and_generate.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/sft_and_generate.ipynb) |
-| [RL with custom rewards](rl_with_custom_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_with_custom_rewards.ipynb) |
-| [RL with SAE rewards](rl_with_sae_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_with_sae_rewards.ipynb) |
+| Notebook | Function | Colab |
+|---|---|---|
+| [Generate IDRs](generate_idrs.ipynb) | Generate standalone IDRs or replacements within protein flanks, using known or Metapredict-predicted IDR boundaries. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/generate_idrs.ipynb) |
+| [Extract embeddings](extract_embeddings.ipynb) | Extract pooled and per-residue model embeddings, plus SAE activations and feature-presence vectors. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/extract_embeddings.ipynb) |
+| [Enriched SAE features](enriched_sae_features.ipynb) | Compare positive and background IDR sets to identify enriched SAE features and export a signature for RL-SAE. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/enriched_sae_features.ipynb) |
+| [RL custom](rl_custom.ipynb) | Define a custom sequence reward, train with GRPO, and compare scores before and after training. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_custom.ipynb) |
+| [RL SAE](rl_sae.ipynb) | Train with SAE feature signatures as rewards, optionally combine signatures, and compare feature coverage. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_sae.ipynb) |
+| [SFT](sft.ipynb) | Fine-tune IDiom on an IDR sequence set and generate sequences from the adapted model. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/sft.ipynb) |
 
 See the [cookbook guide](../README.md#notebooks) for setup and saving results,
 and [example data](../README.md#example-data) for the bundled inputs.

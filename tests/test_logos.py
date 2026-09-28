@@ -28,3 +28,28 @@ def test_windows_keep_peaks_aligned_and_missing_positions(tmp_path):
     empty = logo_data(fd, 1, half_width=2)
     assert not empty["windows"] and not empty["counts"].any()
     assert feature_windows(fd, 0, n=0) == []
+
+
+def test_gallery_preserves_feature_order_and_does_not_save(tmp_path, monkeypatch):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    import idiom.sae.features as features
+    from idiom.utils.notebook_helpers import feature_gallery
+
+    calls = []
+
+    def data(dataset, feature, **kwargs):
+        calls.append((feature, kwargs))
+        return dict(information=np.ones((15, 20)) / 20, mean_activation=np.eye(1, 15, 7)[0])
+
+    monkeypatch.setattr(features, "logo_data", data)
+    monkeypatch.chdir(tmp_path)
+    fig = feature_gallery(None, [7, 2, 9])
+    assert [ax.get_title() for ax in fig.axes if ax.get_visible()] == ["F7", "F2", "F9"]
+    assert calls == [(f, dict(n=80, half_width=7)) for f in [7, 2, 9]]
+    assert not list(tmp_path.iterdir())
+    plt.close(fig)
+    assert feature_gallery(None, []) is None

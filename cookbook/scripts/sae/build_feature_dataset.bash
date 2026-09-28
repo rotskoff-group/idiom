@@ -12,7 +12,7 @@ OUT="/path/to/output/features" # EDIT: feature dataset directory
 cd "$REPO"
 
 SAE=jxliu2/idiomsae-300M-L18-k32 # EDIT: Hub ID or released SAE directory
-FASTA=cookbook/example_data/protgps/nucleolus.fasta # EDIT: headers end in _IDR_x-y
+FASTA=cookbook/example_data/protgps/idrs/nucleolus_idrs.fasta # EDIT: headers end in _IDR_x-y
 BATCH_SIZE=16 # EDIT: records per model forward
 
 idiom_feature_dataset \
@@ -21,5 +21,5 @@ idiom_feature_dataset \
     --out "$OUT" \
     --batch-size "$BATCH_SIZE"
 
-# Inspect the output with FeatureDataset in Python; see cookbook/notebooks/interpret_sae_features.ipynb.
+# Inspect the output with FeatureDataset in Python; see cookbook/notebooks/enriched_sae_features.ipynb.
 echo "DONE -> $OUT"

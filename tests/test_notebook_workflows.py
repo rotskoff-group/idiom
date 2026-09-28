@@ -45,17 +45,15 @@ def test_input_audit_and_roundtrip(tmp_path):
 
 NOTEBOOK_NAMES = [
     "generate_idrs",
-    "predict_idrs",
     "extract_embeddings",
-    "interpret_sae_features",
-    "enriched_feature_signature",
-    "sft_and_generate",
-    "rl_with_custom_rewards",
-    "rl_with_sae_rewards",
+    "enriched_sae_features",
+    "sft",
+    "rl_custom",
+    "rl_sae",
 ]
 
 
-def execute_notebook(name, parameters):
+def execute_notebook(name, parameters, *, stop_after_tag=None):
     """Execute cells against the local install, skipping installation and replacing settings."""
     from IPython.core.inputtransformer2 import TransformerManager
 
@@ -72,11 +70,14 @@ def execute_notebook(name, parameters):
         exec(compile(transformer.transform_cell(source), f"{name}:cell_{i}", "exec"), namespace)
         if "parameters" in cell["metadata"].get("tags", []):
             namespace.update(parameters)
+        if stop_after_tag and stop_after_tag in cell["metadata"].get("tags", []):
+            break
     return namespace
 
 
 @pytest.mark.parametrize(
-    "name,additional", [(n, None) for n in NOTEBOOK_NAMES] + [(NOTEBOOK_NAMES[-1], "second")]
+    "name,additional",
+    [(n, None) for n in NOTEBOOK_NAMES] + [(NOTEBOOK_NAMES[-1], "second"), ("generate_idrs", "invalid")],
 )
 def test_notebook_execution(name, additional, tmp_path, monkeypatch):
     """Run inference, training, checkpoint reload, and exports with real tiny models on CPU."""
@@ -119,18 +120,11 @@ def test_notebook_execution(name, additional, tmp_path, monkeypatch):
         DEVICE="cpu",
         BATCH_SIZE=2,
         LAYER=1,
-        INPUT_FASTA=positive,
-        INPUT_MODE="annotated",
-        MAX_RECORDS=8,
+        N_PROTEINS=8,
         N=4,
         MAX_NEW_TOKENS=12,
         MAX_STEPS=2,
         TARGET_LENGTH=8,
-        POSITIVE_FASTA=positive,
-        POSITIVE_MODE="annotated",
-        BACKGROUND_FASTA=background,
-        BACKGROUND_MODE="annotated",
-        MAX_POSITIVE=8,
         MAX_BACKGROUND=8,
         SIGNATURE_FILE=signature,
         SIGNATURE_NAME="demo",
@@ -138,40 +132,64 @@ def test_notebook_execution(name, additional, tmp_path, monkeypatch):
         PROMPT_FASTA=positive,
         SAE_DEVICE="cpu",
     )
+    import huggingface_hub
+
+    from idiom.utils import notebook_helpers
+
+    monkeypatch.setattr(notebook_helpers, "example_file", lambda *args: positive)
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", lambda **kwargs: str(background))
+    if name in {"generate_idrs", "extract_embeddings"}:
+        # Force an interior predicted span so the FASTA handoff must retain both flanks.
+        from types import SimpleNamespace
+
+        import metapredict
+
+        monkeypatch.setattr(
+            metapredict,
+            "predict_disorder_batch",
+            lambda sequences, **kwargs: [
+                SimpleNamespace(
+                    sequence=seq, disorder=np.ones(len(seq)), disordered_domain_boundaries=[[2, 18]]
+                )
+                for seq in sequences
+            ],
+        )
+        unlabeled = tmp_path / "unlabeled.fasta"
+        unlabeled.write_text(
+            ">protein\nAX\n" if additional == "invalid" else ">protein\nAC" + "Q" * 16 + "DE\n"
+        )
+        parameters["INPUT_FASTA"] = unlabeled
     try:
         namespace = execute_notebook(name, parameters)
         out = parameters["OUT_DIR"]
         assert json.loads((out / "run.json").read_text())["elapsed_seconds"] > 0
-        assert list(out.glob("*.csv")) or (out / "enrichment.tsv").exists()
+        assert list(out.rglob("*.csv")) or (out / "enrichment.tsv").exists()
         if name == "generate_idrs":
-            redesigned = list(read_records(out / "redesigned_proteins.fasta"))
-            assert redesigned and all(r.idr_start == 2 for r in redesigned)
-            assert all(r.full_seq.startswith("AC") and r.full_seq.endswith("DE") for r in redesigned)
             assert (out / "generated.fasta").exists()
             assert len(namespace["sequences"]) == parameters["N"]
-        if name == "predict_idrs":
-            assert (out / "prediction_settings.json").exists()
-            annotated = list(read_records(out / "annotated_proteins.fasta"))
-            isolated_records, _ = load_inputs(out / "idrs.fasta", "idr", None)
-            assert [r.full_seq[r.idr_start : r.idr_end] for r in annotated] == [
-                r.full_seq for r in isolated_records
-            ]
-            import pandas as pd
-
-            candidates = pd.read_csv(out / "prompted_sequences.csv", keep_default_na=False)
-            prompts = {r.accession: r for r in annotated[: namespace["MAX_PROMPT_REGIONS"]]}
-            assert len(candidates) == len(prompts) * namespace["N_PER_REGION"]
-            mapping = candidates.set_index("generated_id")
-            regenerated = list(read_records(out / "redesigned_proteins.fasta"))
-            assert len(regenerated) == (candidates.status == "generated").sum()
-            for record in regenerated:
-                row = mapping.loc[record.accession]
-                original = prompts[row.region_id]
-                assert record.idr_start == original.idr_start
-                assert record.full_seq[: record.idr_start] == original.full_seq[: original.idr_start]
-                assert record.full_seq[record.idr_end :] == original.full_seq[original.idr_end :]
-                assert record.full_seq[record.idr_start : record.idr_end] == row.generated_idr
-                assert row.original_idr == original.full_seq[original.idr_start : original.idr_end]
+            for source_name, generated_name in [
+                ("prepared_records", "prepared_generated"),
+                ("predicted_records", "predicted_generated"),
+            ]:
+                sources = {r.accession: r for r in namespace[source_name]}
+                generated = namespace[generated_name]
+                if sources:
+                    assert generated
+                for record in generated:
+                    original = sources[record.accession.rsplit("_idiom_prompted_gen", 1)[0]]
+                    assert record.idr_start == original.idr_start
+                    assert record.full_seq[: record.idr_start] == original.full_seq[: original.idr_start]
+                    assert record.full_seq[record.idr_end :] == original.full_seq[original.idr_end :]
+            predicted = out / "predicted"
+            annotated = list(read_records(predicted / "annotated_proteins.fasta"))
+            idrs, _ = load_inputs(predicted / "idrs.fasta", "idr", None)
+            assert [r.full_seq[r.idr_start : r.idr_end] for r in annotated] == [r.full_seq for r in idrs]
+            assert (predicted / "prediction_settings.json").exists()
+            if additional == "invalid":
+                assert namespace["regions"].empty and not namespace["predicted_generated"]
+                assert not (predicted / "redesigned_proteins.fasta").exists()
+            else:
+                assert annotated and namespace["predicted_generated"]
         if name == "extract_embeddings":
             assert np.load(out / "embeddings.npy").shape == (8, 16)
             import pandas as pd
@@ -188,28 +206,31 @@ def test_notebook_execution(name, additional, tmp_path, monkeypatch):
             )
             positions = pd.read_csv(out / "residue_index.csv")
             assert positions.protein_position_1based.tolist() == list(range(3, 19)) * 2
-        if name == "interpret_sae_features":
-            assert (out / "features/meta.json").exists()
-            assert list(out.glob("*_trace.png")) and list(out.glob("*_logo.png"))
-        if name == "enriched_feature_signature":
+            assert namespace["sae_residues"].shape == (32, 32)
+            assert namespace["sae_accessions"] == [r.accession for r in namespace["examples"]]
+            np.testing.assert_allclose(
+                namespace["sae_pooled"], namespace["sae_residues"].reshape(2, 16, 32).mean(1), atol=1e-6
+            )
+            assert [row["source_pos"] for row in namespace["sae_index"]] == list(range(16)) * 2
+        if name == "enriched_sae_features":
             from idiom.sae.features import load_enrichment
 
             result, selection = load_enrichment(out / "enrichment.npz")
             assert result["n_pos"] == result["n_neg"] == 8
             assert len(selection["selected"]) == 32
-        if name in ("sft_and_generate", "rl_with_custom_rewards", "rl_with_sae_rewards"):
+        if name in ("sft", "rl_custom", "rl_sae"):
             restored = IDiom.from_pretrained(out / "model", device="cpu")
             assert any(
                 not torch.equal(a, b) for a, b in zip(host.model.parameters(), restored.model.parameters())
             )
             assert (out / "training/checkpoints/last.ckpt").is_file()
-        if name in ("rl_with_custom_rewards", "rl_with_sae_rewards"):
+        if name in ("rl_custom", "rl_sae"):
             import pandas as pd
 
             scores = pd.read_csv(out / "rewards.csv")
             assert set(scores.group) == {"baseline", "adapted"}
             assert np.isfinite(scores.total_reward).all()
-        if name == "rl_with_sae_rewards":
+        if name == "rl_sae":
             expected = {"demo": [0, 1]}
             if additional:
                 expected.update(second=[1, 2], combined=[0, 1, 2])
@@ -232,22 +253,6 @@ def test_split_keeps_duplicate_idrs_together():
     train, validation = split_records(records, seed=2)
     assert train and validation
     assert set(map(idr_sequence, train)).isdisjoint(map(idr_sequence, validation))
-
-
-def test_prediction_notebook_without_valid_proteins(tmp_path, monkeypatch):
-    """An empty prediction set exports valid empty tables without loading a generator."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    fasta = tmp_path / "invalid.fasta"
-    fasta.write_text(">invalid\nAX\n")
-    monkeypatch.setattr(IDiom, "from_pretrained", lambda *a, **k: pytest.fail("Loaded a generator"))
-    out = tmp_path / "outputs"
-    namespace = execute_notebook("predict_idrs", {"INPUT_FASTA": fasta, "OUT_DIR": out, "DEVICE": "cpu"})
-    assert namespace["regions"].empty and namespace["candidates"].empty
-    assert (out / "prompted_idrs.fasta").read_text() == ""
-    assert (out / "redesigned_proteins.fasta").read_text() == ""
-    assert (out / "prompted_sequences.csv").read_text().startswith("generated_id,region_id,")
 
 
 def test_notebook_structure_and_links():
@@ -276,3 +281,27 @@ def test_notebook_structure_and_links():
                     elif "://" not in dest and not dest.startswith("#"):
                         assert (path.parent / dest.split("#")[0]).exists(), (name, dest)
         assert len(parameters) == 1
+
+
+def test_embedding_preparation_without_idrs(tmp_path, monkeypatch):
+    """The fixed protein example stops before model loading when no regions are found."""
+    from types import SimpleNamespace
+
+    import metapredict
+
+    from idiom.utils import notebook_helpers
+
+    fasta = tmp_path / "proteins.fasta"
+    fasta.write_text(">protein\nACDEFGHIKLMNPQRSTVWY\n")
+    monkeypatch.setattr(notebook_helpers, "example_file", lambda *args: fasta)
+    monkeypatch.setattr(
+        metapredict,
+        "predict_disorder_batch",
+        lambda sequences, **kwargs: [
+            SimpleNamespace(sequence=s, disorder=np.zeros(len(s)), disordered_domain_boundaries=[])
+            for s in sequences
+        ],
+    )
+    monkeypatch.setattr(IDiom, "from_pretrained", lambda *args, **kwargs: pytest.fail("Loaded a model"))
+    with pytest.raises(ValueError, match="No IDRs predicted"):
+        execute_notebook("extract_embeddings", dict(OUT_DIR=tmp_path / "outputs", DEVICE="cpu"))

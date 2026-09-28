@@ -10,7 +10,7 @@ OUT="/path/to/output/enrichment" # EDIT: new or empty directory
 cd "$REPO"
 
 SAE=jxliu2/idiomsae-300M-L18-k32
-POSITIVE=cookbook/example_data/protgps/nucleolus.fasta # EDIT
+POSITIVE=cookbook/example_data/protgps/idrs/nucleolus_idrs.fasta # EDIT
 
 # Omitting --background downloads the held-out validation FASTA from jxliu2/idiom-db
 # To use your own background, add: --background /path/to/background.fasta

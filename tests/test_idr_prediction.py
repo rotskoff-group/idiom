@@ -1,21 +1,27 @@
 """Check predicted region coordinates and downstream FASTA handoffs."""
 
+import json
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from idiom.data.records import read_records
 from idiom.utils.idr_prediction import predict_idrs_fasta
 from idiom.utils.notebook_helpers import load_inputs
 
 
-def test_prediction_exports_and_audit(tmp_path, monkeypatch):
+@pytest.mark.parametrize("device", ["cpu", "auto"])
+def test_prediction_exports_and_audit(tmp_path, monkeypatch, device):
     import metapredict
+
+    monkeypatch.setenv("IDIOM_DEVICE", "cpu")
 
     fasta = tmp_path / "proteins.fasta"
     fasta.write_text(">same\nACDEFGHIKL\n>same\nACDEFGHIKL\n>folded\nAAAA\n>bad\nAX\n>\nACDE\n")
 
     def predict(sequences, **kwargs):
+        assert kwargs["device"] == "cpu"
         assert kwargs["version"] == "V3" and kwargs["return_domains"]
         return [
             SimpleNamespace(
@@ -28,12 +34,13 @@ def test_prediction_exports_and_audit(tmp_path, monkeypatch):
 
     monkeypatch.setattr(metapredict, "predict_disorder_batch", predict)
     out = tmp_path / "out"
-    regions, audit, scores = predict_idrs_fasta(fasta, out, minimum_idr_length=3)
+    regions, audit, scores = predict_idrs_fasta(fasta, out, minimum_idr_length=3, device=device)
     assert regions.start_1based.tolist() == [2, 7, 2, 7]
     assert regions.end_1based.tolist() == [4, 10, 4, 10]
     assert regions.region_id.nunique() == 4
     assert audit.status.tolist()[:3] == ["predicted IDRs", "predicted IDRs", "no predicted IDRs"]
     assert len(scores) == 3
+    assert json.loads((out / "prediction_settings.json").read_text())["device"] == "cpu"
     annotated = list(read_records(out / "annotated_proteins.fasta"))
     isolated, _ = load_inputs(out / "idrs.fasta", "idr", None)
     assert [r.full_seq for r in isolated] == ["CDE", "HIKL"] * 2

@@ -326,7 +326,7 @@ present = peak_features > 0  # [N_IDRs, num_latents] boolean feature presence
 
 SAE features are returned only for IDR residues, with flanks excluded by this released model. Max-pooled values greater than zero indicate features active anywhere in an IDR.
 
-For more complex SAE workflows, please see the notebooks for [inspecting SAE features](cookbook/notebooks/interpret_sae_features.ipynb), [finding enriched features](cookbook/notebooks/enriched_feature_signature.ipynb), and [using feature signatures as RL rewards](cookbook/notebooks/rl_with_sae_rewards.ipynb).
+For more complex SAE workflows, please see the notebooks for [extracting embeddings and SAE feature vectors](cookbook/notebooks/extract_embeddings.ipynb), [finding enriched features](cookbook/notebooks/enriched_sae_features.ipynb), and [using feature signatures as RL rewards](cookbook/notebooks/rl_sae.ipynb).
 
 <br>
 

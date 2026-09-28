@@ -10,7 +10,7 @@ REPO="/path/to/idiom" # EDIT: cloned repository location
 OUT="/path/to/output/sft" # EDIT: run output directory
 
 cd "$REPO"
-TRAIN_FASTA=cookbook/example_data/protgps/nucleolus.fasta # EDIT
+TRAIN_FASTA=cookbook/example_data/protgps/idrs/nucleolus_idrs.fasta # EDIT
 
 export WANDB_MODE=offline
 

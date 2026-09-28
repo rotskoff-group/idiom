@@ -49,16 +49,14 @@ Use the examples in [`cookbook/rewards/`](rewards/README.md) to define custom re
 
 Run any notebook independently in Colab or locally, using example data or your own FASTA.
 
-| Notebook | Colab |
-|---|---|
-| [Generate IDRs](notebooks/generate_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/generate_idrs.ipynb) |
-| [Predict IDRs and generate replacements](notebooks/predict_idrs.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/predict_idrs.ipynb) |
-| [Extract embeddings](notebooks/extract_embeddings.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/extract_embeddings.ipynb) |
-| [Interpret SAE features](notebooks/interpret_sae_features.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/interpret_sae_features.ipynb) |
-| [Enriched feature signature](notebooks/enriched_feature_signature.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/enriched_feature_signature.ipynb) |
-| [SFT and generate](notebooks/sft_and_generate.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/sft_and_generate.ipynb) |
-| [RL with custom rewards](notebooks/rl_with_custom_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_with_custom_rewards.ipynb) |
-| [RL with SAE rewards](notebooks/rl_with_sae_rewards.ipynb) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_with_sae_rewards.ipynb) |
+| Notebook | Function | Colab |
+|---|---|---|
+| [Generate IDRs](notebooks/generate_idrs.ipynb) | Generate standalone IDRs or replacements within protein flanks, using known or Metapredict-predicted IDR boundaries. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/generate_idrs.ipynb) |
+| [Extract embeddings](notebooks/extract_embeddings.ipynb) | Extract pooled and per-residue model embeddings, plus SAE activations and feature-presence vectors. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/extract_embeddings.ipynb) |
+| [Enriched SAE features](notebooks/enriched_sae_features.ipynb) | Compare positive and background IDR sets to identify enriched SAE features and export a signature for RL-SAE. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/enriched_sae_features.ipynb) |
+| [RL custom](notebooks/rl_custom.ipynb) | Define a custom sequence reward, train with GRPO, and compare scores before and after training. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_custom.ipynb) |
+| [RL SAE](notebooks/rl_sae.ipynb) | Train with SAE feature signatures as rewards, optionally combine signatures, and compare feature coverage. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/rl_sae.ipynb) |
+| [SFT](notebooks/sft.ipynb) | Fine-tune IDiom on an IDR sequence set and generate sequences from the adapted model. | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rotskoff-group/idiom/blob/v1/cookbook/notebooks/sft.ipynb) |
 
 Run cells in order. Colab notebooks will install dependencies and download example data.
 For local use, install `idiom`. Input and parameter details are in each notebook.
@@ -358,15 +356,16 @@ Demo inputs are included in `cookbook/example_data`.
 
 | Directory | Contents |
 |---|---|
-| `cookbook/example_data/protgps/` | IDRs associated with six subcellular compartments |
+| `cookbook/example_data/protgps/full_length/` | Full-length ProtGPS proteins, without IDR annotations |
+| `cookbook/example_data/protgps/idrs/` | Complete paper IDR sets for six subcellular compartments |
 | `cookbook/example_data/effector/` | Experimentally measured activation and repression domain IDRs |
 | `cookbook/example_data/disprot/` | Held-out proteins with annotated IDRs and flanking context |
 | [`cookbook/example_data/sae_features/`](example_data/sae_features/) | Enriched top-30 and original private-30 SAE targets |
 | `cookbook/example_data/prompted_grpo/` | HP1α (P45973), IDR residues 79–123 |
 | `cookbook/example_data/finches/` | ProTalpha and H1.0 C-terminal reference constructs |
 
-FASTA headers end with `_IDR_x-y`, with 1-based, inclusive coordinates, to mark an IDR span.
-ProtGPS and effector sequences are isolated IDRs with no flanking context. DisProt sequences include flanks and may repeat accessions with different spans. Prompted IDR generation uses the flanks of a full protein around the marked IDR span as the prompt, and the HP1α sequence is used as an example of this.
+Annotated FASTA headers end with `_IDR_x-y`, with 1-based, inclusive coordinates, to mark an IDR span.
+ProtGPS sequences in `protgps/idrs/` and effector sequences are isolated IDRs with no flanking context. DisProt sequences include flanks and may repeat accessions with different spans. Prompted IDR generation uses the flanks of a full protein around the marked IDR span as the prompt, and the HP1α sequence is used as an example of this.
 
 See the main README's [sequence conventions](../README.md#sequence-conventions) for more information.
 

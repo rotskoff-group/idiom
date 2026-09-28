@@ -232,18 +232,30 @@ def nearest_reference(sequences, references) -> pd.DataFrame:
 
 
 def example_file(name: str, directory, *, revision="v1") -> Path:
-    """Download a cookbook FASTA from the same release used by notebook installation."""
+    """Use a checkout's example FASTA, or download/cache it from the notebook release."""
     from urllib.request import urlretrieve
 
     allowed = {
         "disprot/disprot_len1020_idrs.fasta",
         "effector/ad.fasta",
         "effector/rd.fasta",
-        "protgps/nucleolus.fasta",
         "prompted_grpo/P45973.fasta",
     }
+    compartments = (
+        "chromosome",
+        "nuclear_pore_complex",
+        "nuclear_speckle",
+        "nucleolus",
+        "p-body",
+        "stress_granule",
+    )
+    allowed.update(f"protgps/idrs/{compartment}_idrs.fasta" for compartment in compartments)
+    allowed.update(f"protgps/full_length/{compartment}.fasta" for compartment in compartments)
     if name not in allowed:
         raise ValueError(f"Unknown example: {name}")
+    local = Path(__file__).resolve().parents[3] / "cookbook" / "example_data" / name
+    if local.is_file():
+        return local
     out = Path(directory) / name
     out.parent.mkdir(parents=True, exist_ok=True)
     if not out.exists():
@@ -344,3 +356,49 @@ def load_feature_inputs(path, mode="idr", *, max_length):
         if reason:
             audit.loc[audit.record_id == record.accession, "status"] = reason
     return kept, audit
+
+
+def feature_gallery(dataset, feature_ids, *, n=80, half_width=7):
+    """Return an SI-style logo gallery, or None for no selected features; never save files.
+
+    Preserve feature order. Each logo uses one peak-centered window per sequence,
+    drawn from up to n strongest firing sequences. Orange shading represents the
+    mean activation profile normalized independently for each feature.
+    """
+    import logomaker
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    from idiom.sae.features import AMINO_ACIDS, logo_data
+
+    feature_ids = list(feature_ids)
+    if not feature_ids:
+        return None
+    ncols = 5
+    nrows = (len(feature_ids) + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(14, 1.8 * nrows), squeeze=False, layout="constrained")
+    for ax in axes.flat:
+        ax.set_visible(False)
+    for ax, feature in zip(axes.flat, feature_ids):
+        ax.set_visible(True)
+        data = logo_data(dataset, feature, n=n, half_width=half_width)
+        profile = data["mean_activation"]
+        peak = profile.max()
+        for position, activation in enumerate(profile):
+            if activation > 0:
+                ax.axvspan(
+                    position - 0.5,
+                    position + 0.5,
+                    color="#ff8c00",
+                    alpha=0.65 * float(activation / peak) ** 0.55,
+                    lw=0,
+                    zorder=0,
+                )
+        logomaker.Logo(
+            pd.DataFrame(data["information"], columns=list(AMINO_ACIDS)), ax=ax, color_scheme="chemistry"
+        )
+        ax.axvline(half_width, color="black", ls="--", lw=0.5)
+        ax.set(title=f"F{feature}", ylim=(0, np.log2(20)), yticks=[0, 2, 4], xticks=[])
+        if ax in axes[:, 0]:
+            ax.set_ylabel("bits")
+    return fig
