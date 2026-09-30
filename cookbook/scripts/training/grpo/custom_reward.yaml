@@ -1,0 +1,12 @@
+# Reward terms for custom_reward.bash
+# Target charged fraction 0.30; score 0 at 0.30 and -0.15 at 0.15 or 0.45
+# Add entropy or length terms if needed; see the other reward YAML examples
+reward:
+  terms:
+    - label: fcr
+      weight: 1.0
+      reward:
+        name: cookbook/rewards/custom_rewards_shapings.py:fraction_charged
+      shaping:
+        name: cookbook/rewards/custom_rewards_shapings.py:absolute_error
+        target: 0.3

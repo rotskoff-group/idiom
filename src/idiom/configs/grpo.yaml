@@ -1,0 +1,51 @@
+seed: 0
+device: auto
+init_from: ??? # Checkpoint, release directory, or Hub repo ID
+resume_from: null # Resume training state (optimizer, step, RNG) from a .ckpt
+wandb_project: idiom-grpo
+run_name: null
+
+prompts:
+  mode: unprompted # unprompted (de novo) | prompted (per-protein flank prompts)
+  n: 1000 # unprompted mode: number of prompts
+  fasta: null # prompted mode: FASTA of proteins (_IDR_x-y headers)
+  n_per: 1000 # prompted mode: copies per protein
+  batch_size: 4 # Prompts per micro-batch; each yields group_size completions
+
+grpo:
+  group_size: 8
+  max_new_tokens: 1020
+  lr: 5.0e-6
+  beta_kl: 0.02
+  eps_clip: 0.2
+  temperature: 1.0
+  top_k: null
+  top_p: null
+  normalize_advantage: true # Divide advantages by the within-group standard deviation
+  log_samples_every: 5 # print example generations every N steps (0 disables)
+  n_log_samples: 3
+  track_disorder: true # Compute mean per-sequence disorder with metapredict V3 on CPU each step
+
+trainer:
+  max_steps: 3000
+  accelerator: auto
+  devices: 1
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 2 # micro-batches per optimizer step
+  log_every_n_steps: 1
+  checkpoint_every: 0 # Save every N steps; 0 saves only the final checkpoint
+
+# Total reward = sum of weight * shaping(reward(idr)) across terms.
+# Configure terms explicitly; names accept aliases or "module:function" paths.
+# See cookbook/scripts/training/grpo/*.yaml for complete examples.
+reward:
+  terms: []
+
+out_dir: ${oc.env:IDIOM_OUT,./runs}/grpo
+
+hydra:
+  run:
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}

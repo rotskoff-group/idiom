@@ -1,0 +1,52 @@
+"""Feature-dataset tests: build -> read -> reduce, with residue alignment."""
+
+from idiom.data.records import Record
+from idiom.data.tokenizer import RESIDUES, Tokenizer
+from idiom.model import IDiomTransformer, ModelConfig
+from idiom.sae import SparseCoder
+from idiom.sae.features.build_feature_dataset import build_feature_dataset
+from idiom.sae.features.feature_dataset import FeatureDataset
+
+TOK = Tokenizer()
+TINY = ModelConfig(vocab_size=27, n_layers=2, d_model=16, n_heads=4, max_seq_len=64)
+RECS = [Record(f"r{i}", "MEDSKVDNRPQACDEFG", 3, 12) for i in range(5)]
+
+
+def _build(tmp_path):
+    """Build a small feature dataset on disk and return its path and SAE."""
+    model = IDiomTransformer(TINY)
+    sae = SparseCoder(TINY.d_model, num_latents=32, k=4)
+    out = build_feature_dataset(model, sae, RECS, layer=1, out_dir=tmp_path / "fd", batch_size=2)
+    return out, sae
+
+
+def test_build_and_read(tmp_path):
+    """Verify that a generated feature dataset can be reopened with matching metadata."""
+    out, sae = _build(tmp_path)
+    for f in ("top_indices.npy", "top_values.npy", "seq_idx.npy", "pos_idx.npy", "strings.json", "meta.json"):
+        assert (out / f).exists()
+    fd = FeatureDataset(out, in_memory=True)
+    assert fd.k == int(sae.k) and fd.num_latents == sae.num_latents and fd.layer == 1
+    assert fd.top_indices.shape[1] == fd.k
+    assert len(fd.strings) == len(RECS)
+    assert fd.sequence(0).startswith("1")
+
+
+def test_pos_idx_aligns_to_residues(tmp_path):
+    """Verify that stored feature positions point to residues in FIM strings."""
+    out, _ = _build(tmp_path)
+    fd = FeatureDataset(out, in_memory=True)
+    for row in range(min(20, len(fd.seq_idx))):
+        s = fd.sequence(int(fd.seq_idx[row]))
+        assert s[int(fd.pos_idx[row])] in RESIDUES
+
+
+def test_reductions_run(tmp_path):
+    """Verify that feature reductions return firing sequences and aligned traces."""
+    out, _ = _build(tmp_path)
+    fd = FeatureDataset(out, in_memory=True)
+    feat = int(fd.top_indices[0, 0])
+    seqs, scores = fd.top_sequences(feat, n=3, sort_by="peak")
+    assert len(seqs) >= 1 and (scores > 0).all()
+    pos, acts = fd.trace(int(seqs[0]), feat)
+    assert len(pos) == len(acts)

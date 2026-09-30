@@ -1,0 +1,45 @@
+# Stream activations from a frozen IDiom for SAE training
+#   idiom_train_sae model_ckpt=jxliu2/idiom-300M data.fasta=/path/records.fasta layer=18
+seed: 0
+device: auto
+model_ckpt: ??? # Frozen model: checkpoint, release directory, or Hub repo ID
+resume_from: null # Resume training state (optimizer, step, RNG) from a .ckpt
+wandb_project: idiom-sae
+run_name: null
+
+layer: 8 # Zero-based residual-stream block index; must be < n_layers
+region: all # residues feeding the SAE: all | idr | non_idr (split at the '2' marker)
+
+data:
+  fasta: ??? # Required: record FASTA for activation extraction
+  prompted_prob: 0.5 # Probability of prompted input; 0.0 uses de novo input only
+  shuffle: true
+  record_batch_size: 16 # sequences per model forward, re-batched into sae_batch_size
+
+sae_batch_size: 4096 # activation rows per SAE step
+buffer_size: 262144 # Activation rows to collect before shuffling and draining
+init_b_dec_from_mean: true
+
+sae:
+  k: 32
+  expansion_factor: 32
+  activation: topk # topk | groupmax
+  multi_topk: false
+  auxk_alpha: 0.03125
+  dead_feature_tokens: 10000000
+  warmup_steps: 1000
+
+trainer:
+  max_steps: 100000
+  accelerator: auto
+  devices: 1
+
+out_dir: ${oc.env:IDIOM_OUT,./runs}/sae
+
+# IDIOM_OUT overrides the output root
+hydra:
+  run:
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${oc.env:IDIOM_OUT,.}/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}

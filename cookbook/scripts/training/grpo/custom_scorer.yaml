@@ -1,0 +1,34 @@
+# Reward terms for custom_scorer.bash
+reward:
+  terms:
+    - label: entropy
+      weight: 1.0
+      reward:
+        name: entropy
+      shaping:
+        name: quadratic
+        target: 3.65
+        width: 0.2
+    - label: length
+      weight: 1.0
+      reward:
+        name: length
+      shaping:
+        name: quadratic
+        target: 100
+        width: 1.0
+    - label: isoelectric_point
+      weight: 1.0
+      reward:
+        name: external_scorer
+        cmd: uv run --script cookbook/rewards/scorers/custom_scorer.py --property isoelectric_point
+        timeout: 300.0
+        maxlen: 0
+        cwd: null
+        env: null
+        cache_max: 100000
+        label: null
+      shaping:
+        name: gaussian
+        target: 4.5
+        width: 0.3

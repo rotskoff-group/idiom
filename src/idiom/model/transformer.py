@@ -1,0 +1,144 @@
+"""Pre-norm RoPE transformer with optional tied embeddings and KV caching."""
+
+from __future__ import annotations
+
+import torch
+import torch.nn.functional as F
+from torch import Tensor, nn
+
+from idiom.model.attention import Attention, KVCache
+from idiom.model.config import ModelConfig
+from idiom.model.norms import RMSNorm
+from idiom.model.rope import Rope
+
+
+class SwiGLU(nn.Module):
+    """SwiGLU with fused gate and up projections."""
+
+    def __init__(self, d_model: int, expansion_ratio: float) -> None:
+        """Initialize the SwiGLU projections.
+
+        Args:
+            d_model: Input and output width.
+            expansion_ratio: Hidden width as a multiple of d_model.
+        """
+        super().__init__()
+        hidden = int(expansion_ratio * d_model)
+        self.w_gate_up = nn.Linear(d_model, 2 * hidden, bias=False)
+        self.w_down = nn.Linear(hidden, d_model, bias=False)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Apply down(silu(gate) * up), preserving shape [..., d_model]."""
+        gate, up = self.w_gate_up(x).chunk(2, dim=-1)
+        return self.w_down(F.silu(gate) * up)
+
+
+class Block(nn.Module):
+    """Pre-norm attention and SwiGLU block."""
+
+    def __init__(self, cfg: ModelConfig) -> None:
+        """Initialize the transformer block.
+
+        Args:
+            cfg: Architecture config for the attention and SwiGLU submodules.
+        """
+        super().__init__()
+        self.attn_norm = RMSNorm(cfg.d_model, cfg.norm_eps)
+        self.attn = Attention(cfg)
+        self.ffn_norm = RMSNorm(cfg.d_model, cfg.norm_eps)
+        self.ffn = SwiGLU(cfg.d_model, cfg.expansion_ratio)
+
+    def forward(self, x, rope, positions, cache=None, layer_idx=0) -> Tensor:
+        """Apply the attention and feed-forward sublayers with residual connections.
+
+        Args:
+            x (Tensor): Residual stream of shape [B, L, d_model].
+            rope (Rope): Rotary embedding tables.
+            positions (Tensor): Absolute position index per element of the L axis.
+            cache (KVCache | None): Cache to read and extend, or None.
+            layer_idx (int): This block's index, used as the cache slot.
+
+        Returns:
+            Tensor: The updated residual stream, shape [B, L, d_model].
+        """
+        x = x + self.attn(self.attn_norm(x), rope, positions, cache, layer_idx)
+        x = x + self.ffn(self.ffn_norm(x))
+        return x
+
+
+class IDiomTransformer(nn.Module):
+    """Sequence-only pre-norm transformer with RoPE, tied embeddings, and KV-cache support.
+
+    Attributes:
+        cfg (ModelConfig): The architecture this model was built from.
+    """
+
+    def __init__(self, cfg: ModelConfig) -> None:
+        """Initialize the transformer.
+
+        Linear and embedding weights use a normal distribution with mean 0 and standard
+        deviation 0.02; the residual-stream output
+        projections (attention wo and SwiGLU w_down) are rescaled by 1 / sqrt(2 * n_layers).
+
+        Args:
+            cfg: The architecture to build.
+        """
+        super().__init__()
+        self.cfg = cfg
+        self.embed = nn.Embedding(cfg.vocab_size, cfg.d_model)
+        self.rope = Rope(cfg.head_dim, cfg.max_seq_len, cfg.rope_base)
+        self.blocks = nn.ModuleList(Block(cfg) for _ in range(cfg.n_layers))
+        self.final_norm = RMSNorm(cfg.d_model, cfg.norm_eps)
+        self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
+        if cfg.tie_embeddings:
+            self.lm_head.weight = self.embed.weight
+
+        # Small initial weights limit logits; scaled output projections limit variance growth with depth
+        for module in self.modules():  # not self.apply(): Rope defines its own .apply(q,k,positions)
+            self._init_weights(module)
+        for name, p in self.named_parameters():
+            if name.endswith("wo.weight") or name.endswith("w_down.weight"):
+                nn.init.normal_(p, mean=0.0, std=0.02 / (2 * cfg.n_layers) ** 0.5)
+
+    @staticmethod
+    def _init_weights(module: nn.Module) -> None:
+        """Initialize linear and embedding weights with small normal values and zero linear biases."""
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def forward(
+        self, tokens: Tensor, *, cache: KVCache | None = None, return_hidden_states: bool = False
+    ) -> Tensor | tuple[Tensor, list[Tensor]]:
+        """Run the transformer, optionally through a KV cache and returning the residual stream.
+
+        When a cache is given, positions continue from cache.length and the cache is extended by L.
+
+        Args:
+            tokens: Token ids of shape [B, L].
+            cache: Cache to read and extend, or None for a full forward.
+            return_hidden_states: If True, also return each block's residual-stream output.
+
+        Returns:
+            Raw next-token logits of shape [B, L, vocab_size], or (logits, hidden) when
+            requested. hidden[i] is block i's residual output before final normalization.
+        """
+        B, L = tokens.shape
+        past = cache.length if cache is not None else 0
+        positions = torch.arange(past, past + L, device=tokens.device)
+
+        x = self.embed(tokens)
+        hidden: list[Tensor] = []
+        for i, block in enumerate(self.blocks):
+            x = block(x, self.rope, positions, cache, i)
+            if return_hidden_states:
+                hidden.append(x)
+
+        if cache is not None:
+            cache.length += L  # advance once per forward, after every layer has appended
+
+        logits = self.lm_head(self.final_norm(x))
+        return (logits, hidden) if return_hidden_states else logits
