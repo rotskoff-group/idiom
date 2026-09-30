@@ -33,7 +33,8 @@ IDiom is an autoregressive protein language model trained on IDiom-DB, a dataset
   - [Sequence generation](#sequence-generation)
   - [Extracting model embeddings](#extracting-model-embeddings)
   - [IDiomSAE](#idiomsae)
-- [Cookbook: notebooks, post-training, and rewards](#cookbook-notebooks-post-training-and-rewards)
+- [Cookbook: notebooks, reinforcement learning, and rewards](#cookbook-notebooks-reinforcement-learning-and-rewards)
+- [RL-SAE: reinforcement learning with sparse autoencoder features](#rl-sae-reinforcement-learning-with-sparse-autoencoder-features)
 - [Models](#models)
 - [Data](#data)
 - [Citation](#citation)
@@ -185,7 +186,7 @@ model.generate_prompted_fasta(
 # outputs regen_hp1a.fasta
 ```
 
-When `return_full=True`, the output FASTA contains each generated IDR placed back within its full-length context, i.e. in bewteen its original prompting flanks. When `return_full=False`, the output FASTA contains just the prompt-generated IDRs. 
+When `return_full=True`, the output FASTA contains each generated IDR placed back within its full-length context, i.e. in between its original prompting flanks. When `return_full=False`, the output FASTA contains just the prompt-generated IDRs.
 
 <!-- each generated IDR between its original prompting flanks in the output FASTA, while `return_full=False` just outputs the prompted IDRs in the FASTA. -->
 
@@ -197,7 +198,7 @@ IDiom can extract embeddings from chosen model layers with mean pooling across t
 
 <!-- Embeddings can be extracted from the model X Y Z (mean pool, per residue, last) -->
 
-### Embeddings of unprompted IDRs 
+### Embeddings of unprompted IDRs
 
 To extract embeddings without flanking context, pass in IDR sequences directly. Each sequence is treated as an unprompted IDR:
 
@@ -223,7 +224,7 @@ last, _ = model.embed(idr_sequences, layers=[18], pool="last")[18]
 print(last.shape)  # (2, 1024) final residue representation for each IDR
 ```
 
-### Embeddings of prompted IDRs 
+### Embeddings of prompted IDRs
 
 To extract IDR embeddings with both flanks as prompting context, use the [`Record`](src/idiom/data/records.py) dataclass, which represents a single IDR data record. `Record`s take the full protein sequence and the indices of the IDR span. In this example, `QSSG` is the IDR, with `MED` and `ACDE` as its N- and C-terminal flanks:
 
@@ -273,7 +274,7 @@ This writes `embeddings/layer_18.npy` and `embeddings/layer_18_index.csv`.
 
 We provide a TopK sparse autoencoder, IDiomSAE, trained on the residual stream of layer-18 of 24 in IDiom-300M. IDiomSAE has k = 32 and a latent dimension of z = 16,384. We note that IDiomSAE was only trained on the IDiom activations of unprompted IDR residues. 
 
-### Extracting SAE feature vectors 
+### Extracting SAE feature vectors
 
 To extract SAE feature vectors, pass in IDR sequences directly. Each residue's feature vector has dimension 16,384. 
 
@@ -308,7 +309,7 @@ print(features.shape)  # (4, 16384) features for QSSG
 # Flanking context is not used for IDiom activation extraction when using sae.encode()
 ```
 
-### Steering generation 
+### Steering generation
 
 To steer the generation of IDRs using SAE features, run:
 
@@ -331,13 +332,19 @@ For more complex SAE workflows, please see the notebooks for [extracting embeddi
 <br>
 
 
-## Cookbook: notebooks, post-training, and rewards
+## Cookbook: notebooks, reinforcement learning, and rewards
 
 The cookbook in `cookbook/` provides detailed examples and workflows for using and post-training IDiom. Detailed information can be found in the [cookbook readme](cookbook/README.md).
 
 - [Notebooks](cookbook/notebooks/README.md): explore generation, prediction, embeddings, SAE analysis, and post-training.
 - [Bash scripts](cookbook/scripts/README.md): run SFT, custom-reward GRPO, and SAE workflows.
 - [Custom rewards](cookbook/rewards/README.md): define reinforcement learning rewards and connect external scorers.
+
+<br>
+
+## RL-SAE: reinforcement learning with sparse autoencoder features
+
+In our preprint, we introduce RL-SAE for post-training IDiom to generate IDRs that activate specified SAE features, including combinations of features associated with different functions. To get started with RL-SAE, use the [feature enrichment notebook](cookbook/notebooks/enriched_sae_features.ipynb) to identify target features, then the [RL-SAE notebook](cookbook/notebooks/rl_sae.ipynb) to use them as reinforcement learning rewards.
 
 <br>
 
