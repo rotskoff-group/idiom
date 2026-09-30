@@ -1191,7 +1191,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2" },
     { name = "safetensors", specifier = ">=0.4" },
     { name = "setuptools", specifier = "<81" },
-    { name = "torch", specifier = ">=2.4,<3" },
+    { name = "torch", specifier = ">=2.4,<2.11" },
     { name = "uv" },
     { name = "wandb", specifier = ">=0.18" },
 ]
