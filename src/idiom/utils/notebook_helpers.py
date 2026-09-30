@@ -231,7 +231,7 @@ def nearest_reference(sequences, references) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["sequence_id", "reference_row", "similarity", "exact_match"])
 
 
-def example_file(name: str, directory, *, revision="v1") -> Path:
+def example_file(name: str, directory, *, revision="v1.0.0") -> Path:
     """Use a checkout's example FASTA, or download/cache it from the notebook release."""
     from urllib.request import urlretrieve
 

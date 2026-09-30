@@ -43,16 +43,16 @@ IDiom is a protein language model for intrinsically disordered protein regions (
 
 ## Installation
 
-Please install the `v1` release directly from GitHub (Python ≥3.10):
+Please install the `v1.0.0` release directly from GitHub (Python ≥3.10):
 
 ```bash
-pip install git+https://github.com/rotskoff-group/idiom.git@v1
+pip install git+https://github.com/rotskoff-group/idiom.git@v1.0.0
 ```
 
-To access the examples in `cookbook/`, please also clone the `v1` release:
+To access the examples in `cookbook/`, please also clone the `v1.0.0` release:
 
 ```bash
-git clone --branch v1 https://github.com/rotskoff-group/idiom.git
+git clone --branch v1.0.0 https://github.com/rotskoff-group/idiom.git
 ```
 
 We welcome any contributions to this open source project. For development, clone the repository and install the package with its development dependencies:

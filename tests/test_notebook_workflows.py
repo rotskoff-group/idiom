@@ -275,7 +275,7 @@ def test_notebook_structure_and_links():
                 parameters.extend(tag for tag in cell["metadata"].get("tags", []) if tag == "parameters")
             else:
                 for dest in re.findall(r"\]\(([^)]+)\)", source):
-                    if "github/rotskoff-group/idiom/blob/v1/" in dest:
+                    if "github/rotskoff-group/idiom/blob/v1.0.0/" in dest:
                         target = dest.rsplit("/", 1)[-1]
                         assert target.removesuffix(".ipynb") in NOTEBOOK_NAMES
                     elif "://" not in dest and not dest.startswith("#"):
