@@ -1,6 +1,9 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["finches @ git+https://github.com/idptools/finches.git"]
+# dependencies = [
+#   "finches @ git+https://github.com/idptools/finches.git",
+#   "afrc==0.3.4", # Newer AFRC rejects the empty reference sequence constructed during FINCHES import.
+# ]
 # ///
 """Score FINCHES interaction epsilon (https://github.com/idptools/finches).
 

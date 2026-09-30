@@ -10,7 +10,7 @@
   <a href="cookbook/">Cookbook</a>
 </p>
 
-IDiom is an autoregressive protein language model trained on IDiom-DB, a dataset of 54M intrinsically disordered protein regions (IDRs) curated from the AlphaFold Database. IDiom is trained in three model sizes, with 20M, 85M, and 300M parameters. This repository supports:
+IDiom is a protein language model for intrinsically disordered protein regions (IDRs) which is trained on IDiom-DB, a dataset of 54M IDRs curated from the AlphaFold Database. IDiom is an autoregressive model trained in three sizes, with 20M, 85M, and 300M parameters. This repository supports:
 
 - **Generation** of standalone unprompted IDRs as well as IDRs conditioned on flanking protein context
 - **Extraction** of sequence- and residue-level embeddings for IDRs
