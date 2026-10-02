@@ -1,7 +1,7 @@
 # IDiom
 
 <p align="center">
-  <a href="">Preprint</a>
+  <a href="https://arxiv.org/abs/2610.02189">Preprint</a>
   |
   <a href="https://huggingface.co/collections/jxliu2/idiom">Models</a>
   |
@@ -21,7 +21,7 @@ IDiom is a protein language model for intrinsically disordered protein regions (
 
 ## Updates
 
-- **2026-09-XX:** [IDiom v1.0.0 release](https://github.com/rotskoff-group/idiom/releases#release-v1.0.0), new preprint.
+- **2026-10-02:** [IDiom v1.0.0 release](https://github.com/rotskoff-group/idiom/releases#release-v1.0.0), New preprint: [Generative modeling of intrinsically disordered protein regions by reinforcing sparse autoencoder features](https://arxiv.org/abs/2610.02189).
 - **2026-04-11:** [IDiom v0.0.0 release](https://github.com/rotskoff-group/idiom/releases#release-v0.0.0), [Generative design of intrinsically disordered protein regions with IDiom](https://doi.org/10.64898/2026.04.10.717777), presented at the ICML GenBio Workshop 2026.
 
 
@@ -107,7 +107,7 @@ MEDQSSGACDE
 
 ## Sequence generation
 
-IDiom enables the generation of standalone unprompted IDRs, as well as IDRs conditioned on flanking protein context. These flanking protein contexts are the protein residues preceding and following the IDR on its N-terminal and C-terminal sides. 
+IDiom enables the generation of standalone unprompted IDRs, as well as IDRs conditioned on flanking protein context. These flanking protein contexts are the protein residues preceding and following the IDR on its N-terminal and C-terminal sides.
 
 ## Unprompted generation
 
@@ -194,7 +194,7 @@ When `return_full=True`, the output FASTA contains each generated IDR placed bac
 
 ## Extracting model embeddings
 
-IDiom can extract embeddings from chosen model layers with mean pooling across the IDR `pool="mean"`, for every IDR residue `pool="none"`, and from only the final position `pool="last"`. **Embedding extraction returns only representations for IDR residues.** 
+IDiom can extract embeddings from chosen model layers with mean pooling across the IDR `pool="mean"`, for every IDR residue `pool="none"`, and from only the final position `pool="last"`. **Embedding extraction returns only representations for IDR residues.**
 
 <!-- Embeddings can be extracted from the model X Y Z (mean pool, per residue, last) -->
 
@@ -234,7 +234,7 @@ from idiom.data.records import Record
 record = Record("protein1", full_seq="MEDQSSGACDE", idr_start=3, idr_end=7)  # IDR: QSSG
 ```
 
-Then, extract the IDR embeddings: 
+Then, extract the IDR embeddings:
 
 ```python
 values, index = model.embed(record, layers=[18], pool="none")[18]
@@ -272,11 +272,11 @@ This writes `embeddings/layer_18.npy` and `embeddings/layer_18_index.csv`.
 
 ## IDiomSAE
 
-We provide a TopK sparse autoencoder, IDiomSAE, trained on the residual stream of layer-18 of 24 in IDiom-300M. IDiomSAE has k = 32 and a latent dimension of z = 16,384. We note that IDiomSAE was only trained on the IDiom activations of unprompted IDR residues. 
+We provide a TopK sparse autoencoder, IDiomSAE, trained on the residual stream of layer-18 of 24 in IDiom-300M. IDiomSAE has k = 32 and a latent dimension of z = 16,384. We note that IDiomSAE was only trained on the IDiom activations of unprompted IDR residues.
 
 ### Extracting SAE feature vectors
 
-To extract SAE feature vectors, pass in IDR sequences directly. Each residue's feature vector has dimension 16,384. 
+To extract SAE feature vectors, pass in IDR sequences directly. Each residue's feature vector has dimension 16,384.
 
 ```python
 from idiom import IDiomSAE
@@ -298,7 +298,7 @@ peak, accessions = sae.encode(idr_sequences, pool="max")
 print(peak.shape)  # (2, 16384) each feature's maximum activation in each IDR
 ```
 
-Full-length protein sequences can also be passed in, but only the unprompted IDR will be used when extracting IDiom activations for IDiomSAE encoding: 
+Full-length protein sequences can also be passed in, but only the unprompted IDR will be used when extracting IDiom activations for IDiomSAE encoding:
 
 ```python
 from idiom.data.records import Record
@@ -344,7 +344,7 @@ The cookbook in `cookbook/` provides detailed examples and workflows for using a
 
 ## RL-SAE: reinforcement learning with sparse autoencoder features
 
-In our preprint, we introduce RL-SAE for post-training IDiom to generate IDRs that activate specified SAE features, including combinations of features associated with different functions. To get started with RL-SAE, use the [feature enrichment notebook](cookbook/notebooks/enriched_sae_features.ipynb) to identify target features, then the [RL-SAE notebook](cookbook/notebooks/rl_sae.ipynb) to use them as reinforcement learning rewards.
+In our [preprint](https://arxiv.org/abs/2610.02189), we introduce RL-SAE for post-training IDiom to generate IDRs that activate specified SAE features, including combinations of features associated with different functions. To get started with RL-SAE, use the [feature enrichment notebook](cookbook/notebooks/enriched_sae_features.ipynb) to identify target features, then the [RL-SAE notebook](cookbook/notebooks/rl_sae.ipynb) to use them as reinforcement learning rewards.
 
 <br>
 
@@ -380,13 +380,15 @@ hf download jxliu2/idiom-db --repo-type dataset --include "idiom-db/idiom-db-v1_
 ## Citation
 
 ```bibtex
-@article{,
-  author = {},
-  title = {},
-  journal = {},
-  year = {},
-  doi = {},
-  URL = {},
+@misc{liu2026generativemodeling,
+  author = {Liu, Jason X. and Ibarraran, Sebastian and Hu, Frank and Yang, Soojung and Feng, Xinyu A. and Park, Abigail and Aneesh, Anagha and Bintu, Lacramioara and Dunn, Alexander R. and Rotskoff, Grant M.},
+  title = {Generative modeling of intrinsically disordered protein regions by reinforcing sparse autoencoder features},
+  year = {2026},
+  eprint = {2610.02189},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.LG},
+  doi = {10.48550/arXiv.2610.02189},
+  url = {https://arxiv.org/abs/2610.02189},
 }
 ```
 

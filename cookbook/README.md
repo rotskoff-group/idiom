@@ -374,4 +374,4 @@ See the main README's [sequence conventions](../README.md#sequence-conventions) 
 - `top30`: enriched features for each compartment
 - `private30`: top private features for each compartment
 
-Both sets cover the main biomolecular compartments discussed in the paper. In [`sae_features.yaml`](scripts/training/grpo/sae_features.yaml), choose a compartment with `signature` (e.g. `nucleolus`) and a feature set with `case` (`top30` or `private30`).
+Both sets cover the main biomolecular compartments discussed in the [paper](https://arxiv.org/abs/2610.02189). In [`sae_features.yaml`](scripts/training/grpo/sae_features.yaml), choose a compartment with `signature` (e.g. `nucleolus`) and a feature set with `case` (`top30` or `private30`).

@@ -5,7 +5,7 @@ See the [cookbook guide](../README.md#example-data) for input conventions and SA
 | Directory | Contents |
 |---|---|
 | `cookbook/example_data/protgps/full_length/` | Full-length ProtGPS proteins, without IDR annotations |
-| `cookbook/example_data/protgps/idrs/` | Complete paper IDR sets for six subcellular compartments |
+| `cookbook/example_data/protgps/idrs/` | Complete IDR sets from the [paper](https://arxiv.org/abs/2610.02189) for six subcellular compartments |
 | `cookbook/example_data/effector/` | Experimentally measured activation and repression domain IDRs |
 | `cookbook/example_data/disprot/` | Held-out proteins with annotated IDRs and flanking context |
 | [`cookbook/example_data/sae_features/`](sae_features/) | Enriched top-30 and original private-30 SAE targets |

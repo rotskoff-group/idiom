@@ -38,6 +38,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/rotskoff-group/idiom"
+Preprint = "https://arxiv.org/abs/2610.02189"
 "Hugging Face" = "https://huggingface.co/collections/jxliu2/idiom"
 
 [tool.hatch.build.targets.sdist]
